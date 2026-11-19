@@ -4,15 +4,43 @@
 
 [English](../README.md)
 
-## Philosophie
+<a id="philosophie"></a>
+
+## Comment la philosophie de Corbo a évolué
+
+Corbo est né d’une expérimentation : concevoir un langage de programmation système principalement destiné au code généré par l’IA.
+
+L’idée initiale était simple : **l’intention du développeur est une ressource que le compilateur devrait exploiter.**
+
+Corbo privilégie les contraintes explicites et vérifiables par une machine plutôt que la facilité d’écriture, tout en cherchant à rendre le code produit compréhensible et auditable par des humains.
+
+La gestion de la mémoire est devenue l’un des axes centraux de cette expérimentation.
 
 **La mémoire est finie. Nous le savons, mais nous écrivons souvent nos programmes comme si elle était illimitée.**
 
-L’allocation dynamique apporte de la souplesse. Elle peut aussi nous amener à laisser les contraintes de ressources implicites, alors même que nous connaissons les limites du système.
+Corbo explore ce qui se passe lorsque les programmes sont conçus autour de capacités mémoire explicites, de durées de vie prévisibles et de stratégies d’allocation bornées, sans dépendre d’un allocateur généraliste sur le tas.
 
-Le développeur connaît des éléments que le compilateur ne peut pas toujours déduire : la charge attendue, les budgets, les responsabilités de nettoyage et les durées de vie. Corbo cherche à rendre ces informations exprimables dans le code pour que le compilateur puisse les exploiter. Les contraintes qui exigent un contrôle à l’exécution restent explicites.
+Au départ, il s’agissait surtout d’une question de faisabilité : quelle quantité de logiciels pouvait-on raisonnablement construire sous ces contraintes ?
 
-Corbo explore les régions sur datastack, les pools de capacité fixe, les emprunts vérifiés statiquement et le placement des valeurs guidé par le compilateur. L’expérience devra être évaluée sur des programmes réels, en termes de sûreté, de performance, de prévisibilité et d’ergonomie.
+À mesure que le langage et sa bibliothèque standard se développaient, une autre possibilité a commencé à se dessiner.
+
+**Et si l’IA pouvait exploiter les contraintes d’un système entier pour aider à déterminer comment ce système devrait être implémenté ?**
+
+Les exigences métier, les limites de taille des données échangées, les schémas de communication, les limites de concurrence et les budgets de ressources pourraient guider non seulement les allocations individuelles, mais aussi des architectures logicielles entières.
+
+Ces informations n’apportent pas toutes les mêmes garanties. Une charge attendue est une hypothèse ; une capacité effectivement imposée est une limite. Cette distinction compte : une implémentation peut être optimisée autour d’hypothèses, tandis que ses garanties doivent reposer sur des contraintes que le programme fait réellement respecter.
+
+Des agents IA pourraient exploiter ces informations pour générer des implémentations spécialisées adaptées à des exigences connues. Des contrats explicites permettraient d’examiner ces choix, tandis que le compilateur vérifierait les propriétés qu’il peut établir et que les contrôles à l’exécution feraient respecter les limites qui ne peuvent pas être résolues statiquement.
+
+Ce n’était pas la motivation initiale du modèle mémoire de Corbo. Cette idée est apparue au fil de l’expérimentation.
+
+Elle reste une hypothèse, pas un résultat établi.
+
+Une génération de code moins coûteuse ne supprime pas le coût de la validation, de la maintenance ou de la compréhension d’un système. Corbo cherche à déterminer si des contraintes explicites et la vérification par le compilateur peuvent rendre la spécialisation pratique sans rendre ses conséquences plus difficiles à évaluer.
+
+Corbo tente d’explorer cette hypothèse : **que devient-il possible lorsque la génération de logiciels devient moins coûteuse, que les contraintes sont explicites et que la vérification fait partie du modèle de programmation ?**
+
+## Les budgets mémoire en pratique
 
 ### Un budget mémoire implicite en Rust
 

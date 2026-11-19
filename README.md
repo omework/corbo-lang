@@ -9,7 +9,8 @@ Compiler: [omework/corboc](https://github.com/omework/corboc).
 
 ## Contents
 
-- [Philosophy and the memory-budget comparison](#philosophy)
+- [How Corbo's philosophy evolved](#how-corbos-philosophy-evolved)
+- [Memory budgets in practice](#memory-budgets-in-practice)
 - [Getting started](#getting-started)
 - [Language and STD examples](#language-and-std-examples)
 - [Explore the STD](#explore-the-std)
@@ -18,23 +19,43 @@ Compiler: [omework/corboc](https://github.com/omework/corboc).
 - [Documentation and validation status](#documentation-and-validation-status)
 - [API references: STD](docs/STDLIB.md) · [runtime](docs/RUNTIME.md)
 
-## Philosophy
+<a id="philosophy"></a>
+
+## How Corbo's philosophy evolved
+
+Corbo began as an experiment in designing a systems programming language primarily for AI-generated code.
+
+The initial idea was simple: **developer intent is a resource that a compiler should exploit.**
+
+Corbo prioritizes explicit, machine-checkable constraints over ease of authoring, while aiming to keep the resulting code understandable and auditable by humans.
+
+Memory management became one of the central experiments.
 
 **Memory is finite. We know it, yet we often write programs as if it were unlimited.**
 
-Dynamic memory allocation has made programming remarkably flexible. But that flexibility can also encourage us to leave resource constraints implicit, even when we already understand the limits of the systems we are building.
+Corbo explores what happens when programs are designed around explicit memory capacities, predictable lifetimes, and bounded allocation strategies, without relying on a general-purpose heap allocator.
 
-Corbo explores a different approach.
+At first, this was primarily a question of feasibility: how much software could reasonably be built under these constraints?
 
-It starts from a simple conviction:
+As the language and its standard library developed, another possibility began to emerge.
 
-**Developer intent is one of the most valuable resources a compiler can leverage.**
+**What if AI could use the constraints of an entire system to help determine how that system should be implemented?**
 
-Developers know things about their programs that compilers cannot always infer: expected workloads, resource budgets, ownership relationships, lifetime constraints, and acceptable limits.
+Business requirements, payload limits, communication patterns, concurrency bounds, and resource budgets could potentially inform not only individual allocations, but entire software architectures.
 
-Rather than leaving this knowledge implicit, Corbo aims to give developers the means to express it and compilers the means to use it.
+These inputs do not all provide the same guarantees. An expected workload is an assumption; an enforced capacity is a limit. Their distinction matters: an implementation may be optimized around assumptions, while its guarantees must rest on constraints the program actually enforces.
 
-The goal is not to replace static analysis with trust in the developer. It is to combine both: let developers express their intent, let the compiler verify what it can prove, and make runtime constraints explicit where static guarantees are insufficient.
+AI agents could use this information to generate specialized implementations adapted to known requirements. Explicit contracts would make those choices inspectable, while the compiler verifies the properties it can establish and runtime checks enforce limits that cannot be resolved statically.
+
+This was not the original motivation behind Corbo's memory model. It emerged through experimentation.
+
+It remains a hypothesis, not an established result.
+
+Cheaper code generation does not remove the cost of validation, maintenance, or understanding a system. Corbo explores whether explicit constraints and compiler verification can help make specialization practical without making its consequences harder to assess.
+
+Corbo is an attempt to explore that hypothesis: **what becomes possible when software generation becomes cheaper, constraints are explicit, and verification is part of the programming model?**
+
+## Memory budgets in practice
 
 ### An implicit memory budget in Rust
 
@@ -100,28 +121,6 @@ metadata have their own storage. This is not a total-process memory limit.
 uses a statically inferred bound where available, then its configured/default
 region policy. A growing value still has a finite region limit. This example
 shows how a developer supplies a particular limit directly in the code.
-
-### Design Direction
-
-Corbo explores several ideas:
-
-- **Predictable memory management.** Explicit memory capacities, stack-based regions, and fixed-capacity pools instead of a general-purpose heap allocator.
-- **Ownership and borrowing.** Memory safety through statically checked ownership, references, and lifetime relationships, without garbage collection.
-- **Intent-driven contracts.** A clearer distinction between program behavior and the constraints used to verify its correctness.
-- **Compiler-guided memory placement.** Using information about scopes, branches, lifetimes, and value identities to plan memory layout and reduce runtime overhead.
-- **Explicit trade-offs.** Favoring predictable resource usage over unrestricted flexibility when the benefits justify the constraints.
-
-### An Experiment, Not a Conclusion
-
-Corbo does not assume that dynamic allocation is unnecessary, that static analysis can solve every problem, or that its approach is universally superior.
-
-These are design choices to be tested against real programs.
-
-The project aims to explore how far a systems programming language can go by treating developer knowledge as a first-class input to compilation.
-
-Its success will depend on whether these ideas translate into meaningful benefits in safety, performance, predictability, or developer experience.
-
-**Express intent. Exploit predictability. Verify guarantees.**
 
 ## Getting started
 
