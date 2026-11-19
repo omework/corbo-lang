@@ -2,7 +2,7 @@
 
 **An experimental systems programming language built around developer intent, predictable memory management, and static verification.**
 
-[Français](docs/README-fr.md)
+[Français](README-fr.md)
 
 Language, STD and runtime: [omework/corbo-lang](https://github.com/omework/corbo-lang).
 Compiler: [omework/corboc](https://github.com/omework/corboc).
