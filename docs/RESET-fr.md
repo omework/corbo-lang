@@ -22,7 +22,7 @@ Il refuse le reset si l'un de ces accès doit encore servir. Un réemprunt
 temporairement suspendu pendant un appel est lui aussi pris en compte.
 
 ```rust
-let mut memory = pool<Int>(2);
+let mut memory = Pool<Int>::new(2);
 let mut a = new(memory) Int(10);
 let mut b = new(memory) Int(20);
 print(a);

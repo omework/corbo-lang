@@ -77,7 +77,7 @@
 | EBNF, G6 | Taille de région positive au-delà de la représentation et refus de zéro au parseur. | P · 19 tests ciblés. |
 | EBNF, identifiants | Refus des noms réservés en position de déclaration et acceptation de `self` comme receveur et de `_` dans un motif. | P · 36 tests ciblés. |
 | EBNF, initialisation et unité | Expression qualifiée dans `.new(...)`, refus des champs qualifiés ou réservés et de la syntaxe de paire de tranches en position de type. | P · 36 tests ciblés. |
-| EBNF, pool et motifs | `pool<&mut i64>(4)` reconnu au parseur, type incomplet refusé ; identifiants réservés refusés dans les motifs de variantes, `_` reconnu comme motif de champ. | P · 39 tests ciblés. |
+| EBNF, pool et motifs | `Pool<&mut i64>::new(4)` reconnu au parseur, type incomplet refusé ; identifiants réservés refusés dans les motifs de variantes, `_` reconnu comme motif de champ. | P · 39 tests ciblés. |
 | EBNF, contrats de type et de branche | Alternatives empruntées reconnues, liste de méthodes vide et identifiants réservés refusés. Distinction des noms et type du receveur vérifiés sur le parcours de compilation. | P · 39 tests ciblés, dont un témoin de la séparation des parcours. |
 | EBNF, lancement | Une expression exigée pour `spawn` et `spawn_blocking`, y compris en contexte synchrone au stade syntaxique. | P · 41 tests ciblés. La suite élargie signale deux assertions liées à l’attente d’un thread autonome, détaillées dans le rapport. |
 | EBNF, RT8 | Identifiants des captures nommées, analyse de `yield` et `.await` indépendante du contexte. | P · 42 tests ciblés, dont refus des suspensions dans un bloc de thread lors de la compilation. |

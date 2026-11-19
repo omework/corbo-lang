@@ -16,7 +16,7 @@ fn create(memory: &mut Pool<Int>) -> <- Int {
 }
 
 fn main() {
-    let mut memory = pool<Int>(1);
+    let mut memory = Pool<Int>::new(1);
     let mut data = create(&mut memory);
     memory.reset();
     print(data); // Refusé : data doit encore être utilisée.

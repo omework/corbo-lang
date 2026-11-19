@@ -620,7 +620,7 @@ async fn lire(data: &Int) -> Int {
 }
 
 fn main() -> Int {
-    let mut memory = pool<Int>(1);
+    let mut memory = Pool<Int>::new(1);
     let nombre = new(memory) Int(10);
 
     let a = runtime::spawn(-> lire(&nombre));

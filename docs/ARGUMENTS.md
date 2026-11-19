@@ -24,7 +24,7 @@ fn consume(n: Int, mut data: -> Int) {
     print(data);
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut data = new(memory) Int(42);
 consume(read(&data), -> data);
 ```
@@ -123,7 +123,7 @@ These regressions are not a general proof of safety.
 
 ```rust
 fn read(data: &Int) -> Int { return *data; }
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut data = new(memory) Int(42);
 let mut view = &data;
 let mut n = read(view);

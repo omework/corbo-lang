@@ -52,7 +52,7 @@ rattacher le comportement attendu à la matrice de vérification.
 
 ## Allocation explicite
 
-- **H1 — Représentation.** `pool<T>.new(...)` fournit un `A<T>`, une
+- **H1 — Représentation.** `Pool<T>.new(...)` fournit un `A<T>`, une
   valeur non Copy qui désigne l'objet initialisé et son pool d'origine.
   Le déplacement transmet ces deux informations et la responsabilité
   unique du nettoyage, avec la même adresse d'objet. Le pool doit

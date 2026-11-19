@@ -745,7 +745,7 @@ fn borrow_mut(data: &mut Int) -> &mut Int {
     return data;
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut nombre = new(memory) Int(10);
 let mut vue = borrow_mut(&mut nombre);
 vue.set(30);
@@ -833,11 +833,28 @@ The automatic cleaning remains the default behavior.
 
 ## 7. Typed pools
 
-**A1 — Passage explicite.** L’API publique utilise `pool<T>(n)` with a
-explicit capacity strictly positive. A local pool used to allocate
-exige `let mut`. A function that assigns `&mut Pool<T>`. The law
-The data stack is not a public type and does not have a public constructor.
-Consumption of `A<T>` uses the provenance he carries.
+**A1 — Explicit storage source.** `Pool<T>::new(n)` creates a pool with an
+explicit, strictly positive capacity. A local pool used for allocation requires
+`let mut`; a function that allocates receives `&mut Pool<T>`. Its right to
+mutate comes from that borrow. The datastack is not a public type and has no
+public constructor. Consuming an `A<T>` uses the provenance it carries.
+
+**A1a — Ordinary construction syntax.** `Pool<T>::new(capacity)` constructs
+pool storage. It replaces the former lowercase contextual constructor; old
+`pool<T>(capacity)` syntax is rejected by corboc. `Pool` is also exported by
+`std`, including through normal import aliases.
+
+**A1b — Recoverable slot exhaustion.** `pool.try(...)` accepts the same
+initializers as `pool.new(...)` and returns `Result<A<T>, PoolError>`.
+`PoolError.Full` reports that the selected slot set (enum arm, where applicable)
+is full. `pool.new(...)` retains its terminating failure behavior.
+An explicitly supplied value is evaluated once before attempting the claim.
+Its ordinary move occurs regardless of success. On failure the supplied value
+is destroyed exactly once before returning the error; it is not returned to its
+former binding. Success transfers its cleanup to the allocation. A stored
+successful Result retains the allocation's source-pool and field dependencies.
+Dropping that Result cleans the allocation, as extracting its success would.
+These operations do not promise recovery from OS/datastack reservation failure.
 
 **A2 — Storage dependency.** An allowance cannot survive his pool.
 
@@ -949,7 +966,7 @@ makes its slot reusable without moving others. A dead suffix is removed from the
 index before recovery by slider retreat. The physical order of the slots is distinct
 from the semantic destruction order defined in L3.
 
-In the prototype, `pool<Int>(n)` reserves a strict capacity to `n` slots in
+In the prototype, `Pool<Int>::new(n)` reserves a strict capacity to `n` slots in
 a virtual range, with a single cursor and an intrusive list of slots
 Free. The parameter `&mut Pool<Int>` demands this
 The pool is exhausted and the program is stopped with a diagnosis.
@@ -965,7 +982,7 @@ The pool interface selects the stack according to the built or destroyed variant
 Living values keep their address. The source of all variants remains the original
 public pool.
 
-In the prototype, `pool<E>(n)` reservation `n` slots per variant. Enums are
+In the prototype, `Pool<E>::new(n)` reservation `n` slots per variant. Enums are
 have fields `Int`, `&Int` ou `&mut Int` fully initialised,
 and are built only via a pool of the corresponding type. A reference points to the
 slot, whose stack provides the discriminant. The functions can borrow, receive and

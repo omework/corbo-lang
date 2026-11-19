@@ -18,8 +18,8 @@ fn use_view(view: &View) {
 }
 
 fn main() {
-    let mut data_pool = pool<Int>(1);
-    let mut view_pool = pool<View>(1);
+    let mut data_pool = Pool<Int>::new(1);
+    let mut view_pool = Pool<View>::new(1);
     let mut data = new(data_pool) Int(42);
     let mut view = new(view_pool) View.Item { data: &data };
     use_view(&view);

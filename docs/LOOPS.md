@@ -10,7 +10,7 @@ suivant. `break;` leaves the loop closest to the current function.
 `continue;` Close the same telescopes, then start its next iteration.
 
 ```rust
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 loop {
     let mut temporary = new(memory) Int(42);
     print(temporary);
@@ -34,8 +34,8 @@ transfers storage. It is limited to Int; it does not give access to
 arbitrary pointers or pointer arithmetic.
 
 ```rust
-let mut memory = pool<Int>(1);
-let mut controls = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
+let mut controls = Pool<Int>::new(1);
 let mut state = new(controls) Int(0);
 loop {
     let mut temporary = new(memory) Int(42);
@@ -164,7 +164,7 @@ The test programs are not executed on infinite paths.
 
 ```rust
 fn main() {
-    let mut memory = pool<Int>(2);
+    let mut memory = Pool<Int>::new(2);
     let result = loop {
         let temporary = new(memory) Int(10);
         let kept = new(memory) Int(20);
@@ -194,7 +194,7 @@ achieved replacement.
 
 ```rust
 fn main() {
-    let mut memory = pool<Int>(2);
+    let mut memory = Pool<Int>::new(2);
     let mut result = new(memory) Int(10);
     while *result == 10 {
         let replacement = new(memory) Int(20);

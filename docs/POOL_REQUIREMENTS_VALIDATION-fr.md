@@ -16,7 +16,7 @@ enum Message { Empty {} }
 fn inspect(p: &Pool<Int>) {}
 fn relay(p: &Allocator) { inspect(p); }
 fn main() {
-    let mut p = pool<Message>(1);
+    let mut p = Pool<Message>::new(1);
     relay(&p);
 }
 ```

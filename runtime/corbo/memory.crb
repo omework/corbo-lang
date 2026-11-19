@@ -373,8 +373,8 @@ fn new_pool(slots:usize,bytes:usize,arms:usize)->usize {
     }
     copy(pool)
 }
-/// Atomically claims a free slot in the requested arm, zeroes it and writes an Owned descriptor to out; exhaustion terminates.
-fn pool_take(out:usize,pool:usize,arm:usize) {
+/// Claims and zeroes a free slot; returns false without changing the pool if full.
+fn pool_try_take(out:usize,pool:usize,arm:usize)->bool {
     let low=copy(arm)*g_Pools_cap(copy(pool));
     let high=copy(low)+g_Pools_cap(copy(pool));
     let mut index=copy(low);
@@ -386,11 +386,15 @@ fn pool_take(out:usize,pool:usize,arm:usize) {
             s_Owned_slot(copy(out),copy(place));
             s_Owned_index(copy(out),copy(index));
             s_Owned_destroy(copy(out),0);
-            return;
+            return true;
         }
         index=copy(index)+1;
     }
-    fault(3);
+    false
+}
+/// Claims a free slot or terminates if the selected arm is full.
+fn pool_take(out:usize,pool:usize,arm:usize) {
+    if !pool_try_take(copy(out),copy(pool),copy(arm)){fault(3);}
 }
 /// Calls a live allocation's typed cleanup callback before releasing its pool slot, then clears the descriptor's pool link.
 fn put(value:usize) {

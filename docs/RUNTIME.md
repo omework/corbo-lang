@@ -761,19 +761,29 @@ fn new_pool(slots:usize,bytes:usize,arms:usize)->usize
 
 Allocates a pool descriptor, atomic occupancy bytes and fixed slots on the datastack; validates sizes and arm counts.
 
-### `pool_take`
+### `pool_try_take`
 
 [memory.crb:377](../runtime/corbo/memory.crb#L377)
+
+```rust
+fn pool_try_take(out:usize,pool:usize,arm:usize)->bool
+```
+
+Claims and zeroes a free slot; returns false without changing the pool if full.
+
+### `pool_take`
+
+[memory.crb:396](../runtime/corbo/memory.crb#L396)
 
 ```rust
 fn pool_take(out:usize,pool:usize,arm:usize)
 ```
 
-Atomically claims a free slot in the requested arm, zeroes it and writes an Owned descriptor to out; exhaustion terminates.
+Claims a free slot or terminates if the selected arm is full.
 
 ### `put`
 
-[memory.crb:396](../runtime/corbo/memory.crb#L396)
+[memory.crb:400](../runtime/corbo/memory.crb#L400)
 
 ```rust
 fn put(value:usize)
@@ -783,7 +793,7 @@ Calls a live allocation's typed cleanup callback before releasing its pool slot,
 
 ### `value_region_new`
 
-[memory.crb:408](../runtime/corbo/memory.crb#L408)
+[memory.crb:412](../runtime/corbo/memory.crb#L412)
 
 ```rust
 fn value_region_new(region:usize,width:usize,owned:i32,dedicated:bool)
@@ -793,7 +803,7 @@ Initializes a region while holding the shared runtime lock; the descriptor must 
 
 ### `value_region_add`
 
-[memory.crb:414](../runtime/corbo/memory.crb#L414)
+[memory.crb:418](../runtime/corbo/memory.crb#L418)
 
 ```rust
 fn value_region_add(region:usize)->usize
@@ -803,7 +813,7 @@ Appends one region slot under the runtime lock and returns its address.
 
 ### `value_region_drop`
 
-[memory.crb:421](../runtime/corbo/memory.crb#L421)
+[memory.crb:425](../runtime/corbo/memory.crb#L425)
 
 ```rust
 fn value_region_drop(region:usize)
@@ -813,7 +823,7 @@ Unlinks and releases a region under the runtime lock after owned child cleanup.
 
 ### `scoped_region_enter`
 
-[memory.crb:427](../runtime/corbo/memory.crb#L427)
+[memory.crb:431](../runtime/corbo/memory.crb#L431)
 
 ```rust
 fn scoped_region_enter(bytes:usize,count:usize,inferred:usize)
@@ -823,7 +833,7 @@ Enters a region scope under the runtime lock using explicit and inferred slot bu
 
 ### `scoped_region_restore`
 
-[memory.crb:433](../runtime/corbo/memory.crb#L433)
+[memory.crb:437](../runtime/corbo/memory.crb#L437)
 
 ```rust
 fn scoped_region_restore(mark:usize)
@@ -833,7 +843,7 @@ Restores the saved region-scope mark under the runtime lock while preserving liv
 
 ### `destroy_region`
 
-[memory.crb:439](../runtime/corbo/memory.crb#L439)
+[memory.crb:443](../runtime/corbo/memory.crb#L443)
 
 ```rust
 fn destroy_region(pointer:usize)
@@ -843,7 +853,7 @@ Cleanup-callback adapter for a region descriptor; releases its payload through t
 
 ### `dispose_owned`
 
-[memory.crb:443](../runtime/corbo/memory.crb#L443)
+[memory.crb:447](../runtime/corbo/memory.crb#L447)
 
 ```rust
 fn dispose_owned(pointer:usize)
@@ -5709,11 +5719,13 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`new_pool`](../runtime/memory/pools.c.inc#L10): Allocates a pool descriptor, atomic occupancy bytes and fixed slots on the datastack; validates sizes and arm counts.
 
-- [`pool_take`](../runtime/memory/pools.c.inc#L15): Claims a free slot in the requested arm, zeroes it and returns an Owned descriptor; exhaustion terminates.
+- [`pool_try_take`](../runtime/memory/pools.c.inc#L15): Atomically claims and zeroes a slot; full pools return false without mutation.
 
-- [`put`](../runtime/memory/pools.c.inc#L19): Calls a live allocation's typed cleanup callback before releasing its pool slot, then clears the descriptor's pool link.
+- [`pool_take`](../runtime/memory/pools.c.inc#L18): Claims a free slot; exhaustion terminates.
 
-- [`dispose_owned`](../runtime/memory/pools.c.inc#L21): Cleanup-callback adapter that destroys and releases the Owned descriptor at pointer.
+- [`put`](../runtime/memory/pools.c.inc#L20): Calls a live allocation's typed cleanup callback before releasing its pool slot, then clears the descriptor's pool link.
+
+- [`dispose_owned`](../runtime/memory/pools.c.inc#L22): Cleanup-callback adapter that destroys and releases the Owned descriptor at pointer.
 
 ### `runtime/memory/reclaim.c.inc`
 

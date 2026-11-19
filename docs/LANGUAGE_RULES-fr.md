@@ -743,7 +743,7 @@ fn borrow_mut(data: &mut Int) -> &mut Int {
     return data;
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut nombre = new(memory) Int(10);
 let mut vue = borrow_mut(&mut nombre);
 vue.set(30);
@@ -830,12 +830,27 @@ du scope ». Le nettoyage automatique reste le comportement par défaut.
 
 ## 7. Pools typés
 
-**A1 — Passage explicite.** L’API publique utilise `pool<T>(n)` avec une
+**A1 — Passage explicite.** L’API publique utilise `Pool<T>::new(n)` avec une
 capacité explicite strictement positive. Un pool local utilisé pour allouer
 exige `let mut`. Une fonction qui alloue reçoit `&mut Pool<T>`. Le droit
 de mutation provient du mode d’emprunt. La data
 stack ne constitue pas un type public et n’a pas de constructeur public.
 La consommation d’un `A<T>` utilise la provenance qu’il porte.
+
+**A1a — Syntaxe de construction ordinaire.** `Pool<T>::new(capacity)` remplace
+l'ancien constructeur contextuel en minuscules, désormais refusé. `Pool` est
+aussi exporté par `std`, y compris avec un alias d'import.
+
+**A1b — Saturation récupérable.** `pool.try(...)` accepte les mêmes initialiseurs
+que `pool.new(...)` et renvoie `Result<A<T>, PoolError>`. `PoolError.Full`
+signale la saturation des slots de la variante sélectionnée, le cas échéant.
+`new` conserve son arrêt du programme en cas de saturation. Une valeur fournie
+est évaluée une seule fois avant la tentative et déplacée même en cas d'échec.
+En cas d'échec, elle est détruite une seule fois avant le retour de l'erreur.
+En cas de succès, son nettoyage est transféré à l'allocation. Un `Result`
+conservé retient les dépendances du pool et des champs ; sa destruction nettoie
+l'allocation qu'il contient. Les erreurs de réservation OS/datastack ne sont
+pas rendues récupérables par cette méthode.
 
 **A2 — Dépendance de stockage.** Une allocation ne peut survivre à son pool.
 
@@ -953,7 +968,7 @@ slot réutilisable sans déplacer les autres. Un suffixe mort est retiré de
 l'index libre avant récupération par recul du curseur. L'ordre physique des
 slots est distinct de l'ordre sémantique de destruction défini en L3.
 
-Dans le prototype, `pool<Int>(n)` réserve une capacité stricte de `n` slots dans
+Dans le prototype, `Pool<Int>::new(n)` réserve une capacité stricte de `n` slots dans
 une plage virtuelle, avec un seul curseur et une liste intrusive des slots
 libres. Le paramètre `&mut Pool<Int>` exige cette
 source typée. L’épuisement du pool arrête le programme avec un diagnostic.
@@ -969,7 +984,7 @@ son index de slots disponibles. L'interface du pool sélectionne la stack selon
 la variante construite ou détruite. Les valeurs vivantes gardent leur adresse.
 La provenance de toutes les variantes reste le pool public d'origine.
 
-Dans le prototype, `pool<E>(n)` réserve `n` slots par variante. Les enums sont
+Dans le prototype, `Pool<E>::new(n)` réserve `n` slots par variante. Les enums sont
 déclarés au niveau du programme, ont des champs `Int`, `&Int` ou `&mut Int` entièrement initialisés,
 et ne sont construits que via un pool du type correspondant. Une référence
 pointe vers le slot, dont la stack fournit le discriminant. Les fonctions

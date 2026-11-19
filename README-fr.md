@@ -97,7 +97,7 @@ use std::Vector;
 
 fn main() {
     let count: i64 = 1000;
-    let mut vectors = pool<Vector<i64>>(1);
+    let mut vectors = Pool<Vector<i64>>::new(1);
 
     #(stack_region: max_size=64K, count=1) {
         let mut numbers = vectors.new();
@@ -113,7 +113,7 @@ fn main() {
 
 Sortie : `1000`. [Paquet complet](examples/features/budget/).
 
-- `pool<Vector<i64>>(1)` fournit un slot de vecteur. Le `1` compte les objets vecteurs, pas leurs éléments.
+- `Pool<Vector<i64>>::new(1)` fournit un slot de vecteur. Le `1` compte les objets vecteurs, pas leurs éléments.
 - `#(stack_region: max_size=64K, count=1)` fixe la taille d’une région à 64 Kio et réserve une région pour ce scope. Les données grandissantes du vecteur utilisent cette région.
 - Un `i64` occupe huit octets : ce budget permet donc de stocker au plus 8 192 éléments. Augmenter le nombre d’entrées n’augmente pas la limite de la région.
 - Avec `push`, dépasser cette limite arrête le programme avec un diagnostic. La sortie du scope détruit le vecteur avant de rendre le stockage de sa région réutilisable.
@@ -489,12 +489,12 @@ Sortie : `43, 7`. [Paquet complet](examples/features/arrays/).
 
 #### Pools de capacité fixe et handles d’allocation
 
-`pool<T>(n)` réserve des slots fixes. `new` retourne `A<T>` ; le pool doit survivre à cette allocation. Détruire une allocation vivante libère son slot après son nettoyage.
+`Pool<T>::new(n)` réserve des slots fixes. `new` retourne `A<T>` ; le pool doit survivre à cette allocation. Détruire une allocation vivante libère son slot après son nettoyage.
 
 <!-- example: pools -->
 ```rust
 fn main() {
-    let mut numbers = pool<i64>(2);
+    let mut numbers = Pool<i64>::new(2);
     let first: A<i64> = numbers.new(10);
     let second = numbers.new(20);
     print(*first);
@@ -507,6 +507,16 @@ fn main() {
 
 Sortie : `10, 20, 30`. [Paquet complet](examples/features/pools/).
 
+##### Allocation récupérable dans un pool
+
+`Pool<T>::new(capacity)` crée un pool de capacité fixe. `pool.new(...)` arrête
+le programme si aucun slot n'est disponible. `pool.try(...)` renvoie
+`Result<A<T>, PoolError>`, avec `PoolError.Full` en cas de saturation. Les mêmes
+formes d'initialisation sont acceptées. L'argument est déplacé même en cas
+d'échec : sa valeur est détruite avant le retour de l'erreur.
+
+Voir [l'API des pools](docs/COLLECTIONS_API.md).
+
 <a id="placement"></a>
 
 <a id="receivers-and-placement-across-scopes"></a>
@@ -518,7 +528,7 @@ Le résultat d’un bloc possède un receveur explicite. Le plan de placement po
 <!-- example: placement -->
 ```rust
 fn main() {
-    let mut numbers = pool<i64>(1);
+    let mut numbers = Pool<i64>::new(1);
     let received = {
         let local = numbers.new(42);
         local
@@ -574,7 +584,7 @@ L’annotation globale de datastack et ses propriétés sont facultatives. `stac
 use std::Vector;
 
 fn main() {
-    let mut vectors = pool<Vector<i64>>(1);
+    let mut vectors = Pool<Vector<i64>>::new(1);
     #(stack_region: max_size=64K, count=1) #(free_pages) {
         let mut values = vectors.new();
         let mut number: i64 = 0;
@@ -607,7 +617,7 @@ Le descripteur d’un vecteur a une taille fixe ; ses données contiguës grandi
 use std::Vector;
 
 fn main() {
-    let mut vectors = pool<Vector<i64>>(1);
+    let mut vectors = Pool<Vector<i64>>::new(1);
     let mut values = vectors.new();
     values.push(10);
     values.push(20);
@@ -664,7 +674,7 @@ Sortie : `42, 42`. [Paquet complet](examples/features/map/).
 use std::String;
 
 fn main() {
-    let mut strings = pool<String>(1);
+    let mut strings = Pool<String>::new(1);
     let mut text = strings.new();
     text.push_str("été,soleil,");
     print(text.byte_len());
@@ -756,7 +766,7 @@ impl Counter {
 
 fn main() {
     let mut counter = Counter { position: 1, end: 7 };
-    let mut storage = pool<Vector<i64>>(1);
+    let mut storage = Pool<Vector<i64>>::new(1);
     let mut destination = storage.new();
     iter(&mut counter)
         .filter(|item: &i64| { *item % 2 == 0 })

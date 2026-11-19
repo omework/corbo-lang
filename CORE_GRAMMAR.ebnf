@@ -156,13 +156,13 @@ produit             = conversion, { ( "*" | "/" | "%" ), conversion } ;
 conversion          = unaire, { "as", type } ;
 unaire              = ( "-" | "!" | "~" | "*" | ( "&", [ "mut" ] ) ), unaire | postfixee ;
 postfixee           = primaire, { suffixe } ;
-(* En position d'appel, new sélectionne la production initialisation_pool.
-   Dans new, {} et { champ: expression, ... } sont des initialiseurs
+(* En position d'appel, new ou try sélectionne la production initialisation_pool.
+   Dans new et try, {} et { champ: expression, ... } sont des initialiseurs
    de structure dont le type est fourni par le pool. Les autres blocs
    restent des expressions.
    try_slice avec un séparateur .. sélectionne la production plage. *)
 suffixe             = ".", identifiant, [ "(", [ arguments ], ")" ]
-                    | ".", "new", "(", [ initialisation_pool ], ")"
+                    | ".", ( "new" | "try" ), "(", [ initialisation_pool ], ")"
                     | ".", "try_slice", "(", plage, ")"
                     | ".", "await" | "[", indice, "]" | "?" ;
 indice              = expression | plage ;
@@ -185,7 +185,7 @@ appel_closure       = "(", expression_closure, ")", "(", [ arguments ], ")" ;
 primaire            = litteral | chemin_valeur, [ "(", [ arguments ], ")" ] | "self"
                     | "(" , [ expression ], ")" | tableau | tuple
                     | expression_closure | appel_closure
-                    | construction | pool | lancement | groupe_selection | thread_natif
+                    | construction | lancement | groupe_selection | thread_natif
                     | appel_type
                     | forme_bloc ;
 tuple               = "(", expression, ",", expression, { ",", expression }, [ "," ], ")" ;
@@ -197,9 +197,8 @@ construction        = nom_structure, "{", [ valeurs_champs ], "}"
                                                   | "(", arguments, ")" ] ;
 valeurs_champs      = valeur_champ, { ",", valeur_champ }, [ "," ] ;
 valeur_champ        = identifiant, ":", expression ;
-(* pool est un nom contextuel. La forme pool<type>(...) a priorité
-   lorsqu’une liste d’arguments suit la fermeture du type. *)
-pool                = "pool", "<", type, ">", "(", entier, ")" ;
+(* Pool<T>::new(capacity) utilise un appel qualifié générique ordinaire.
+   La capacité reste un entier statique strictement positif. *)
 initialisation_pool = initialiseur_structure_pool | valeurs_champs | expression ;
 initialiseur_structure_pool = "{", [ valeurs_champs ], "}" ;
 

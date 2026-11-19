@@ -1,3 +1,15 @@
+## Pool construction and recoverable allocation (core + STD API)
+
+- [x] Parse `Pool<T>::new(capacity)`; reject the former constructor.
+- [x] Implement `try` with `PoolError.Full`, exactly-once initialization and cleanup.
+- [x] Preserve source-pool/field dependencies in stored/extracted owned Results.
+- [x] Migrate active source examples, grammar, STD exports and API documentation.
+- [x] Run 20 focused checks: 11 UBSan programs and nine expected refusals.
+- [x] Check C-reference slot reuse and byte-identical self-reconstruction.
+- [x] Record existing limits, the baseline iterator failure and platform scope.
+
+No open language decision. See [evidence and limits](cycles/POOL_CONSTRUCTION_TRY_CYCLE.md).
+
 ## Documentation coverage gaps (compiler/core)
 
 - [x] Replay the nine historical failures without changing their sources or accepted rules.
@@ -474,7 +486,7 @@ The migration of tests and ASan are followed in
   the parser alone, with `self` as recipient and `_` in the reasons.
 - [x] Accepting a qualified expression in `.new(...)`, require
   simple names for its fields and limit parenthesed types to `()`.
-- [x] Parse borrowing types in `pool<type>(taille)` and implementation
+- [x] Parse borrowing types in `Pool<type>::new(taille)` and implementation
   the syntax of the identifiers to the variants and fields of the d的enum patterns.
 - [x] Parse type alternatives in contracts, including
   borrowings, prior to separate name and type checks of the recipient.
@@ -536,7 +548,7 @@ The migration of tests and ASan are followed in
   operators directly follow a target type of conversion.
 - [x] Recognize the immediate call of a closure with the pair of
   parentheses provided for by `appel_closure`.
-- [x] Distinguish the manufacturer `pool<T>(taille)` of Ordinary Uses
+- [x] Distinguish the manufacturer `Pool<T>::new(taille)` of Ordinary Uses
   Name `pool` in expressions, including interlocked comparisons.
 - [x] Check the exhausts recognized by the current sprinkler and pick up
   the missing normative list in TX1.

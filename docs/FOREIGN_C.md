@@ -90,7 +90,7 @@ struct Point { x: i64, y: i64 }
 
 fn main() {
     let mut point = Point { x: 1, y: 2 };
-    let mut memory = pool<i64>(2);
+    let mut memory = Pool<i64>::new(2);
     let mut number = memory.new(3);
     @unchecked {
         @c(includes={"corbo_runtime.h", "assert.h"}) {

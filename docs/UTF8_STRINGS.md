@@ -116,7 +116,7 @@ This architecture decision does not in itself approve the entire API
 generic `Vector<T>`. The first case on its empty construction is only
 proposed at the time of this check-in.
 
-**TX10 — Pool, region and cleaning.** `pool<String>` provides slots containing
+**TX10 — Pool, region and cleaning.** `Pool<String>` provides slots containing
 fixed information; the growing associated storage uses strategies
 data stacks/regions already retained. `textes.new()` construit un String vide.
 The current annotation is `#(directive, stack_region_max_size=1M)` before a telescope; the
@@ -269,7 +269,7 @@ not additional statements made by each programme.
 fn main() -> Int {
     #(directive, stack_region_max_size=1M)
     {
-        let mut textes = pool<String>(1);
+        let mut textes = Pool<String>::new(1);
         let mut texte: String = textes.new();
         texte.push_str("été");
         let octets: [u8; 2] = [0x61, 0x62];
@@ -295,7 +295,7 @@ fn main() -> Int {
 fn main() -> Int {
     #(directive, stack_region_max_size=1M)
     {
-        let mut textes = pool<String>(2);
+        let mut textes = Pool<String>::new(2);
         let mut original: String = textes.new();
         original.push_str("é");
 

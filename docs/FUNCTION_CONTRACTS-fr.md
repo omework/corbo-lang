@@ -115,7 +115,7 @@ mutable ne suffit pas à lui seul pour établir la dernière propriété.
 
 Le contrat doit aussi imposer que `memory` puisse allouer Int. Vérification
 reproduite : cette signature est actuellement acceptée avec `allocator()` et
-`pool<Int>(1)`, mais son corps est refusé avec `pool<E>(1)`. Le type générique
+`Pool<Int>::new(1)`, mais son corps est refusé avec `Pool<E>::new(1)`. Le type générique
 `Allocator` ne fournit pas encore à lui seul cette garantie. Une fonction qui
 alloue uniquement un temporaire Int puis le détruit a la même exigence, même
 sans retour d'allocation. La vérification indépendante doit donc conserver

@@ -56,7 +56,7 @@ link expected behaviour to the verification matrix.
 
 ## Allocation explicite
 
-- **H1 — Representation.** `pool<T>.new(...)` fournit un `A<T>`, one
+- **H1 — Representation.** `Pool<T>.new(...)` fournit un `A<T>`, one
   non-copy value that refers to the initialized object and its original pool.
   The move transmits both information and responsibility
   unique cleaning, with the same object address. The pool must

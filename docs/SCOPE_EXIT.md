@@ -56,7 +56,7 @@ fn create(memory: &mut Allocator) -> <- Int {
 }
 
 fn main() {
-    let mut memory = pool<Int>(3);
+    let mut memory = Pool<Int>::new(3);
     let mut received = create(&mut memory);
     print(received);
 }
@@ -106,7 +106,7 @@ then mark the dead object and recover its storage according to its source:
 | --- | --- |
 | `allocator()` | Appeal `free` on the allowance |
 | `stack(...)` | Back of cursor on dead suffix; inside holes wait |
-| `pool<T>(...)` | Reusable free slot; slider back on dead suffix |
+| `Pool<T>::new(...)` | Reusable free slot; slider back on dead suffix |
 
 In the example, `result` is physically above `inner` and `outer`.
 Their destruction does not allow the cursor to be turned back.

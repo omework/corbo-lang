@@ -8,7 +8,7 @@ suivant. `break;` quitte la boucle la plus proche de la fonction courante.
 `continue;` ferme les mêmes scopes, puis commence son itération suivante.
 
 ```rust
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 loop {
     let mut temporary = new(memory) Int(42);
     print(temporary);
@@ -30,8 +30,8 @@ transfère pas le stockage. Elle est limitée à Int ; elle ne donne pas accès 
 des pointeurs arbitraires ni à l'arithmétique de pointeurs.
 
 ```rust
-let mut memory = pool<Int>(1);
-let mut controls = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
+let mut controls = Pool<Int>::new(1);
 let mut state = new(controls) Int(0);
 loop {
     let mut temporary = new(memory) Int(42);
@@ -150,7 +150,7 @@ retourner ne reçoit pas de résultat fictif ; la suite correspondante n'est pas
 
 ```rust
 fn main() {
-    let mut memory = pool<Int>(2);
+    let mut memory = Pool<Int>::new(2);
     let result = loop {
         let temporary = new(memory) Int(10);
         let kept = new(memory) Int(20);
@@ -178,7 +178,7 @@ atteint le remplacement.
 
 ```rust
 fn main() {
-    let mut memory = pool<Int>(2);
+    let mut memory = Pool<Int>::new(2);
     let mut result = new(memory) Int(10);
     while *result == 10 {
         let replacement = new(memory) Int(20);

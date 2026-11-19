@@ -60,7 +60,7 @@ fn make(memory: &mut Pool<Int>, old: &Int) -> <- Int {
     return <- fresh;
 }
 
-let mut memory = pool<Int>(2);
+let mut memory = Pool<Int>::new(2);
 let mut data = new(memory) Int(10);
 data = make(&mut memory, &data);
 print(data);

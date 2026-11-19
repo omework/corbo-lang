@@ -103,8 +103,8 @@ doit donc avoir un défaut.
 struct Boite { nombre: A<i64> }
 
 fn main() {
-    let mut nombres = pool<i64>(1);
-    let mut boites = pool<Boite>(1);
+    let mut nombres = Pool<i64>::new(1);
+    let mut boites = Pool<Boite>::new(1);
     let boite: A<Boite> = boites.new({ nombre: nombres.new(7) });
     drop(boite);
 }
@@ -297,7 +297,7 @@ struct Point {
 }
 
 fn main() -> Int {
-    let mut points = pool<Point>(3);
+    let mut points = Pool<Point>::new(3);
     let original: Point = points.new(x: 10); // y = 0.
     let mut explicite: Point = points.copy(original);
     let abregee: Point = copy(original);
@@ -326,8 +326,8 @@ fn obtenir_cible(vue: &Vue) -> &Int {
 }
 
 fn main() -> Int {
-    let mut nombres = pool<Int>(1);
-    let mut vues = pool<Vue>(1);
+    let mut nombres = Pool<Int>::new(1);
+    let mut vues = Pool<Vue>::new(1);
     let mut nombre: Int = nombres.new();
     nombre = 10;
 

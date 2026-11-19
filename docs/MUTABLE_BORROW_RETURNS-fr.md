@@ -16,7 +16,7 @@ fn borrow_mut(data: &mut Int) -> &mut Int {
     return data;
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut nombre = new(memory) Int(10);
 let mut vue = borrow_mut(&mut nombre);
 vue.set(30);
@@ -84,7 +84,7 @@ fn make(memory: &mut Pool<Int>) -> <- Int {
     return <- data;
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut nombre = make(&mut memory);
 nombre = 20;
 ```

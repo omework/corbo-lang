@@ -1,6 +1,6 @@
 # Compiler-backed collections and pool allocations
 
-`use std::{Vector, HashMap, String};` imports the public collection names. Their
+`use std::{Pool, PoolError, Vector, HashMap, String};` imports the public collection names. Their
 export file declares those names; the compiler supplies their representations
 and method lowering, and [the Corbo runtime](../runtime/corbo/README.md) implements
 storage and operations. An empty export declaration does not mean an empty object.
@@ -11,14 +11,15 @@ for the interfaces below. The normative rules remain in
 [Language Rules](LANGUAGE_RULES.md); an API description does not establish that
 all compositions have been executed.
 
-## `pool<T>` and `A<T>`
+## `Pool<T>` and `A<T>`
 
 | Operation | Meaning |
 | --- | --- |
-| `pool<T>(count)` | Reserve fixed slots for `T`; the pool's storage must outlive live allocations. |
+| `Pool<T>::new(count)` | Reserve fixed slots for `T`; the pool's storage must outlive live allocations. |
 | `pool.new(value)` | Initialize a free slot and return `A<T>`, moving the supplied value. |
 | `pool.new({...})` | Contextual struct initialization in a slot, using the pool's element type. |
 | `pool.new()` | Use the element type's valid default initialization; required non-defaultable fields cannot be fabricated. |
+| `pool.try(value)` / `.try({...})` / `.try()` | The same initialization with `Result<A<T>, PoolError>`; `Full` recovers slot exhaustion. |
 | `*allocation` | Access the stored value; this is distinct from the allocation descriptor itself. |
 | `allocation.ref()` / `.mut_ref()` | Borrow the allocation descriptor. |
 | `allocation.vref()` / `.mut_vref()` | Borrow its stored value explicitly. |
@@ -30,8 +31,12 @@ container that receives the descriptor. Dropping a container of allocations
 cleans those elements before releasing its own storage. A freed slot is reusable;
 it does not reactivate a former reference.
 
-Pool capacity is a fixed number of simultaneous live slots. Exhaustion is a
-runtime failure, not an implicit request for a general-purpose heap allocator.
+Pool capacity is a fixed number of simultaneous live slots per enum arm (one
+slot set for an ordinary type). `new` stops on exhaustion; `try` returns
+`PoolError.Full`. Neither requests a general-purpose heap allocation. A supplied
+value moves and is evaluated once before the slot attempt; failure destroys it
+before returning the error. An unexamined successful Result still owns and
+cleans its allocation. Reservation/datastack failures remain terminating.
 [Pool example](../examples/features/pools/src/main.crb).
 
 ## `Vector<T>`

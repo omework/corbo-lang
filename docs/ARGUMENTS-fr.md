@@ -20,7 +20,7 @@ fn consume(n: Int, mut data: -> Int) {
     print(data);
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut data = new(memory) Int(42);
 consume(read(&data), -> data);
 ```
@@ -111,7 +111,7 @@ anticipés. Les erreurs de modes et de types produisent un diagnostic avant
 
 ```rust
 fn read(data: &Int) -> Int { return *data; }
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut data = new(memory) Int(42);
 let mut view = &data;
 let mut n = read(view);

@@ -127,7 +127,7 @@ The last property is not sufficient for the mutable to establish.
 
 The contract must also require that: `memory` may allocate Int.
 reproduced: this signature is currently accepted with `allocator()` and
-`pool<Int>(1)`but his body is refused with `pool<E>(1)`. The generic type
+`Pool<Int>::new(1)`but his body is refused with `Pool<E>::new(1)`. The generic type
 `Allocator` This guarantee is not yet provided by itself.
 allocates only a temporary Int then destroys it has the same requirement, even
 The independent audit must therefore retain the right to

@@ -54,7 +54,7 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 ## `std`
 
 Root STD exports for the existing native collection types.
-Files in this directory belong to `std`, so import with `use std::{Vector, HashMap, String};`.
+Files in this directory belong to `std`, so import with `use std::{Pool, PoolError, Vector, HashMap, String};`.
 These declarations bind compiler-provided types, not empty record layouts.
 Storage, operations and dependency tracking retain their existing native implementation.
 
@@ -67,7 +67,7 @@ pub struct Vector<T>
 ```
 
 A contiguous, region-backed sequence of owned values of type T, initially empty.
-Construct through `pool<Vector<T>>(...).new()`; normal moves and loans apply.
+Construct through `Pool<Vector<T>>::new(...).new()`; normal moves and loans apply.
 
 ### `HashMap`
 
@@ -91,6 +91,32 @@ pub struct String
 An owned, region-backed UTF-8 string with the existing String operations.
 Construct through a String pool; borrowed text views retain its lifetime.
 `split(separator)` returns `std::text::Split`, yielding borrowed `&str` pieces.
+
+### `Pool`
+
+[collections.crb:26](../stdlib/src/collections.crb#L26)
+
+```rust
+pub struct Pool<T>
+```
+
+Fixed-capacity typed slot storage on the datastack; allocations retain its lifetime.
+`Pool<T>::new(capacity)` creates storage; `new` allocates or terminates on exhaustion.
+`try` returns `Result<A<T>, PoolError>` and consumes its supplied value on both paths.
+
+### `PoolError`
+
+[collections.crb:30](../stdlib/src/collections.crb#L30)
+
+```rust
+pub enum PoolError
+```
+
+Recoverable failure to allocate a slot in an existing typed pool.
+
+Members:
+
+- [`Full`](../stdlib/src/collections.crb#L32) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
 
 
 ## `std::compression::gzip`

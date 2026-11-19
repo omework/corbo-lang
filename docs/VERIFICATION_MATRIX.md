@@ -138,7 +138,7 @@ matches. [Evidence and limits](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md
 | EBNF, G6 | Positive region size beyond representation and zero refusal to parser. | P · 19 targeted tests. |
 | EBNF, identifiants | Refusal of the names reserved in the declaration position and acceptance of `self` as a recipient and `_` in a pattern. | P · 36 targeted tests. |
 | EBNF, initialization and unit | Qualified expression in `.new(...)`, refusal of qualified or reserved fields and of the pair syntax of slices in type position. | P · 36 targeted tests. |
-| EBNF, pool and patterns | `pool<&mut i64>(4)` recognised to the parser, incomplete type refused; reserved identifiers refused in the reasons for variants, `_` recognized as a field pattern. | P · 39 targeted tests. |
+| EBNF, pool and patterns | `Pool<&mut i64>::new(4)` recognised to the parser, incomplete type refused; reserved identifiers refused in the reasons for variants, `_` recognized as a field pattern. | P · 39 targeted tests. |
 | EBNF, type and branch contracts | Accepted borrowed alternatives, list of empty methods and reserved identifiers refused. Distinction of name and type of recipient verified on the compilation path. | P · 39 targeted tests, including one witness of the separation of routes. |
 | EBNF, lancement | An expression required for `spawn` and `spawn_blocking`, including synchronous synchronous syntactic context. | The extended suite of reports indicates two assertions related to the expectation of an independent thread, detailed in the report. |
 | EBNF, RT8 | Named catch identifiers, analysis of `yield` and `.await` independent of context. | P · 42 targeted tests, including refusal of suspensions in a thread block when compiling. |
@@ -4906,3 +4906,14 @@ repository-link updates. Language and runtime implementations remain unchanged.
 Historical evidence is retained with its original scope and limitations.
 See the [migration record](cycles/REPOSITORY_MIGRATION_CYCLE.md) for boundaries
 and handoff validation. This is not a new language-rule or safety validation.
+
+## Pool construction and recoverable allocation
+
+| Mechanism / rules | Executed evidence | Scope and limits |
+| --- | --- | --- |
+| A1/A1a/A1b: explicit Pool construction and recoverable exhaustion | Default/contextual/value initialization, alias imports, scalar/enum/vector slots and slot reuse. | P — 11 focused O1/UBSan programs overall |
+| N4/N5/N6: dependencies, moves and cleanup | Pool/borrowed-target lifetime refusals; moved input refusal; Result/? extraction and exactly-once failed/successful cleanup. | P — nine expected refusals overall |
+| Runtime and integration | C-reference claim/full/reuse, byte-identical stage2/stage3 compiler output, generated references and explicit-override runtime freshness. | macOS ARM64; published lock unchanged; complex owned-Result signatures remain limited |
+
+[Cycle report](cycles/POOL_CONSTRUCTION_TRY_CYCLE.md) records the baseline iterator
+failure and the absence of other-platform execution or an independent audit.

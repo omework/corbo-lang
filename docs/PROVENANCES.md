@@ -11,8 +11,8 @@ fn choose(mut a: -> Int, mut b: -> Int, n: Int) -> <- Int {
     if n == 0 { return <- a; }
     return <- b;
 }
-let mut first = pool<Int>(1);
-let mut second = pool<Int>(1);
+let mut first = Pool<Int>::new(1);
+let mut second = Pool<Int>::new(1);
 let mut a = new(first) Int(10);
 let mut b = new(second) Int(20);
 let mut result = choose(-> a, -> b, 1);

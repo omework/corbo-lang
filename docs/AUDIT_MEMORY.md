@@ -19,7 +19,7 @@ Cross-example accepted before correction:
 ```rust
 enum E { A { x: Int, y: Int } }
 fn read(a: &Int) -> Int { return *a; }
-let mut memory = pool<E>(1);
+let mut memory = Pool<E>::new(1);
 let mut temps = allocator();
 let mut n = 10;
 let mut e = new(memory) E.A {

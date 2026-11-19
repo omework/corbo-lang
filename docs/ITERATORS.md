@@ -20,7 +20,7 @@ impl Counter {
 
 fn main() {
     let mut source = Counter { position: 1, end: 7 };
-    let mut memory = pool<Vector<i64>>(1);
+    let mut memory = Pool<Vector<i64>>::new(1);
     let mut destination = memory.new();
     iter(&mut source)
         .filter(|item: &i64| { *item % 2 == 0 })

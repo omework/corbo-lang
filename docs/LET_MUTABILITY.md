@@ -18,7 +18,7 @@ The cycle follows [validation guidelines]](VALIDATION_GUIDELINES.md).
 ## Comportement
 
 ```rust
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut nombre = new(memory) Int(10);
 
 nombre = 20;

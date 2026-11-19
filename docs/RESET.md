@@ -26,7 +26,7 @@ He refuses to reset if one of these accesses still needs to be used.
 temporarily suspended during an appeal is also taken into account.
 
 ```rust
-let mut memory = pool<Int>(2);
+let mut memory = Pool<Int>::new(2);
 let mut a = new(memory) Int(10);
 let mut b = new(memory) Int(20);
 print(a);

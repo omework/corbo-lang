@@ -31,7 +31,7 @@ fn relay(data: &Int) -> &Int {
     return view;
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut data = new(memory) Int(42);
 let mut view = relay(&data);
 print(view);

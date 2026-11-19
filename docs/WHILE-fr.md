@@ -7,8 +7,8 @@ comparaison de valeurs Int (`==`, `!=`, `<`, `<=`, `>`, `>=`). Les opérandes
 sont évalués de gauche à droite, une fois par test.
 
 ```rust
-let mut memory = pool<Int>(1);
-let mut controls = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
+let mut controls = Pool<Int>::new(1);
 let mut state = new(controls) Int(0);
 while *state == 0 {
     let mut temporary = new(memory) Int(42);

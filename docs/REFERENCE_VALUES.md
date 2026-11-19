@@ -32,7 +32,7 @@ fn relay(data: &Int) -> &Int {
     return view;
 }
 
-let mut memory = pool<Int>(1);
+let mut memory = Pool<Int>::new(1);
 let mut data = new(memory) Int(42);
 let mut view = &data;
 let mut a = inspect(&data);           // Crée un emprunt depuis l'allocation.

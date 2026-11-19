@@ -581,7 +581,7 @@ fn main() {
 
     #(stack_region: max_size=64M, count=1)
     {
-        let mut buffers = pool<Vector<[u64; 128]>>(1);
+        let mut buffers = Pool<Vector<[u64; 128]>>::new(1);
         let mut work = buffers.new();
         let mut count: usize = 0;
         while count < 65536 {

@@ -9,10 +9,9 @@ syntax keyword corboControl if else match loop while for in break continue retur
 syntax keyword corboBoolean true false
 syntax keyword corboReceiver self
 syntax keyword corboType bool Void i32 i64 u8 u16 u32 u64 usize f32 f64 str char String
-syntax keyword corboType A Pool Vector Option Result Mutex AsyncMutex HashMap
+syntax keyword corboType A Pool PoolError Vector Option Result Mutex AsyncMutex HashMap
 syntax match corboNamespace /\<\%(std\|runtime\)\>\ze::/
 syntax match corboBuiltin /\<\%(addr\|copy\|drop\|print\)\>\ze\s*(/
-syntax match corboBuiltin /\<pool\>\ze\s*</
 syntax match corboFunction /\%(\<fn\s\+\)\@<=[A-Za-z_][A-Za-z_0-9]*/
 syntax match corboAnnotation /#\s*(\s*\%(if\|endif\|branch\|datastack\|directive\|free_pages\|lock\|stack_region\|type\)\>/
 syntax match corboUnchecked /@unchecked\>/

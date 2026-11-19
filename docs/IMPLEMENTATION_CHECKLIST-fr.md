@@ -220,7 +220,7 @@ Les migrations de tests et ASan sont suivis dans
   le parseur seul, avec `self` comme receveur et `_` dans les motifs.
 - [x] Accepter une expression qualifiée dans `.new(...)`, exiger des
   noms simples pour ses champs et limiter les types parenthésés à `()`.
-- [x] Parser les types d’emprunt dans `pool<type>(taille)` et appliquer
+- [x] Parser les types d’emprunt dans `Pool<type>::new(taille)` et appliquer
   la syntaxe des identifiants aux variantes et champs des motifs d’enum.
 - [x] Parser les alternatives de type dans les contrats, y compris les
   emprunts, avant les contrôles de noms distincts et de type du receveur.
@@ -282,7 +282,7 @@ Les migrations de tests et ASan sont suivis dans
   opérateurs suivent directement un type cible de conversion.
 - [x] Reconnaître l’appel immédiat d’une closure avec la paire de
   parenthèses prévue par `appel_closure`.
-- [x] Distinguer le constructeur `pool<T>(taille)` des usages ordinaires
+- [x] Distinguer le constructeur `Pool<T>::new(taille)` des usages ordinaires
   du nom `pool` dans les expressions, y compris les comparaisons imbriquées.
 - [x] Vérifier les échappements reconnus par le parseur actuel et relever
   la liste normative manquante dans TX1.
