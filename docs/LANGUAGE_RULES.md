@@ -48,7 +48,8 @@ verification used those contracts, while the C backend remained specialized.
 [Configurable package constants](CONFIGURATION_CONSTANTS.md) define the accepted
 `#(configurable)` marker and lexical `#(override: ...)` blocks (CC1–CC7).
 They select compile-time specializations, not runtime limits or verifier analysis
-directives. The grammar records these forms; compiler implementation is pending.
+directives. The grammar and corboc implement these forms; the configuration specification
+records the current bounded constant-expression support.
 The [HTTP parsing design](HTTP.md) applies them to bounded request/response
 parsing and records caller responsibility for request-dependent body semantics.
 The synchronous HTTP API is implemented; its focused execution evidence and limits
