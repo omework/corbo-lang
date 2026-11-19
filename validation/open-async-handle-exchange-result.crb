@@ -1,0 +1,20 @@
+async fn exchange(v:&mut Vector<A<Int>>,incoming:->A<Int>)-><-Result<A<Int>,A<Int>> {
+    yield;
+    let r=<-v.replace(0,->incoming);
+    yield;
+    return <-r;
+}
+async fn replace(v:&mut Vector<A<Int>>,incoming:->Int)->Int {
+    let r=exchange(v,->incoming).await;
+    match (->r) {
+        Ok(old)=>{let n=*old;drop(->old);return n;},
+        Err(rejected)=>{drop(->rejected);return 0;}
+    }
+}
+fn main() {
+    let mut p=pool<Int>(2);let mut vp=pool<Vector<A<Int>>>(1);let mut v=vp.new();
+    v.push(->p.new(7));let next=p.new(8);
+    let h=runtime::spawn(->replace(&mut v,->next));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+    print(*v[0]);drop(->v);let reused=p.new(9);print(*reused);
+}

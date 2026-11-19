@@ -1,0 +1,34 @@
+fn work(memory: &mut Pool<i32>, stop: i32) {
+    let mut data = memory.new(42);
+
+    if stop == 1 {
+        move data;
+        drop(data);
+        return; // Ce chemin ne rejoint pas print(data).
+    }
+
+    print(*data); // Allocation vivante sur tous les chemins qui arrivent ici.
+}
+
+fn reuse(memory: &mut Pool<i32>, flag: i32) {
+    let mut data = memory.new(10);
+    address(data);
+
+    if flag == 1 {
+        move data;
+        drop(data);
+    }
+
+    // data est inutilisable ici : un chemin l'a détruite.
+    let mut fresh = memory.new(20);
+    address(fresh); // Même adresse si flag == 1.
+    print(*fresh);
+} // Nettoyage de fresh, et de data seulement si elle est encore vivante.
+
+fn main() {
+    let mut memory = pool<i32>(2);
+    work(&mut memory, 0);
+    work(&mut memory, 1);
+    reuse(&mut memory, 0);
+    reuse(&mut memory, 1);
+}

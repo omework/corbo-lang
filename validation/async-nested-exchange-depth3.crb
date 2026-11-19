@@ -1,0 +1,17 @@
+async fn exchange(v:&mut Vector<A<Int>>,incoming:->A<Int>)-><-Result<A<Int>,A<Int>> {
+    yield;
+    let r=<-v.replace(0,->incoming);
+    yield;
+    return <-r;
+}
+async fn wrapped1(v:&mut Vector<A<Int>>,incoming:->A<Int>)-><-Result<Result<A<Int>,A<Int>>,runtime::Error>{
+            let h=runtime::spawn(->exchange(v,->incoming));return <-h.await;}
+async fn wrapped2(v:&mut Vector<A<Int>>,incoming:->A<Int>)-><-Result<Result<Result<A<Int>,A<Int>>,runtime::Error>,runtime::Error>{
+            let h=runtime::spawn(->wrapped1(v,->incoming));return <-h.await;}
+fn main() {
+    let mut p=pool<Int>(2);let mut vp=pool<Vector<A<Int>>>(1);let mut v=vp.new();
+    v.push(->p.new(7));let next=p.new(8);
+    let h=runtime::spawn(->wrapped2(&mut v,->next));
+    match h.join(){Ok(inner2)=>{match inner2{Ok(inner1)=>{match inner1{Ok(leaf)=>{match (->leaf){Ok(n)=>{print(*n);drop(->n);},Err(n)=>{print(*n);drop(->n);}}},Err(_)=>{print(90);}}},Err(_)=>{print(91);}}},Err(_)=>{print(92);}}
+    print(*v[0]);drop(->v);let reused=p.new(9);print(*reused);
+}

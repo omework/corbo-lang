@@ -1,0 +1,26 @@
+--- before/storage_requirements.py
++++ after/storage_requirements.py
+@@ -25,6 +25,14 @@
+         return Value(mode, typ)
+ 
+     def expression(self, expr, state, line, expected_array=None):
++        if expr and expr[0] == 'array_copy' and expr[1][0] == 'name':
++            value = self.lookup(expr[1][1], state, line)
++            if isinstance(value, Value) and (value.inline_path or any(
++                    choice.inline_path for choice in value.structure_choices)):
++                # An interior value has no pool of its own nominal type.
++                # The implicit copy therefore requires a local root; an
++                # explicit destination pool uses the separate struct_copy op.
++                self.analyzer.storage_annotation_hook(self, value, value.typ, line)
+         if expr and expr[0] == 'task_select':
+             current, values = state, []
+             for branch in expr[1]:
+@@ -147,6 +155,8 @@
+                 return True
+             return relevant(value.args)
+         if isinstance(value, (tuple, list)):
++            if value and value[0] == 'array_copy':
++                return True
+             if len(value) == 3 and value[0] == 'call' and isinstance(value[1], str) and value[1] in catalog:
+                 if catalog[value[1]].storage_requirements:
+                     return True

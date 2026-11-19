@@ -1,0 +1,5 @@
+fn relay(v:&mut Int)->&mut Int{return v;}
+fn main(){let mut p=pool<Int>(1);let mut a=p.new(7);let v=&mut a;
+ let h=runtime::thread({->(v);return relay(v);});
+ match h.join(){Ok(r)=>{r.set(9);},Err(_)=>{print(99);}}
+ print(a);drop(->a);let b=p.new(10);print(b);drop(->b);}

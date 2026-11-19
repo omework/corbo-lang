@@ -1,0 +1,54 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10404,8 +10404,8 @@
+                     projected.extend(replace(target, id=self.uid(), array_capture=replace(
+                         loan, static_type='uint8_t' if self.async_definitions[nominal][0].args[2][1] == 'u8' else 'int', async_array_path=loan.async_array_path + path)) for path in paths)
+             dependencies.append((key, tuple(projected)))
+-        targets = {target.id for _, candidates in dependencies for target in candidates}
+-        parents = {id(parent): parent for parent in ancestry if any(target.id in targets for target in (
++        targets = {(target.inline_root or target).id for _, candidates in dependencies for target in candidates}
++        parents = {id(parent): parent for parent in ancestry if any((target.inline_root or target).id in targets for target in (
+             *(parent.referents or (parent.alloc,)), *self.dependency_targets(parent.alloc)))}
+         parents.update(cell_parents)
+         return tuple((*dependencies, *cell_dependencies)), tuple(parents.values())
+@@ -10623,9 +10623,6 @@
+                         and any(source.kind != 'local_stack' and source.element_type != typ
+                                 for source in target.sources)):
+                     self.fail('copie implicite de sous-structure : racine locale ou pool de destination explicite requis')
+-                if target is not None and kind in ('ref', 'mut', 'owned') and any(
+-                        item.inline_root is not None for item in self.retained_dependencies(target)):
+-                    self.fail('prototype : capture async de sous-structure non encore raccordée')
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
+                 if not array_capture and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
+                     targets_by_parameter[index] = target
+@@ -14778,6 +14775,30 @@
+                         external.allocations.append(target)
+                         borrowed.append((variant + '.' + name, (target,)))
+                         continue
++                    target_type = declared.removeprefix('&').removeprefix('mut ')
++                    if declared.startswith('&') and target_type in check.struct_fields:
++                        target_pointer = f'bridge_typed_field_{check.uid()}'
++                        offset = check.field_offset(members, field_index)
++                        check.lines.append(f'CrustStructureView {target_pointer} = {present} ? cell_load_view({pointer}, {offset}) : (CrustStructureView){{0}};')
++                        check.lines.append(f'(void){target_pointer};')
++                        source = MemorySource(check.uid(), external.id, 'symbolic', name,
++                            f'({target_pointer}.root ? {target_pointer}.root->source : NULL)', element_type=target_type)
++                        external.sources.append(source)
++                        target_root = Allocation(check.uid(), external.id, name, (source,),
++                            c=f'{target_pointer}.root', typ=target_type)
++                        target = replace(target_root, id=check.uid(), c=target_pointer,
++                                         inline_root=target_root, inline_path='')
++                        check.origin_sources[target_root.id] = source
++                        check.origin_sources[target.id] = source
++                        check.allocations.append(target_root)
++                        external.allocations.append(target_root)
++                        owned_bridge_fields(target, target_pointer)
++                        target_root.owned_fields = target.owned_fields
++                        target_root.dependencies = target.dependencies
++                        target_root.variants = target.variants
++                        target_root.item_sources = target.item_sources
++                        borrowed.append((variant + '.' + name, (target,)))
++                        continue
+                     if not declared.startswith('A<'):
+                         continue
+                     child_pointer = f'bridge_owned_field_{check.uid()}'

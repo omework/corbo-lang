@@ -1,0 +1,15 @@
+--- before/results.py
++++ after/results.py
+@@ -3244,6 +3244,12 @@
+                     for origin in carriers
+                 )
+                 mode = 'mut' if mutable and capability[0] == 'mut' else 'ref'
++                if field_type == '&Int' and isinstance(subject, Value):
++                    # A shared field points outside its carrier. Its target
++                    # survives independently; mutable fields retain a capability.
++                    origins = frozenset(replace(target, kind='detached_field_parameter')
++                        if target.kind in ('field_parameter', 'shared_field_parameter') else target
++                        for target in dict(subject.fields).get(f'{arm}.{field}', ()))
+                 fields = nested_reference_fields(subject.fields, f'{arm}.{field}') if isinstance(subject, Value) else ()
+                 bindings[name] = Value(mode, capability[1], fields=fields,
+                                        reference_targets=origins or frozenset({BorrowTarget('local')}))

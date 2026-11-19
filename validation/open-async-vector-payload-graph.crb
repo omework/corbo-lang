@@ -1,0 +1,5 @@
+struct Item{value:&Int}
+async fn read(v:->Vector<A<Item>>)->Int{let mut items=<-v;yield;let item=<-items.remove(0);let result=*item.value;drop(->item);drop(->items);return result;}
+fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let mut p=pool<Item>(1);let mut vp=pool<Vector<A<Item>>>(1);
+let mut v=vp.new();v.push(->p.new(value:&n));let execution=runtime::spawn(->read(->v));
+match execution.join(){Ok(result)=>{print(result);},Err(_)=>{print(0);}}drop(->n);}

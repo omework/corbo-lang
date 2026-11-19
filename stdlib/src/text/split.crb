@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Allocation-free splitting of UTF-8 text into borrowed views.
+
+/// A forward iterator over non-overlapping literal separator matches.
+/// Pieces borrow the original text; no piece owns or copies its bytes.
+pub struct Split {
+    /// Original UTF-8 storage, retained independently of the iterator cursor.
+    text: &str,
+    /// Literal separator; its storage must remain valid while matching continues.
+    separator: &str,
+    /// Byte offset of the next unconsumed piece.
+    position: usize,
+    /// Records exhaustion, including the final empty piece after a trailing match.
+    finished: bool,
+    /// Records whether an empty separator has yielded its leading empty piece.
+    empty_started: bool,
+}
+
+/// Borrows text and its separator and constructs a fixed-size iterator descriptor.
+/// Empty pieces are preserved. An empty separator splits at Unicode scalar boundaries.
+pub fn split(text: &str, separator: &str) -> Split {
+    Split { text: text, separator: separator, position: 0, finished: false, empty_started: false }
+}
+
+impl Split {
+    /// Returns the next UTF-8 view, or None after exhaustion.
+    /// Returned pieces depend on the original text, independently of this cursor.
+    fn next(&mut self) -> Option<&str> {
+        if (*self).finished { return None; }
+
+        let text = &(*self).text[..];
+        let separator = &(*self).separator[..];
+        let bytes = text.as_bytes();
+        let pattern = separator.as_bytes();
+        let position = &mut (*self).position;
+        let finished = &mut (*self).finished;
+        let start = *position;
+        let length = bytes.len();
+        let width = pattern.len();
+
+        if width == 0 {
+            if !(*self).empty_started {
+                let started = &mut (*self).empty_started;
+                *started = true;
+                return Some(&text[0..0]);
+            }
+            if start == length {
+                *finished = true;
+                return Some(&text[length..length]);
+            }
+            let mut end = copy(start) + 1;
+            while end < length && (bytes[end] & 192) == 128 {
+                end += 1;
+            }
+            *position = copy(end);
+            return Some(&text[start..end]);
+        }
+
+        let mut at = copy(start);
+        if width <= length - copy(start) {
+            let limit = copy(length) - copy(width);
+            while at <= limit {
+                let mut index: usize = 0;
+                while index < width && bytes[at + index] == pattern[index] {
+                    index += 1;
+                }
+                if index == width {
+                    *position = copy(at) + width;
+                    return Some(&text[start..at]);
+                }
+                at += 1;
+            }
+        };
+        *finished = true;
+        Some(&text[start..length])
+    }
+}

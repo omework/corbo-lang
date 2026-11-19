@@ -1,0 +1,216 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -37,4 +37,7 @@
+ JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested'}
+ JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation'}
++OWNED_WRAPPER_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult',
++                       'handle_option': 'VectorHandleResult'}
++OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation'}
+ ARRAY_BORROWS = {'array_ref': 'ref', 'array_mut': 'mut'}
+ SCALAR_TYPES = ChainMap(PLAIN_JOIN_TYPES, { **ERROR_VALUE_TYPES, 'runtime_error': 'runtime::Error', 'scalar': 'Int', 'bool': 'Bool', 'byte': 'u8', 'char': 'char', 'text': '&str', 'byte_ref': '&u8',
+@@ -2856,5 +2859,5 @@
+             return False
+         record = join_results[name]
+-        return record is None or record[1] == 'allocation' or (nested and record[1] == 'nested')
++        return record is None or record[1] in ('allocation', 'optional_allocation') or (nested and record[1] == 'nested')
+ 
+     def consume_owned_join(name, line):
+@@ -2869,5 +2872,5 @@
+         result, payload, _ = consume_owned_join(name, line)
+         clear_stored_fields(result)
+-        cell = f'{result}.allocation'
++        cell = f'{result}.value' if payload == 'optional_allocation' else f'{result}.allocation'
+         success = f'{result}.status == 0'
+         if payload == 'nested':
+@@ -2990,4 +2993,5 @@
+         if statement.annotation is not None and kind != 'array':
+             expected = (public_execution_type(value, statement.annotation, statement.line) if kind == 'execution' else
++                        'Option<A<Int>>' if kind == 'handle_option' else
+                         (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
+                          f'A<{owned_result_types.get(value, "Int")}>') if kind == 'owned' else None)
+@@ -3022,5 +3026,5 @@
+             scopes[-1][0][name] = None
+             steps.append(f'frame->{member} = {value};')
+-        elif kind in ('join_owned', 'join_nested'):
++        elif kind in OWNED_WRAPPER_TYPES:
+             join_results[name] = value
+             storage_bindings[name] = storage_of(value[0])
+@@ -3254,4 +3258,23 @@
+             initializer = consumed_result_expression(inner, collection_types.get(inner[1][1]))
+         operator = initializer[0]
++        if operator in ('array_pop_handle', 'array_handle_option_pop', 'array_handle_option_value'):
++            check_new_name(name, statement.line)
++            require_owned_result_use(statement, body, position, export_name)
++            if operator == 'array_handle_option_value':
++                source = initializer[1][1]
++                record = handle_option_record(source, statement.line)
++                value = temporary('Cell *')
++                keep_storage(value, storage_of(record[0]))
++                consume_owned_join(source, statement.line)
++                steps.extend((f'{value} = {record[0]}.value;', f'{record[0]}.value = NULL;'))
++                owned_result_types[value] = 'Int'
++                kind = 'owned'
++            else:
++                value = handle_pop_value(initializer, statement.line, following=body[position + 1:])
++                kind = 'handle_option' if operator == 'array_handle_option_pop' else 'owned'
++                if kind == 'handle_option':
++                    value = (value, 'optional_allocation', None)
++            bind_transferred_value(name, kind, value, statement)
++            return True
+         if operator in ('move', 'down') and initializer[1] in local_pools:
+             fail(statement.line, 'un pool local ne peut être transféré')
+@@ -3482,4 +3505,5 @@
+             if join_move:
+                 join_results[name] = consume_owned_join(initializer[1], statement.line)
++                storage_bindings[name] = storage_of(join_results[name][0])
+             elif handle_move:
+                 executions[name] = consume_execution(initializer[1], statement.line)
+@@ -3556,7 +3580,7 @@
+                         continue
+                     result, payload, _ = record
+-                    if payload not in ('allocation', 'nested'):
++                    if payload not in OWNED_WRAPPER_PAYLOADS.values():
+                         continue
+-                    cell = f'{result}.allocation'
++                    cell = f'{result}.value' if payload == 'optional_allocation' else f'{result}.allocation'
+                     success = f'{result}.status == 0'
+                     if payload == 'nested':
+@@ -3693,4 +3717,7 @@
+             fail(line, 'match async : résultat de handle requis')
+         subject = nodes[0].args[1]
++        if (subject[0] == 'method_call' and subject[1][0] == 'name' and subject[2] == 'pop'
++                and collection_types.get(subject[1][1]) == HANDLE_VECTOR):
++            fail(line, 'pop de A<Int> exige un transfert <- explicite')
+         if wrapped_utf8_family(subject) is not None:
+             return match_wrapped_utf8(nodes, line, valued=valued, transfer_result=transfer_result,
+@@ -4269,4 +4296,34 @@
+         return None
+ 
++    def handle_vector_mutation(receiver, line, *, following=None):
++        if collection_types.get(receiver) != HANDLE_VECTOR:
++            fail(line, 'pop transféré exige un Vector<A<Int>>')
++        if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable):
++            fail(line, 'pop exige un Vector mutable')
++        if following is not None:
++            release_statement_loans(following)
++        check_access(receiver, line, write=True)
++
++    def handle_pop_value(expr, line, *, following=None):
++        receiver = expr[1][1]
++        handle_vector_mutation(receiver, line, following=following)
++        buffered = expr[0] == 'array_handle_option_pop'
++        result = temporary('VectorHandleResult' if buffered else 'Cell *')
++        if buffered:
++            steps.extend((f'{result} = (VectorHandleResult){{0}};',
++                          f'{result}.status = vector_pop(frame->{fields[receiver]}, &{result}.value);'))
++        else:
++            steps.append(f'if (vector_pop(frame->{fields[receiver]}, &{result}) != CRUST_CHAR_OK) fail("pop de handle vide");')
++        keep_storage(result, storage_bindings.get(receiver, ()))
++        owned_result_types[result] = 'Int'
++        return result
++
++    def handle_option_record(name, line):
++        if name not in join_results or join_results[name] is not None and join_results[name][1] != 'optional_allocation':
++            fail(line, 'match consommant : Option<A<Int>> requis')
++        if join_results[name] is None:
++            fail(line, f"résultat '{name}' déjà consommé")
++        return join_results[name]
++
+     def vector_remove_value(expr, line, *, following=None):
+         receiver, arguments = expr[1][1], expr[3]
+@@ -4851,7 +4908,7 @@
+         if kind == 'array':
+             return kind, (target, returns_int, nominal)
+-        if kind in ('join_owned', 'join_nested'):
++        if kind in OWNED_WRAPPER_TYPES:
+             owned_result_types[target] = nominal
+-            return kind, (target, 'nested' if kind == 'join_nested' else 'allocation', None)
++            return kind, (target, OWNED_WRAPPER_PAYLOADS[kind], None)
+         loans = list(dict.fromkeys(loop['loans']))
+         active_loans[id(loans)] = loans
+@@ -5021,7 +5078,7 @@
+                 result, returns_int, nominal = record
+                 ctype = nominal
+-            elif kind in ('join_owned', 'join_nested'):
++            elif kind in OWNED_WRAPPER_TYPES:
+                 result, returns_int, nominal = record[0], None, owned_result_types.get(record[0], 'Int')
+-                ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++                ctype = OWNED_WRAPPER_TYPES[kind]
+             elif kind == 'selection':
+                 result = f'&{record.c}'
+@@ -5065,7 +5122,7 @@
+             fail(line, 'les break async doivent fournir le même type et le même mode')
+         if kind != 'array':
+-            if kind in ('owned', 'join_owned', 'join_nested'):
++            if kind in ('owned', *OWNED_WRAPPER_TYPES):
+                 keep_storage(target, storage_of(result))
+-            if kind in ('owned', 'join_owned', 'join_nested', 'task', 'execution'):
++            if kind in ('owned', *OWNED_WRAPPER_TYPES, 'task', 'execution'):
+                 move_stored_fields(result, target)
+             steps.append(f'{target} = {result};')
+@@ -5478,8 +5535,8 @@
+                             result, shape, ctype = record
+                             signature = kind, shape, ctype
+-                        elif kind in ('join_owned', 'join_nested'):
++                        elif kind in OWNED_WRAPPER_TYPES:
+                             result, payload, _ = record
+                             signature = kind, payload, owned_result_types.get(result, 'Int')
+-                            ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++                            ctype = OWNED_WRAPPER_TYPES[kind]
+                         elif kind == 'selection':
+                             result, ctype = f'&{record.c}', 'CrustSelect *'
+@@ -5517,7 +5574,7 @@
+                             selected_signature = kind, child_returns_int, common
+                         if kind != 'array':
+-                            if kind in ('owned', 'join_owned', 'join_nested'):
++                            if kind in ('owned', *OWNED_WRAPPER_TYPES):
+                                 keep_storage(target, storage_of(result))
+-                            if kind in ('owned', 'join_owned', 'join_nested', 'task', 'execution'):
++                            if kind in ('owned', *OWNED_WRAPPER_TYPES, 'task', 'execution'):
+                                 move_stored_fields(result, target)
+                             steps.append(f'{target} = {result};')
+@@ -5633,5 +5690,5 @@
+             if kind == 'array':
+                 return kind, (target, *selected_signature[1:])
+-            if kind in ('join_owned', 'join_nested'):
++            if kind in OWNED_WRAPPER_TYPES:
+                 owned_result_types[target] = selected_signature[2]
+                 return kind, (target, selected_signature[1], None)
+@@ -5680,5 +5737,5 @@
+                 require_durable_storage(join_results[name][0], depth, line)
+             record = consume_owned_join(name, line)
+-            return ('join_nested' if record[1] == 'nested' else 'join_owned'), record
++            return next(kind for kind, payload in OWNED_WRAPPER_PAYLOADS.items() if payload == record[1]), record
+         elif name in tasks and name in names:
+             kind, value = 'task', consume_task(name, line)
+@@ -6624,4 +6681,12 @@
+ 
+     def expression(expr, line, *, following=None):
++        if expr[0] == 'array_handle_len':
++            receiver = expr[1][1]
++            handle_vector_mutation(receiver, line, following=following)
++            return f'vector_len(frame->{fields[receiver]})'
++        if expr[0] == 'array_handle_option_status':
++            name = expr[1][1]
++            require_local_async_value(name, line)
++            return f'{handle_option_record(name, line)[0]}.status'
+         if expr[0] == 'match_expr':
+             return match_enum(expr[1], valued=True, following=following)
+@@ -6779,4 +6844,6 @@
+ 
+     def infer_scalar_value(expr, line, *, following=None):
++        if expr[0] in ('array_handle_len', 'array_handle_option_status'):
++            return expression(expr, line, following=following), 'Int'
+         if expr[0] == 'match_expr':
+             return match_enum(expr[1], valued=True, following=following, boolean=None)
+@@ -7321,4 +7388,10 @@
+         if statement.op in ('call', 'array_statement'):
+             expr = statement.args[0]
++            if expr[0] == 'array_handle_option_empty':
++                name = expr[1][1]
++                record = handle_option_record(name, statement.line)
++                consume_owned_join(name, statement.line)
++                steps.append(f'{record[0]}.value = NULL;')
++                return True
+             if vector_remove_type(expr) is not None:
+                 vector_remove_value(expr, statement.line, following=following)

@@ -1,0 +1,24 @@
+--- /tmp/crust-before-async-borrowed-local-results/async_local_placement.py
++++ /Users/jabarkarim/sources/crust/async_local_placement.py
+@@ -24,6 +24,8 @@
+         if not expr:
+             return None
+         op = expr[0]
++        if op == 'new_enum' and expr[1] is None:
++            return expr[2], {id(expr): expr}
+         if op in ('name', 'ref', 'mut', 'move', 'down'):
+             return env.get(expr[1])
+         if op in ('array_transfer', 'new_transfer', 'transfer'):
+@@ -83,6 +85,12 @@
+                     candidates.append((summary.typ, {id(expr): expr}) if origin else None)
+                 elif candidate.kind == 'parameter':
+                     candidates.append(evaluate(arguments[candidate.parameter], env))
++                elif candidate.kind == 'task_capture':
++                    origin = evaluate(arguments[candidate.parameter], env)
++                    if origin is not None and isinstance(origin[0], tuple) and origin[0][0] in ('task', 'execution'):
++                        candidates.append((origin[0][1], origin[1]))
++                    else:
++                        candidates.append(None)
+                 else:
+                     candidates.append(None)
+             return merge(candidates)

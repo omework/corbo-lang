@@ -1,0 +1,57 @@
+--- /tmp/crust-before-async-handle-exchange-results/async_result_storage.py
++++ async_result_storage.py
+@@ -25,7 +25,7 @@
+ 
+ def may_need_destination(node, structures):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option') or node.args[2][1] not in structures or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange') or node.args[2][1] not in structures or not effect or not effect.complete:
+         return False
+     return any(candidate.kind == 'fresh' and candidate.source.kind in ('local_value','allocation_parameter')
+                for candidate in effect.completion_result.candidates)
+@@ -33,14 +33,14 @@
+ 
+ def result_storage(node, local_parameters=frozenset()):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option'):
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange'):
+         return ResultStorage()
+     summary = effect.completion_result
+     if not summary.candidates:
+         return ResultStorage()
+     kinds, parameters, destination, unknown = set(), set(), False, False
+     for candidate in summary.candidates:
+-        if candidate.kind in ('parameter', 'vector_element'):
++        if candidate.kind in ('parameter', 'vector_element', 'exchange_parameter'):
+             parameters.add(candidate.parameter)
+             kinds.add('local' if candidate.kind == 'parameter' and candidate.parameter in local_parameters else 'pool')
+         elif candidate.kind == 'fresh':
+@@ -115,9 +115,19 @@
+     Local descendant sources remain unsupported and must not be promoted.
+     """
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option'):
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange'):
+         return None
+     summary = effect.completion_result
++    if summary.mode == 'buffered_handle_exchange' and len(summary.exchange_payloads) == 2:
++        from results import SourceOrigin
++        def storage(candidate):
++            if candidate.kind == 'exchange_parameter':
++                return SourceOrigin('allocation_field_parameter', candidate.parameter,
++                                    ('ok', 'err')[candidate.item_index])
++            return candidate.storage()
++        arms = tuple((name, frozenset(storage(candidate) for candidate in candidates))
++                     for name, candidates in zip(('ok', 'err'), summary.exchange_payloads))
++        return frozenset().union(*(sources for _, sources in arms)), arms
+     if (not summary.owned_fields and any(candidate.kind == 'vector_element' for candidate in summary.candidates)
+             and all(candidate.kind in ('parameter', 'vector_element') or candidate.kind == 'fresh'
+                     and candidate.source.kind == 'source_parameter' for candidate in summary.candidates)):
+@@ -181,6 +191,6 @@
+ def borrowed_result_fields(node):
+     """Completed stored-reference origins, distinct from captures kept while running."""
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option') or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange') or not effect or not effect.complete:
+         return ()
+     return effect.completion_result.borrowed_fields

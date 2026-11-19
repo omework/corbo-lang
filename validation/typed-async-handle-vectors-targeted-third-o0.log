@@ -1,0 +1,65 @@
+test_borrowed_push_remove_and_sync_relay (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_borrowed_push_remove_and_sync_relay) ... ok
+test_growing_payloads_keep_their_type (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_growing_payloads_keep_their_type) ... FAIL
+test_local_pools_and_cross_pool_cleanup (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_local_pools_and_cross_pool_cleanup) ... ok
+test_shared_and_owned_captures (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_shared_and_owned_captures) ... ok
+test_slot_borrow_and_capture_lifetimes (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_slot_borrow_and_capture_lifetimes) ... ok
+test_typed_option_survives_yield_and_sync_call (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_typed_option_survives_yield_and_sync_call) ... ok
+
+======================================================================
+FAIL: test_growing_payloads_keep_their_type (test_typed_async_handle_vectors.TypedAsyncHandleVectorTests.test_growing_payloads_keep_their_type)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17159, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15166, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1008, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7877, in _lower_async_function
+    returned = conditional(*args, line, valued=False, following=body[index + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4978, in conditional
+    return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+                         boolean=boolean, exchange_success=direct_exchange_success(condition))
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5760, in emit_branches
+    if bind_special(statement, body, position, export_name=export_name):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3422, in bind_special
+    check_new_name(name, statement.line)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2354, in check_new_name
+    fail(line, f"variable '{variable}' déjà déclarée")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1044, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 5: variable 'item' déjà déclarée
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_async_handle_vectors.py", line 88, in test_growing_payloads_keep_their_type
+    self.assertEqual(self.run_source(source).stdout, expected)
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: variable 'item' déjà déclarée
+
+----------------------------------------------------------------------
+Ran 6 tests in 4.462s
+
+FAILED (failures=1)

@@ -1,0 +1,108 @@
+--- crust.py before detached fields
++++ crust.py
+@@ -2310,9 +2310,9 @@
+                                  for root, parent in self.utf8_task_capture_paths(binding.alloc, int(target.field)))
+                     continue
+                 nominal = params[target.parameter][2]
+-                dependencies = self.project_task_result_captures(
++                dependencies, ancestry = self.project_task_result_captures(
+                     nominal, capture_fields(binding.alloc.dependencies, target.field), binding.alloc.borrow_parents)
+-                paths.update(self.join_reference_array_paths(dependencies, binding.alloc.borrow_parents))
++                paths.update(self.join_reference_array_paths(dependencies, ancestry))
+                 continue
+             if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter'):
+                 binding = self.original_array_slot(self.reference_slot(binding, target.field))
+@@ -9591,7 +9591,7 @@
+         result_paths = {}
+         for index, path in self.async_reference_paths[nominal]:
+             result_paths.setdefault(index, []).append(path)
+-        dependencies = []
++        dependencies, detached, detached_parents = [], [], {}
+         for key, candidates in captures:
+             paths = result_paths.get(int(key.split('.')[1]), ())
+             if not paths:
+@@ -9606,12 +9606,17 @@
+                     for path in paths:
+                         field = '.'.join(path)
+                         typ = dict(self.enums[target.typ]['']).get(field)
+-                        if typ == '&mut Int':
++                        if typ == '&Int':
++                            roots, parents = self.struct_shared_reference(binding, '.' + field)
++                            detached.append((f'ref.{key.split(".")[1]}', roots))
++                            detached_parents.update((id(parent), parent) for parent in parents)
++                            continue
++                        elif typ == '&mut Int':
+                             field_paths = self.struct_mutable_field_paths(binding, field, binding)
+                         elif typ == 'Int':
+                             field_paths = tuple((root, binding) for root in self.struct_int_roots(binding, field))
+                         else:
+-                            self.fail('projection du retour async : champ Int ou &mut Int requis')
++                            self.fail('projection du retour async : champ Int ou référence Int requis')
+                         for root, parent in field_paths:
+                             view = self.array_borrow_binding(target.label, 'array_' + mode, '',
+                                                              ('int', ((root, parent),)))
+@@ -9628,7 +9633,11 @@
+                     projected.extend(replace(target, id=self.uid(), array_capture=replace(
+                         loan, static_type='uint8_t' if self.async_definitions[nominal][0].args[2][1] == 'u8' else 'int', async_array_path=loan.async_array_path + path)) for path in paths)
+             dependencies.append((key, tuple(projected)))
+-        return tuple(dependencies)
++        targets = {target.id for _, candidates in dependencies for target in candidates}
++        parents = {id(parent): parent for parent in ancestry if any(target.id in targets for target in (
++            *(parent.referents or (parent.alloc,)), *self.dependency_targets(parent.alloc)))}
++        parents.update(detached_parents)
++        return tuple((*dependencies, *detached)), tuple(parents.values())
+ 
+     def async_array_capture(self, loan, root):
+         if root.alloc is None:
+@@ -10020,11 +10029,7 @@
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins, typ=typ)
+         if mode in ('ref', 'mut'):
+-            dependencies = self.project_task_result_captures(task_name, allocation.dependencies, allocation.borrow_parents)
+-            targets = {target.id for _, candidates in dependencies for target in candidates}
+-            parents = tuple(parent for parent in allocation.borrow_parents
+-                            if any(target.id in targets for target in (
+-                                *(parent.referents or (parent.alloc,)), *self.dependency_targets(parent.alloc))))
++            dependencies, parents = self.project_task_result_captures(task_name, allocation.dependencies, allocation.borrow_parents)
+             kind = 'join_' + mode
+             payload = Allocation(uid, -1, label, (), typ=kind,
+                                  dependencies=dependencies, borrow_parents=parents,
+@@ -12322,9 +12327,9 @@
+                 self.lines.append(f'{target} = {value};')
+             elif op == 'if_yield':
+                 expr = args[0]
+-                if returns in ('if', 'match_result', 'value_match') and expr[0] == 'name':
++                if returns in (True, 'if', 'match_result', 'value_match') and expr[0] == 'name':
+                     binding = self.lookup(expr[1])
+-                    if binding.kind in ('array_ref', 'array_mut'):
++                    if returns is not True and binding.kind in ('array_ref', 'array_mut'):
+                         self.expression_clock(expr)
+                         result = self.array_borrow((f'(*{binding.c})', binding.static_type, binding), binding.kind)
+                         continue
+@@ -12371,6 +12376,14 @@
+                     snapshot = f'block_value{self.uid()}'
+                     self.lines.append(f'{COPY_VALUE_TYPES[kind]} {snapshot} = {value};')
+                     result = kind, snapshot, None
++                    continue
++                if returns is True and result[0] in ('ref', 'mut'):
++                    kind, value, descriptor = result
++                    if not descriptor.reference_targets:
++                        descriptor = self.reference_descriptor(value, (descriptor,))
++                    snapshot = f'block_reference{self.uid()}'
++                    self.lines.append(f'Cell *{snapshot} = {value};')
++                    result = kind, snapshot, descriptor
+                     continue
+                 if returns is True:
+                     self.fail('une expression bloc exige une valeur transférée par <-')
+@@ -13524,7 +13537,10 @@
+         signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+         lines = check.flag_declarations + check.lines
+         if result is not None and mode != 'void':
+-            lines.append(f'return {result[1]};')
++            value = result[1]
++            if result[0] in ('ref', 'mut') and contract.result_type[1] == 'Int':
++                value = f'&({value})->value'
++            lines.append(f'return {value};')
+         self.definitions.extend(check.definitions)
+         self.definitions.append(signature + ' {\n' + '\n'.join('    ' + line for line in lines) + '\n}\n')
+         self.async_sync_prototypes.append(signature + ';')

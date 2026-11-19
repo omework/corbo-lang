@@ -1,0 +1,29 @@
+--- before/async_result_storage.py
++++ after/async_result_storage.py
+@@ -11,7 +11,7 @@
+ 
+ def may_need_destination(node, structures):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] != 'owned' or node.args[2][1] not in structures or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested') or node.args[2][1] not in structures or not effect or not effect.complete:
+         return False
+     return any(candidate.kind == 'fresh' and candidate.source.kind in ('local_value','allocation_parameter')
+                for candidate in effect.completion_result.candidates)
+@@ -19,7 +19,7 @@
+ 
+ def result_storage(node, local_parameters=frozenset()):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] != 'owned':
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested'):
+         return ResultStorage()
+     summary = effect.completion_result
+     if not summary.candidates:
+@@ -92,7 +92,7 @@
+     Local descendant sources remain unsupported and must not be promoted.
+     """
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] != 'owned':
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested'):
+         return None
+     summary = effect.completion_result
+     if not summary.owned_fields or not summary.candidates or any(

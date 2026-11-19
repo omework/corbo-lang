@@ -1,0 +1,56 @@
+--- /tmp/crust-before-inline-structure-views/crust.py
++++ crust.py
+@@ -1946,6 +1946,7 @@
+         self.body_call_contracts = {}
+         self.enums = {}
+         self.struct_fields = {}
++        self.inline_structures = {}
+         self.async_definitions.structures = self.enums
+         self.definitions = []
+         self.call_stack = []
+@@ -2845,7 +2846,7 @@
+         for name in self.function_effects:
+             node = self.functions[name]
+             check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+-            for attr in ('functions', 'async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields',
++            for attr in ('functions', 'async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields', 'inline_structures',
+                          'function_effects', 'function_results',
+                          'function_constraints', 'function_contracts'):
+                 setattr(check, attr, getattr(self, attr))
+@@ -3130,7 +3131,7 @@
+     def verify_top_level(self, nodes):
+         """Verify script statements with opaque callee contracts too."""
+         check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+-        for attr in ('async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields', 'function_effects', 'function_results',
++        for attr in ('async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields', 'inline_structures', 'function_effects', 'function_results',
+                      'function_constraints', 'function_contracts'):
+             setattr(check, attr, getattr(self, attr))
+         check.contract_calls = True
+@@ -14138,6 +14139,8 @@
+ 
+         for typ in self.struct_fields:
+             self.enums[typ][''] = layout(typ)
++        from structure_views import contained_layouts
++        self.inline_structures = contained_layouts(self.struct_fields)
+         for typ, variants in self.enums.items():
+             self.line = lines[typ]
+             for fields in variants.values():
+@@ -14509,7 +14512,7 @@
+         name, local_parameters = name if isinstance(name, tuple) else (name, frozenset())
+         contract = self.function_contracts[name]
+         check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+-        for attr in ('functions', 'async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields',
++        for attr in ('functions', 'async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields', 'inline_structures',
+                      'function_effects', 'function_results', 'function_constraints', 'function_contracts',
+                      'array_types', 'array_definitions', 'handle_slot_types'):
+             setattr(check, attr, getattr(self, attr))
+@@ -16239,6 +16242,9 @@
+ '''
+ 
+ 
++from structure_views import STRUCTURE_VIEW_RUNTIME
++PROTOTYPE_RUNTIME += STRUCTURE_VIEW_RUNTIME
++
+ LEGACY_RESET_RUNTIME = r'''
+ static void cell_drop_for_reset(Cell *cell) {
+     cell_drop_impl(cell, 1);

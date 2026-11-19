@@ -1,0 +1,10 @@
+struct Point{x:Int}
+async fn exchange(v:&mut Vector<A<Point>>,incoming:->A<Point>)-><-Result<A<Point>,A<Point>>{
+    yield;let r=<-v.replace(0,->incoming);yield;return <-r;
+}
+fn main(){let mut p=pool<Point>(2);let mut vp=pool<Vector<A<Point>>>(1);let mut v=vp.new();
+    v.push(->p.new(x:7));let incoming=p.new(x:8);
+    let h=runtime::spawn(->exchange(&mut v,->incoming));
+    match h.join(){Ok(r)=>{match (->r){Ok(old)=>{print(old.x);drop(->old);},Err(rejected)=>{print(rejected.x);drop(->rejected);}}},Err(_)=>{print(99);}}
+    let resident=<-v.remove(0);print(resident.x);drop(->resident);drop(->v);
+    let reused=p.new(x:9);print(reused.x);}

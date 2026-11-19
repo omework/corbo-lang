@@ -1,0 +1,18 @@
+--- before/async_structure_effects.py
++++ async_structure_effects.py
+@@ -205,9 +205,13 @@
+                 reference_targets=frozenset(target for value in values for target in value.reference_targets),
+                 payload_reference=any(value.payload_reference for value in values))
+         elif mode in ('owned', 'join_owned', 'join_nested', *UTF8_BORROW_MODES):
+-            if not values or any((value.mode, value.typ) != (mode, typ) for value in values):
++            if (not values and not joined) or any((value.mode, value.typ) != (mode, typ) for value in values):
+                 raise IncompleteStructureEffects('résultat async sans contrat de provenance compatible')
+-            value = merge_owned_values(values)
++            # All complete child summaries can prove that no successful poll
++            # returns. A launched handle still has the LaunchFailed exit, but
++            # it carries no payload origin. Unknown summaries are rejected by
++            # the caller before reaching this point, never treated as failure.
++            value = merge_owned_values(values) if values else Value(mode, typ, absent_owned_payload=True)
+         elif mode in FIELD_RESULT_MODES:
+             # Plain scalars/arrays and error envelopes carry no memory target.
+             value = Value(mode, typ)

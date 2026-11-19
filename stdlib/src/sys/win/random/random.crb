@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows system entropy backends for ARM64 and x86-64.
+
+// The public wrapper calls this with nonempty chunks of at most 256
+// bytes, so the byte count fits BCryptGenRandom's ULONG argument.
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Requests bytes from the platform entropy source and returns its status and byte count.
+    pub fn read_random(output: &mut [u8]) -> (i64, usize) {
+        let length = output.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { return (-1073741811, 0); }
+        let mut status: i64 = 0;
+        @unchecked {
+            let address = addr(&mut output[0]);
+            @asm {
+                mov x0, #0
+                mov x1, ${address}
+                mov x2, ${length}
+                mov w3, #2
+                bl BCryptGenRandom
+                sxtw x0, w0
+                mov ${status}, x0
+            }
+        }
+        if status < 0 { return (status, 0); }
+        return (0, length);
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Requests bytes from the platform entropy source and returns its status and byte count.
+    pub fn read_random(output: &mut [u8]) -> (i64, usize) {
+        let length = output.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { return (-1073741811, 0); }
+        let mut status: i64 = 0;
+        @unchecked {
+            let address = addr(&mut output[0]);
+            @asm {
+                sub rsp, 32
+                xor ecx, ecx
+                mov rdx, ${address}
+                mov r8, ${length}
+                mov r9d, 2
+                call BCryptGenRandom
+                cdqe
+                mov ${status}, rax
+                add rsp, 32
+            }
+        }
+        if status < 0 { return (status, 0); }
+        return (0, length);
+    }
+#(endif)

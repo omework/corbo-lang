@@ -1,0 +1,12 @@
+struct Point{x:Int}
+async fn left(v:->Point)-><-Point{yield;return <-v;}
+async fn right(v:->Point)-><-Point{return <-v;}
+async fn work()->Int{
+ let mut ps=pool<Point>(1);
+ let a=Point{x:7};let b=ps.new(x:9);
+ let mut s=runtime::select(->left(->a),->right(->b));
+ let result=s.await;drop(->s);print(result.x);drop(->result);return 1;
+}
+fn main(){let h=runtime::spawn(->work());
+ match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+}

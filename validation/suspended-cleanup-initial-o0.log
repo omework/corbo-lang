@@ -1,0 +1,524 @@
+test_direct_await_tree_cleans_child_before_parent_storage (test_suspended_cleanup.SuspendedCleanupTests.test_direct_await_tree_cleans_child_before_parent_storage) ... ok
+test_inactive_children_transfers_and_resumed_loop (test_suspended_cleanup.SuspendedCleanupTests.test_inactive_children_transfers_and_resumed_loop) ... ok
+test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) ... 
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=1) ... ERROR
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=2) ... ERROR
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=3) ... ERROR
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=1) ... ERROR
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=2) ... ERROR
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=3) ... ERROR
+test_outstanding_handle_preflight_preserves_normal_execution (test_suspended_cleanup.SuspendedCleanupTests.test_outstanding_handle_preflight_preserves_normal_execution) ... ERROR
+test_prepared_moves_during_later_argument_await (test_suspended_cleanup.SuspendedCleanupTests.test_prepared_moves_during_later_argument_await) ... ok
+test_result_allocation_cleaned_after_success_or_launch_failure (test_suspended_cleanup.SuspendedCleanupTests.test_result_allocation_cleaned_after_success_or_launch_failure) ... 
+  test_result_allocation_cleaned_after_success_or_launch_failure (test_suspended_cleanup.SuspendedCleanupTests.test_result_allocation_cleaned_after_success_or_launch_failure) (failure=False) ... ERROR
+  test_result_allocation_cleaned_after_success_or_launch_failure (test_suspended_cleanup.SuspendedCleanupTests.test_result_allocation_cleaned_after_success_or_launch_failure) (failure=True) ... ERROR
+test_select_uses_generated_suspended_destructor (test_suspended_cleanup.SuspendedCleanupTests.test_select_uses_generated_suspended_destructor) ... ok
+
+======================================================================
+ERROR: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 48, in test_locals_replacements_and_conditional_suspension_points
+                        run = self.native(source, f'''
+                              ~~~~~~~~~~~^^^^^^^^^^^^^
+        Source incoming=source_pool(1); Cell *n=cell_new(&incoming,7,"incoming");
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        cell_drop(reused);source_close(&incoming);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5949, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5375, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5370, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5236, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 48, in test_locals_replacements_and_conditional_suspension_points
+                        run = self.native(source, f'''
+                              ~~~~~~~~~~~^^^^^^^^^^^^^
+        Source incoming=source_pool(1); Cell *n=cell_new(&incoming,7,"incoming");
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        cell_drop(reused);source_close(&incoming);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5949, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5375, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5370, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5236, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 48, in test_locals_replacements_and_conditional_suspension_points
+                        run = self.native(source, f'''
+                              ~~~~~~~~~~~^^^^^^^^^^^^^
+        Source incoming=source_pool(1); Cell *n=cell_new(&incoming,7,"incoming");
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        cell_drop(reused);source_close(&incoming);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5949, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5375, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5370, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5236, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 48, in test_locals_replacements_and_conditional_suspension_points
+                        run = self.native(source, f'''
+                              ~~~~~~~~~~~^^^^^^^^^^^^^
+        Source incoming=source_pool(1); Cell *n=cell_new(&incoming,7,"incoming");
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        cell_drop(reused);source_close(&incoming);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5949, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5375, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5370, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5236, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 48, in test_locals_replacements_and_conditional_suspension_points
+                        run = self.native(source, f'''
+                              ~~~~~~~~~~~^^^^^^^^^^^^^
+        Source incoming=source_pool(1); Cell *n=cell_new(&incoming,7,"incoming");
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        cell_drop(reused);source_close(&incoming);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5949, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5375, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5370, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5236, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 48, in test_locals_replacements_and_conditional_suspension_points
+                        run = self.native(source, f'''
+                              ~~~~~~~~~~~^^^^^^^^^^^^^
+        Source incoming=source_pool(1); Cell *n=cell_new(&incoming,7,"incoming");
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        cell_drop(reused);source_close(&incoming);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5949, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5375, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5370, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5236, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_outstanding_handle_preflight_preserves_normal_execution (test_suspended_cleanup.SuspendedCleanupTests.test_outstanding_handle_preflight_preserves_normal_execution)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 163, in test_outstanding_handle_preflight_preserves_normal_execution
+            self.native(source, '''
+            ~~~~~~~~~~~^^^^^^^^^^^^
+        CrustTask *task=crust_async_relay_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        assert(observed_closes==1);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5920, in _lower_async_function
+    returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4359, in match_statement
+    return match_async_result((statement, *tail), statement.line, valued=False, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2648, in match_async_result
+    return emit_branches(test, yes, no, line, valued=valued,
+                         join_payload=(result, payload, status, loans, direct, subject[1] if not direct and subject[0] == 'name' else None), construct='match',
+                         transfer_result=transfer_result, following=following, boolean=boolean,
+                         reference_result=reference_result)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3990, in emit_branches
+    declare(payload, line)
+    ~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1471, in declare
+    check_new_name(variable, line)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1467, in check_new_name
+    fail(line, f"variable '{variable}' déjà déclarée")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: variable 'n' déjà déclarée
+
+======================================================================
+ERROR: test_result_allocation_cleaned_after_success_or_launch_failure (test_suspended_cleanup.SuspendedCleanupTests.test_result_allocation_cleaned_after_success_or_launch_failure) (failure=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 147, in test_result_allocation_cleaned_after_success_or_launch_failure
+                    run = self.native(source, '''
+                          ~~~~~~~~~~~^^^^^^^^^^^^
+        CrustTask *task=crust_async_work_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        assert(task_drop_owned(task));assert(observed_closes==1);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', failure=failure)
+    ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5920, in _lower_async_function
+    returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4359, in match_statement
+    return match_async_result((statement, *tail), statement.line, valued=False, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2648, in match_async_result
+    return emit_branches(test, yes, no, line, valued=valued,
+                         join_payload=(result, payload, status, loans, direct, subject[1] if not direct and subject[0] == 'name' else None), construct='match',
+                         transfer_result=transfer_result, following=following, boolean=boolean,
+                         reference_result=reference_result)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3990, in emit_branches
+    declare(payload, line)
+    ~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1471, in declare
+    check_new_name(variable, line)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1467, in check_new_name
+    fail(line, f"variable '{variable}' déjà déclarée")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: variable 'n' déjà déclarée
+
+======================================================================
+ERROR: test_result_allocation_cleaned_after_success_or_launch_failure (test_suspended_cleanup.SuspendedCleanupTests.test_result_allocation_cleaned_after_success_or_launch_failure) (failure=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 147, in test_result_allocation_cleaned_after_success_or_launch_failure
+                    run = self.native(source, '''
+                          ~~~~~~~~~~~^^^^^^^^^^^^
+        CrustTask *task=crust_async_work_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        assert(task_drop_owned(task));assert(observed_closes==1);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''', failure=failure)
+    ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5920, in _lower_async_function
+    returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4359, in match_statement
+    return match_async_result((statement, *tail), statement.line, valued=False, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2648, in match_async_result
+    return emit_branches(test, yes, no, line, valued=valued,
+                         join_payload=(result, payload, status, loans, direct, subject[1] if not direct and subject[0] == 'name' else None), construct='match',
+                         transfer_result=transfer_result, following=following, boolean=boolean,
+                         reference_result=reference_result)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3990, in emit_branches
+    declare(payload, line)
+    ~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1471, in declare
+    check_new_name(variable, line)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1467, in check_new_name
+    fail(line, f"variable '{variable}' déjà déclarée")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: variable 'n' déjà déclarée
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.715s
+
+FAILED (errors=9)

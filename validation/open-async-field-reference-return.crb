@@ -1,0 +1,7 @@
+struct View{left:Int,data:&mut Int,right:Int}
+           async fn work(v:&mut View)->&mut Int{let r=&mut *v.data;yield;return r;}
+          fn main(){let mut memory=pool<Int>(1);let mut data=memory.new(7);
+            let mut v=View{left:2,data:&mut data,right:3};
+            let h=runtime::spawn(->work(&mut v));
+            match h.join(){Ok(n)=>{n.set(21);print(n);},Err(_)=>{print(99);}}
+            print(v.left);print(v.right);print(data);}

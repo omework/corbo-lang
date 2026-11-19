@@ -1,0 +1,219 @@
+--- /tmp/crust-before-typed-handle-vectors/results.py
++++ /Users/jabarkarim/sources/crust/results.py
+@@ -17,6 +17,7 @@
+ 
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ASYNC_SHARED_VIEW_MODES, VECTOR_SLICE_ELEMENTS, VECTOR_SPLIT_TYPES, SHARED_VECTOR_SLICE_MODES, VECTOR_SLICE_MODES, VECTOR_MUT_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, UTF8_BORROW_MODES, VALUE_MODES, UTF8_VALUE_RESULT_FAMILIES
+ from dataclasses import dataclass, field, replace
++from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import aggregate_owned_paths
+ from array_syntax import merge_structure_choices
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+@@ -537,8 +538,8 @@
+ UNKNOWN_HANDLE_ITEM = ResultCandidate('fresh', source=SourceOrigin('local', -1, 'élément de vecteur'))
+ 
+ 
+-def extracted_handle(items):
+-    return Value('owned', 'Int', items or frozenset({UNKNOWN_HANDLE_ITEM}))
++def extracted_handle(items, typ='Int'):
++    return Value('owned', typ, items or frozenset({UNKNOWN_HANDLE_ITEM}))
+ 
+ 
+ def merge_input_item_history(values):
+@@ -665,7 +666,7 @@
+         mode, typ = node.args[2]
+         mutable_containers = any((parameter_mode == 'array_mut' and reference_array_shape(parameter_type))
+                                  or (reference_array_shape(parameter_type) and reference_array_shape(reference_array_element(parameter_type)[1]))
+-                                 or (parameter_mode == 'mut' and parameter_type in (HANDLE_VECTOR, *REFERENCE_VECTORS))
++                                 or (parameter_mode == 'mut' and parameter_type in (*HANDLE_VECTORS, *REFERENCE_VECTORS))
+                                  or (parameter_mode == 'mut' and parameter_type.startswith('A<'))
+                                  or (parameter_mode == 'mut' and any(
+                                      reference_type(typ)
+@@ -1044,17 +1045,17 @@
+                 tracks_reference_items = typ in REFERENCE_VECTORS and mode in ('owned', 'mut')
+                 if typ in REFERENCE_VECTORS:
+                     fields = (('.items', frozenset({BorrowTarget('detached_field_parameter', index, '.items')})),)
+-                origins = (frozenset({('vector_parameter', index)}) if typ == HANDLE_VECTOR
++                origins = (frozenset({('vector_parameter', index)}) if is_handle_vector(typ)
+                            else frozenset({('owned_parameter', index)})
+                            if tracks_reference_items or (mode == 'owned' and typ in self.analyzer.enums)
+                            else frozenset())
+                 environment[name] = Value(mode, typ, frozenset({ResultCandidate('parameter', index)}), fields,
+                                           structure_origins=origins,
+                                           handle_items=(frozenset({ResultCandidate('vector_element', index)})
+-                                                        if typ == HANDLE_VECTOR and mode in ('owned', 'mut')
++                                                        if is_handle_vector(typ) and mode in ('owned', 'mut')
+                                                         else fields[0][1] if tracks_reference_items else None),
+                                           input_item_history=InputVectorHistory()
+-                                          if (typ == HANDLE_VECTOR and mode in ('owned', 'mut'))
++                                          if (is_handle_vector(typ) and mode in ('owned', 'mut'))
+                                           or (typ in REFERENCE_VECTORS and mode == 'mut') else None)
+         for index, (name, mode, typ) in enumerate(self.params):
+             if mode in ('array_ref', 'array_mut') and reference_array_shape(typ):
+@@ -1087,7 +1088,7 @@
+                                for arm, declarations in self.analyzer.enums.get(content, {}).items()
+                                for field, field_type in declarations if field_type in ('&Int', '&mut Int'))
+                 environment[key] = Value('owned', content, environment[name].candidates, fields,
+-                    handle_items=frozenset({ResultCandidate('vector_element', index)}) if content == HANDLE_VECTOR else None)
++                    handle_items=frozenset({ResultCandidate('vector_element', index)}) if is_handle_vector(content) else None)
+         def capture(index, value, prefix=''):
+             for slot, row in value.rows:
+                 path = prefix + slot
+@@ -1170,7 +1171,7 @@
+ 
+     def collect_vector_writes(self, visible, line):
+         for index, (name, mode, typ) in enumerate(self.params):
+-            if mode != 'mut' or typ != HANDLE_VECTOR:
++            if mode != 'mut' or not is_handle_vector(typ):
+                 continue
+             final = visible[name]
+             history = final.input_item_history
+@@ -1266,7 +1267,7 @@
+                             or item.kind not in ('fresh', 'parameter', 'vector_element')
+                             for item in candidates):
+                         self.fail(line, 'remplacement du handle injecté : provenance non durable')
+-                    if final.typ == HANDLE_VECTOR:
++                    if is_handle_vector(final.typ):
+                         if final.handle_items is None and any(item.kind == 'fresh' for item in candidates):
+                             self.fail(line, 'remplacement du handle injecté : inventaire neuf non vérifiable')
+                         candidates = self.describe_vector_result(final, line)
+@@ -1518,12 +1519,12 @@
+ 
+     def describe_vector_result(self, value, line):
+         candidates = value.candidates
+-        fresh_vector = value.typ == HANDLE_VECTOR and any(candidate.kind == 'fresh' for candidate in candidates)
++        fresh_vector = is_handle_vector(value.typ) and any(candidate.kind == 'fresh' for candidate in candidates)
+         items = possible_handle_items(value.handle_items)
+         history = value.input_item_history
+         if value.input_items_written and history is not None:
+             items = frozenset().union(*history.appended, *(slot for _, slot in history.replaced))
+-        if value.typ == HANDLE_VECTOR and (value.input_items_written or (fresh_vector and items)):
++        if is_handle_vector(value.typ) and (value.input_items_written or (fresh_vector and items)):
+             if items is None:
+                 self.fail(line, 'retour d’un vecteur injecté après écriture sans contrat de cases')
+             added = tuple(sorted({item.parameter for item in items if item.kind == 'parameter'}))
+@@ -1548,7 +1549,7 @@
+                         item for item in items if item.kind == 'vector_element'
+                         and (candidate.kind != 'parameter' or item.parameter != candidate.parameter)))))
+             candidates = frozenset(returned)
+-        elif value.typ == HANDLE_VECTOR and value.input_items_changed:
++        elif is_handle_vector(value.typ) and value.input_items_changed:
+             history = value.input_item_history
+             if value.handle_items is None or any(candidate.kind != 'parameter' for candidate in candidates):
+                 self.fail(line, 'retour d’un vecteur injecté après extraction sans historique vérifiable')
+@@ -1713,7 +1714,7 @@
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+         vector = environment.get(receiver)
+-        if not isinstance(vector, Value) or vector.typ != HANDLE_VECTOR:
++        if not isinstance(vector, Value) or not is_handle_vector(vector.typ):
+             return
+         owner = vector.storage_owner
+         alias = vector if owner is not None else None
+@@ -1749,8 +1750,9 @@
+                 return extracted_handle(None)
+         items = vector.handle_items if isinstance(vector, Value) else None
+         candidates = vector_result_candidates(vector, index, last=last)
+-        result = (Value('handle_option', 'Int') if optional and items == ()
+-                  and not candidates else extracted_handle(candidates))
++        typ = handle_vector_element(vector.typ) if isinstance(vector, Value) else 'Int'
++        result = (Value('handle_option', typ) if optional and items == ()
++                  and not candidates else extracted_handle(candidates, typ))
+         if last:
+             index = last_handle_index(items)
+         if isinstance(vector, Value):
+@@ -1782,7 +1784,7 @@
+     def invalidate_handle_items(self, environment, *, writing=False):
+         for bindings in (environment, *(shadows for _, shadows in self.blocks)):
+             for name, value in bindings.items():
+-                if isinstance(value, Value) and value.typ == HANDLE_VECTOR:
++                if isinstance(value, Value) and is_handle_vector(value.typ):
+                     bindings[name] = replace(value, handle_items=None, input_item_history=None,
+                                              input_items_written=value.input_items_written or (writing and any(
+                                                  candidate.kind == 'parameter' for candidate in value.candidates)))
+@@ -1792,12 +1794,12 @@
+             self.invalidate_handle_items(environment, writing=True)
+             return
+         origins, index = target.handle_slot
+-        if any(isinstance(value, Value) and value.typ == HANDLE_VECTOR and value.structure_origins & origins
++        if any(isinstance(value, Value) and is_handle_vector(value.typ) and value.structure_origins & origins
+                for _, shadows in self.blocks for value in shadows.values()):
+             self.invalidate_handle_items(environment, writing=True)
+             return
+         roots = [(name, value) for name, value in environment.items()
+-                 if isinstance(value, Value) and value.typ == HANDLE_VECTOR and value.structure_origins & origins]
++                 if isinstance(value, Value) and is_handle_vector(value.typ) and value.structure_origins & origins]
+         if not roots:
+             self.invalidate_handle_items(environment, writing=True)
+             return
+@@ -2191,12 +2193,12 @@
+                     return flow, Value('bool', 'Bool')
+                 if values[0].mode in ('byte_option', 'byte_replace', 'byte_try_push', 'join_byte'):
+                     return flow, Value('byte', 'u8')
+-            if op == 'array_index' and isinstance(values[0], Value) and values[0].typ == HANDLE_VECTOR:
++            if op == 'array_index' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 root = values[0]
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+-                return flow, Value('handle_slot', 'A<Int>', reference_targets=text_origins(root), payload_reference=True,
++                return flow, Value('handle_slot', f'A<{handle_vector_element(root.typ)}>', reference_targets=text_origins(root), payload_reference=True,
+                                    handle_slot=(root.structure_origins, index) if root.structure_origins else None)
+-            if op == 'array_vector_remove' and isinstance(values[0], Value) and values[0].typ == HANDLE_VECTOR:
++            if op == 'array_vector_remove' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+                 return flow, self.extract_vector_item(environment, expr[1], index)
+             if op in ('array_index', 'array_vector_remove') and values and isinstance(values[0], Value) and values[0].typ in VECTOR_ELEMENTS:
+@@ -2383,7 +2385,7 @@
+                 return {'next'}, parent
+             if parent.mode == 'array_refs':
+                 return {'next'}, replace(parent, container_borrow=True, container_mode=expr[2])
+-            if parent.typ.startswith('A<'):
++            if parent.typ.startswith('A<') or is_handle_vector(parent.typ):
+                 return {'next'}, replace(parent, mode=expr[2])
+             if parent.typ in self.analyzer.enums:
+                 return {'next'}, replace(parent, mode=expr[2], reference_targets=borrowed_targets(parent))
+@@ -2419,7 +2421,7 @@
+                         reference_targets=value.reference_targets or frozenset({BorrowTarget('local')}))
+                 if value.mode in ('ref', 'mut'):
+                     self.fail(line, 'emprunt imbriqué non pris en charge : & sur un emprunt ajoute un niveau ; utiliser son nom')
+-                if value.typ == HANDLE_VECTOR:
++                if is_handle_vector(value.typ):
+                     return {'next'}, replace(value, mode=op, storage_owner=expr[1])
+                 value = Value(op, value.typ, value.candidates, value.fields, value.fresh_variants,
+                               borrowed_targets(value) or (frozenset({BorrowTarget('local')}) if fixed_array_shape(value.typ) else frozenset()),
+@@ -2660,8 +2662,8 @@
+             return flow, Value('owned', typ, frozenset({ResultCandidate('fresh', source=source)}),
+                                tuple(fields), frozenset({arm}) if arm is not None else frozenset(),
+                                owned_fields=tuple(owned_fields),
+-                               structure_origins=frozenset({id(expr)}) if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) or typ in self.analyzer.enums else frozenset(),
+-                               handle_items=() if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) else None)
++                               structure_origins=frozenset({id(expr)}) if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) or typ in self.analyzer.enums else frozenset(),
++                               handle_items=() if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) else None)
+         if op == 'call':
+             name, args = expr[1:]
+             if name in self.analyzer.async_functions:
+@@ -2862,7 +2864,7 @@
+                                        else self.array_update_targets(target, inputs[target.parameter]))))
+                         for field, targets in write_fields.get(parameter, ()))
+                     vectors = (self.apply_vector_result_candidates(candidates, inputs, id(expr))
+-                               if inputs[parameter].typ == HANDLE_VECTOR else ())
++                               if is_handle_vector(inputs[parameter].typ) else ())
+                     incoming = replace(inputs[parameter], candidates=self.resolve_vector_slot(candidates, inputs),
+                                        fields=fields, handle_items=merge_handle_items(vectors) if vectors else None,
+                                        input_item_history=merge_input_item_history(vectors) if vectors else None,
+@@ -3306,7 +3308,7 @@
+             fresh_variants = summary.fresh_variants | frozenset(
+                 arm for candidate in summary.candidates if candidate.kind == 'parameter'
+                 for arm in actuals[candidate.parameter].fresh_variants)
+-            if summary.typ == HANDLE_VECTOR:
++            if is_handle_vector(summary.typ):
+                 vectors = self.apply_vector_result_candidates(summary.candidates, actuals, id(expr))
+                 return flow, Value('owned', summary.typ, frozenset(candidates), fresh_variants=fresh_variants,
+                                    handle_items=merge_handle_items(vectors),
+@@ -3890,7 +3892,7 @@
+     def apply_deferred_vectors(self, updates, environment):
+         for carrier, items in updates:
+             for name, current in tuple(environment.items()):
+-                if (isinstance(current, Value) and current.typ == HANDLE_VECTOR
++                if (isinstance(current, Value) and is_handle_vector(current.typ)
+                         and current.structure_origins == carrier.structure_origins):
+                     previous = possible_handle_items(current.handle_items)
+                     environment[name] = replace(current,

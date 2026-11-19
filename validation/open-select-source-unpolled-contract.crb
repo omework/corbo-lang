@@ -1,0 +1,12 @@
+#(directive, async_pool_sizes={ready:1,recursive:4,work:1})
+struct View{data:&Int}
+async fn ready()->Int{return 1;}
+async fn recursive(v:&mut View)->Int{return recursive(v).await;}
+async fn work(v:&mut View)->Int{
+    let mut s=runtime::select(->ready(),->recursive(v));
+    let r=s.await;drop(->s);return r;
+}
+fn main(){let mut p=pool<Int>(1);let a=p.new(7);let mut v=View{data:&a};
+    let h=runtime::spawn(->work(&mut v));match h.join(){Ok(r)=>{print(r);},Err(_)=>{}}
+    print(*v.data);
+}

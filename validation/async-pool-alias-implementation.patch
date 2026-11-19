@@ -1,0 +1,106 @@
+--- async_lowering.py (before aliases)
++++ async_lowering.py
+@@ -659,6 +659,8 @@
+         op = expr[0]
+         if op in ('move', 'name', 'down'):
+             return bindings.get(expr[1])
++        if op in ('ref', 'mut', 'reborrow') and bindings.get(expr[1]) is not None and bindings[expr[1]][0] == 'source':
++            return bindings[expr[1]]
+         if op == 'new' and bindings.get(expr[1]) is not None and bindings[expr[1]][0] == 'source':
+             return 'owner', bindings[expr[1]][1]
+         if op in ('task_spawn', 'transfer', 'array_transfer', 'new_transfer'):
+@@ -874,7 +876,10 @@
+         if mode == 'mut' and references[name] != 'mut':
+             fail(line, 'allouer exige un emprunt mutable du pool')
+         check_access(name, line, write=mode == 'mut')
+-        return f'frame->{fields[name]}', [(name, mode)]
++        return f'frame->{fields[name]}', [(name, mode), *received_refs.get(name, ())]
++
++    def pool_storage(name):
++        return frozenset({name}) if name in local_pools else pool_alias_origins.get(name, frozenset())
+ 
+     def storage_of(value):
+         for name, member in fields.items():
+@@ -971,7 +976,7 @@
+                        f'_Alignof({element}), 0, "{label}")')
+         steps.append(f'{cell} = {factory};')
+         owned_result_types[cell] = typ
+-        keep_storage(cell, {expr[1]} if expr[1] in local_pools else ())
++        keep_storage(cell, pool_storage(expr[1]))
+         return cell
+ 
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
+@@ -1032,7 +1037,7 @@
+                     steps.append(f'{value} = NULL;')
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
+-                argument_storage.append(({argument[1]} if (mode, typ) in pool_sync_types and argument[1] in local_pools
++                argument_storage.append((pool_storage(argument[1]) if (mode, typ) in pool_sync_types
+                                          else storage_of(value) if mode == 'owned' else frozenset()))
+                 release_sync_argument_loans(following)
+                 argument_tails.pop()
+@@ -1091,6 +1096,7 @@
+     reference_types = {name: typ for name, mode, typ in parameters if mode in ('ref', 'mut')}
+     pool_types = {name: typ for name, mode, typ in parameters if (mode, typ) in pool_sync_types}
+     local_pools = {}
++    pool_alias_origins = {}
+     storage_bindings = {}
+     storage_values = {}
+     awaited_reference_types = {}
+@@ -1218,8 +1224,8 @@
+                 if (mode, typ) in pool_sync_types:
+                     value, held = pool_argument(argument, mode, typ, line)
+                     loans.extend(held)
+-                    if argument[1] in local_pools and index in owner_indexes:
+-                        returned_loans.append((argument[1], 'storage'))
++                    if index in owner_indexes:
++                        returned_loans.extend((origin, 'storage') for origin in pool_storage(argument[1]))
+                 elif mode == 'scalar':
+                     value = boolean_value(argument, line) if typ == 'Bool' else expression(argument, line)
+                 elif mode == 'byte':
+@@ -1884,6 +1890,28 @@
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
+         operator = initializer[0]
++        if operator in ('ref', 'mut', 'reborrow') and initializer[1] in pool_types:
++            source_name = initializer[1]
++            mode = initializer[2] if operator == 'reborrow' else operator
++            if (source_name in local_pools) == (operator == 'reborrow'):
++                fail(statement.line, 'emprunt de pool : & sur une référence ajoute un niveau ; utiliser &* ou &mut *')
++            if mode == 'mut' and references[source_name] != 'mut':
++                fail(statement.line, 'emprunt mutable de pool : accès mutable requis')
++            expected = '&' + ('mut ' if mode == 'mut' else '') + pool_types[source_name]
++            if statement.annotation not in (None, expected) or statement.compact_transfer:
++                fail(statement.line, 'annotation ou transfert incompatible avec un emprunt de pool')
++            reservation = 'mut' if source_name not in local_pools and references[source_name] == 'mut' else mode
++            check_access(source_name, statement.line, write=reservation == 'mut')
++            loans = [(source_name, reservation), *received_refs.get(source_name, ())]
++            member = declare(name, statement.line)
++            references[name] = mode
++            reference_types[name] = pool_types[name] = pool_types[source_name]
++            pool_alias_origins[name] = pool_storage(source_name)
++            received_refs[name] = loans
++            active_loans[id(loans)] = loans
++            track_result(name, loans, body, position)
++            steps.append(f'frame->{member} = frame->{fields[source_name]};')
++            return True
+         if operator == 'source':
+             if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
+                 fail(statement.line, 'prototype async : pool local Int/String/Vector<Int/u8> requis')
+@@ -3780,6 +3808,7 @@
+                 collection_types.pop(name, None)
+                 pool_types.pop(name, None)
+                 local_pools.pop(name, None)
++                pool_alias_origins.pop(name, None)
+                 storage_bindings.pop(name, None)
+                 utf8_view_loans.pop(name, None)
+                 mutable_utf8_bindings.discard(name)
+@@ -3863,7 +3892,7 @@
+             for attached, _, returning, *_ in scopes[depth:]:
+                 local_names.update(attached.keys() - returning)
+                 moving.update(returning)
+-        departing = mutable_slices.intersection(local_names)
++        departing = (mutable_slices | pool_alias_origins.keys()).intersection(local_names)
+         task, returns_int, loans, nominal, returned_loans = value
+         if any(loan_root(target) in local_names and loan_root(target) not in departing for target, _ in loans):
+             fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')

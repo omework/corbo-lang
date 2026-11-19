@@ -1,0 +1,17 @@
+--- before/async_runtime.py
++++ after/async_runtime.py
+@@ -911,6 +911,14 @@
+     return 1;
+ }
+ 
++static int task_select_discardable(CrustSelect *selection) {
++    if (selection->dropped) return 0;
++    for (size_t i = 0; i < selection->count; ++i)
++        if (selection->branches[i].task &&
++                !task_owned_discardable(selection->branches[i].task)) return 0;
++    return 1;
++}
++
+ static void task_select_drop(CrustSelect *selection) {
+     if (selection->dropped) abort();
+     /* Revoke routes before any frame can be released. Concurrent producers

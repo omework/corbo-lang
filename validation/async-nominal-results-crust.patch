@@ -1,0 +1,84 @@
+--- before/crust.py
++++ after/crust.py
+@@ -7340,6 +7340,11 @@
+                 field = 'mutable_byte_reference' if byte else 'mutable_reference' if mode == 'mut' else 'reference'
+                 code = f'(Cell *)(({value}).{field})'
+                 targets = self.dependency_targets(descriptor)
++                if descriptor.async_reference_type in self.struct_fields:
++                    field = 'mutable_structure_reference' if mode == 'mut' else 'structure_reference'
++                    code = f'({value}).{field}'
++                    if not any(target.inline_root is not None for target in targets):
++                        code += '.root'
+                 if any(target.array_capture is not None for target in targets):
+                     paths = self.join_reference_array_paths(descriptor.dependencies, descriptor.borrow_parents)
+                     element = 'uint8_t' if byte else 'int'
+@@ -10303,7 +10308,7 @@
+             paths = result_paths.get(capture_index(key.partition('.')[2]), ())
+             field = key.partition('/')[2]
+             if field:
+-                paths = tuple(path for path in paths if not path or '.'.join(path) == field.lstrip('.'))
++                paths = tuple(() for path in paths if not path or '.'.join(path) == field.lstrip('.'))
+             if not paths:
+                 continue
+             projected = []
+@@ -10365,12 +10370,17 @@
+                     for path in paths:
+                         field = '.'.join(path)
+                         typ = dict(self.enums[target.typ]['']).get(field)
+-                        if typ == '&Int':
++                        if any(layout.path == field for layout in self.inline_structures.get(target.typ, ())):
++                            descriptor = self.inline_structure_projection(binding, field, mode)
++                            cell_dependencies.append((key, descriptor.reference_targets))
++                            cell_parents.update((id(parent), parent) for parent in descriptor.borrow_parents)
++                            continue
++                        if typ and typ.startswith('&') and not typ.startswith('&mut '):
+                             roots, parents = self.struct_shared_reference(binding, '.' + field)
+                             cell_dependencies.append((f'ref.{key.split(".")[1]}', roots))
+                             cell_parents.update((id(parent), parent) for parent in parents)
+                             continue
+-                        elif typ == '&mut Int' and not inline_result:
++                        elif typ and typ.startswith('&mut ') and not inline_result:
+                             # Keep the actual target plus the field capability;
+                             # neither is an inline piece of the other.
+                             roots = dict(target.dependencies).get('.' + field, ())
+@@ -10931,7 +10941,11 @@
+             payload = Allocation(uid, -1, label, (), typ=kind,
+                                  dependencies=dependencies, borrow_parents=parents,
+                                  async_reference_type=typ)
+-            if (mode, typ) == ('mut', 'u8'):
++            if typ in self.struct_fields:
++                field = 'mutable_structure_reference' if mode == 'mut' else 'structure_reference'
++                self.lines.append(f'CrustJoinResult {c} = {{0}};')
++                self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.{field}).status;')
++            elif (mode, typ) == ('mut', 'u8'):
+                 self.lines.append(f'CrustJoinResult {c} = {{0}};')
+                 self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.mutable_byte_reference).status;')
+             else:
+@@ -14659,6 +14673,7 @@
+                     sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+                     struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
+                     enum_layouts={typ: arms for typ, arms in self.enums.items() if '' not in arms},
++                    inline_layouts=self.inline_structures,
+                     local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+                     specialize=self.reserve_async_local_variant)
+             self.lower_async_local_variants(refresh=True)
+@@ -14719,6 +14734,7 @@
+                     sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+                     struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
+                     enum_layouts={typ: arms for typ, arms in self.enums.items() if '' not in arms},
++                    inline_layouts=self.inline_structures,
+                     local_parameters=local_parameters, variant_name=symbol,
+                     specialize=self.reserve_async_local_variant)
+                 self.async_local_variants[key] = symbol, code
+@@ -15143,11 +15159,6 @@
+ }
+ typedef struct Cell Cell;
+ typedef struct Source Source;
+-typedef struct {
+-    Cell *root;
+-    size_t offset, size;
+-    const Source *layout;
+-} CrustStructureView;
+ typedef struct VectorStorage VectorStorage;
+ static void vector_drop(Cell *cell);
+ static void vector_storage_close(VectorStorage *storage);

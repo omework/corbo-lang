@@ -1,0 +1,36 @@
+--- /tmp/async_lowering.py-before-ready-queue	2026-11-08 00:29:49
++++ async_lowering.py	2026-11-08 00:29:49
+@@ -5652,14 +5652,24 @@
+         initialize.append(
+             f'    task_pool_init(&crust_task_context.pool_{name}, &crust_task_context.states_{name}, '
+             f'sizeof({prefix}_state), {capacity}, crust_task_context.generations_{name});')
++        if threaded:
++            members.append(f'    CrustQueueEntry queue_entries_{name}[{capacity}];')
++            initialize.append(f'    for (size_t i = 0; i < {capacity}; ++i) '
++                              f'task_queue_entry_init(&crust_task_context.queue_entries_{name}[i]);')
+         checks.append(
+             f'    if (!task_pool_is_empty(&crust_task_context.pool_{name})) fail("live async task at context close");')
++        if threaded:
++            checks.append(f'    for (size_t i = 0; i < {capacity}; ++i) '
++                          f'task_queue_entry_destroy(&crust_task_context.queue_entries_{name}[i]);')
+         parameters = range(len(node.args[1]))
+         captures = ''.join(f', capture_{i}' for i in parameters)
+         reap = '    task_thread_reap(&crust_abandoned_tasks);\n' if threaded else ''
+         factories.append(
+             f'{task_factory_signature(name, node)} {{\n'
+-            f'{reap}    return {prefix}_create_in_pool(&crust_task_context.pool_{name}{captures});\n'
++            f'{reap}    CrustTask *task = {prefix}_create_in_pool(&crust_task_context.pool_{name}{captures});\n'
++            + (f'    task->queue_entry = &crust_task_context.queue_entries_{name}'
++               f'[(({prefix}_state *)task)->slot.index];\n' if threaded else '')
++            + '    return task;\n'
+             '}')
+     total_capacity = ' + '.join(capacity_names)
+     abandoned = ''
+@@ -5680,6 +5690,7 @@
+     task_async_abandon(&crust_abandoned_tasks, execution);
+ }
+ """
++        checks.insert(0, '    task_default_close();')
+         checks.insert(0, '    task_thread_drain(&crust_abandoned_tasks);')
+     return '\n' + '\n'.join(capacity_defines) + '''
+ static struct {

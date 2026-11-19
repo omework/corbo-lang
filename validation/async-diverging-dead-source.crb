@@ -1,0 +1,9 @@
+async fn choose(flag:Int,a:&mut Int,b:&mut Int,c:&mut Int)->&mut Int {
+ let unused=if flag==1 {return a;}else{return b;};
+ return c;
+}
+fn main(){let mut p=pool<Int>(3);let mut a=p.new(10);let mut b=p.new(20);let mut c=p.new(30);
+ let h=runtime::spawn(->choose(1,&mut a,&mut b,&mut c));
+ match h.join(){Ok(r)=>{c=50;*r=42;},Err(_)=>{print(999);}}
+ print(a);print(b);print(c);
+}

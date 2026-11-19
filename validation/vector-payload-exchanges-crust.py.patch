@@ -1,0 +1,226 @@
+--- before/crust.py
++++ after/crust.py
+@@ -42,7 +42,7 @@
+ 
+ from array_syntax import aggregate_owned_paths, aggregate_reference_paths, SHARED_REF_VECTOR, MUT_REF_VECTOR, REFERENCE_VECTORS, replace_handle_positions, remaining_handle_positions, VECTOR_LAST_ITEM, last_handle_index, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, reference_array_path, reference_array_element, reference_type, reference_tree_type
+ from effects import allocation_handle_method, allocation_value_borrow, ARRAY_METHOD_ARITY, EffectAnalyzer, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+-from results import BorrowTarget, FunctionResult, ResultAnalyzer, SourceOrigin, capture_fields
++from results import BorrowTarget, FunctionResult, ResultAnalyzer, SourceOrigin, capture_fields, merge_owned_values
+ from constraints import ConstraintAnalyzer
+ from contracts import function_contracts
+ from async_runtime import UTF8_VALUE_TYPES_C
+@@ -1690,6 +1690,7 @@
+     payload_storage: str | None = None
+     exchange_payloads: tuple = ()
+     exchange_prototypes: tuple = ()
++    field_capability_id: int | None = None
+     reference_positions: tuple | None = None
+     optional_reference_targets: tuple = ()
+     reference_outcome: int | None = None
+@@ -3232,6 +3233,23 @@
+                     root.bindings[actual] = Binding(actual, kind, parameter_c, allocation, mutable=True)
+                     arguments.append(('down' if mode == 'owned' or transferred_result else mode, actual))
+                     add_field_dependencies(allocation, index)
++                    if mode == 'buffered_handle_exchange':
++                        prototypes = []
++                        for arm, payload in zip(('ok', 'err'), allocation.exchange_payloads):
++                            if not payload[0]:
++                                prototypes.append(None)
++                                continue
++                            child = replace(allocation, variants=frozenset(self.enums.get(content, {})),
++                                            dependencies=(), owned_fields=(), exchange_payloads=())
++                            add_field_dependencies(child, index, prefix=arm + '/')
++                            add_owned_fields(child, index, prefix=arm + '/')
++                            prototypes.append(child)
++                        allocation.exchange_prototypes = tuple(prototypes)
++                        merged = check.merge_payload_prototypes(prototypes)
++                        if merged is not None:
++                            allocation.dependencies, allocation.owned_fields = merged.dependencies, merged.owned_fields
++                            allocation.variants = merged.variants
++                            allocation.item_sources = check.owned_field_sources(merged.owned_fields)
+                     if mode in ('ref', 'mut', 'owned', 'handle_option', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
+                         add_owned_fields(allocation, index)
+                     if is_handle_vector(typ) and mode in ('owned', 'mut'):
+@@ -3511,8 +3529,11 @@
+                         pending.extend(parent.alloc.borrow_parents)
+                         if parent.alloc is not child.alloc:
+                             parent_holders.add(parent.alloc.id)
++        parent_capabilities = {holder.field_capability_id or holder.id
++                               for holder in (*self.allocations, *self.embedded_allocations())
++                               if holder.id in parent_holders}
+         result = []
+-        seen, field_tokens = set(), set()
++        seen, field_tokens, field_capabilities = set(), set(), set()
+         reservations, projected = {}, set()
+         for child in active:
+             ancestry = (*child.borrow_parents, *self.retained_borrow_parents(child.alloc)) if child.alloc else child.borrow_parents
+@@ -3558,12 +3579,21 @@
+                 for holder in holders:
+                     if exclude is not None and (exclude.alloc is holder or any(a is holder for a in exclude.referents)):
+                         continue
+-                    for carrier in self.dependency_carriers(holder):
++                    carriers = (tuple(carrier for item in holder.exchange_prototypes if item is not None
++                                      for carrier in self.dependency_carriers(item)) if holder.exchange_prototypes
++                                else self.dependency_carriers(holder))
++                    for carrier in carriers:
++                        capability = carrier.field_capability_id or carrier.id
+                         if (carrier.id in field_tokens or carrier.id in parent_holders
++                                or capability in field_capabilities
++                                or capability in parent_capabilities
++                                or exclude is not None and exclude.alloc is not None
++                                    and capability == (exclude.alloc.field_capability_id or exclude.alloc.id)
+                                 or exclude is not None and (exclude.alloc is carrier or any(a is carrier for a in exclude.referents))
+                                 or not any(a is allocation for a in self.dependency_targets(carrier))):
+                             continue
+                         field_tokens.add(carrier.id)
++                        field_capabilities.add(capability)
+                         mode = self.dependency_mode(carrier, allocation)
+                         shared_async_barrier = mode == 'mut' and carrier.typ == 'join_ref'
+                         if mode == 'mut' and carrier.typ.startswith(('Task<', 'Execution<')):
+@@ -5641,10 +5671,19 @@
+         targets = (carrier,)
+         for key in path.split('/'):
+             targets = tuple(target for holder in targets
+-                            for target in (Compiler.vector_payloads(holder) if key == '[]' else
++                            for target in (Compiler.payload_path_targets(holder, key) if key in ('[]', 'ok', 'err') else
+                                            dict(holder.dependencies).get(key, ()) or
+                                            dict(holder.owned_fields).get(key, ())))
+         return targets
++
++    @staticmethod
++    def payload_path_targets(holder, key):
++        if key == '[]':
++            return Compiler.vector_payloads(holder)
++        if holder.exchange_prototypes:
++            child = holder.exchange_prototypes[('ok', 'err').index(key)]
++            return (child,) if child is not None else ()
++        return ()
+ 
+     def struct_shared_reference(self, binding, key, *, allow_empty_vector=False, allow_mutable_vector=False,
+                                 skip_unreachable=False, traverse=False):
+@@ -8227,6 +8266,9 @@
+             self.origin_sources.update(zip(origins, sources))
+         allocation = Allocation(self.uid(), scope.id, label, sources, c=name, typ=typ, origins=frozenset(origins))
+         if prototype is not None:
++            # Moving a payload preserves its stored loans, including when a
++            # conditional vector update also retains an alternative for it.
++            allocation.field_capability_id = prototype.field_capability_id or (prototype.id if prototype.id > 0 else None)
+             allocation.dependencies = prototype.dependencies
+             allocation.borrow_parents = prototype.borrow_parents
+             allocation.owned_fields = tuple((key, tuple(self.copy_owned_tree(child, scope.id) for child in children))
+@@ -10328,6 +10370,16 @@
+     def resolve_result_contract(self, name, params, bindings, base, summary=None):
+         if summary is None:
+             summary = self.function_results[name]
++        if summary.mode == 'buffered_handle_exchange' and summary.exchange_values:
++            arms = self.resolve_exchange_contracts(name, params, bindings, base, summary)
++            merged = self.resolve_result_contract(name, params, bindings, base,
++                self.exchange_value_summary(merge_owned_values(summary.exchange_values)))
++            merged['owned_fields'] = self.merge_dependencies(*(arm['owned_fields'] for arm in arms))
++            merged['item_sources'] = source_union(*(arm['item_sources'] for arm in arms))
++            merged['dependencies'] = self.merge_dependencies(*(arm['dependencies'] for arm in arms))
++            merged['variants'] = frozenset().union(*(arm['variants'] for arm in arms))
++            merged['borrow_parents'] = tuple({id(p): p for arm in arms for p in arm['borrow_parents']}.values())
++            return merged
+         inputs, fresh_sources, vectors = [], [], []
+         projected = self.resolve_owned_projections(summary, params, bindings)
+         inputs.extend(projected)
+@@ -10402,7 +10454,7 @@
+             for key in candidate.field_path.split('/'):
+                 children = []
+                 for holder in targets:
+-                    known = self.vector_payloads(holder) if key == '[]' else dict(holder.owned_fields).get(key, ())
++                    known = self.payload_path_targets(holder, key) if key in ('[]', 'ok', 'err') else dict(holder.owned_fields).get(key, ())
+                     children.extend(known)
+                     if holder.recursive_projection_sources:
+                         arm, field = key.split('.', 1)
+@@ -10444,6 +10496,12 @@
+                     prototype = self.extracted_payload(vector, selected)
+                     if prototype is not None:
+                         alternatives.append(self.copy_owned_tree(prototype, scope.id))
++                elif candidate.kind == 'exchange_parameter':
++                    carrier = bindings[params[candidate.parameter][0]].alloc
++                    if carrier.exchange_prototypes:
++                        prototype = carrier.exchange_prototypes[candidate.item_index]
++                        if prototype is not None:
++                            alternatives.append(self.copy_owned_tree(prototype, scope.id))
+                 elif candidate.kind == 'fresh':
+                     if candidate.source.kind == 'task_result_field_parameter':
+                         metadata = self.inherited_async_storage((candidate.source,), params, bindings)
+@@ -10513,7 +10571,15 @@
+         if not matches(state, contract['owned_fields']):
+             self.fail('invariant interne : provenance de champ propriétaire absente du contrat')
+ 
++    @staticmethod
++    def exchange_value_summary(value):
++        return FunctionResult('owned', value.typ, value.candidates, value.fields,
++                              value.fresh_variants, owned_fields=value.owned_fields)
++
+     def resolve_exchange_contracts(self, name, params, bindings, base, summary):
++        if summary.mode == 'buffered_handle_exchange' and summary.exchange_values:
++            return tuple(self.resolve_result_contract(name, params, bindings, base, self.exchange_value_summary(value))
++                         for value in summary.exchange_values)
+         return tuple(self.resolve_result_contract(name, params, bindings, base, replace(summary, candidates=arm))
+                      for arm in summary.exchange_payloads)
+ 
+@@ -12397,11 +12463,16 @@
+                     checked = dict(state, item_sources=()) if declared[0] in JOIN_RESULT_TYPES else state
+                     self.check_result_contract(result_contract, allocation, checked)
+                     if declared[0] == 'buffered_handle_exchange':
+-                        for contract, (sources, origins) in zip(exchange_contracts, state['exchange_payloads']):
+-                            payload = copy.copy(allocation)
++                        for arm, (contract, (sources, origins)) in enumerate(zip(exchange_contracts, state['exchange_payloads'])):
++                            prototype = state['exchange_prototypes'][arm] if state['exchange_prototypes'] else None
++                            payload = copy.copy(prototype or allocation)
+                             payload.sources = sources
+                             payload.origins = origins or frozenset()
+-                            self.check_result_contract(contract, payload, dict(state, origins=payload.origins))
++                            if not prototype:
++                                payload.dependencies, payload.owned_fields, payload.item_sources = (), (), ()
++                            if not sources:
++                                payload.variants = frozenset()
++                            self.check_result_contract(contract, payload, vars(payload))
+                         exchange_states.append(state)
+                     conditional_origins |= state['origins']
+                     state.update(alive=False, definite=False)
+@@ -12791,6 +12862,8 @@
+                 self.apply_async_field_updates(bindings[params[index][0]].alloc)
+         detached_captures = self.detached_async_captures(result, params, bindings)
+         exchange_contracts = self.resolve_exchange_contracts(name, params, bindings, self.snapshot(), result) if result.exchange_payloads else ()
++        exchange_prototypes = tuple(self.merge_payload_prototypes(dict(self.resolve_owned_fields(
++            (('', value),), params, bindings, caller)).get('', ())) for value in result.exchange_values)
+         updates = self.prepare_structure_updates(result, params, bindings)
+         owned_updates = self.prepare_owned_field_writes(result, params, bindings)
+         for holder, fields in owned_updates:
+@@ -12952,7 +13025,12 @@
+                     self.origin_sources[origin] = source
+                     arm_origins.add(origin)
+                 payloads.append((arm['sources'], frozenset(arm_origins)))
+-            state = {'exchange_payloads': tuple(payloads), 'optional_payload': exchange_optional(result.typ), 'typ': exchange_element(result.typ)}
++            prototypes = exchange_prototypes or tuple(Allocation(self.uid(), caller.id, '', arm['sources'], typ=exchange_element(result.typ),
++                origins=payload[1], dependencies=arm['dependencies'], variants=arm['variants'],
++                owned_fields=arm['owned_fields'], borrow_parents=arm['borrow_parents']) if payload[0] else None
++                for arm, payload in zip(exchange_contracts, payloads))
++            state = {'exchange_payloads': tuple(payloads), 'exchange_prototypes': prototypes,
++                     'optional_payload': exchange_optional(result.typ), 'typ': exchange_element(result.typ)}
+             return self.join_buffered_exchange(c, [state], caller, f'retour {name}')
+         if result.mode in ('task', 'execution'):
+             return self.receive_async_result(result, params, bindings, caller, c, detached_captures, updated_arrays)
+@@ -15137,7 +15215,7 @@
+                 if mode in ('handle_option', 'buffered_handle_exchange', *JOIN_RESULT_TYPES):
+                     if mode in ('handle_option', 'buffered_handle_exchange'):
+                         element = typ if mode == 'handle_option' else exchange_element(typ)
+-                        self.check_handle_vector_payload(f'Vector<A<{element}>>', local=mode == 'handle_option')
++                        self.check_handle_vector_payload(f'Vector<A<{element}>>', local=mode in ('handle_option', 'buffered_handle_exchange'))
+                     continue
+                 if mode in ('ref', 'mut') and typ.startswith('A<') and typ[2:-1] in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                     continue
+@@ -15168,7 +15246,7 @@
+                 self.check_handle_vector_payload(content)
+             if result[0] in ('handle_option', 'buffered_handle_exchange'):
+                 element = result[1] if result[0] == 'handle_option' else exchange_element(result[1])
+-                self.check_handle_vector_payload(f'Vector<A<{element}>>', local=result[0] == 'handle_option')
++                self.check_handle_vector_payload(f'Vector<A<{element}>>', local=result[0] in ('handle_option', 'buffered_handle_exchange'))
+             if result[0] in JOIN_RESULT_TYPES and result[1] not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                 self.fail('type de charge propriétaire inconnu dans Result')
+             if self.has_owned_fields(content) and not (

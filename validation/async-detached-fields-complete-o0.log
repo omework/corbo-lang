@@ -1,0 +1,88 @@
+test_carrier_pool_reuse_and_close (test_async_detached_field_returns.AsyncDetachedFieldTests.test_carrier_pool_reuse_and_close) ... ERROR
+test_child_capture_and_return_detach (test_async_detached_field_returns.AsyncDetachedFieldTests.test_child_capture_and_return_detach) ... ok
+test_detached_local_value_allows_mutable_carrier_call (test_async_detached_field_returns.AsyncDetachedFieldTests.test_detached_local_value_allows_mutable_carrier_call) ... ok
+test_direct_named_and_explicit_shared_reborrow (test_async_detached_field_returns.AsyncDetachedFieldTests.test_direct_named_and_explicit_shared_reborrow) ... ok
+test_launch_failure_still_releases_capture (test_async_detached_field_returns.AsyncDetachedFieldTests.test_launch_failure_still_releases_capture) ... ok
+test_mixed_direct_and_detached_results_preserve_both_dependencies (test_async_detached_field_returns.AsyncDetachedFieldTests.test_mixed_direct_and_detached_results_preserve_both_dependencies) ... 
+  test_mixed_direct_and_detached_results_preserve_both_dependencies (test_async_detached_field_returns.AsyncDetachedFieldTests.test_mixed_direct_and_detached_results_preserve_both_dependencies) (stage='verify_program') ... FAIL
+  test_mixed_direct_and_detached_results_preserve_both_dependencies (test_async_detached_field_returns.AsyncDetachedFieldTests.test_mixed_direct_and_detached_results_preserve_both_dependencies) (stage='compile_source') ... FAIL
+test_mutable_fields_do_not_detach_or_copy (test_async_detached_field_returns.AsyncDetachedFieldTests.test_mutable_fields_do_not_detach_or_copy) ... ok
+test_recorded_case_with_explicit_scope_import (test_async_detached_field_returns.AsyncDetachedFieldTests.test_recorded_case_with_explicit_scope_import) ... ok
+test_shared_result_keeps_external_mutable_ancestor (test_async_detached_field_returns.AsyncDetachedFieldTests.test_shared_result_keeps_external_mutable_ancestor) ... ok
+test_sync_helpers_methods_and_reverse_relay (test_async_detached_field_returns.AsyncDetachedFieldTests.test_sync_helpers_methods_and_reverse_relay) ... ok
+test_target_released_only_after_last_use (test_async_detached_field_returns.AsyncDetachedFieldTests.test_target_released_only_after_last_use) ... ok
+
+======================================================================
+ERROR: test_carrier_pool_reuse_and_close (test_async_detached_field_returns.AsyncDetachedFieldTests.test_carrier_pool_reuse_and_close)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_detached_field_returns.py", line 51, in test_carrier_pool_reuse_and_close
+    self.assertEqual(self.run_native(source).stdout,'0\n7\n7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15073, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15066, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13567, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13412, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2951, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9553, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10717, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12013, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12509, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6072, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8863, in expression
+    return self.block_expression(expr)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8368, in block_expression
+    result = self.block(expr[1], expr[2], returns, region_limit=expr[3] if len(expr) > 3 else None,
+                        expected_array=expected_array)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12013, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12381, in statements
+    self.fail('une expression bloc exige une valeur transférée par <-')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1921, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 8: une expression bloc exige une valeur transférée par <-
+
+======================================================================
+FAIL: test_mixed_direct_and_detached_results_preserve_both_dependencies (test_async_detached_field_returns.AsyncDetachedFieldTests.test_mixed_direct_and_detached_results_preserve_both_dependencies) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_detached_field_returns.py", line 15, in refused
+    with self.assertRaises(Error):check(source,**options)
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_mixed_direct_and_detached_results_preserve_both_dependencies (test_async_detached_field_returns.AsyncDetachedFieldTests.test_mixed_direct_and_detached_results_preserve_both_dependencies) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_detached_field_returns.py", line 15, in refused
+    with self.assertRaises(Error):check(source,**options)
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 11 tests in 6.904s
+
+FAILED (failures=2, errors=1)

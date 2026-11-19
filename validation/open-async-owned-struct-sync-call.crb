@@ -1,0 +1,16 @@
+struct Holder { value: A<Int> }
+fn inspect(h: ->A<Holder>) -> Int { return *h.value; }
+async fn work(h: ->A<Holder>) -> Int {
+    yield;
+    return inspect(->h);
+}
+fn main() {
+    let mut values = pool<Int>(1);
+    let mut holders = pool<Holder>(1);
+    let value = values.new(7);
+    let holder = holders.new(value: <-value);
+    let execution = runtime::spawn(->work(->holder));
+    match execution.join() { Ok(n) => { print(n); }, Err(_) => {} }
+    let reused = values.new(30);
+    print(*reused);
+}

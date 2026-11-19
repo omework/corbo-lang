@@ -1,0 +1,59 @@
+test_exhaustiveness_fields_and_subject_type (test_async_enum_match.AsyncEnumMatchTests.test_exhaustiveness_fields_and_subject_type) ... ok
+test_match_reserves_carrier_until_arm_exit (test_async_enum_match.AsyncEnumMatchTests.test_match_reserves_carrier_until_arm_exit) ... ok
+test_mutable_projection_and_reborrow_inside_arm (test_async_enum_match.AsyncEnumMatchTests.test_mutable_projection_and_reborrow_inside_arm) ... ok
+test_owned_result_constructed_in_arm (test_async_enum_match.AsyncEnumMatchTests.test_owned_result_constructed_in_arm) ... ok
+test_recorded_scalar_match (test_async_enum_match.AsyncEnumMatchTests.test_recorded_scalar_match) ... ok
+test_return_break_continue_and_pool_cleanup (test_async_enum_match.AsyncEnumMatchTests.test_return_break_continue_and_pool_cleanup) ... ok
+test_returned_mutable_projection_reserves_caller (test_async_enum_match.AsyncEnumMatchTests.test_returned_mutable_projection_reserves_caller) ... FAIL
+test_shared_projection_outlives_owned_carrier (test_async_enum_match.AsyncEnumMatchTests.test_shared_projection_outlives_owned_carrier) ... ok
+test_three_arms_reordered_with_suspension_model (test_async_enum_match.AsyncEnumMatchTests.test_three_arms_reordered_with_suspension_model) ... ok
+
+======================================================================
+FAIL: test_returned_mutable_projection_reserves_caller (test_async_enum_match.AsyncEnumMatchTests.test_returned_mutable_projection_reserves_caller)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16220, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14376, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3117, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10065, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11493, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12861, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12922, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3303, in verify_state
+    self.fail('invariant interne : emprunt mutable non exclusif')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1963, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: invariant interne : emprunt mutable non exclusif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_enum_match.py", line 75, in test_returned_mutable_projection_reserves_caller
+    self.assertEqual(self.run_source(source.replace('BEFORE','')).stdout,'Writer.One(30)\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: invariant interne : emprunt mutable non exclusif
+
+----------------------------------------------------------------------
+Ran 9 tests in 6.615s
+
+FAILED (failures=1)

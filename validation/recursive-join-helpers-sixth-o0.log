@@ -1,0 +1,58 @@
+test_async_caller_uses_join_bridge (test_recursive_join_helpers.RecursiveJoinHelperTests.test_async_caller_uses_join_bridge) ... FAIL
+test_join_result_keeps_deep_reference (test_recursive_join_helpers.RecursiveJoinHelperTests.test_join_result_keeps_deep_reference) ... ok
+test_recorded_public_handle_join (test_recursive_join_helpers.RecursiveJoinHelperTests.test_recorded_public_handle_join) ... ok
+test_two_helpers_terminal_variant_and_launch_failure (test_recursive_join_helpers.RecursiveJoinHelperTests.test_two_helpers_terminal_variant_and_launch_failure) ... ok
+
+======================================================================
+FAIL: test_async_caller_uses_join_bridge (test_recursive_join_helpers.RecursiveJoinHelperTests.test_async_caller_uses_join_bridge)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16811, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14871, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 939, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7362, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3264, in bind_special
+    value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+               ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1702, in sync_call
+    fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 975, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 6: join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_recursive_join_helpers.py", line 55, in test_async_caller_uses_join_bridge
+    self.assertEqual(self.run_source(self.program(body,helpers)).stdout,'Node.End(9)\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.419s
+
+FAILED (failures=1)

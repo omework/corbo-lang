@@ -1,0 +1,23 @@
+--- /tmp/crust-before-recursive-owned-joins/effects.py
++++ effects.py
+@@ -1,4 +1,7 @@
+ """Infer external source effects without concrete allocations or C emission."""
++from owned_join_types import (
++    OWNED_JOIN_TYPES, owned_result_type,
++)
+ from option_join_types import (
+     OPTION_JOIN_TYPES,
+ )
+@@ -133,10 +136,8 @@
+         return f'{mode.capitalize()}<{typ}>'
+     if mode in OPTION_JOIN_TYPES:
+         return OPTION_JOIN_TYPES[mode]
+-    if mode == 'join_owned':
+-        return f'Result<A<{typ}>,runtime::Error>'
+-    if mode == 'join_nested':
+-        return f'Result<Result<A<{typ}>,runtime::Error>,runtime::Error>'
++    if mode in OWNED_JOIN_TYPES:
++        return owned_result_type(mode, typ)
+     return typ
+ 
+ 

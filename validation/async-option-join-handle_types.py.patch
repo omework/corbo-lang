@@ -1,0 +1,20 @@
+--- /tmp/crust-before-async-option-join/handle_types.py
++++ handle_types.py
+@@ -33,6 +33,8 @@
+         content = payload[2:-1]
+         if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures:
+             return ('owned', content)
++    if payload == 'Option<A<Int>>':
++        return ('handle_option', 'Int')
+     if payload in structures:
+         return ('owned', payload)
+     if payload.startswith('Result<') and payload.endswith(',runtime::Error>'):
+@@ -140,7 +142,7 @@
+             parameters.append(('opaque_result_borrow', signature[0], signature[1]))
+             if signature[0] == 'ref':
+                 parameters.append(('opaque_result_capability', 'ref', signature[1]))
+-        if signature[0] in ('owned', 'join_owned'):
++        if signature[0] in ('owned', 'join_owned', 'handle_option'):
+             result_storage = len(parameters)
+             parameters.append(('opaque_result_storage', 'owned', signature[1]))
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),

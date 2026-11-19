@@ -1,0 +1,11 @@
+--- tests/test_sync_task_arguments.py
++++ tests/test_sync_task_arguments.py
+@@ -125,7 +125,7 @@
+         for helper, call, setup in (
+             ('struct Point{x:Int}async fn make()-><-Point{yield;return <-Point{x:7};}',
+              'make()', ''),
+-            ('struct Point{x:Int}async fn make(p:&mut Pool<Point>)-><-Point{yield;return <-p.new(x:7);}',
++            ('struct Point{x:Int}async fn make(p:&mut Pool<Point>)-><-A<Point>{yield;return <-p.new(x:7);}',
+              'make(&mut ps)', 'let mut ps=pool<Point>(1);')):
+             helpers = helper + 'fn relay(t:->make)-><-make{return <-t;}'
+             body = setup + 'let t=relay(->' + call + ');let result=t.await;yield;print(result.x);drop(->result);return 1;'

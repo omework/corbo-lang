@@ -1,0 +1,129 @@
+--- before/results.py
++++ results.py
+@@ -351,6 +351,9 @@
+     owned_alternatives: tuple = ()
+     task_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_sources: frozenset[SourceOrigin] = frozenset()
++    # Deferred field-effect analysis keeps capture snapshots until await/join.
++    # This is separate from storage identities of ordinary structures.
++    pending_structure_calls: frozenset = frozenset()
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -523,6 +526,9 @@
+         if name not in environment:
+             self.fail(line, f"variable inconnue '{name}'")
+         return environment[name]
++
++    def check_call_actuals(self, name, actuals, line):
++        """Extension point for additional symbolic payloads crossing contracts."""
+ 
+     def public_handle_value(self, value, typ, line):
+         from handle_types import is_public_handle, canonical_captures
+@@ -1217,7 +1223,8 @@
+                     input_items_written=any(value.input_items_written for value in values),
+                     handle_slot=first.handle_slot if all(value.handle_slot == first.handle_slot for value in values) else None,
+                     task_sources=frozenset(source for value in values for source in value.task_sources),
+-                    task_result_sources=frozenset(source for value in values for source in value.task_result_sources))
++                    task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
++                    pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls))
+ 
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+@@ -2037,7 +2044,8 @@
+                           input_items_changed=any(value.input_items_changed for value in returning),
+                           input_items_written=any(value.input_items_written for value in returning),
+                           task_sources=frozenset(source for value in returning for source in value.task_sources),
+-                          task_result_sources=frozenset(source for value in returning for source in value.task_result_sources)))
++                          task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
++                          pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls)))
+         if op == 'struct_copy':
+             source = self.lookup(expr[1], environment, line)
+             original = self.lookup(expr[2], environment, line)
+@@ -2166,6 +2174,7 @@
+                 actuals.append(value)
+             if 'next' not in flow or not self.analyzer.effects[name].may_return:
+                 return flow - {'next'}, UNKNOWN
++            self.check_call_actuals(name, actuals, line)
+             for (parameter_name, _, parameter_type), actual in zip(params, actuals):
+                 if reference_array_shape(parameter_type) and (
+                         not isinstance(actual, Value) or actual.typ != parameter_type):
+@@ -2269,31 +2278,7 @@
+                 rebuilt = rebuild_reference_tree(row, row.typ, mapped, fields, actuals)
+                 name = borrowed_array_name(args[parameter])
+                 update_array_aliases(environment, name, rebuilt.fields, row, rebuilt.rows)
+-            updated_structures = {}
+-            for parameter, fields in summary.structure_fields:
+-                name = borrowed_array_name(args[parameter])
+-                if name not in environment:
+-                    self.fail(line, 'prototype : mise à jour de champ exige un porteur nommé')
+-                carrier = environment[name]
+-                changes = {}
+-                for field, targets in fields:
+-                    changes[field] = frozenset(origin for target in targets
+-                        for origin in (dict(actuals[target.parameter].fields).get(target.field, ())
+-                                       if target.kind == 'field_parameter'
+-                                       else self.array_update_targets(target, actuals[target.parameter])))
+-                if carrier.typ in REFERENCE_VECTORS:
+-                    slots = dict(summary.reference_appends).get(parameter)
+-                    appended = None if slots is None else tuple(frozenset(
+-                        origin for target in slot for origin in self.array_update_targets(target, actuals[target.parameter]))
+-                        for slot in slots)
+-                    items = changes['.items']
+-                    if appended is not None and isinstance(carrier.handle_items, tuple):
+-                        items = (*carrier.handle_items, *appended)
+-                    update_shared_vector_items(environment, (bindings for _, bindings in self.blocks), carrier,
+-                                               items, lambda value: value.structure_origins, appended=appended)
+-                else:
+-                    self.update_structure(environment, name, carrier, changes, line)
+-                    updated_structures[parameter] = environment[name]
++            updated_structures = self.apply_structure_updates(summary, actuals, args, environment, line)
+             if summary.mode in ('task', 'execution'):
+                 from async_lowering import borrowed_result_paths, int_reference_row
+                 declaration = self.analyzer.async_functions[summary.typ]
+@@ -2673,7 +2658,8 @@
+             input_items_changed=any(value.input_items_changed for value in values),
+             input_items_written=any(value.input_items_written for value in values),
+             task_sources=frozenset(source for value in values for source in value.task_sources),
+-            task_result_sources=frozenset(source for value in values for source in value.task_result_sources))
++            task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
++            pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls))
+ 
+     def nodes(self, nodes, environment, valued=False, shadows=None, expected_array=None):
+         flow, tail = {'next'}, UNKNOWN
+@@ -3014,6 +3000,35 @@
+             return self.detached_field_targets(actual, target.field)
+         return borrowed_targets(actual)
+ 
++    def apply_structure_updates(self, summary, actuals, args, environment, line):
++        """Instantiate a field-effect contract using input snapshots, not callee bodies."""
++        updated = {}
++        for parameter, fields in summary.structure_fields:
++            name = borrowed_array_name(args[parameter])
++            if name not in environment:
++                self.fail(line, 'prototype : mise à jour de champ exige un porteur nommé')
++            carrier = environment[name]
++            changes = {}
++            for field, targets in fields:
++                changes[field] = frozenset(origin for target in targets
++                    for origin in (dict(actuals[target.parameter].fields).get(target.field, ())
++                                   if target.kind == 'field_parameter'
++                                   else self.array_update_targets(target, actuals[target.parameter])))
++            if carrier.typ in REFERENCE_VECTORS:
++                slots = dict(summary.reference_appends).get(parameter)
++                appended = None if slots is None else tuple(frozenset(
++                    origin for target in slot for origin in self.array_update_targets(target, actuals[target.parameter]))
++                    for slot in slots)
++                items = changes['.items']
++                if appended is not None and isinstance(carrier.handle_items, tuple):
++                    items = (*carrier.handle_items, *appended)
++                update_shared_vector_items(environment, (bindings for _, bindings in self.blocks), carrier,
++                                           items, lambda value: value.structure_origins, appended=appended)
++            else:
++                self.update_structure(environment, name, carrier, changes, line)
++                updated[parameter] = environment[name]
++        return updated
++
+     def update_structure(self, environment, name, carrier, changes, line):
+         if carrier.mode == 'mut' and carrier.storage_owner is None:
+             indices = {target.parameter for target in carrier.reference_targets

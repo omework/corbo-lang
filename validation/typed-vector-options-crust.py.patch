@@ -1,0 +1,239 @@
+--- /tmp/crust-before-typed-vector-options/crust.py
++++ /Users/jabarkarim/sources/crust/crust.py
+@@ -22,6 +22,7 @@
+ import copy
+ from contextlib import ExitStack, contextmanager
+ import json
++from handle_option_types import option_type, option_element
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression
+@@ -534,8 +535,8 @@
+             if mode == 'owned' and typ.startswith('A<'):
+                 handle_parameters.add(pname)
+                 typ = typ[2:-1]
+-            if mode == 'owned' and typ == 'Option<A<Int>>':
+-                mode, typ = 'handle_option', 'Int'
++            if mode == 'owned' and option_element(typ) is not None:
++                mode, typ = 'handle_option', option_element(typ)
+             elif mode == 'owned' and exchange_element(typ) is not None:
+                 mode = 'buffered_handle_exchange'
+             if mode == 'owned' and (joined := join_allocation_signature(typ)) is not None:
+@@ -570,8 +571,8 @@
+             if mode == 'scalar' and fixed_array_shape(typ):
+                 mode = 'array_refs' if reference_array_shape(typ) else 'array'
+             handle_result = mode == 'owned' and typ.startswith('A<')
+-            if mode == 'owned' and typ == 'Option<A<Int>>':
+-                mode, typ = 'handle_option', 'Int'
++            if mode == 'owned' and option_element(typ) is not None:
++                mode, typ = 'handle_option', option_element(typ)
+             result = mode, typ[2:-1] if handle_result else typ
+             if mode == 'owned' and exchange_element(typ) is not None:
+                 result = 'buffered_handle_exchange', typ
+@@ -597,6 +598,9 @@
+             raise Error('prototype : résultats typés de replace/try_push dans une signature async non raccordés')
+         if asynchronous and (result[0] == 'buffered_handle_exchange' or result[0] in EXCHANGE_JOIN_TYPES):
+             exchange_join_mode(result[1] if result[0] == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[result[0]])
++        if asynchronous and any(mode == 'handle_option' and typ != 'Int'
++                                for mode, typ in (result, *((mode, typ) for _, mode, typ in params))):
++            raise Error('prototype : Option<A<T>> typé dans une signature async non raccordé')
+         if asynchronous and (result[0] == 'handle_option' or result[0] in OPTION_JOIN_TYPES):
+             option_join_mode('Option<A<Int>>' if result[0] == 'handle_option' else OPTION_JOIN_TYPES[result[0]])
+         if asynchronous and result[0] in ('owned', *OWNED_JOIN_TYPES):
+@@ -3189,7 +3193,7 @@
+                             check.fail('contraintes de sources incompatibles avec le type du handle')
+                         source.element_type = typ
+                     content = exchange_element(typ) if mode == 'buffered_handle_exchange' else typ
+-                    if mode == 'buffered_handle_exchange':
++                    if mode in ('buffered_handle_exchange', 'handle_option'):
+                         if source.element_type not in (None, content):
+                             check.fail('contraintes de sources incompatibles avec le type du résultat propriétaire')
+                         source.element_type = content
+@@ -4161,7 +4165,7 @@
+         elif kind == 'array_refs':
+             typ = self.stored_array_signature(allocation)
+         elif kind == 'handle_option':
+-            typ = kind
++            typ = allocation.typ if allocation is not None else 'Int'
+         elif kind == 'buffered_handle_exchange':
+             typ = self.exchange_result_type(allocation)
+         elif kind in ('borrowed_text', 'borrowed_byte'):
+@@ -4258,7 +4262,7 @@
+             payloads = [allocation for allocation in values if allocation is not None]
+             return self.buffered_handle_result(c, source_union(*(a.sources for a in payloads)),
+                                                frame['destination'], name,
+-                                               frozenset(o for a in payloads for o in a.origins))
++                                               frozenset(o for a in payloads for o in a.origins), typ=typ)
+         parents = {id(p): p for a in values for p in a.borrow_parents}
+         if kind in ('ref', 'mut'):
+             return kind, c, self.reference_descriptor(
+@@ -5060,7 +5064,7 @@
+                             selected_split_paths.update(((id(root), id(parent)), (root, parent))
+                                                         for root, parent in paths_for_half)
+                     else:
+-                        typ = (kind if kind == 'handle_option' else allocation if kind == 'array'
++                        typ = (allocation.typ if kind == 'handle_option' and allocation is not None else 'Int' if kind == 'handle_option' else allocation if kind == 'array'
+                                else allocation.typ if allocation is not None else kind)
+                     if selected_kind == kind == 'execution' and selected_type != typ:
+                         previous = Allocation(-1, -1, 'branche précédente', (), typ=selected_type,
+@@ -5186,7 +5190,7 @@
+                                                        for state in selected_item_states)))
+             if selected_kind == 'handle_option':
+                 return self.buffered_handle_result(result_c, selected_sources, self.scopes[-1],
+-                                                   source_name, selected_origins)
++                                                   source_name, selected_origins, typ=selected_type)
+             if selected_kind == 'buffered_handle_exchange':
+                 return self.join_buffered_exchange(result_c, selected_item_states, self.scopes[-1], source_name)
+             allocation = Allocation(self.uid(), self.scopes[-1].id, source_name, selected_sources,
+@@ -7509,7 +7513,7 @@
+                     inner_mode, _ = option_inner_signature(kind)
+                     if inner_mode == 'handle_option':
+                         return self.buffered_handle_result(f'({value}).value', descriptor.sources, scope,
+-                                                           label, descriptor.origins)
++                                                           label, descriptor.origins, typ=descriptor.typ)
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                         label, descriptor.origins, optional=inner_mode,
+                         absent=descriptor.absent_owned_payload)
+@@ -8201,9 +8205,11 @@
+                                              origins=origins, typ=handle_vector_element(vector.typ))
+ 
+     def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int'):
++        _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ)
++        allocation.absent_owned_payload = not sources
++        allocation.payload_storage = 'pool'
+         if not sources:
+-            return 'handle_option', name, None
+-        _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ)
++            allocation.origins = frozenset()
+         self.guard_buffered_handle(name, allocation, '==')
+         return 'handle_option', name, allocation
+ 
+@@ -8323,8 +8329,7 @@
+         return next(iter(kinds), None)
+ 
+     def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, optional=False, typ='Int', absent=False, storage=None, owned_fields=(), borrowed_fields=(), borrow_parents=(), variants=frozenset(), exchange=None):
+-        # Like buffered_handle_result, a resolved empty optional source set
+-        # carries no allocation. The outer Result still needs its descriptor.
++        # Empty options/results retain a typed descriptor but own no payload.
+         owned_mode = nested if isinstance(nested, str) else 'join_nested' if nested else 'join_owned'
+         option_mode = optional if isinstance(optional, str) else 'join_option' if optional else None
+         absent = absent or (optional and not sources)
+@@ -9523,7 +9528,7 @@
+                 allocation.alive = allocation.definite = False
+             if op == 'array_handle_option_empty':
+                 return 'void', '', None
+-            if allocation is None:
++            if allocation is None or allocation.absent_owned_payload:
+                 self.lines.append('fail("pop de handle : aucun élément possible");')
+                 raise PathsReturned()
+             return self.receive_extracted_handle(f'{binding.c}.value', allocation.sources, scope, source_name,
+@@ -10264,7 +10269,7 @@
+                 fresh_sources.extend(self.parameter_storage(candidate.source, params, bindings))
+         target = (bindings[params[summary.same_parameter][0]].alloc
+                   if summary.same_parameter is not None and params[summary.same_parameter][1] not in JOIN_RESULT_TYPES else None)
+-        dependencies, variants, parents = self.resolve_borrowed_result(summary, params, bindings) if summary.mode in ('owned', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
++        dependencies, variants, parents = self.resolve_borrowed_result(summary, params, bindings) if summary.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+         item_sources, item_positions, item_origins, item_position_origins, fresh_positions = self.handle_result_metadata(summary, params, bindings)
+         if target is not None and self.has_owned_fields(summary.typ):
+             item_sources = self.owned_sources(target)
+@@ -11799,9 +11804,9 @@
+                 else:
+                     kind, c, allocation = self.expression(arg[1], caller, pname)
+                     self.expression_clock(arg)
+-                if kind != mode or (mode in JOIN_RESULT_TYPES and allocation.typ != typ) or (mode == 'buffered_handle_exchange'
++                if kind != mode or (mode in ('handle_option', *JOIN_RESULT_TYPES) and allocation is not None and allocation.typ != typ) or (mode == 'buffered_handle_exchange'
+                                     and self.exchange_result_type(allocation) != typ):
+-                    expected_type = {'handle_option': 'Option<A<Int>>', **JOIN_RESULT_TYPES}
++                    expected_type = {'handle_option': option_type(typ), **JOIN_RESULT_TYPES}
+                     self.fail(f"argument '{pname}' : {expected_type.get(mode, typ)} transféré attendu")
+                 binding = Binding(pname, mode, pc, allocation)
+                 frame.append(binding)
+@@ -12382,7 +12387,7 @@
+                                                borrow_parents=result_contract['borrow_parents'], variants=result_contract['variants'])
+         if result[0] == 'handle_option':
+             return self.buffered_handle_result(c, result_contract['sources'], caller,
+-                                               f'retour {name}', conditional_origins)
++                                               f'retour {name}', conditional_origins, typ=declared[1])
+         if result[0] == 'buffered_handle_exchange':
+             return self.join_buffered_exchange(c, exchange_states, caller, f'retour {name}')
+         if conditional_sources is not None:
+@@ -12689,7 +12694,7 @@
+             for key in fields:
+                 self.check_external_owned_write((holder,), key)
+         updated_arrays = self.apply_array_parameter_updates(result, params, bindings, updates)
+-        dependencies, variants, parents = self.resolve_borrowed_result(result, params, bindings) if result.mode in ('owned', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
++        dependencies, variants, parents = self.resolve_borrowed_result(result, params, bindings) if result.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+         owned = {b.alloc.id: b.alloc for b in bindings.values()
+                  if b.kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', *JOIN_RESULT_TYPES) and b.alloc is not None}
+         resets = {bindings[params[i][0]].source.id for i in effects.resets}
+@@ -12827,7 +12832,7 @@
+                                                owned_fields=self.owned_field_storage(fields),
+                                                borrowed_fields=dependencies, borrow_parents=parents, variants=variants)
+         if result.mode == 'handle_option':
+-            return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins))
++            return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins), typ=result.typ)
+         if result.mode == 'buffered_handle_exchange':
+             payloads = []
+             for arm in exchange_contracts:
+@@ -13776,7 +13781,7 @@
+                     if value[0] in ('owned', 'task', 'execution'):
+                         self.fail('retour d’allocation, de tâche ou de handle : <- explicite requis ; recevoir la valeur avant de la retourner')
+                     if value[0] == 'handle_option' and expr[0] != 'array_handle_option_pop':
+-                        self.fail('retour de Option<A<Int>> : <- explicite requis')
++                        self.fail('retour de Option<A<T>> : <- explicite requis')
+                     if value[0] == 'buffered_handle_exchange' and expr[0] not in ('array_buffered_replace', 'array_buffered_try_push'):
+                         self.fail('retour de Result non Copy : <- explicite requis')
+                 mode = self.exit_frames[-1]['declared'][0]
+@@ -14257,7 +14262,7 @@
+                 if kind in ('handle_option', 'buffered_handle_exchange'):
+                     if op != 'var':
+                         self.fail('un résultat non Copy exige une nouvelle liaison locale')
+-                    actual_type = 'Option<A<Int>>' if kind == 'handle_option' else self.exchange_result_type(allocation)
++                    actual_type = option_type(allocation.typ if allocation is not None else 'Int') if kind == 'handle_option' else self.exchange_result_type(allocation)
+                     if annotation is not None and annotation != actual_type:
+                         self.fail(f'annotation de let : attendu {annotation}, reçu {actual_type}')
+                     last = self.last_use(name, nodes[i + 1:], kind)
+@@ -15008,9 +15013,10 @@
+                     continue
+                 if (mode, typ) in (('mut', 'u8'), ('ref', 'A<Int>'), ('mut', 'A<Int>'), ('ref', MUT_REF_VECTOR), ('mut', MUT_REF_VECTOR), ('owned', MUT_REF_VECTOR), ('ref', SHARED_REF_VECTOR), ('mut', SHARED_REF_VECTOR), ('owned', SHARED_REF_VECTOR), ('ref', HANDLE_VECTOR), ('mut', HANDLE_VECTOR), ('owned', HANDLE_VECTOR), ('handle_option', 'Int')):
+                     continue
+-                if mode in ('buffered_handle_exchange', *JOIN_RESULT_TYPES):
+-                    if mode == 'buffered_handle_exchange':
+-                        self.check_handle_vector_payload(f'Vector<A<{exchange_element(typ)}>>')
++                if mode in ('handle_option', 'buffered_handle_exchange', *JOIN_RESULT_TYPES):
++                    if mode in ('handle_option', 'buffered_handle_exchange'):
++                        element = typ if mode == 'handle_option' else exchange_element(typ)
++                        self.check_handle_vector_payload(f'Vector<A<{element}>>')
+                     continue
+                 if mode in ('ref', 'mut') and typ.startswith('A<') and typ[2:-1] in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                     continue
+@@ -15037,8 +15043,9 @@
+                 result = ('execution', definition)
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             content = result[1][2:-1] if result[1].startswith('A<') else result[1]
+-            if result[0] == 'buffered_handle_exchange':
+-                self.check_handle_vector_payload(f'Vector<A<{exchange_element(result[1])}>>')
++            if result[0] in ('handle_option', 'buffered_handle_exchange'):
++                element = result[1] if result[0] == 'handle_option' else exchange_element(result[1])
++                self.check_handle_vector_payload(f'Vector<A<{element}>>')
+             if result[0] in JOIN_RESULT_TYPES and result[1] not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                 self.fail('type de charge propriétaire inconnu dans Result')
+             if self.has_owned_fields(content) and not (
+@@ -15057,7 +15064,7 @@
+                 self.declared_array_type(result[1])
+             elif result[0] == 'array':
+                 self.declared_array_type(result[1])
+-            elif result[0] in ('buffered_handle_exchange', 'vector_split', 'task', 'execution', *JOIN_RESULT_TYPES):
++            elif result[0] in ('handle_option', 'buffered_handle_exchange', 'vector_split', 'task', 'execution', *JOIN_RESULT_TYPES):
+                 pass
+             elif result not in (('void', 'Void'), ('scalar', 'Void'), ('scalar', 'Int'), ('owned', 'Int'), ('handle_option', 'Int'), ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('ref', 'A<Int>'), ('mut', 'A<Int>'), ('text', 'str'), ('byte', 'u8'), ('byte_ref', 'u8')) and result[0] not in VALUE_MODES and not (
+                     (result[0] == 'owned' and result[1] in ('String', *VECTOR_TYPES, *self.enums))
+@@ -15410,7 +15417,7 @@
+                 origin = check.uid()
+                 check.origin_sources[origin] = source
+                 kind, _, allocation = check.buffered_handle_result(parameter, (source,), root, parameter,
+-                                                                  frozenset({origin}))
++                                                                  frozenset({origin}), typ=typ)
+                 check.lines.append(f'(void)*({allocation.guard});')
+                 root.bindings[parameter] = Binding(parameter, kind, parameter, allocation)
+                 ctype = 'VectorHandleResult'

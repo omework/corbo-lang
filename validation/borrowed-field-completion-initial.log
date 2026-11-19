@@ -1,0 +1,68 @@
+test_direct_reference_store_matches_helper (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_direct_reference_store_matches_helper) ... ok
+test_factory_and_public_handle_relay (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_factory_and_public_handle_relay) ... ok
+test_independent_result_and_carrier_model (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_independent_result_and_carrier_model) ... ok
+test_nested_direct_waits_and_returned_snapshot (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_nested_direct_waits_and_returned_snapshot) ... ok
+test_old_and_new_result_have_distinct_targets (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_old_and_new_result_have_distinct_targets) ... ok
+test_recorded_child_write_and_borrowed_output (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_recorded_child_write_and_borrowed_output) ... ok
+test_result_and_field_require_independent_pools (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_result_and_field_require_independent_pools) ... ERROR
+test_stores_retain_new_target_even_with_old_result (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_stores_retain_new_target_even_with_old_result) ... ok
+
+======================================================================
+ERROR: test_result_and_field_require_independent_pools (test_borrowed_field_completion.BorrowedFieldCompletionTests.test_result_and_field_require_independent_pools)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_borrowed_field_completion.py", line 81, in test_result_and_field_require_independent_pools
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('RESET',reset),allow_legacy_reset=True)).stdout,
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15405, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15398, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13899, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13670, in verify
+    self.function_results, Error, self.enums, async_functions).infer_all()
+                                                               ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 206, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 218, in infer
+    result = context.infer()
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 438, in infer
+    self.nodes(self.node.args[3], initial,
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               valued=self.node.args[2][0] == 'owned')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2140, in nodes
+    yes, _ = self.block(args[1], yes_entry)
+             ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 575, in block
+    paths, value = self.nodes(nodes, entry, valued, expected_array)
+                   ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2220, in nodes
+    part, _ = self.expression(expr, following.pop('next'), line)
+              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1281, in expression
+    self.touch(value, state, line)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 505, in touch
+    self.touch_assets(assets, state, line, before=before)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 513, in touch_assets
+    self.require('distinct', asset.source, reset, line)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 469, in require
+    self.impossible(reason, line)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 486, in impossible
+    self.fail(line, 'reset interdit : une allocation doit encore être utilisée dans cette source')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 313, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 7: reset interdit : une allocation doit encore être utilisée dans cette source
+
+----------------------------------------------------------------------
+Ran 8 tests in 8.588s
+
+FAILED (errors=1)

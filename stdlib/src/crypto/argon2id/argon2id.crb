@@ -1,0 +1,365 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Argon2id version 1.3 with caller-provided memory blocks and output storage.
+
+/// Sets the number of passes and lanes. The workspace supplied to `derive` sets the memory cost.
+pub struct Params {
+    /// Argon2 time-cost iteration count.
+    passes: u32,
+    /// Configured Argon2 parallel lane count.
+    lanes: u32,
+}
+
+/// Reports invalid parameters, insufficient workspace, or incompatible input or output lengths.
+pub enum Error {
+    /// A parameter is outside this algorithm's supported bounds.
+    InvalidParams,
+    /// The supplied Argon2 memory blocks do not meet the configured parameters.
+    InvalidMemory,
+    /// The requested Argon2 output length is invalid.
+    InvalidOutput,
+    /// Input length exceeds the algorithm's supported counter or encoding limit.
+    InputTooLong
+}
+
+// RFC 9106 H': emit 32-byte prefixes of successive 64-byte
+// BLAKE2b digests, followed by a digest of the exact remaining length.
+/// Computes the Argon2 variable-length hash using BLAKE2b.
+fn extended_hash(input: &[u8], output: &mut [u8]) {
+    let size = output.len() as u64;
+    if size <= 64 {
+        let mut hash = blake_new(copy(size));
+        blake_le32(&mut hash, size);
+        blake_update(&mut hash, input);
+        blake_finish(&mut hash, output);
+        return;
+    }
+    let mut digest: [u8; 64] = [0; 64];
+    let mut hash = blake_new(64);
+    blake_le32(&mut hash, copy(size));
+    blake_update(&mut hash, input);
+    blake_finish(&mut hash, &mut digest[..]);
+
+    let mut written: u64 = 0;
+    while size - written > 64 {
+        let mut byte: u64 = 0;
+        while byte < 32 {
+            output[written + byte] = digest[byte];
+            byte = byte + 1;
+        }
+        written = written + 32;
+        let remaining = size - written;
+        let mut next = blake_new(if remaining > 64 { 64 } else { copy(remaining) });
+        blake_update(&mut next, &digest[..]);
+        blake_finish(&mut next, &mut digest[..]);
+    }
+    let mut i: u64 = 0;
+    while written < size {
+        output[written] = digest[i];
+        written = written + 1;
+        i = i + 1;
+    }
+}
+
+/// Appends one length-prefixed input field to the initial hash.
+fn hash_input(hash: &mut Blake2b, input: &[u8]) {
+    blake_le32(&mut *hash, input.len() as u64);
+    blake_update(&mut *hash, input);
+}
+
+/// Derives an initial 1 KiB memory block for a lane from the initial digest.
+fn hash_block(seed: &[u8; 64], index: u64, lane: u64, block: &mut [u64; 128]) {
+    let mut input: [u8; 72] = [0; 72];
+    let mut byte: u64 = 0;
+    while byte < 64 {
+        input[byte] = (*seed)[byte];
+        byte = byte + 1;
+    }
+    byte = 0;
+    while byte < 4 {
+        input[64 + byte] = argon_octet(copy(index), byte * 8);
+        input[68 + byte] = argon_octet(copy(lane), byte * 8);
+        byte = byte + 1;
+    }
+    let mut bytes: [u8; 1024] = [0; 1024];
+    extended_hash(&input[..], &mut bytes[..]);
+    let mut word: u64 = 0;
+    while word < 128 {
+        let mut value: u64 = 0;
+        byte = 0;
+        while byte < 8 {
+            value = value | ((bytes[word * 8 + byte] as u64) << (byte * 8));
+            byte = byte + 1;
+        }
+        let element = &mut (*block)[word];
+        *element = value;
+        word = word + 1;
+    }
+}
+
+/// Adds two words and twice the product of their low 32 bits modulo 2^64.
+fn blamka(a: u64, b: u64) -> u64 {
+    let product = (a & ARGON_LOW_WORD) * (b & ARGON_LOW_WORD);
+    argon_add(argon_add(a, b), (product & 0x7fffffffffffffff) << 1)
+}
+
+/// Mixes four Argon2 words with BlaMka additions, XORs and rotations.
+fn argon_mix(v: &mut [u64; 16], a: u64, b: u64, c: u64, d: u64) {
+    let va = blamka((*v)[a], (*v)[b]);
+    let vd = argon_rot((*v)[d] ^ va, 32);
+    let vc = blamka((*v)[c], copy(vd));
+    let vb = argon_rot((*v)[b] ^ vc, 24);
+    let wa = blamka(va, copy(vb));
+    let wd = argon_rot(vd ^ wa, 16);
+    let wc = blamka(vc, copy(wd));
+    let wb = argon_rot(vb ^ wc, 63);
+    let aa = &mut (*v)[a];
+    *aa = wa;
+    let bb = &mut (*v)[b];
+    *bb = wb;
+    let cc = &mut (*v)[c];
+    *cc = wc;
+    let dd = &mut (*v)[d];
+    *dd = wd;
+}
+
+/// Applies the Argon2 permutation to a group of 16 words.
+fn argon_permute(v: &mut [u64; 16]) {
+    argon_mix(&mut *v, 0, 4, 8, 12);
+    argon_mix(&mut *v, 1, 5, 9, 13);
+    argon_mix(&mut *v, 2, 6, 10, 14);
+    argon_mix(&mut *v, 3, 7, 11, 15);
+    argon_mix(&mut *v, 0, 5, 10, 15);
+    argon_mix(&mut *v, 1, 6, 11, 12);
+    argon_mix(&mut *v, 2, 7, 8, 13);
+    argon_mix(&mut *v, 3, 4, 9, 14);
+}
+
+/// Maps a permutation-group index to its position in the memory block.
+fn group_word(group: u64, word: u64) -> u64 {
+    if group < 8 { group * 16 + word } else { word / 2 * 16 + (group - 8) * 2 + word % 2 }
+}
+
+/// Combines two memory blocks using Argon2's compression permutation.
+fn argon_compress(a: &[u64; 128], b: &[u64; 128], output: &mut [u64; 128]) {
+    let mut block: [u64; 128] = [0; 128];
+    let mut word: u64 = 0;
+    while word < 128 {
+        block[word] = (*a)[word] ^ (*b)[word];
+        word = word + 1;
+    }
+    let mut group: u64 = 0;
+    let mut v: [u64; 16] = [0; 16];
+    while group < 16 {
+        word = 0;
+        while word < 16 {
+            v[word] = block[group_word(copy(group), copy(word))];
+            word = word + 1;
+        }
+        argon_permute(&mut v);
+        word = 0;
+        while word < 16 {
+            block[group_word(copy(group), copy(word))] = v[word];
+            word = word + 1;
+        }
+        group = group + 1;
+    }
+    word = 0;
+    while word < 128 {
+        let element = &mut (*output)[word];
+        *element = block[word] ^ (*a)[word] ^ (*b)[word];
+        word = word + 1;
+    }
+}
+
+/// Carries the pass, slice and lane coordinates used to fill a segment.
+struct Segment {
+    /// Zero-based Argon2 pass index.
+    pass: u64,
+    /// Zero-based Argon2 synchronization slice index.
+    slice: u64,
+    /// Zero-based Argon2 lane index.
+    lane: u64,
+    /// Number of Argon2 lanes in this addressing context.
+    lanes: u64,
+    /// Number of blocks in one Argon2 lane segment.
+    length: u64,
+    /// Argon2 time-cost iteration count.
+    passes: u64,
+}
+
+/// Selects the reference block from the permitted window for the current segment position.
+fn segment_reference(segment: &Segment, index: u64, pseudo: u64) -> u64 {
+    let length = (*segment).length;
+    let lane_length = length * 4;
+    let pass = (*segment).pass;
+    let slice = (*segment).slice;
+    let lane = (*segment).lane;
+    let other = if pass == 0 && slice == 0 { copy(lane) } else { (pseudo >> 32) % (*segment).lanes };
+    let mut area = if pass == 0 { slice * length } else { lane_length - length };
+    if other == lane { area = area + index - 1; }
+    else if index == 0 { area = area - 1; }
+    let low = pseudo & ARGON_LOW_WORD;
+    let relative = area - 1 - ((area * ((low * low) >> 32)) >> 32);
+    let start: u64 = if pass == 0 || slice == 3 { 0 } else { (slice + 1) * length };
+    other * lane_length + (start + relative) % lane_length
+}
+
+/// Generates the next block of pseudorandom addresses for data-independent indexing.
+fn refresh_addresses(input: &mut [u64; 128], intermediate: &mut [u64; 128], addresses: &mut [u64; 128]) {
+    let counter = &mut (*input)[6];
+    *counter = *counter + 1;
+    let zero: [u64; 128] = [0; 128];
+    argon_compress(&zero, &*input, &mut *intermediate);
+    argon_compress(&zero, &*intermediate, &mut *addresses);
+}
+
+/// Fills one lane segment with the indexing mode required at that pass and slice.
+fn fill_segment(work: &mut [[u64; 128]], segment: &Segment) {
+    let pass = (*segment).pass;
+    let slice = (*segment).slice;
+    let lane = (*segment).lane;
+    let length = (*segment).length;
+    let lane_length = length * 4;
+    let independent = pass == 0 && slice < 2;
+    let mut input: [u64; 128] = [0; 128];
+    let mut intermediate: [u64; 128] = [0; 128];
+    let mut addresses: [u64; 128] = [0; 128];
+    let mut block: [u64; 128] = [0; 128];
+    let mut prev: [u64; 128] = [0; 128];
+    let mut other: [u64; 128] = [0; 128];
+    let mut index: u64 = if pass == 0 && slice == 0 { 2 } else { 0 };
+
+    if independent {
+        input[0] = copy(pass);
+        input[1] = copy(lane);
+        input[2] = copy(slice);
+        input[3] = lane_length * (*segment).lanes;
+        input[4] = (*segment).passes;
+        input[5] = 2;
+        if index != 0 { refresh_addresses(&mut input, &mut intermediate, &mut addresses); }
+    }
+    while index < length {
+        let position = slice * length + index;
+        let current = lane * lane_length + position;
+        let previous = lane * lane_length + (position + lane_length - 1) % lane_length;
+        if independent && index % 128 == 0 {
+            refresh_addresses(&mut input, &mut intermediate, &mut addresses);
+        }
+        let pseudo = if independent { addresses[index % 128] } else { work[previous][0] };
+        let reference = segment_reference(segment, copy(index), pseudo);
+        let mut word: u64 = 0;
+        while word < 128 {
+            prev[word] = work[previous][word];
+            other[word] = work[reference][word];
+            word = word + 1;
+        }
+        argon_compress(&prev, &other, &mut block);
+        word = 0;
+        while word < 128 {
+            let updated = if pass == 0 { block[word] } else { work[current][word] ^ block[word] };
+            work[current][word] = updated;
+            word = word + 1;
+        }
+        index = index + 1;
+    }
+}
+
+/// Initializes memory, fills lanes by pass and slice, and hashes the final lane blocks.
+fn derive_internal(
+    password: &[u8], salt: &[u8], secret: &[u8], associated_data: &[u8],
+    params: Params, work: &mut [[u64; 128]], output: &mut [u8],
+) -> Result<(), Error> {
+    let lanes = params.lanes as u64;
+    let passes = params.passes as u64;
+    let memory = work.len() as u64;
+    let output_size = output.len() as u64;
+    if lanes == 0 || lanes > 0xffffff || passes == 0 { return Err(Error.InvalidParams); }
+    if memory < 8 * lanes || memory > ARGON_LOW_WORD { return Err(Error.InvalidMemory); }
+    if output_size < 4 || output_size > ARGON_LOW_WORD { return Err(Error.InvalidOutput); }
+    if (password.len() as u64) > ARGON_LOW_WORD || (salt.len() as u64) > ARGON_LOW_WORD
+        || (secret.len() as u64) > ARGON_LOW_WORD || (associated_data.len() as u64) > ARGON_LOW_WORD {
+        return Err(Error.InputTooLong);
+    }
+    let mut hash = blake_new(64);
+    blake_le32(&mut hash, copy(lanes));
+    blake_le32(&mut hash, output_size);
+    blake_le32(&mut hash, copy(memory));
+    blake_le32(&mut hash, copy(passes));
+    blake_le32(&mut hash, 0x13);
+    blake_le32(&mut hash, 2);
+    hash_input(&mut hash, password);
+    hash_input(&mut hash, salt);
+    hash_input(&mut hash, secret);
+    hash_input(&mut hash, associated_data);
+    let mut seed: [u8; 64] = [0; 64];
+    blake_finish(&mut hash, &mut seed[..]);
+
+    let length = memory / (4 * lanes);
+    let lane_length = 4 * length;
+    let mut lane: u64 = 0;
+    let mut initial: [u64; 128] = [0; 128];
+    while lane < lanes {
+        let mut first: u64 = 0;
+        while first < 2 {
+            hash_block(&seed, copy(first), copy(lane), &mut initial);
+            let mut word: u64 = 0;
+            while word < 128 {
+                work[lane * lane_length + first][word] = initial[word];
+                word = word + 1;
+            }
+            first = first + 1;
+        }
+        lane = lane + 1;
+    }
+    let mut pass: u64 = 0;
+    while pass < passes {
+        let mut slice: u64 = 0;
+        while slice < 4 {
+            lane = 0;
+            while lane < lanes {
+                let segment = Segment {
+                    pass: copy(pass), slice: copy(slice), lane: copy(lane), lanes: copy(lanes),
+                    length: copy(length), passes: copy(passes),
+                };
+                fill_segment(&mut work[0..work.len()], &segment);
+                lane = lane + 1;
+            }
+            slice = slice + 1;
+        }
+        pass = pass + 1;
+    }
+    let mut final_bytes: [u8; 1024] = [0; 1024];
+    let mut word: u64 = 0;
+    while word < 128 {
+        let mut value: u64 = 0;
+        lane = 0;
+        while lane < lanes {
+            value = value ^ work[(lane + 1) * lane_length - 1][word];
+            lane = lane + 1;
+        }
+        let mut byte: u64 = 0;
+        while byte < 8 {
+            final_bytes[word * 8 + byte] = argon_octet(copy(value), byte * 8);
+            byte = byte + 1;
+        }
+        word = word + 1;
+    }
+    extended_hash(&final_bytes[..], output);
+    let mut index: u64 = 0;
+    while index < lane_length * lanes {
+        word = 0;
+        while word < 128 {
+            work[index][word] = 0;
+            word = word + 1;
+        }
+        index = index + 1;
+    }
+    Ok(())
+}
+
+/// Derives the requested Argon2id output using the supplied workspace and parameters.
+pub fn derive(password: &[u8], salt: &[u8], params: Params,
+    work: &mut [[u64; 128]], output: &mut [u8]) -> Result<(), Error> {
+    let empty: [u8; 0] = [];
+    derive_internal(password, salt, &empty[..], &empty[..], params, work, output)
+}

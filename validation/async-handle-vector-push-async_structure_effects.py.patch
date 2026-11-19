@@ -1,0 +1,73 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -150,6 +150,7 @@
+         self.has_suspension = False
+         self.suspended_structures = {}
+         self.suspended_owned_states = []
++        self.suspended_vector_states = []
+         self.suspension_reason = ''
+         if any(mode in ('array_ref', 'array_mut') and reference_array_shape(typ)
+                or mode == 'mut' and (typ.startswith('A<') or typ in REFERENCE_VECTORS
+@@ -162,6 +163,7 @@
+ 
+     def observe_suspension(self, environment, line):
+         self.has_suspension = True
++        self.suspended_vector_states.append((line, environment.copy()))
+         self.suspended_owned_states.append((line, {index: environment[f'\0structure:{index}']
+                                                    for index in self.structure_inputs}))
+         for index, original in self.structure_inputs.items():
+@@ -199,7 +201,19 @@
+             return None
+         finally:
+             self.owned_exit_states, self.owned_field_writes = exits, writes
+-        return FunctionResult('void', 'Void', structure_fields=fields, owned_field_writes=owned)
++        completion_paths = self.vector_write_paths
++        self.vector_write_paths = {}
++        try:
++            for line, environment in self.suspended_vector_states:
++                self.collect_vector_writes(environment, line)
++            vectors = self.vector_write_summary()
++        except self.analyzer.error as error:
++            self.suspension_reason = str(error)
++            return None
++        finally:
++            self.vector_write_paths = completion_paths
++        return FunctionResult('void', 'Void', structure_fields=fields, owned_field_writes=owned,
++                              vector_writes=vectors)
+ 
+     def apply_async_result(self, name, parameters, result, actuals, environment, line, phase):
+         branch = environment.copy()
+@@ -217,6 +231,16 @@
+                 for variable, alias in tuple(branch.items()):
+                     if isinstance(alias, Value) and alias.storage_owner == owner:
+                         branch[variable] = replace(alias, fields=current.fields)
++        for index, *_ in result.vector_writes:
++            current = branch[names[index]]
++            if not isinstance(current, Value):
++                continue
++            for variable, alias in tuple(branch.items()):
++                if isinstance(alias, Value) and alias.typ == current.typ and alias.structure_origins == current.structure_origins:
++                    branch[variable] = replace(alias, handle_items=current.handle_items,
++                        input_item_history=current.input_item_history,
++                        input_items_written=current.input_items_written,
++                        input_items_changed=current.input_items_changed)
+         for variable in names:
+             branch.pop(variable)
+         return branch, completed
+@@ -240,7 +264,7 @@
+ 
+     def observe_factory_suspensions(self, task, environment, line):
+         if (task.deferred_suspension_updates is None or task.task_may_suspend is None
+-                or task.deferred_suspension_owned is None):
++                or task.deferred_suspension_owned is None or task.deferred_suspension_vectors is None):
+             self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
+             return
+         if not task.task_may_suspend:
+@@ -250,6 +274,7 @@
+         self.blocks = [(outer.copy(), shadows.copy()) for outer, shadows in blocks]
+         try:
+             self.apply_deferred_owned(task.deferred_suspension_owned, branch)
++            self.apply_deferred_vectors(task.deferred_suspension_vectors, branch)
+             self.apply_factory_fields(task.deferred_suspension_updates, branch, line)
+             self.observe_suspension(branch, line)
+         except (IncompleteStructureEffects, self.effects.error) as error:

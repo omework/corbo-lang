@@ -1,0 +1,11 @@
+// VE3 / AS8: removing a Copy element inside a suspendable function is valid.
+async fn take(v:&mut Vector<Int>)->Int {
+    yield;
+    return v.remove(0);
+}
+fn main(){
+    let mut p=pool<Vector<Int>>(1);let mut v=p.new();v.push(17);v.push(29);
+    let h=runtime::spawn(->take(&mut v));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+    print(v.len());print(v[0]);
+}

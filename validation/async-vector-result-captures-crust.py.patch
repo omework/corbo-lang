@@ -1,0 +1,39 @@
+--- before/crust.py
++++ crust.py
+@@ -4305,7 +4305,8 @@
+                                                absent=all(a.absent_owned_payload for a in values),
+                                                storage=self.join_payload_storage(vars(a) for a in values),
+                                                owned_fields=self.task_owned_result_fields(values),
+-                                               borrowed_fields=self.merge_dependencies(*(a.dependencies for a in values)),
++                                               borrowed_fields=self.merge_dependencies(*(tuple(
++                                                   (path, targets) for path, _, targets in self.owned_dependency_fields(a)) for a in values)),
+                                                borrow_parents=tuple({id(p): p for a in values for p in a.borrow_parents}.values()))
+         if kind == 'handle_option':
+             payloads = [allocation for allocation in values if allocation is not None]
+@@ -5244,11 +5245,13 @@
+                                                    source_name, selected_origins, nested=selected_kind if selected_kind in OWNED_JOIN_TYPES else False, optional=selected_kind if selected_kind in OPTION_JOIN_TYPES else False, exchange=selected_kind if selected_kind in EXCHANGE_JOIN_TYPES else None, typ=selected_type,
+                                                    absent=all(state['absent_owned_payload'] for state in selected_item_states),
+                                                    storage=self.join_payload_storage(selected_item_states),
+-                                                   borrowed_fields=selected_dependencies,
++                                                   borrowed_fields=self.merge_dependencies(selected_dependencies, *(tuple(
++                                                       (path, targets) for path, _, targets in self.owned_dependency_fields(Allocation(**state)))
++                                                       for state in selected_item_states)),
+                                                    borrow_parents=tuple({id(p): p for state in selected_item_states for p in state['borrow_parents']}.values()),
+                                                    owned_fields=self.merge_async_result_fields(*(
+                                                        tuple((arm, *payload) for arm, payload in zip(('ok', 'err'), state['exchange_payloads']))
+-                                                       if selected_kind in EXCHANGE_JOIN_TYPES else self.owned_field_storage(state['owned_fields'])
++                                                       if selected_kind in EXCHANGE_JOIN_TYPES else self.allocation_field_storage(Allocation(**state))
+                                                        for state in selected_item_states)))
+             if selected_kind == 'handle_option':
+                 return self.buffered_handle_result(result_c, selected_sources, self.scopes[-1],
+@@ -7597,7 +7600,9 @@
+                                                        absent=descriptor.absent_owned_payload,
+                                                        storage=descriptor.payload_storage,
+                                                        owned_fields=self.task_owned_result_fields((descriptor,)),
+-                                                       borrowed_fields=descriptor.dependencies, borrow_parents=descriptor.borrow_parents)
++                                                       borrowed_fields=tuple((path, targets) for path, _, targets
++                                                           in self.owned_dependency_fields(descriptor)),
++                                                       borrow_parents=descriptor.borrow_parents)
+                 if descriptor.absent_owned_payload:
+                     self.lines.append('fail("join : charge propriétaire impossible");')
+                     raise PathsReturned()

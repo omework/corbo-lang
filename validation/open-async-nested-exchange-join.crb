@@ -1,0 +1,15 @@
+async fn exchange(v:&mut Vector<A<Int>>,incoming:->A<Int>)-><-Result<A<Int>,A<Int>> {
+    yield;
+    let r=<-v.replace(0,->incoming);
+    yield;
+    return <-r;
+}
+async fn wrapped(v:&mut Vector<A<Int>>,incoming:->A<Int>)-><-Result<Result<A<Int>,A<Int>>,runtime::Error>{
+    let h=runtime::spawn(->exchange(v,->incoming));return <-h.await;}
+fn main() {
+    let mut p=pool<Int>(2);let mut vp=pool<Vector<A<Int>>>(1);let mut v=vp.new();
+    v.push(->p.new(7));let next=p.new(8);
+    let h=runtime::spawn(->wrapped(&mut v,->next));
+    let result=h.join();drop(->result);
+    print(*v[0]);drop(->v);let reused=p.new(9);print(*reused);
+}

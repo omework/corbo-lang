@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Nonblocking Unix socket operations that await reactor readiness before retrying.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    use std::sys::unix::linux::x86_64::socket as raw;
+#(endif)
+#(if: target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    use std::sys::unix::native::socket as raw;
+#(endif)
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    /// Recognizes the target's native status for an operation that must wait for readiness.
+    fn would_block(code: i64) -> bool { code == -11 }
+    /// Recognizes statuses for a connect that is interrupted or still pending.
+    fn connecting(code: i64) -> bool { code == -115 || code == -4 }
+#(endif)
+#(if: target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    /// Recognizes the target's native status for an operation that must wait for readiness.
+    fn would_block(code: i64) -> bool { code == -35 }
+    /// Recognizes statuses for a connect that is interrupted or still pending.
+    fn connecting(code: i64) -> bool { code == -36 || code == -4 }
+#(endif)
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    use std::sys::net::reactor::ready;
+    use std::sys::net::{PlatformSocket, make_socket, adopt_socket, socket_error, socket_descriptor, receive_datagram, datagram_result};
+    use std::net::{SocketError, Datagram};
+
+    /// Sets the native socket to nonblocking mode for the readiness reactor.
+    pub fn prepare_async(socket: &PlatformSocket) -> Result<(), SocketError> {
+        let status = raw::nonblocking(socket_descriptor(socket));
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        Ok(())
+    }
+
+    /// Connects a nonblocking socket, waits for write readiness and checks the pending error.
+    pub async fn connect_nonblocking(ip: u32, port: u16) -> Result<PlatformSocket, SocketError> {
+        let socket = match make_socket(1) {
+            Ok(value) => { value }, Err(error) => { return Err(error); },
+        };
+        match prepare_async(&socket) {
+            Ok(()) => {}, Err(error) => { return Err(error); },
+        };
+        let status = raw::connect(socket_descriptor(&socket), ip, port);
+        if copy(status) == 0 { return Ok(socket); }
+        if !connecting(copy(status)) { return Err(socket_error(status)); }
+        let waited = ready(socket_descriptor(&socket), true).await;
+        if waited != 0 { return Err(socket_error(waited)); }
+        let done = raw::connect_status(socket_descriptor(&socket));
+        if done != 0 { return Err(socket_error(done)); }
+        Ok(socket)
+    }
+
+    /// Retries accept after readiness and configures the new socket for asynchronous I/O.
+    pub async fn accept_nonblocking(socket: &mut PlatformSocket) -> Result<PlatformSocket, SocketError> {
+        let listener = socket_descriptor(&*socket);
+        while true {
+            let (status, handle) = raw::accept(copy(listener));
+            if copy(status) == 0 {
+                let accepted = match adopt_socket(handle) {
+                    Ok(value) => { value }, Err(error) => { return Err(error); },
+                };
+                match prepare_async(&accepted) {
+                    Ok(()) => {}, Err(error) => { return Err(error); },
+                };
+                return Ok(accepted);
+            }
+            if copy(status) != -4 {
+                if !would_block(copy(status)) { return Err(socket_error(status)); }
+                let waited = ready(copy(listener), false).await;
+                if waited != 0 { return Err(socket_error(waited)); }
+            }
+        }
+        Err(SocketError.Os { code: -1 })
+    }
+
+    /// Retries a nonblocking read after the reactor reports read readiness.
+    pub async fn read_nonblocking(socket: u64, buffer: &mut [u8]) -> Result<usize, SocketError> {
+        let length = buffer.len();
+        if copy(length) == 0 { return Ok(0); }
+        while true {
+            let (status, count) = raw::receive(copy(socket), &mut buffer[0..copy(length)]);
+            if copy(status) == 0 { return Ok(count); }
+            if copy(status) != -4 {
+                if !would_block(copy(status)) { return Err(socket_error(status)); }
+                let waited = ready(copy(socket), false).await;
+                if waited != 0 { return Err(socket_error(waited)); }
+            }
+        }
+        Err(SocketError.Os { code: -1 })
+    }
+
+    /// Retries a nonblocking write after the reactor reports write readiness.
+    pub async fn write_nonblocking(socket: u64, buffer: &[u8]) -> Result<usize, SocketError> {
+        let length = buffer.len();
+        if copy(length) == 0 { return Ok(0); }
+        while true {
+            let (status, count) = raw::send(copy(socket), &buffer[0..copy(length)], copy(length));
+            if copy(status) == 0 && copy(count) != 0 { return Ok(count); }
+            if copy(status) != -4 {
+                if copy(status) != 0 && !would_block(copy(status)) { return Err(socket_error(status)); }
+                let waited = ready(copy(socket), true).await;
+                if waited != 0 { return Err(socket_error(waited)); }
+            }
+        }
+        Err(SocketError.Os { code: -1 })
+    }
+    /// Waits for a readable datagram and preserves the sender and truncation status.
+    pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) -> Result<Datagram, SocketError> {
+        let length = buffer.len();
+        while true {
+            let (status, count, from) = receive_datagram(copy(socket), &mut buffer[0..copy(length)]);
+            if !would_block(copy(status)) && copy(status) != -4 { return datagram_result(status, count, from); }
+            if status != -4 {
+                let waited = ready(copy(socket), false).await;
+                if waited != 0 { return Err(socket_error(waited)); }
+            }
+        }
+        Err(SocketError.Os { code: -1 })
+    }
+
+    /// Performs one send attempt to either the connected peer or an explicit destination.
+    fn send_packet(socket: u64, buffer: &[u8], length: usize, direct: bool, ip: u32, port: u16) -> (i64, usize) {
+        if direct { return raw::send(socket, buffer, length); }
+        raw::send_to(socket, buffer, length, ip, port)
+    }
+
+    /// Retries sending a complete datagram after write readiness.
+    pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) -> Result<usize, SocketError> {
+        let length = buffer.len();
+        if copy(length) > 65507 { return Err(SocketError.DatagramTooLarge); }
+        let dummy: [u8; 1] = [0];
+        while true {
+            let (error, count) = if copy(length) == 0 {
+                send_packet(copy(socket), &dummy[..], 0, copy(direct), copy(ip), copy(port))
+            } else {
+                send_packet(copy(socket), &buffer[0..copy(length)], copy(length), copy(direct), copy(ip), copy(port))
+            };
+            if copy(error) == 0 { return Ok(count); }
+            if copy(error) != -4 {
+                if !would_block(copy(error)) { return Err(socket_error(error)); }
+                let waited = ready(copy(socket), true).await;
+                if waited != 0 { return Err(socket_error(waited)); }
+            }
+        }
+        Err(SocketError.Os { code: -1 })
+    }
+#(endif)

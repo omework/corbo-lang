@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Asynchronous IPv4 UDP I/O with synchronous socket setup.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    use std::net::{SocketError, Datagram};
+    use std::net::ipv4::{SocketAddr, from_parts};
+    use std::sys::net::{PlatformSocket, open_connection, open_listener, socket_descriptor};
+
+    use std::sys::net::asyn::{prepare_async, send_datagram, recv_datagram};
+
+    /// Owns a UDP socket prepared for asynchronous I/O with an associated peer.
+    pub struct Connection {
+        /// Owned native socket storage; the connection/listener closes it on destruction.
+        __din_package_socket: PlatformSocket,
+        /// Cached local IPv4 endpoint, including any OS-assigned port.
+        local_address: SocketAddr,
+        /// Cached remote IPv4 endpoint.
+        remote_address: SocketAddr,
+    }
+
+    /// Owns a bound UDP socket prepared for asynchronous addressed I/O.
+    pub struct Listener {
+        /// Owned native socket storage; the connection/listener closes it on destruction.
+        __din_package_socket: PlatformSocket,
+        /// Cached local IPv4 endpoint, including any OS-assigned port.
+        local_address: SocketAddr,
+    }
+
+    /// Associates a UDP socket with a peer and prepares it for asynchronous I/O.
+    pub fn connect(address: SocketAddr) -> Result<Connection, SocketError> {
+        let inner = match open_connection(2, address.ipv4_bits(), address.port()) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        match prepare_async(&inner) {
+            Ok(()) => {}, Err(error) => { return Err(error); },
+        };
+        let local = match inner.endpoint(0) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        Ok(Connection { __din_package_socket: inner, local_address: local, remote_address: address })
+    }
+
+    impl Connection {
+        /// Returns the local IPv4 address and port, including a port assigned by the OS.
+        fn addr(&self) -> SocketAddr {
+            let local = &(*self).local_address;
+            from_parts(local.ipv4_bits(), local.port())
+        }
+
+        /// Returns the remote IPv4 address and port associated with the connection.
+        fn peer(&self) -> SocketAddr {
+            let remote = &(*self).remote_address;
+            from_parts(remote.ipv4_bits(), remote.port())
+        }
+
+        /// Awaits transmission of one complete datagram to the connected peer, including an empty datagram.
+        async fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError> {
+            if buffer.len() > 65507 { return Err(SocketError.DatagramTooLarge); }
+            let inner = &(*self).__din_package_socket;
+            send_datagram(socket_descriptor(inner), buffer, true, 0, 0).await
+        }
+
+        /// Awaits one datagram from the connected peer. An oversized payload is consumed and reported.
+        async fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError> {
+            let inner = &(*self).__din_package_socket;
+            let packet = match recv_datagram(socket_descriptor(inner), buffer).await {
+                Ok(value) => { value },
+                Err(error) => { return Err(error); },
+            };
+            Ok(packet.count())
+        }
+    }
+
+    impl Listener {
+        /// Binds the supplied endpoint and prepares the socket for asynchronous I/O.
+        fn bind(address: SocketAddr) -> Result<Listener, SocketError> {
+            let inner = match open_listener(2, address.ipv4_bits(), address.port(), 0) {
+                Ok(value) => { value },
+                Err(error) => { return Err(error); },
+            };
+            match prepare_async(&inner) {
+                Ok(()) => {}, Err(error) => { return Err(error); },
+            };
+            let local = match inner.endpoint(0) {
+                Ok(value) => { value },
+                Err(error) => { return Err(error); },
+            };
+            Ok(Listener { __din_package_socket: inner, local_address: local })
+        }
+
+        /// Returns the local IPv4 address and port, including a port assigned by the OS.
+        fn addr(&self) -> SocketAddr {
+            let local = &(*self).local_address;
+            from_parts(local.ipv4_bits(), local.port())
+        }
+
+        /// Awaits one datagram and its sender address. An oversized payload is consumed and reported.
+        async fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError> {
+            let inner = &(*self).__din_package_socket;
+            recv_datagram(socket_descriptor(inner), buffer).await
+        }
+
+        /// Awaits transmission of one complete datagram to the supplied destination, including an empty datagram.
+        async fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError> {
+            let inner = &(*self).__din_package_socket;
+            send_datagram(socket_descriptor(inner), buffer, false, destination.ipv4_bits(), destination.port()).await
+        }
+    }
+#(endif)

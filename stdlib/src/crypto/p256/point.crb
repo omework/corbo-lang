@@ -1,0 +1,219 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! P-256 Jacobian point operations and affine conversion.
+
+// Jacobian coordinates, in Montgomery form. A zero Z denotes infinity.
+/// Returns the Jacobian representation of the point at infinity.
+fn infinity() -> [u64; 24] {
+    let point: [u64; 24] = [0; 24];
+    point
+}
+
+/// Copies a point's three coordinates into caller-owned storage.
+fn point_set(point: &mut [u64; 24], source: &[u64]) {
+    let mut i: u64 = 0;
+    while i < 24 {
+        let limb = &mut (*point)[i];
+        *limb = source[i];
+        i = i + 1;
+    }
+}
+
+/// Reads one eight-limb coordinate from an internal point.
+fn coordinate(point: &[u64], offset: u64) -> [u64; 8] {
+    let mut out: [u64; 8] = [0; 8];
+    let mut i: u64 = 0;
+    while i < 8 {
+        out[i] = point[offset + i];
+        i = i + 1;
+    }
+    out
+}
+
+/// Packs x, y and z into one Jacobian point.
+fn point_new(x: &[u64], y: &[u64], z: &[u64]) -> [u64; 24] {
+    let mut point = infinity();
+    let mut i: u64 = 0;
+    while i < 8 {
+        point[i] = x[i];
+        point[i + 8] = y[i];
+        point[i + 16] = z[i];
+        i = i + 1;
+    }
+    point
+}
+
+/// Returns the standard P-256 base point.
+fn generator() -> [u64; 24] {
+    let x = generator_x();
+    let y = generator_y();
+    let z = montgomery_one(false);
+    let result = point_new(&x[..], &y[..], &z[..]);
+    result
+}
+
+/// Adds two coordinate values modulo the P-256 field prime.
+fn field_add(a: &[u64], b: &[u64]) -> [u64; 8] {
+    let result = modular_add(&a[0..8], &b[0..8], false);
+    result
+}
+/// Subtracts two coordinate values modulo the P-256 field prime.
+fn field_sub(a: &[u64], b: &[u64]) -> [u64; 8] {
+    let result = modular_sub(&a[0..8], &b[0..8], false);
+    result
+}
+/// Multiplies two Montgomery coordinate values.
+fn field_mul(a: &[u64], b: &[u64]) -> [u64; 8] {
+    let result = montgomery_mul(&a[0..8], &b[0..8], false);
+    result
+}
+
+/// Selects each limb from one of two points using a bit mask.
+fn point_select(a: &[u64], b: &[u64], bit: u64) -> [u64; 24] {
+    let ax = coordinate(&a[0..24], 0);
+    let ay = coordinate(&a[0..24], 8);
+    let az = coordinate(&a[0..24], 16);
+    let bx = coordinate(&b[0..24], 0);
+    let by = coordinate(&b[0..24], 8);
+    let bz = coordinate(&b[0..24], 16);
+    let x = word_select(&ax[..], &bx[..], copy(bit));
+    let y = word_select(&ay[..], &by[..], copy(bit));
+    let z = word_select(&az[..], &bz[..], bit);
+    let result = point_new(&x[..], &y[..], &z[..]);
+    result
+}
+
+/// Doubles a Jacobian point using the P-256 curve equation.
+fn point_double(a: &[u64]) -> [u64; 24] {
+    let ax = coordinate(&a[0..24], 0);
+    let ay = coordinate(&a[0..24], 8);
+    let az = coordinate(&a[0..24], 16);
+    let delta = field_mul(&az[..], &az[..]);
+    let gamma = field_mul(&ay[..], &ay[..]);
+    let beta = field_mul(&ax[..], &gamma[..]);
+    let lower = field_sub(&ax[..], &delta[..]);
+    let upper = field_add(&ax[..], &delta[..]);
+    let product = field_mul(&lower[..], &upper[..]);
+    let twice = field_add(&product[..], &product[..]);
+    let alpha = field_add(&twice[..], &product[..]);
+    let beta2 = field_add(&beta[..], &beta[..]);
+    let beta4 = field_add(&beta2[..], &beta2[..]);
+    let beta8 = field_add(&beta4[..], &beta4[..]);
+    let alpha2 = field_mul(&alpha[..], &alpha[..]);
+    let x = field_sub(&alpha2[..], &beta8[..]);
+
+    let sum = field_add(&ay[..], &az[..]);
+    let sum2 = field_mul(&sum[..], &sum[..]);
+    let z0 = field_sub(&sum2[..], &gamma[..]);
+    let z = field_sub(&z0[..], &delta[..]);
+
+    let difference = field_sub(&beta4[..], &x[..]);
+    let y0 = field_mul(&alpha[..], &difference[..]);
+    let gamma2 = field_mul(&gamma[..], &gamma[..]);
+    let twice_gamma2 = field_add(&gamma2[..], &gamma2[..]);
+    let four_gamma2 = field_add(&twice_gamma2[..], &twice_gamma2[..]);
+    let eight_gamma2 = field_add(&four_gamma2[..], &four_gamma2[..]);
+    let y = field_sub(&y0[..], &eight_gamma2[..]);
+    let result = point_new(&x[..], &y[..], &z[..]);
+    result
+}
+
+/// Adds two Jacobian points, including identity and doubling cases.
+fn point_add(a: &[u64], b: &[u64]) -> [u64; 24] {
+    let ax = coordinate(&a[0..24], 0);
+    let ay = coordinate(&a[0..24], 8);
+    let az = coordinate(&a[0..24], 16);
+    let bx = coordinate(&b[0..24], 0);
+    let by = coordinate(&b[0..24], 8);
+    let bz = coordinate(&b[0..24], 16);
+    let z1_squared = field_mul(&az[..], &az[..]);
+    let z2_squared = field_mul(&bz[..], &bz[..]);
+    let u1 = field_mul(&ax[..], &z2_squared[..]);
+    let u2 = field_mul(&bx[..], &z1_squared[..]);
+    let z1_cubed = field_mul(&z1_squared[..], &az[..]);
+    let z2_cubed = field_mul(&z2_squared[..], &bz[..]);
+    let s1 = field_mul(&ay[..], &z2_cubed[..]);
+    let s2 = field_mul(&by[..], &z1_cubed[..]);
+    let h = field_sub(&u2[..], &u1[..]);
+    let r = field_sub(&s2[..], &s1[..]);
+
+    let hh = field_mul(&h[..], &h[..]);
+    let hhh = field_mul(&h[..], &hh[..]);
+    let v = field_mul(&u1[..], &hh[..]);
+    let r_squared = field_mul(&r[..], &r[..]);
+    let x0 = field_sub(&r_squared[..], &hhh[..]);
+    let x1 = field_sub(&x0[..], &v[..]);
+    let x = field_sub(&x1[..], &v[..]);
+    let difference = field_sub(&v[..], &x[..]);
+    let y0 = field_mul(&r[..], &difference[..]);
+    let y1 = field_mul(&s1[..], &hhh[..]);
+    let y = field_sub(&y0[..], &y1[..]);
+    let z0 = field_mul(&az[..], &bz[..]);
+    let z = field_mul(&z0[..], &h[..]);
+
+    // Complete the addition with masked selections for equal points
+    // and identity operands. Opposite points already yield Z = 0.
+    let sum = point_new(&x[..], &y[..], &z[..]);
+    let doubled = point_double(&a[0..24]);
+    let same = zero_bit(&h[..]) & zero_bit(&r[..]);
+    let selected = point_select(&sum[..], &doubled[..], same);
+    let left_infinity = point_select(&selected[..], &b[0..24], zero_bit(&az[..]));
+    let result = point_select(&left_infinity[..], &a[0..24], zero_bit(&bz[..]));
+    result
+}
+
+/// Multiplies a point by a 256-bit scalar.
+fn scalar_multiply(point: &[u64], scalar: &[u64]) -> [u64; 24] {
+    let mut result = infinity();
+    let mut bit: u64 = 256;
+    while bit > 0 {
+        bit = bit - 1;
+        let doubled = point_double(&result[..]);
+        let added = point_add(&doubled[..], &point[0..24]);
+        let next = point_select(&doubled[..], &added[..], scalar_bit(&scalar[0..8], copy(bit)));
+        point_set(&mut result, &next[..]);
+    }
+    result
+}
+
+/// Converts the Jacobian x coordinate to affine form.
+fn affine_x(point: &[u64]) -> [u64; 8] {
+    let pointx = coordinate(&point[0..24], 0);
+    let pointz = coordinate(&point[0..24], 16);
+    let inverse = modular_inverse(&pointz[..], false);
+    let squared = field_mul(&inverse[..], &inverse[..]);
+    let x = field_mul(&pointx[..], &squared[..]);
+    let result = from_montgomery(&x[..], false);
+    result
+}
+
+/// Writes the point as an uncompressed SEC1 encoding.
+fn serialize_point(point: &[u64], output: &mut [u8]) {
+    let pointx = coordinate(&point[0..24], 0);
+    let pointy = coordinate(&point[0..24], 8);
+    let pointz = coordinate(&point[0..24], 16);
+    let inverse = modular_inverse(&pointz[..], false);
+    let squared = field_mul(&inverse[..], &inverse[..]);
+    let cubed = field_mul(&inverse[..], &squared[..]);
+    let x = field_mul(&pointx[..], &squared[..]);
+    let y = field_mul(&pointy[..], &cubed[..]);
+    let raw_x = from_montgomery(&x[..], false);
+    let raw_y = from_montgomery(&y[..], false);
+    let size = output.len();
+    output[0] = 4;
+    write_words(&raw_x[..], &mut output[0..size], 1);
+    write_words(&raw_y[..], output, 33);
+}
+
+/// Checks the affine coordinates against the P-256 curve equation.
+fn on_curve(x: &[u64], y: &[u64]) -> bool {
+    let xx = field_mul(&x[0..8], &x[0..8]);
+    let xxx = field_mul(&xx[..], &x[0..8]);
+    let twice = field_add(&x[0..8], &x[0..8]);
+    let thrice = field_add(&twice[..], &x[0..8]);
+    let low = field_sub(&xxx[..], &thrice[..]);
+    let b = curve_b();
+    let right = field_add(&low[..], &b[..]);
+    let left = field_mul(&y[0..8], &y[0..8]);
+    let difference = field_sub(&left[..], &right[..]);
+    zero_bit(&difference[..]) == 1
+}

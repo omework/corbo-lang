@@ -1,0 +1,80 @@
+test_constructor_type_checks (test_async_struct_pools.AsyncStructPoolTests.test_constructor_type_checks) ... ok
+test_defaults_named_order_and_multiple_slots (test_async_struct_pools.AsyncStructPoolTests.test_defaults_named_order_and_multiple_slots) ... ok
+test_fields_reborrow_methods_and_drop (test_async_struct_pools.AsyncStructPoolTests.test_fields_reborrow_methods_and_drop) ... ok
+test_injected_pool_sync_async_and_alias (test_async_struct_pools.AsyncStructPoolTests.test_injected_pool_sync_async_and_alias) ... ok
+test_loop_cleanup_continue_break_and_native_block (test_async_struct_pools.AsyncStructPoolTests.test_loop_cleanup_continue_break_and_native_block) ... ok
+test_nested_owned_graph_and_injected_source_return (test_async_struct_pools.AsyncStructPoolTests.test_nested_owned_graph_and_injected_source_return) ... FAIL
+test_ownership_of_fields_and_cross_pool_lifetimes (test_async_struct_pools.AsyncStructPoolTests.test_ownership_of_fields_and_cross_pool_lifetimes) ... ok
+test_parent_receiver_and_short_sources (test_async_struct_pools.AsyncStructPoolTests.test_parent_receiver_and_short_sources) ... ok
+test_pending_owner_cleanup_during_later_field (test_async_struct_pools.AsyncStructPoolTests.test_pending_owner_cleanup_during_later_field) ... ok
+test_recorded_local_pool (test_async_struct_pools.AsyncStructPoolTests.test_recorded_local_pool) ... ok
+test_scalar_snapshot_and_borrowed_arguments (test_async_struct_pools.AsyncStructPoolTests.test_scalar_snapshot_and_borrowed_arguments) ... ok
+test_scope_cycles_model (test_async_struct_pools.AsyncStructPoolTests.test_scope_cycles_model) ... ok
+test_slot_identity_capacity_and_suspended_cleanup (test_async_struct_pools.AsyncStructPoolTests.test_slot_identity_capacity_and_suspended_cleanup) ... ok
+
+======================================================================
+FAIL: test_nested_owned_graph_and_injected_source_return (test_async_struct_pools.AsyncStructPoolTests.test_nested_owned_graph_and_injected_source_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15797, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13987, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3020, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9833, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11156, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12477, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12990, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6237, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9128, in expression
+    return self.execution_expression(expr, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10390, in execution_expression
+    return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                       typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields)
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 7752, in join_allocation_result
+    self.restore_async_owned_fields(payload, owned_fields)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 7741, in restore_async_owned_fields
+    allocation.owned_fields = restore(allocation.typ)
+                              ~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 7732, in restore
+    self.fail('résultat async : provenance du champ propriétaire absente')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1948, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 3: résultat async : provenance du champ propriétaire absente
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_pools.py", line 113, in test_nested_owned_graph_and_injected_source_return
+    self.assertEqual(self.run_source(factory).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: résultat async : provenance du champ propriétaire absente
+
+----------------------------------------------------------------------
+Ran 13 tests in 8.156s
+
+FAILED (failures=1)

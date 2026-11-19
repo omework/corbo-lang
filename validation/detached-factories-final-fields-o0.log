@@ -1,0 +1,80 @@
+FFF
+======================================================================
+FAIL: test_return_follows_field_replacement_at_completion (test_detached_task_factories.DetachedTaskFactoryTests.test_return_follows_field_replacement_at_completion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16011, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14164, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 934, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6785, in _lower_async_function
+    store_struct_field(*args, line, following=body[index + 1:])
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5474, in store_struct_field
+    changes = prepare_field_changes(summary, parameters,
+        [[(name, 'mut'), *received_refs.get(name, ())], held], line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1468, in prepare_field_changes
+    fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 967, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: remplacement de champ async : cible locale ou provenance non raccordée
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_detached_task_factories.py", line 134, in test_return_follows_field_replacement_at_completion
+    self.assertEqual(self.run_source(source).stdout,'9\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: remplacement de champ async : cible locale ou provenance non raccordée
+
+======================================================================
+FAIL: test_repeated_return_releases_target_after_last_use (test_detached_task_factories.DetachedTaskFactoryTests.test_repeated_return_releases_target_after_last_use) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 3: branche de boucle async : instruction non prise en charge
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "emprunt|réserv|référenc" does not match "ligne 3: branche de boucle async : instruction non prise en charge"
+
+======================================================================
+FAIL: test_repeated_return_releases_target_after_last_use (test_detached_task_factories.DetachedTaskFactoryTests.test_repeated_return_releases_target_after_last_use) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 3: branche de boucle async : instruction non prise en charge
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "emprunt|réserv|référenc" does not match "ligne 3: branche de boucle async : instruction non prise en charge"
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.782s
+
+FAILED (failures=3)

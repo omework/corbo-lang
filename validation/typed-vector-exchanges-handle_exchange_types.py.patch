@@ -1,0 +1,31 @@
+--- /tmp/crust-before-typed-vector-exchanges/handle_exchange_types.py
++++ /Users/jabarkarim/sources/crust/handle_exchange_types.py
+@@ -0,0 +1,28 @@
++"""Types of the two ownership results produced by handle-vector operations."""
++
++
++def exchange_type(element, optional=False):
++    handle = f'A<{element}>'
++    return f'Result<{"()" if optional else handle},{handle}>'
++
++
++def exchange_element(typ):
++    if not isinstance(typ, str) or not typ.startswith('Result<') or not typ.endswith('>'):
++        return None
++    body = typ[7:-1]
++    depth = 0
++    for index, character in enumerate(body):
++        if character == '<':
++            depth += 1
++        elif character == '>':
++            depth -= 1
++        elif character == ',' and depth == 0:
++            first, second = body[:index], body[index + 1:]
++            if second.startswith('A<') and second.endswith('>') and first in ('()', second):
++                return second[2:-1]
++            return None
++    return None
++
++
++def exchange_optional(typ):
++    return exchange_element(typ) is not None and typ.startswith('Result<(),')

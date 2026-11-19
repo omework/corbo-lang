@@ -1,0 +1,53 @@
+test_copy_preserves_typed_reference_without_root (test_inline_typed_views.InlineTypedViewTests.test_copy_preserves_typed_reference_without_root) ... ok
+test_mutable_replacement_return_uses_new_target (test_inline_typed_views.InlineTypedViewTests.test_mutable_replacement_return_uses_new_target) ... FAIL
+test_mutable_typed_reborrow_reserves_field_and_target (test_inline_typed_views.InlineTypedViewTests.test_mutable_typed_reborrow_reserves_field_and_target) ... ok
+test_shared_typed_reference_return_detaches_from_root (test_inline_typed_views.InlineTypedViewTests.test_shared_typed_reference_return_detaches_from_root) ... ok
+test_transitive_target_can_outlive_intermediate_holders (test_inline_typed_views.InlineTypedViewTests.test_transitive_target_can_outlive_intermediate_holders) ... ok
+test_typed_reference_replacement_through_call_and_root (test_inline_typed_views.InlineTypedViewTests.test_typed_reference_replacement_through_call_and_root) ... ok
+
+======================================================================
+FAIL: test_mutable_replacement_return_uses_new_target (test_inline_typed_views.InlineTypedViewTests.test_mutable_replacement_return_uses_new_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16460, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14524, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 589, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 632, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 936, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 3288, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 1252, in collect
+    self.fail(line, 'retour refusé : cible empruntée non durable dans le scope parent')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 684, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 5: retour refusé : cible empruntée non durable dans le scope parent
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_typed_views.py", line 70, in test_mutable_replacement_return_uses_new_target
+    self.assertEqual(self.run_source(source).stdout,'11\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: retour refusé : cible empruntée non durable dans le scope parent
+
+----------------------------------------------------------------------
+Ran 6 tests in 2.048s
+
+FAILED (failures=1)

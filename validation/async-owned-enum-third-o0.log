@@ -1,0 +1,261 @@
+test_borrowed_field_return_keeps_target (test_async_owned_enums.AsyncOwnedEnumTests.test_borrowed_field_return_keeps_target) ... ok
+test_fresh_enum_from_injected_pool (test_async_owned_enums.AsyncOwnedEnumTests.test_fresh_enum_from_injected_pool) ... ok
+test_local_pools_keep_per_arm_layout_and_capacity (test_async_owned_enums.AsyncOwnedEnumTests.test_local_pools_keep_per_arm_layout_and_capacity) ... ok
+test_owned_children_cleanup_on_inactive_and_launch_failure (test_async_owned_enums.AsyncOwnedEnumTests.test_owned_children_cleanup_on_inactive_and_launch_failure) ... ok
+test_public_handle_and_relay_keep_reference_field (test_async_owned_enums.AsyncOwnedEnumTests.test_public_handle_and_relay_keep_reference_field) ... ERROR
+test_recorded_enum_and_variants (test_async_owned_enums.AsyncOwnedEnumTests.test_recorded_enum_and_variants) ... ok
+test_relay_and_consumption_in_sync_helper (test_async_owned_enums.AsyncOwnedEnumTests.test_relay_and_consumption_in_sync_helper) ... ok
+test_select_borrowed_enum_fields_remain_live (test_async_owned_enums.AsyncOwnedEnumTests.test_select_borrowed_enum_fields_remain_live) ... FAIL
+test_select_winner_and_loser_reuse_model (test_async_owned_enums.AsyncOwnedEnumTests.test_select_winner_and_loser_reuse_model) ... ok
+test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) ... 
+  test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) (variant='Item') ... FAIL
+  test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) (variant='Pair') ... FAIL
+  test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) (variant='Empty') ... FAIL
+
+======================================================================
+ERROR: test_public_handle_and_relay_keep_reference_field (test_async_owned_enums.AsyncOwnedEnumTests.test_public_handle_and_relay_keep_reference_field)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_enums.py", line 115, in test_public_handle_and_relay_keep_reference_field
+    self.assertEqual(self.run_source(source.replace('BEFORE','')).stdout,'View.Item(7)\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16144, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14205, in verify
+    self.function_effects = EffectAnalyzer(self.functions, self.enums, Error, async_functions).infer_all()
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 150, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 177, in infer
+    outcomes = self.nodes(body, environment, resets, allocations, pools)
+  File "/Users/jabarkarim/sources/crust/effects.py", line 605, in nodes
+    part = self.expression(expr, environment, resets, allocations, pools, line, types, break_types)
+  File "/Users/jabarkarim/sources/crust/effects.py", line 407, in expression
+    result_types.add(self.receiver_type(expr, environment) if expr is not None else None)
+                     ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 272, in receiver_type
+    mode, typ = self.async_functions[execution[len('Execution<'):-1]].args[2]
+                ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/handle_types.py", line 120, in __missing__
+    raise KeyError(key)
+KeyError: 'runtime::Handle<A<View>>'
+
+======================================================================
+FAIL: test_select_borrowed_enum_fields_remain_live (test_async_owned_enums.AsyncOwnedEnumTests.test_select_borrowed_enum_fields_remain_live)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16144, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14300, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3115, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10018, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11418, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13298, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6373, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9305, in expression
+    return self.construct_enum(expr, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5688, in construct_enum
+    self.fail(f"champ '{name}' : emprunt nommé &allocation Int requis")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1962, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: champ 'target' : emprunt nommé &allocation Int requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_enums.py", line 142, in test_select_borrowed_enum_fields_remain_live
+    self.assertEqual(self.run_source(source.replace('BEFORE','')).stdout,'View.Item(9)\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: champ 'target' : emprunt nommé &allocation Int requis
+
+======================================================================
+FAIL: test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) (variant='Item')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16144, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14300, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3115, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10018, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11418, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12873, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4834, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13884, in statements
+    self.access(binding, write=op == 'set')
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3528, in access
+    self.fail('invariant interne : provenance de champ emprunté manquante')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1962, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: invariant interne : provenance de champ emprunté manquante
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_enums.py", line 129, in test_sync_bridge_reads_only_active_variant
+    self.assertEqual(self.run_source(source).stdout,(f'View.{variant}({expected})\n')*2)
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: invariant interne : provenance de champ emprunté manquante
+
+======================================================================
+FAIL: test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) (variant='Pair')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16144, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14300, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3115, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10018, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11418, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12873, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4834, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13884, in statements
+    self.access(binding, write=op == 'set')
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3528, in access
+    self.fail('invariant interne : provenance de champ emprunté manquante')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1962, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: invariant interne : provenance de champ emprunté manquante
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_enums.py", line 129, in test_sync_bridge_reads_only_active_variant
+    self.assertEqual(self.run_source(source).stdout,(f'View.{variant}({expected})\n')*2)
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: invariant interne : provenance de champ emprunté manquante
+
+======================================================================
+FAIL: test_sync_bridge_reads_only_active_variant (test_async_owned_enums.AsyncOwnedEnumTests.test_sync_bridge_reads_only_active_variant) (variant='Empty')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16144, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14300, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3115, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10018, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11418, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12873, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4834, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12785, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13884, in statements
+    self.access(binding, write=op == 'set')
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3528, in access
+    self.fail('invariant interne : provenance de champ emprunté manquante')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1962, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: invariant interne : provenance de champ emprunté manquante
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_enums.py", line 129, in test_sync_bridge_reads_only_active_variant
+    self.assertEqual(self.run_source(source).stdout,(f'View.{variant}({expected})\n')*2)
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: invariant interne : provenance de champ emprunté manquante
+
+----------------------------------------------------------------------
+Ran 10 tests in 6.205s
+
+FAILED (failures=4, errors=1)

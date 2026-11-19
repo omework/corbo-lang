@@ -1,0 +1,231 @@
+test_branch_result_protects_both_targets (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_branch_result_protects_both_targets) ... ok
+test_constructor_arguments_keep_loans_across_suspend (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_constructor_arguments_keep_loans_across_suspend) ... 
+  test_constructor_arguments_keep_loans_across_suspend (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_constructor_arguments_keep_loans_across_suspend) (checker='verify_program') ... FAIL
+  test_constructor_arguments_keep_loans_across_suspend (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_constructor_arguments_keep_loans_across_suspend) (checker='compile_source') ... FAIL
+test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) ... 
+  test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) (write='v.data=&b;') ... FAIL
+  test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) (write='change(&mut v,&b);') ... FAIL
+  test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) (write='child(&mut v,&b).await;') ... FAIL
+test_mutable_reborrow_exclusivity_and_last_use (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_mutable_reborrow_exclusivity_and_last_use) ... ok
+test_receiver_transfer_and_short_target (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_receiver_transfer_and_short_target) ... ok
+test_recorded (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_recorded) ... ok
+test_shared_projection_detaches_but_target_remains (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_shared_projection_detaches_but_target_remains) ... ok
+test_shared_target_drop_and_last_use (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_shared_target_drop_and_last_use) ... FAIL
+
+======================================================================
+FAIL: test_constructor_arguments_keep_loans_across_suspend (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_constructor_arguments_keep_loans_across_suspend) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 1: résultat propriétaire 'n' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "défaut" does not match "ligne 1: résultat propriétaire 'n' sans usage explicite"
+
+======================================================================
+FAIL: test_constructor_arguments_keep_loans_across_suspend (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_constructor_arguments_keep_loans_across_suspend) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 1: résultat propriétaire 'n' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "défaut" does not match "ligne 1: résultat propriétaire 'n' sans usage explicite"
+
+======================================================================
+FAIL: test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) (write='v.data=&b;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15811, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14001, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3020, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9833, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11170, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12491, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12719, in statements
+    kind, value, descriptor = self.expression(rhs, scope, 'champ')
+                              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9212, in expression
+    self.fail('affectation implicite interdite : utiliser &, &mut ou <-')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1948, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_struct_pools.py", line 86, in test_direct_and_helper_field_replacement
+    self.assertEqual(self.run_source(source).stdout,'9\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+======================================================================
+FAIL: test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) (write='change(&mut v,&b);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15811, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14001, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3020, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9833, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11170, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12491, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12719, in statements
+    kind, value, descriptor = self.expression(rhs, scope, 'champ')
+                              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9212, in expression
+    self.fail('affectation implicite interdite : utiliser &, &mut ou <-')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1948, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_struct_pools.py", line 86, in test_direct_and_helper_field_replacement
+    self.assertEqual(self.run_source(source).stdout,'9\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+======================================================================
+FAIL: test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) (write='child(&mut v,&b).await;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15811, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14001, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3020, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9833, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11170, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12491, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12719, in statements
+    kind, value, descriptor = self.expression(rhs, scope, 'champ')
+                              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9212, in expression
+    self.fail('affectation implicite interdite : utiliser &, &mut ou <-')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1948, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_struct_pools.py", line 86, in test_direct_and_helper_field_replacement
+    self.assertEqual(self.run_source(source).stdout,'9\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+======================================================================
+FAIL: test_shared_target_drop_and_last_use (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_shared_target_drop_and_last_use)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15811, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13982, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 927, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6662, in _lower_async_function
+    elif drop_async_binding(statement):
+         ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2364, in drop_async_binding
+    drop_owned(name, statement.line)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5181, in drop_owned
+    check_access(name, line, write=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5178, in check_access
+    fail(line, f"accès à '{name}' incompatible avec un emprunt actif")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 960, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: accès à 'n' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_struct_pools.py", line 33, in test_shared_target_drop_and_last_use
+    self.assertEqual(self.run_source(source).stdout,'7\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: accès à 'n' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 8 tests in 4.575s
+
+FAILED (failures=6)

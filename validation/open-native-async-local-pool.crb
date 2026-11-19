@@ -1,0 +1,18 @@
+// Valid obligation: a native block may consume an allocation made in an async
+// caller's local pool. Local pool creation in that caller is not yet lowered.
+async fn work() -> Int {
+    let mut p = pool<Int>(1);
+    let a = p.new(7);
+    let h = runtime::thread({ -> (a); return *a; });
+    match h.await {
+        Ok(value) => { return value; },
+        Err(_) => { return 99; },
+    }
+}
+fn main() {
+    let h = runtime::spawn(-> work());
+    match h.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(999); },
+    }
+}

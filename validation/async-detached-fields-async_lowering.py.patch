@@ -1,0 +1,110 @@
+--- async_lowering.py before detached fields
++++ async_lowering.py
+@@ -506,10 +506,10 @@
+                 fail(line, diagnostic)
+             origins = set()
+             for target in contract.result.reference_targets:
+-                if target.kind not in ('parameter', 'inline_field_parameter', 'indirect_field_parameter'):
++                if target.kind not in ('parameter', 'inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
+                     fail(line, 'prototype : projection du résultat synchrone non prise en charge dans un état')
+                 _, inherited = reference_origin(expr[2][target.parameter], task_calls, awaited, line)
+-                suffix = tuple(target.field.split('.')) if target.kind != 'parameter' else ()
++                suffix = tuple(target.field.lstrip('.').split('.')) if target.kind != 'parameter' else ()
+                 origins.update((index, path + suffix) for index, path in inherited)
+             return mode, origins
+         if expr[0] == 'loop_expr':
+@@ -551,8 +551,8 @@
+             return mode, set().union(*(origins for _, origins in possibilities))
+         if expr[0] == 'await' or push_new_receiver(expr) is not None:
+             mode, origins = awaited_origin(expr if push_new_receiver(expr) is not None else expr[1], task_calls, awaited, line)
+-        elif expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('field', 'field_deref'):
+-            place = expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
++        elif expr[0] == 'field' or expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('field', 'field_deref'):
++            place = expr if expr[0] == 'field' else expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
+             inherited_mode, inherited = reference_origin(('name', place[1]), task_calls, awaited, line)
+             mode = 'mut' if expr[0] == 'mut_expr' else 'ref'
+             if mode == 'mut' and inherited_mode != 'mut':
+@@ -1097,11 +1097,12 @@
+         if signature in reference_sync_types and borrow:
+             retained = []
+             for target in contract.result.reference_targets:
+-                if target.kind in ('inline_field_parameter', 'indirect_field_parameter'):
++                if target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
+                     typ = contract.parameters[target.parameter][2]
+                     if typ not in reference_structs:
+                         fail(line, 'projection du résultat : structure prise en charge requise')
+-                    retained.extend(project_field_loans(argument_loans[target.parameter], tuple(target.field.split('.'))))
++                    retained.extend(project_result_field_loans(argument_loans[target.parameter], typ,
++                                                               tuple(target.field.lstrip('.').split('.'))))
+                 elif target.kind == 'parameter':
+                     retained.extend(argument_loans[target.parameter])
+                 else:
+@@ -1443,7 +1444,7 @@
+                             returned_loans.append((name, 'ref'))
+                         elif index in result_paths and typ in reference_structs:
+                             for path in result_paths[index]:
+-                                returned_loans.extend(project_field_loans(capture_loans, path))
++                                returned_loans.extend(project_result_field_loans(capture_loans, typ, path))
+                         elif index in result_paths or index in utf8_indexes:
+                             returned_loans.extend(capture_loans)
+                 if mode in ASYNC_SHARED_VIEW_MODES:
+@@ -4117,7 +4118,7 @@
+     def check_access(name, line, *, write=False, path=()):
+         if name in consumed:
+             fail(line, f"'{name}' n’est plus utilisable après drop ou transfert")
+-        if any(loan_root(target) == name and mode != 'storage' and (mode == 'mut' or write)
++        if any(loan_root(target) == name and mode not in ('storage', 'shared_target') and (mode == 'mut' or write)
+                and (not isinstance(target, tuple)
+                     or all(left is None or right is None or left == right for left, right in zip(path, target[1])))
+                for loans in active_loans.values() for target, mode in loans):
+@@ -4201,9 +4202,9 @@
+         fail(line, f"champ inconnu '{path}' dans {typ}")
+ 
+     def field_reference_shape(expr, bindings=None):
+-        if expr[0] not in ('ref_expr', 'mut_expr'):
++        if expr[0] not in ('ref_expr', 'mut_expr', 'field'):
+             return None
+-        place = expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
++        place = expr if expr[0] == 'field' else expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
+         if place[0] != 'field':
+             return None
+         if bindings is None:
+@@ -4213,6 +4214,8 @@
+             typ = signature[1] if signature else None
+         if typ not in reference_structs:
+             return None
++        if expr[0] == 'field' and dict(reference_structs[typ]).get(place[2]) != '&Int':
++            return None
+         # The actual field type/mode is checked by borrow_struct_field. In
+         # particular &view.reference is not shorthand for &*view.reference.
+         return ('mut' if expr[0] == 'mut_expr' else 'ref', 'Int')
+@@ -4227,9 +4230,17 @@
+             projected.append(((root, prefix + path), mode))
+         return projected
+ 
++    def project_result_field_loans(loans, typ, path):
++        projected = project_field_loans(loans, path)
++        if dict(reference_structs[typ]).get('.'.join(path)) == '&Int':
++            # These origins identify the external target. They do not reserve
++            # the carrier slot or its mutable capability (ST13).
++            return [(target, 'shared_target' if mode != 'storage' else mode) for target, mode in projected]
++        return projected
++
+     def borrow_struct_field(expr, mode, line):
+-        indirect = expr[1][0] == 'field_deref'
+-        place = expr[1][1] if indirect else expr[1]
++        indirect = expr[0] == 'field' or expr[1][0] == 'field_deref'
++        place = expr if expr[0] == 'field' else expr[1][1] if indirect else expr[1]
+         name, cell, offset, path, typ = struct_field(place, line, write=mode == 'mut')
+         if indirect:
+             if typ not in ('&Int', '&mut Int') or mode == 'mut' and typ != '&mut Int':
+@@ -4241,7 +4252,8 @@
+             pointer = f'(int *)((unsigned char *){cell}->fields + ({offset}))'
+         reservation = 'mut' if references.get(name) == 'mut' else mode
+         check_access(name, line, write=reservation == 'mut', path=path)
+-        loans = [((name, path), reservation), *project_field_loans(received_refs.get(name, ()), path)]
++        loans = project_result_field_loans([(name, reservation), *received_refs.get(name, ())],
++                                           reference_types[name], path)
+         return pointer, loans
+ 
+     def store_struct_field(place, rhs, line, *, following):

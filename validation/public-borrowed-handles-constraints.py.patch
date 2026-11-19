@@ -1,0 +1,23 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -963,7 +963,9 @@
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+                 return paths, self.extract_vector_item(paths['next'], expr[1], index, line)
+             if op in ('array_index', 'array_vector_remove') and values and isinstance(values[0], Value) and values[0].typ in VECTOR_ELEMENTS:
+-                return paths, SCALAR if VECTOR_ELEMENTS[values[0].typ] == 'Int' else Value('byte', 'u8')
++                element = VECTOR_ELEMENTS[values[0].typ]
++                return paths, Value('scalar' if element == 'Int' else 'byte', element,
++                                    projection_assets=values[0].all_assets if op == 'array_index' else frozenset())
+             if op == 'utf8_try_slice':
+                 if not values or not isinstance(values[0], Value) or values[0].typ not in ('str', 'String'):
+                     self.fail(line, 'try_slice exige un &str ou String')
+@@ -1192,7 +1194,8 @@
+             if isinstance(projected, Value) and projected.mode == 'scalar' and projected.projection_assets:
+                 return paths, Value('mut' if op == 'mut_expr' else 'ref', 'Int', projected.projection_assets)
+             if isinstance(projected, Value) and projected.mode == 'byte':
+-                return paths, Value('mut' if op == 'mut_expr' else 'byte_ref', 'u8', projected.projection_assets)
++                mode = ('mut' if projected.projection_assets else 'array_mut') if op == 'mut_expr' else 'byte_ref'
++                return paths, Value(mode, 'u8', projected.projection_assets)
+             if isinstance(projected, Value) and projected.mode == 'array_refs':
+                 return paths, replace(projected, container_borrow=True, container_mode='mut' if op == 'mut_expr' else 'ref')
+             return paths, Value('array_mut' if op == 'mut_expr' else 'array_ref', projected.typ, projected.all_assets)

@@ -1,0 +1,13 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -1409,7 +1409,9 @@
+                                               nested_reference_fields(carrier.fields, key),
+                                               carrier.assets | carrier.reservations,
+                                               storage_owner=(carrier.storage_owner or place[1]) if declared.startswith('A<') else None,
+-                                              owned_path=(*carrier.owned_path, key) if declared.startswith('A<') else ())
++                                              owned_path=(*carrier.owned_path,
++                                                  ('.' + carrier.inline_path if carrier.inline_path else '') + key)
++                                              if declared.startswith('A<') else ())
+             return {'next': state}, Value('array_mut' if op == 'mut_expr' else 'array_ref',
+                                           'Int', targets, reservations=carrier.assets | carrier.reservations)
+         if op in ('transfer', 'new_transfer', 'ref_expr', 'mut_expr'):

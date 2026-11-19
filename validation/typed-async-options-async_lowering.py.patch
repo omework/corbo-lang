@@ -1,0 +1,29 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -7,7 +7,7 @@
+ )
+ from option_join_types import (
+     OPTION_JOIN_TYPES, OPTION_JOIN_CTYPES, OPTION_JOIN_CELLS, OPTION_JOIN_PAYLOADS,
+-    OPTION_PAYLOAD_MODES, option_join_mode, option_inner_signature, option_cleanup,
++    OPTION_PAYLOAD_MODES, option_join_mode, option_inner_signature, option_cleanup, option_payload_type,
+ )
+ from exchange_join_types import (
+     EXCHANGE_JOIN_TYPES, exchange_join_mode, EXCHANGE_JOIN_CTYPES, EXCHANGE_JOIN_CELLS,
+@@ -1092,7 +1092,7 @@
+                                  for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *owned_aggregates)})
+     owned_join_sync_types.update({('buffered_handle_exchange', typ): 'VectorHandleResult'
+         for typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')})
+-    owned_join_sync_types.update({(mode, 'Int'): ctype for mode, ctype in OPTION_JOIN_CTYPES.items()})
++    owned_join_sync_types.update({(mode, option_payload_type(mode)): ctype for mode, ctype in OPTION_JOIN_CTYPES.items()})
+     owned_join_sync_types.update({(mode, 'Int'): ctype for mode, ctype in EXCHANGE_JOIN_CTYPES.items()})
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+                             for mode in ('ref', 'mut') for typ in (*pool_structures, *owned_enums)})
+@@ -3025,7 +3025,7 @@
+         mode, typ = functions[nominal].args[2]
+         outer = PLAIN_RETURN_JOINS.get((mode, typ)) if mode in PLAIN_JOIN_TYPES else None
+         exchange_outer = exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]) if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES else None
+-        option_outer = option_join_mode('Option<A<Int>>' if mode == 'handle_option' else OPTION_JOIN_TYPES[mode]) if mode == 'handle_option' or mode in OPTION_JOIN_TYPES else None
++        option_outer = option_join_mode(f'Option<A<{typ}>>' if mode == 'handle_option' else OPTION_JOIN_TYPES[mode]) if mode == 'handle_option' or mode in OPTION_JOIN_TYPES else None
+         owned_outer = owned_join_mode(mode) if mode in OWNED_JOIN_TYPES else None
+         result = temporary(PLAIN_JOIN_C_TYPES[outer] if outer else EXCHANGE_JOIN_CTYPES[exchange_outer] if exchange_outer else OPTION_JOIN_CTYPES[option_outer] if option_outer else OWNED_JOIN_CTYPES[owned_outer] if owned_outer else 'CrustJoinResult')
+         status_result = None

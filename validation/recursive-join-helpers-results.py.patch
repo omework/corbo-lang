@@ -1,0 +1,23 @@
+--- before/results.py
++++ results.py
+@@ -783,10 +783,17 @@
+                 if declared.startswith('A<'):
+                     key = f'{arm}.{name}'
+                     path = prefix + key
+-                    children.append((key, self.async_owned_result_value(
+-                        'owned', declared[2:-1], storage.get(path, ()), fields, path + '/')))
++                    if path in storage:
++                        children.append((key, self.async_owned_result_value(
++                            'owned', declared[2:-1], storage[path], fields, path + '/')))
++        inherited_root = bool(sources) and all(source.kind in ('task_result_parameter', 'allocation_parameter')
++                                              for source in sources)
++        opaque_field = not children and any(source.kind == 'task_result_field_parameter' for source in sources)
++        # Input variants are instantiated at the call; they are not freshly
++        # constructed alternatives of this helper's result.
++        variants = frozenset() if inherited_root or opaque_field else frozenset(self.analyzer.enums.get(typ, {}))
+         return Value(mode, typ, async_owned_candidates(sources), owned_fields=tuple(children),
+-                     fresh_variants=frozenset(self.analyzer.enums.get(typ, {})))
++                     fresh_variants=variants)
+ 
+     def owned_capture_storage(self, value, path=''):
+         """Resolve an owned descendant without inspecting the async body.

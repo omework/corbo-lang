@@ -1,0 +1,18 @@
+// Réservation virtuelle explicite, en octets.
+let mut memory = stack(65536);
+
+let mut result = {
+    let mut temporary = new(memory) Int(99);
+    let mut data = new(memory) Int(42);
+    address(data);
+    <- data
+};
+
+// Même adresse : l'allocation n'a pas été déplacée.
+address(result);
+print(result);
+
+// La destruction de result permet aussi de récupérer l'emplacement
+// de temporary, resté sous cette allocation dans la pile.
+memory.drop(-> result);
+memory.reset();

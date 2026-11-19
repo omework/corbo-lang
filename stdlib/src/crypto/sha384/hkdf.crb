@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! HKDF extract and expand using HMAC-SHA-384.
+
+use std::crypto::sha512::HashError;
+
+/// Reports an oversized HKDF result, a short pseudorandom key, or an input length limit.
+pub enum KdfError {
+    /// Requested output exceeds the derivation's algorithmic limit.
+    OutputTooLong,
+    /// The pseudorandom key length does not meet this HKDF API's requirement.
+    InvalidPrkLength,
+    /// Input length exceeds the algorithm's supported counter or encoding limit.
+    InputTooLong
+}
+
+/// Derives a pseudorandom key from salt and input key material using HMAC.
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 48], HashError> {
+    // An empty HMAC key and RFC 5869's default all-zero salt both
+    // produce the same zero-padded SHA-384 key block.
+    hmac(salt, input_key_material)
+}
+
+/// Fills the output with derived key material using the pseudorandom key and context.
+/// The pseudorandom key needs at least 48 bytes and the output can hold up to 12240 bytes.
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError> {
+    let length = output.len();
+    if length > 12240 { return Err(KdfError.OutputTooLong); }
+    let key_len = prk.len();
+    if key_len < 48 { return Err(KdfError.InvalidPrkLength); }
+    if length == 0 { return Ok(()); }
+
+    let info_len = info.len();
+    // The largest HMAC input here is a platform-sized info slice plus
+    // 177 bytes. It fits SHA-384's 125-bit byte count even on 64-bit targets.
+    let mut previous: [u8; 48] = [0; 48];
+    let mut prefix_len: usize = 0;
+    let mut counter: u8 = 1;
+    let mut written: usize = 0;
+    while written < length {
+        let suffix: [u8; 1] = [copy(counter)];
+        match hmac_parts(&prk[0..key_len], &previous[..prefix_len], &info[0..info_len], &suffix[..]) {
+            Err(error) => { drop(error); return Err(KdfError.InputTooLong); },
+            Ok(block) => {
+                let mut i: usize = 0;
+                while i < 48 {
+                    let byte = block[i];
+                    previous[i] = copy(byte);
+                    if written < length {
+                        output[written] = byte;
+                        written = written + 1;
+                    }
+                    i = i + 1;
+                }
+            },
+        };
+        prefix_len = 48;
+        if written < length { counter = counter + 1; }
+    }
+    Ok(())
+}

@@ -1,0 +1,129 @@
+--- /tmp/crust-async-before-loop-references.py	2026-11-07 20:37:45
++++ async_lowering.py	2026-11-07 20:40:32
+@@ -217,6 +217,26 @@
+ 
+ def int_reference_row(typ, mode):
+     return tuple(length for length, _ in int_reference_layout(typ, mode))
++
++
++def reference_loop_exits(body, definitions=()):
++    """Yield only breaks belonging to this loop, with lexical initializers."""
++    definitions = list(definitions)
++    for statement in body:
++        if statement.op == 'var':
++            definitions.append(statement)
++        elif statement.op == 'break':
++            yield statement.args[0], statement.line, definitions
++            return
++        elif statement.op in ('return', 'continue'):
++            return
++        elif statement.op == 'if':
++            for branch in statement.args[1:]:
++                yield from reference_loop_exits(branch, definitions)
++        elif statement.op == 'scope':
++            yield from reference_loop_exits(statement.args[1], definitions)
++        # An inner loop owns its own breaks. Expressions in initializers also
++        # keep their own loops and are resolved only if their value is used.
+ 
+ 
+ def expand_reference_return_branches(node):
+@@ -398,6 +418,18 @@
+         return mode, origins
+ 
+     def reference_origin(expr, task_calls, awaited, line):
++        if expr[0] == 'loop_expr':
++            possibilities = []
++            for value, break_line, definitions in reference_loop_exits(expr[1].args[0]):
++                if value is None:
++                    fail(break_line, diagnostic)
++                local_tasks, local_awaited = task_calls.copy(), awaited.copy()
++                for binding in definitions:
++                    record_binding(*binding.args, local_tasks, local_awaited)
++                possibilities.append(reference_origin(value, local_tasks, local_awaited, break_line))
++            if not possibilities or any(mode != possibilities[0][0] for mode, _ in possibilities):
++                fail(line, diagnostic)
++            return possibilities[0][0], set().union(*(origins for _, origins in possibilities))
+         if expr[0] == 'utf8_value' and expr[1][0] == 'name' and expr[1][1] in awaited:
+             return awaited_origin(*awaited[expr[1][1]], line)
+         if expr[0] in ('if_expr', 'scope', 'value_match'):
+@@ -463,6 +495,11 @@
+             expr = value.args[0]
+             if not expr:
+                 fail(value.line, diagnostic)
++            # A return operand can itself exit the function (for example,
++            # `return loop { if flag { return a; } break b; };`). Those
++            # paths do not reach the outer result, but still belong to the
++            # function's contract and must retain their borrowed sources.
++            yield from scan(expr, task_calls, awaited)
+             mode, origins = reference_origin(expr, task_calls, awaited, value.line)
+             if mode != result_mode:
+                 fail(value.line, diagnostic)
+@@ -1317,6 +1354,14 @@
+             bindings = {name: (mode, reference_types.get(name, 'Int'))
+                         for name, mode in references.items()
+                         if mode in ('ref', 'mut') and name not in collection_types}
++        if expr[0] == 'loop_expr':
++            for value, _, definitions in reference_loop_exits(expr[1].args[0]):
++                local = bindings.copy()
++                for binding in definitions:
++                    local[binding.args[0]] = reference_shape(binding.args[1], local)
++                if value is not None and (shape := reference_shape(value, local)) is not None:
++                    return shape
++            return None
+         if expr[0] == 'value_match':
+             nodes = expr[1]
+             local = bindings.copy()
+@@ -1369,6 +1414,11 @@
+         return retained
+ 
+     def reference_value(expr, line, *, following=None):
++        if expr[0] == 'loop_expr':
++            kind, record = emit_loop(expr[1].args[0], line, valued=True, following=following)
++            if kind != 'reference':
++                fail(line, 'résultat emprunté de boucle requis')
++            return record
+         if expr[0] == 'value_match':
+             return match_async_result(expr[1], line, following=following, boolean=None, reference_result=True)
+         if expr[0] == 'if_expr':
+@@ -2647,7 +2697,7 @@
+         entry = control_state()
+         loop = {'entry': entry, 'depth': len(scopes), 'fields': set(fields),
+                 'valued': valued, 'result': None, 'loans': [], 'returned_loans': [], 'exit': None,
+-                'following': following, 'body': body, 'utf8_loans': [], 'key': id(body),
++                'following': following, 'body': body, 'utf8_loans': [], 'reference_loans': [], 'key': id(body),
+                 'utf8_bindings': names, 'utf8_exit_live': exit_live, 'utf8_head_live': head_live}
+         steps.append('for (;;) {')
+         if body and body[0].op == 'while_check':
+@@ -2671,6 +2721,10 @@
+         if loop['result'] is None:
+             fail(line, 'boucle expression async sans break avec résultat')
+         kind, target, returns_int, nominal = loop['result']
++        if kind == 'reference':
++            loans = list(dict.fromkeys(loop['reference_loans']))
++            active_loans[id(loans)] = loans
++            return kind, (target, loans, (returns_int, nominal))
+         if kind == 'owned':
+             owned_result_types[target] = nominal
+             return kind, target
+@@ -2819,6 +2873,12 @@
+                 del active_loans[id(loans)]
+                 loop['loans'].extend(loans)
+                 ctype = 'CrustTask *' if kind == 'task' else 'CrustAsyncExecution *'
++        elif reference_shape(value) is not None:
++            result, loans, (returns_int, nominal) = reference_value(value, line)
++            loop['reference_loans'].extend(surviving_reference_loans(loans, loop['depth'], line))
++            active_loans.pop(id(loans), None)
++            kind = 'reference'
++            ctype = capture_ctype(returns_int, nominal)
+         else:
+             result, typ = infer_scalar_value(value, line)
+             if typ in ASYNC_VIEW_TYPES:
+@@ -3344,7 +3404,7 @@
+         elif returns_ref:
+             if value[0] in ('name', 'ref', 'mut', 'reborrow') and value[1] in collection_types:
+                 fail(line, 'retour emprunté Int incompatible avec une collection')
+-            if value[0] in ('if_expr', 'scope', 'value_match'):
++            if value[0] in ('if_expr', 'scope', 'value_match', 'loop_expr'):
+                 pointer, _, signature = reference_value(value, line, following=())
+                 if signature != result:
+                     fail(line, 'retour emprunté async : type ou mode incompatible')

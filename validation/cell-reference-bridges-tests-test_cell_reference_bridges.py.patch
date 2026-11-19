@@ -1,0 +1,209 @@
+--- before/tests/test_cell_reference_bridges.py
++++ after/tests/test_cell_reference_bridges.py
+@@ -0,0 +1,206 @@
++"""Stored references cross a sync bridge with their real allocation descriptor."""
++import re
++import unittest
++from itertools import product
++
++from crust import Error, compile_program, compile_source, verify_program
++import test_async_runtime
++import test_native_blocks
++
++
++HELPERS = '''struct View{data:&Int}
++  fn inspect(n:&Int)->Int{let view=View{data:&*n};return *view.data;}
++  fn forward(n:&Int)->Int{return inspect(n);}
++  fn detach(n:&Int)->&Int{let view=View{data:&*n};return view.data;}
++  fn read_only(n:&Int)->Int{return *n;}
++  struct Writer{data:&mut Int}
++  fn edit(n:&mut Int,amount:Int)->Int{
++    let mut writer=Writer{data:&mut *n};let mut target=&mut *writer.data;
++    target.set(amount);return *target;
++  }
++'''
++
++
++class CellReferenceBridgeTests(unittest.TestCase):
++    run_c_oracle = test_async_runtime.AsyncRuntimeTests.run_c_oracle
++    run_native = test_native_blocks.NativeBlockTests.run_native
++
++    @staticmethod
++    def program(body, helpers=HELPERS, parameters='', argument='', setup=''):
++        return helpers + f'''async fn work({parameters})->Int{{{body}}}
++          fn main(){{{setup}let h=runtime::spawn(->work({argument}));
++            match h.join(){{Ok(n)=>{{print(n);}},Err(_)=>{{print(99);}}}}}}'''
++
++    def rejected(self, source, pattern='emprunt|réserv|descripteur|plus utilisable'):
++        for stage in (verify_program,compile_source):
++            with self.subTest(stage=stage.__name__):
++                with self.assertRaisesRegex(Error,pattern) as caught:
++                    stage(source)
++                self.assertNotIn('invariant interne',str(caught.exception))
++
++    def test_contract_requirement_crosses_relays_without_final_field_changes(self):
++        compiler = verify_program(HELPERS)
++        for name in ('inspect','forward','detach','edit'):
++            summary = compiler.function_results[name]
++            self.assertEqual(summary.stored_reference_parameters,frozenset({0}))
++            self.assertEqual(summary.structure_fields,())
++            self.assertEqual(summary.describe(compiler.functions[name].args[1])['stored_reference_parameters'],['n'])
++        self.assertEqual(compiler.function_results['read_only'].stored_reference_parameters,frozenset())
++
++    def test_nonreturning_helper_still_requires_its_stored_input(self):
++        helpers='''struct View{data:&Int}
++          fn hang(n:&Int){let view=View{data:&*n};print(*view.data);loop{}}
++          fn relay(n:&Int){hang(n);}'''
++        source=self.program('let mut p=pool<Int>(1);let n=p.new(7);relay(&n);',helpers)
++        compiler=verify_program(source)
++        for name in ('hang','relay'):
++            self.assertFalse(compiler.function_effects[name].may_return)
++            self.assertEqual(compiler.function_results[name].stored_reference_parameters,frozenset({0}))
++        # Compile the divergent body, but never execute it. The replacement
++        # entry point only makes C warnings and UBSan instrumentation checkable.
++        code=compile_source(source)
++        self.run_c_oracle('#define main unexecuted_crust_main\n'+code+
++                          '\n#undef main\nint main(void){return 0;}\n')
++        returning=source.replace('fn hang(n:&Int){','fn hang(n:&Int)->Int{').replace(
++            'fn relay(n:&Int){hang(n);}', 'fn relay(n:&Int)->Int{return hang(n);}').replace(
++            'let n=p.new(7);relay(&n);','let n=p.new(7);return relay(&n);')
++        code=compile_source(returning)
++        self.run_c_oracle('#define main unexecuted_crust_main\n'+code+
++                          '\n#undef main\nint main(void){return 0;}\n')
++
++    def test_local_pool_cell_is_not_copied_or_destroyed_by_bridge(self):
++        helpers=HELPERS+'''fn identity(n:&Int)->Int{
++            address(n);let view=View{data:&*n};return *view.data;}'''
++        source = self.program('''let mut p=pool<Int>(1);let n=p.new(7);
++          let x=identity(&n);yield;let y=identity(&n);return x+y;''',helpers)
++        verify_program(source)
++        run = self.run_c_oracle(compile_source(source))
++        before,after,value = run.stdout.splitlines()
++        self.assertEqual((after,value),(before,'14'))
++        destroyed = [line for line in run.stderr.splitlines() if line.startswith('destroy ')]
++        self.assertEqual(sum(line.endswith('=7') for line in destroyed),1)
++        self.assertEqual(sum(line.endswith('=View') for line in destroyed),2)
++
++    def test_transferred_capture_and_launch_failure(self):
++        source = self.program('yield;return forward(&n);',parameters='n:->Int',argument='->n',
++                              setup='let mut p=pool<Int>(1);let n=p.new(7);')
++        self.assertEqual(self.run_native(source).stdout,'7\n')
++        failed = self.run_native(source,fail_at=1)
++        self.assertEqual(failed.stdout,'99\n')
++        self.assertEqual(sum(line=='destroy n=7' for line in failed.stderr.splitlines()),1)
++        self.assertFalse(any(line.endswith('=View') for line in failed.stderr.splitlines()))
++
++    def test_stored_field_and_mutable_field_targets(self):
++        for mutable in (False,True):
++            carrier='Writer' if mutable else 'View'
++            argument='&mut *v.data' if mutable else 'v.data'
++            call='edit('+argument+',11)' if mutable else 'forward('+argument+')'
++            source = self.program('yield;return '+call+';', parameters='v:'+('&mut ' if mutable else '&')+carrier,
++                argument=('&mut ' if mutable else '&')+'v',
++                setup='let mut p=pool<Int>(1);let mut n=p.new(7);let mut v='+carrier+
++                      '{data:'+('&mut ' if mutable else '&')+'n};')
++            with self.subTest(mutable=mutable):
++                self.assertEqual(self.run_native(source).stdout,'11\n' if mutable else '7\n')
++
++    def test_requirement_follows_nonfirst_method_argument(self):
++        helpers=HELPERS+'''impl View{
++          fn combine(self:&View,n:&Int)->Int{
++            let nested=View{data:&*n};return *self.data+*nested.data;
++          }}'''
++        source=self.program('''let mut p=pool<Int>(1);let n=p.new(9);
++          yield;return v.combine(&n);''',helpers,parameters='v:&View',argument='&v',
++          setup='let mut p=pool<Int>(1);let a=p.new(7);let v=View{data:&a};')
++        compiler=verify_program(source)
++        self.assertEqual(compiler.function_results['View.combine'].stored_reference_parameters,frozenset({1}))
++        self.assertEqual(self.run_native(source).stdout,'16\n')
++
++    def test_named_reborrow_and_conditional_cell_selection(self):
++        for flag in ('true','false'):
++            source=self.program('''let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(9);
++              let v=if flag {&a}else{&b};yield;return forward(v);''',
++              parameters='flag:Bool',argument=flag)
++            with self.subTest(flag=flag):
++                self.assertEqual(self.run_native(source).stdout,'7\n' if flag=='true' else '9\n')
++        alias=self.program('''let mut p=pool<Int>(1);let mut n=p.new(7);
++            let mut a=&mut n;let mut b=&mut *a;let x=edit(b,12);yield;return x;''')
++        self.assertEqual(self.run_native(alias).stdout,'12\n')
++
++    def test_returned_reference_keeps_target_and_excludes_future_mutation(self):
++        source=self.program('''let mut p=pool<Int>(1);let mut n=p.new(7);
++          let view=detach(&n);yield;BEFORE print(*view);n.set(11);return *n;''')
++        self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'7\n11\n')
++        for operation in ('drop(->n);','n.set(11);'):
++            self.rejected(source.replace('BEFORE',operation))
++
++    def test_later_argument_cannot_invalidate_prepared_reference(self):
++        source=self.program('''let mut p=pool<Int>(1);let mut n=p.new(7);
++          return edit(&mut n,{n.set(12);11});''')
++        self.rejected(source)
++
++    def test_raw_inline_and_untracked_captured_pointer_are_not_fabricated(self):
++        # These are still representation gaps, not new normative prohibitions.
++        self.rejected(self.program('let mut n=7;return forward(&n);'),'descripteur')
++        self.rejected(self.program('return forward(n);',parameters='n:&Int',argument='&n',
++            setup='let mut p=pool<Int>(1);let n=p.new(7);'),'descripteur')
++
++    def test_slot_reuse_after_helper_scope_and_target_drop(self):
++        source=self.program('''let mut p=pool<Int>(1);let mut total=0;let mut i=0;
++          loop{let n=p.new(i);let x=forward(&n);total=total+x;
++            drop(->n);yield;i=i+1;if i<4{continue;}break;}return total;''')
++        run=self.run_native(source)
++        self.assertEqual(run.stdout,'6\n')
++        self.assertEqual(sum(line.endswith('=View') for line in run.stderr.splitlines()),4)
++
++    def test_native_thread_uses_same_bridge_representation(self):
++        source=HELPERS+'''fn main(){let mut p=pool<Int>(1);let n=p.new(7);
++          let h=runtime::thread({->(n);return forward(&n);});
++          match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}}'''
++        self.assertEqual(self.run_native(source).stdout,'7\n')
++        self.assertEqual(self.run_native(source,fail_native=True).stdout,'99\n')
++
++    def test_independent_model_of_selected_target_retention(self):
++        accepted=rejected=0
++        for last_use,mask,flag in product((False,True),range(4),(False,True)):
++            destroyed={i for i in range(2) if mask & (1<<i)}
++            # Static selection can return either target. Releasing a target
++            # before the result's final use is invalid on one possible path.
++            allowed=last_use or not destroyed
++            drops=''.join(f'drop(->{("a","b")[i]});' for i in sorted(destroyed))
++            operation=('print(*view);'+drops) if last_use else (drops+'print(*view);')
++            source=self.program('''let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(9);
++              let input=if flag {&a}else{&b};let view=detach(input);yield;'''+operation+'return 1;',
++              parameters='flag:Bool',argument=str(flag).lower())
++            with self.subTest(last_use=last_use,mask=mask,flag=flag):
++                if allowed:
++                    self.assertEqual(self.run_native(source).stdout,('7' if flag else '9')+'\n1\n')
++                    accepted+=1
++                else:
++                    self.rejected(source)
++                    rejected+=1
++        self.assertEqual((accepted,rejected),(10,6))
++
++    def test_generated_bridge_can_replace_an_external_field_with_cell_input(self):
++        source='''struct View{data:&Int}
++          fn change(v:&mut View,n:&Int){v.data=&*n;}
++          fn main(){let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(9);
++            let mut v=View{data:&a};change(&mut v,&b);print(*v.data);}'''
++        compiler,code=compile_program(source)
++        previous=len(compiler.definitions)
++        compiler.reserve_async_sync_bridge('change','probe')
++        compiler.emit_async_sync_bridge('change')
++        prototype=compiler.async_sync_prototypes[-1]
++        self.assertIn('Cell * bridge_input_0',prototype)
++        self.assertIn('Cell * bridge_input_1',prototype)
++        # Exercise the generated bridge from the already checked C caller.
++        # Full async callers remain gated until their effects survive join.
++        symbol=compiler.async_sync_bridges['change'][0]
++        code,count=re.subn(r'    crust_fn_\d+\((argument\d+), (argument\d+)\);',
++                           lambda match:f'    {symbol}({match[1]}, {match[2]});',code)
++        self.assertEqual(count,1)
++        code=code.replace(compiler.definitions[0],prototype+';\n'+compiler.definitions[0],1)
++        code+='\n'+'\n'.join(compiler.definitions[previous:])
++        self.assertEqual(self.run_c_oracle(code).stdout,'9\n')
++
++
++if __name__=='__main__':
++    unittest.main()

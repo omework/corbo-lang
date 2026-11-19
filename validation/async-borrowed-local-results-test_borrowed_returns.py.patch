@@ -1,0 +1,14 @@
+--- /tmp/crust-before-async-borrowed-local-results/test_borrowed_returns.py
++++ /Users/jabarkarim/sources/crust/tests/test_borrowed_returns.py
+@@ -234,9 +234,9 @@
+ 
+     def test_holder_pool_can_reset_before_fresh_view_is_returned(self):
+         function='fn rebuild(q:&mut Pool<View>,d:&Int)-><-View{q.reset();let mut v=new(q)View.Item{data:d};return<-v;}'
+-        source=DECL+function+SETUP+'let mut old=new(q)View.Empty{};let mut view=rebuild(&mut q,&data);print(view);'
++        source=DECL+function+SETUP+'let mut old=new(q)View.Empty{};print(old);let mut view=rebuild(&mut q,&data);print(view);'
+         result=self.execute(source,add_source=False)
+-        self.assertEqual(result.stdout,'View.Item(42)\n')
++        self.assertEqual(result.stdout,'View.Empty()\nView.Item(42)\n')
+         self.assertEqual(result.stderr.count('destroy old=View.Empty'),1)
+ 
+     def test_mixed_fresh_and_input_variants_resolve_only_possible_fields(self):

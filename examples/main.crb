@@ -1,0 +1,21 @@
+enum Message {
+    Value { number: i32 },
+    Empty,
+}
+
+fn create(memory: &mut Pool<Message>, number: i32) -> A<Message> {
+    let message = memory.new(Message.Value { number: number });
+    message
+}
+
+fn main() {
+    let mut memory = pool<Message>(4);
+    let message = create(&mut memory, 42);
+
+    match &message {
+        Message.Value { number: n } => { print(n); },
+        Message.Empty => { print(0); },
+    }
+
+    drop(message);
+}

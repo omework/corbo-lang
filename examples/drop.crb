@@ -1,0 +1,19 @@
+fn consume(data: A<i32>) {
+    print(*data);
+    drop(data); // Le slot revient au pool d’origine.
+}
+
+fn main() {
+    let mut memory = pool<i32>(1);
+    let data = memory.new(42);
+    let view = data.vref();
+    print(*view); // Dernière utilisation de l’emprunt.
+
+    {
+        move data;
+        consume(data);
+    }
+
+    let next = memory.new(43);
+    drop(next);
+}

@@ -1,0 +1,46 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -5,7 +5,9 @@
+ """
+ 
+ 
+-def result_constructors(expression, contracts, known_locals, *, assigned_to=None, returns=False):
++def result_constructors(expression, contracts, known_locals, *, assigned_to=None, returns=False,
++                        async_functions=None):
++    async_functions = async_functions or {}
+     assignments = {name: [] for name in assigned_to or ()}
+     returned = []
+     def merge(values):
+@@ -26,12 +28,31 @@
+             return env.get(expr[1])
+         if op in ('array_transfer', 'new_transfer', 'transfer'):
+             return evaluate(expr[1], env)
++        if op == 'await':
++            task = evaluate(expr[1], env)
++            if task is not None and isinstance(task[0], tuple) and task[0][0] == 'task':
++                return task[0][1], task[1]
++            return None
+         call_name, arguments = (expr[1], expr[2]) if op == 'call' else (None, ())
+         if op == 'method_call':
+             receiver = evaluate(expr[1], env)
+-            if receiver is not None:
++            if receiver is not None and isinstance(receiver[0], str):
+                 call_name = receiver[0] + '.' + expr[2]
+                 arguments = (expr[1], *expr[3])
++        if call_name in async_functions:
++            from async_result_storage import result_storage
++            node = async_functions[call_name]
++            if not node.result_storage:
++                return None
++            local_parameters = frozenset(index for index, argument in enumerate(arguments)
++                                         if (value := evaluate(argument, env)) is not None
++                                         and not isinstance(value[0], tuple))
++            plan = result_storage(node, local_parameters)
++            # Only a fresh independent result is relocated by this plan.
++            # Captured inputs and borrowed targets keep their original storage.
++            if plan.destination and plan.parameters == frozenset() and not plan.mixed:
++                return ('task', node.args[2][1]), {id(expr): expr}
++            return None
+         if call_name in contracts:
+             summary = contracts[call_name].result
+             candidates = []

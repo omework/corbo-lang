@@ -1,0 +1,18 @@
+struct Inner { view: &Int }
+struct Outer { inner: A<Inner> }
+async fn consume(value: -> Outer) -> Int {
+    yield;
+    drop(->value);
+    return 1;
+}
+fn main() {
+    let mut numbers = pool<Int>(1);
+    let number = numbers.new(9);
+    let mut inners = pool<Inner>(1);
+    let mut outers = pool<Outer>(1);
+    let inner = inners.new(view: &number);
+    let outer = outers.new(inner: <-inner);
+    let handle = runtime::spawn(->consume(->outer));
+    match handle.join() { Ok(n) => { print(n); }, Err(_) => { print(99); } }
+    drop(->number);
+}

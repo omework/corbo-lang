@@ -1,0 +1,59 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1015,4 +1015,5 @@
+     owned_join_sync_types.update({(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                                  for mode in ('join_owned', 'join_nested') for typ in owned_aggregates})
++    owned_join_sync_types[('handle_option', 'Int')] = 'VectorHandleResult'
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+                             for mode in ('ref', 'mut') for typ in (*pool_structures, *owned_enums)})
+@@ -1298,8 +1299,12 @@
+                 require_local_async_value(expr[1], line)
+             return consume_owned_join(expr[1], line)
++        if expr[0] in ('down', 'move'):
++            fail(line, 'argument de résultat propriétaire : type incompatible')
+         if sync_signature(expr) in output_join_types:
+             mode, _ = sync_signature(expr)
+             value, _ = sync_call(expr, line, following=following, owned=True)
+-            return value, JOIN_PAYLOADS[mode], None
++            return value, OWNED_WRAPPER_PAYLOADS[mode], None
++        if expr[0] == 'array_handle_option_pop':
++            return handle_pop_value(expr, line, following=following), 'optional_allocation', None
+         if expr[0] == 'await':
+             if awaits_execution(expr):
+@@ -1324,5 +1329,5 @@
+             return result
+         kind, value = emit_computed_transfer(expr, line, following=following)
+-        if kind not in JOIN_PAYLOADS:
++        if kind not in OWNED_WRAPPER_PAYLOADS:
+             fail(line, 'expression Result propriétaire : type incompatible')
+         return value
+@@ -1840,6 +1845,6 @@
+                     value, payload, _ = owned_join_value(
+                         argument if argument[0] == 'down' else argument[1], line)
+-                    if payload != JOIN_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
+-                        fail(line, 'argument Result propriétaire : type incompatible')
++                    if payload != OWNED_WRAPPER_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
++                        fail(line, 'argument de résultat propriétaire : type incompatible')
+                 elif (mode, typ) in pool_sync_types:
+                     value, held = pool_argument(argument, mode, typ, line)
+@@ -1896,5 +1901,5 @@
+                     clear_stored_fields(value)
+                 elif (mode, typ) in owned_join_sync_types:
+-                    field = 'value.allocation' if mode == 'join_nested' else 'allocation'
++                    field = 'value' if mode == 'handle_option' else 'value.allocation' if mode == 'join_nested' else 'allocation'
+                     success = f'{snapshot}.status == 0' + (f' && {snapshot}.value.status == 0' if mode == 'join_nested' else '')
+                     pending = temporary('Cell *')
+@@ -3374,5 +3379,5 @@
+             mode, typ = sync_signature(owned_initializer)
+             value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+-            bind_transferred_value(name, mode, (value, JOIN_PAYLOADS[mode], None), statement)
++            bind_transferred_value(name, mode, (value, OWNED_WRAPPER_PAYLOADS[mode], None), statement)
+             return True
+         if (sync_signature(owned_initializer) in owned_output_types or owned_initializer[0] in ('new', 'new_enum')
+@@ -3766,4 +3771,6 @@
+         elif sync_signature(subject) in output_join_types:
+             mode, _ = sync_signature(subject)
++            if mode == 'handle_option':
++                fail(line, 'Option<A<Int>> : recevoir puis consommer avec match (-> résultat)')
+             result, _ = sync_call(subject, line, following=following, owned=True)
+             payload, loans, direct = JOIN_PAYLOADS[mode], None, True

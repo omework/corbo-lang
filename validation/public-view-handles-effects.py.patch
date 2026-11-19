@@ -1,0 +1,32 @@
+--- before/effects.py
++++ effects.py
+@@ -1,5 +1,5 @@
+ """Infer external source effects without concrete allocations or C emission."""
+-from utf8_syntax import ERROR_VALUE_TYPES, RESULT_ERROR_MODES
++from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+ from utf8_syntax import PLAIN_JOIN_TYPES, PLAIN_JOIN_PAYLOADS, PLAIN_RETURN_JOINS
+ from utf8_syntax import VECTOR_SPLIT_TYPES, VECTOR_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, VECTOR_PAYLOAD_TYPES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, VALUE_MODES
+ from dataclasses import dataclass
+@@ -270,6 +270,9 @@
+                          else self.receiver_type(expr[1], environment))
+             if execution and execution.startswith('Execution<'):
+                 mode, typ = self.async_functions[execution[len('Execution<'):-1]].args[2]
++                if mode in ASYNC_CAPTURE_VIEW_MODES:
++                    from async_lowering import SCALAR_RESULTS
++                    return f'Result<{SCALAR_RESULTS[mode, typ]},runtime::Error>'
+                 if mode == 'owned':
+                     return f'Result<A<{typ}>,runtime::Error>'
+                 if mode == 'join_owned':
+@@ -289,6 +292,12 @@
+             op = 'utf8_value'
+         if op == 'utf8_value':
+             subject = self.receiver_type(expr[1], environment)
++            if subject and subject.startswith('Result<') and subject.endswith(',runtime::Error>'):
++                from handle_types import public_signature
++                inner = subject[len('Result<'):-len(',runtime::Error>')]
++                signature = public_signature(f'runtime::Handle<{inner}>')
++                if signature is not None and signature[0] in ASYNC_CAPTURE_VIEW_MODES:
++                    return signature[1]
+             for mode, typ in PLAIN_JOIN_TYPES.items():
+                 if subject == typ:
+                     return PLAIN_JOIN_PAYLOADS[mode]

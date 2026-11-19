@@ -1,0 +1,54 @@
+--- before/exchange_join_types.py
++++ after/exchange_join_types.py
+@@ -1,5 +1,6 @@
+ """Runtime envelopes whose leaf is a replace/try_push ownership result."""
+ from result_envelopes import ResultLeaf, RuntimeResultEnvelopes
++from handle_exchange_types import exchange_element, exchange_optional
+ 
+ EXCHANGE_LEAVES = ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')
+ _registry = RuntimeResultEnvelopes({
+@@ -15,9 +16,41 @@
+ EXCHANGE_JOIN_PAYLOADS = _registry.payloads
+ EXCHANGE_PAYLOAD_MODES = _registry.payload_modes
+ EXCHANGE_JOIN_DEPTHS = _registry.depths
+-exchange_type_mode = _registry.type_mode
+-exchange_join_mode = _registry.wrap
+-exchange_inner_signature = _registry.inner_signature
++
++
++def _register_leaf(typ):
++    while typ.startswith('Result<') and typ.endswith(',runtime::Error>'):
++        typ = typ[len('Result<'):-len(',runtime::Error>')]
++    element = exchange_element(typ)
++    if element is not None and typ not in _registry.leaves:
++        optional = exchange_optional(typ)
++        suffix = element.encode('utf-8').hex()
++        family = 'join_try_push' if optional else 'join_exchange'
++        payload = 'rejected' if optional else 'exchange'
++        _registry.leaves[typ] = ResultLeaf(family + '_t' + suffix,
++            'CrustExchangeJoinResult', payload + '_t' + suffix + '_nested',
++            'buffered_handle_exchange', typ, '!=' if optional else None)
++
++
++def exchange_type_mode(typ):
++    _register_leaf(typ)
++    return _registry.type_mode(typ)
++
++
++def exchange_join_mode(inner):
++    _register_leaf(inner)
++    return _registry.wrap(inner)
++
++
++def exchange_payload_type(mode):
++    return exchange_element(_registry.roots[mode].typ)
++
++
++def exchange_inner_signature(mode):
++    inner_mode, typ = _registry.inner_signature(mode)
++    return inner_mode, typ if inner_mode == 'buffered_handle_exchange' else exchange_payload_type(mode)
++
++
+ exchange_cleanup = _registry.cleanup
+ exchange_join_layouts = _registry.layouts
+ 

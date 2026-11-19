@@ -1,0 +1,138 @@
+--- /tmp/async_runtime.py-before-task-wakes	2026-11-08 00:13:04
++++ async_runtime.py	2026-11-08 00:15:16
+@@ -84,7 +84,7 @@
+ } CrustTaskState;
+ 
+ typedef enum {
+-    TASK_STEP_YIELD, TASK_STEP_RETURN
++    TASK_STEP_YIELD, TASK_STEP_RETURN, TASK_STEP_PENDING
+ } CrustTaskStep;
+ 
+ typedef struct {
+@@ -96,6 +96,8 @@
+ struct CrustTask {
+     _Atomic CrustTaskState state;
+     _Atomic int worker_done;
++    _Atomic int scheduling_lock;
++    int ready; /* Protected by scheduling_lock, including during a poll. */
+     const CrustTaskOps *ops;
+ };
+ 
+@@ -103,42 +105,78 @@
+     task->ops = ops;
+     atomic_init(&task->state, TASK_INACTIVE);
+     atomic_init(&task->worker_done, 0);
++    atomic_init(&task->scheduling_lock, 0);
++    task->ready = 1;
+ }
+ 
++/* Only short bookkeeping sections hold this gate, never user code. Callers
++   must keep the task alive until their poll/wake calls have returned. */
++static void task_scheduling_lock(CrustTask *task) {
++    int expected = 0;
++    while (!atomic_compare_exchange_weak_explicit(&task->scheduling_lock,
++            &expected, 1, memory_order_acquire, memory_order_relaxed)) expected = 0;
++}
++
++static void task_scheduling_unlock(CrustTask *task) {
++    atomic_store_explicit(&task->scheduling_lock, 0, memory_order_release);
++}
++
++static int task_wake(CrustTask *task) {
++    task_scheduling_lock(task);
++    CrustTaskState state = atomic_load(&task->state);
++    int live = state != TASK_COMPLETE && state != TASK_CONSUMED;
++    if (live) task->ready = 1;
++    task_scheduling_unlock(task);
++    return live;
++}
++
+ static CrustTaskState task_resume_claimed(CrustTask *task) {
+     CrustTaskStep step = task->ops->resume(task);
+-    CrustTaskState next = step == TASK_STEP_YIELD ? TASK_SUSPENDED : TASK_COMPLETE;
++    CrustTaskState next = step == TASK_STEP_RETURN ? TASK_COMPLETE : TASK_SUSPENDED;
++    task_scheduling_lock(task);
++    /* Pending keeps a wake received during resume. Yield makes itself ready. */
++    if (step == TASK_STEP_YIELD) task->ready = 1;
+     atomic_store(&task->state, next);
++    task_scheduling_unlock(task);
+     return next;
+ }
+ 
+ static CrustTaskState task_poll(CrustTask *task) {
++    task_scheduling_lock(task);
+     CrustTaskState state = atomic_load(&task->state);
+-    while (state == TASK_INACTIVE || state == TASK_SUSPENDED) {
+-        if (atomic_compare_exchange_strong(&task->state, &state, TASK_RUNNING))
++    if ((state == TASK_INACTIVE || state == TASK_SUSPENDED) && task->ready) {
++        if (atomic_compare_exchange_strong(&task->state, &state, TASK_RUNNING)) {
++            task->ready = 0;
++            task_scheduling_unlock(task);
+             return task_resume_claimed(task);
++        }
+     }
++    task_scheduling_unlock(task);
+     return state;
+ }
+ 
++static int task_consume(CrustTask *task, CrustTaskState expected) {
++    task_scheduling_lock(task);
++    int consumed = atomic_compare_exchange_strong(&task->state, &expected, TASK_CONSUMED);
++    task_scheduling_unlock(task);
++    return consumed;
++}
++
+ static int task_take(CrustTask *task, void *result) {
+-    CrustTaskState expected = TASK_COMPLETE;
+-    if (!atomic_compare_exchange_strong(&task->state, &expected, TASK_CONSUMED)) return 0;
++    if (!task_consume(task, TASK_COMPLETE)) return 0;
+     task->ops->take_result(task, result);
+     task->ops->release(task);
+     return 1;
+ }
+ 
+ static int task_drop_inactive(CrustTask *task) {
+-    CrustTaskState expected = TASK_INACTIVE;
+-    if (!atomic_compare_exchange_strong(&task->state, &expected, TASK_CONSUMED)) return 0;
++    if (!task_consume(task, TASK_INACTIVE)) return 0;
+     task->ops->release(task);
+     return 1;
+ }
+ 
+ static int task_drop_complete(CrustTask *task) {
+-    CrustTaskState expected = TASK_COMPLETE;
+-    if (!atomic_compare_exchange_strong(&task->state, &expected, TASK_CONSUMED)) return 0;
++    if (!task_consume(task, TASK_COMPLETE)) return 0;
+     task->ops->release(task);
+     return 1;
+ }
+@@ -207,10 +245,17 @@
+     size_t count, capacity;
+ } CrustAbandonedTasks;
+ 
+-static void *task_thread_run(void *pointer) {
+-    CrustTask *task = pointer;
++static void task_claim_queued(CrustTask *task) {
++    task_scheduling_lock(task);
+     CrustTaskState queued = TASK_QUEUED;
+     if (!atomic_compare_exchange_strong(&task->state, &queued, TASK_RUNNING)) abort();
++    task->ready = 0;
++    task_scheduling_unlock(task);
++}
++
++static void *task_thread_run(void *pointer) {
++    CrustTask *task = pointer;
++    task_claim_queued(task);
+     CrustTaskState state = task_resume_claimed(task);
+     while (state == TASK_SUSPENDED) {
+         sched_yield();
+@@ -226,8 +271,7 @@
+    is a compiler/runtime contract violation, not a request to schedule it. */
+ static void *task_native_run(void *pointer) {
+     CrustTask *task = pointer;
+-    CrustTaskState queued = TASK_QUEUED;
+-    if (!atomic_compare_exchange_strong(&task->state, &queued, TASK_RUNNING)) abort();
++    task_claim_queued(task);
+     if (task_resume_claimed(task) != TASK_COMPLETE) abort();
+     /* No access to the task slot is allowed after this publication. */
+     atomic_store_explicit(&task->worker_done, 1, memory_order_release);

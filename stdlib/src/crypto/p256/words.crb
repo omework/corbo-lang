@@ -1,0 +1,286 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Eight-limb arithmetic modulo the P-256 field prime or group order.
+
+// P-256 uses eight little-endian base-2^32 limbs. The upper half
+// of each machine word is available for multiplication and carry.
+/// Mask that keeps the low 32 bits of an arithmetic limb.
+const LIMB_MASK: u64 = 0xffffffff;
+/// Radix of the arithmetic limb representation.
+const LIMB_BASE: u64 = 0x100000000;
+
+/// Selects the P-256 group order or the coordinate field prime.
+fn modulus(order: bool) -> [u64; 8] {
+    if order { let words: [u64; 8] = [0xfc632551, 0xf3b9cac2, 0xa7179e84, 0xbce6faad, 0xffffffff, 0xffffffff, 0x00000000, 0xffffffff]; return words; }
+    let words: [u64; 8] = [0xffffffff, 0xffffffff, 0xffffffff, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0xffffffff];
+    words
+}
+
+/// Returns R squared modulo the selected modulus for conversion into Montgomery form.
+fn montgomery_square(order: bool) -> [u64; 8] {
+    if order { let words: [u64; 8] = [0xbe79eea2, 0x83244c95, 0x49bd6fa6, 0x4699799c, 0x2b6bec59, 0x2845b239, 0xf3d95620, 0x66e12d94]; return words; }
+    let words: [u64; 8] = [0x00000003, 0x00000000, 0xffffffff, 0xfffffffb, 0xfffffffe, 0xffffffff, 0xfffffffd, 0x00000004];
+    words
+}
+
+/// Returns the representation of one in the selected Montgomery domain.
+fn montgomery_one(order: bool) -> [u64; 8] {
+    if order { let words: [u64; 8] = [0x039cdaaf, 0x0c46353d, 0x58e8617b, 0x43190552, 0x00000000, 0x00000000, 0xffffffff, 0x00000000]; return words; }
+    let words: [u64; 8] = [0x00000001, 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0xffffffff, 0xfffffffe, 0x00000000];
+    words
+}
+
+/// Returns the selected modulus minus two for inversion by exponentiation.
+fn inverse_exponent(order: bool) -> [u64; 8] {
+    if order { let words: [u64; 8] = [0xfc63254f, 0xf3b9cac2, 0xa7179e84, 0xbce6faad, 0xffffffff, 0xffffffff, 0x00000000, 0xffffffff]; return words; }
+    let words: [u64; 8] = [0xfffffffd, 0xffffffff, 0xffffffff, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0xffffffff];
+    words
+}
+
+/// Returns the constant b of the P-256 curve equation.
+fn curve_b() -> [u64; 8] {
+    let words: [u64; 8] = [0x29c4bddf, 0xd89cdf62, 0x78843090, 0xacf005cd, 0xf7212ed6, 0xe5a220ab, 0x04874834, 0xdc30061d];
+    words
+}
+
+/// Returns the standard P-256 generator's x coordinate.
+fn generator_x() -> [u64; 8] {
+    let words: [u64; 8] = [0x18a9143c, 0x79e730d4, 0x5fedb601, 0x75ba95fc, 0x77622510, 0x79fb732b, 0xa53755c6, 0x18905f76];
+    words
+}
+
+/// Returns the standard P-256 generator's y coordinate.
+fn generator_y() -> [u64; 8] {
+    let words: [u64; 8] = [0xce95560a, 0xddf25357, 0xba19e45c, 0x8b4ab8e4, 0xdd21f325, 0xd2e88688, 0x25885d85, 0x8571ff18];
+    words
+}
+
+/// Montgomery reduction factor for the P-256 group order.
+const ORDER_FACTOR: u64 = 0xee00bc4f;
+
+/// Expands a selection bit to a 32-bit limb mask.
+fn word_mask(value: u64) -> u64 { LIMB_MASK * value }
+
+/// Returns one when all limbs are zero and zero otherwise.
+fn zero_bit(value: &[u64]) -> u64 {
+    let mut combined: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 8 {
+        combined = combined | value[i];
+        i = i + 1;
+    }
+    1 - ((combined + LIMB_MASK) >> 32)
+}
+
+/// Returns the scalar bit at the given least-significant-bit index.
+fn scalar_bit(value: &[u64], index: u64) -> u64 {
+    (value[index / 32] >> (index % 32)) & 1
+}
+
+/// Copies eight limbs into the destination array.
+fn word_copy(target: &mut [u64; 8], source: &[u64]) {
+    let mut i: u64 = 0;
+    while i < 8 {
+        let limb = &mut (*target)[i];
+        *limb = source[i];
+        i = i + 1;
+    }
+}
+
+// Select b when bit is one and a when it is zero.
+/// Selects one of two eight-limb values using a mask derived from a bit.
+fn word_select(a: &[u64], b: &[u64], bit: u64) -> [u64; 8] {
+    let mask = word_mask(bit);
+    let mut result: [u64; 8] = [0; 8];
+    let mut i: u64 = 0;
+    while i < 8 {
+        result[i] = a[i] ^ ((a[i] ^ b[i]) & mask);
+        i = i + 1;
+    }
+    result
+}
+
+/// Returns a bit indicating whether the first unsigned limb array is smaller.
+fn less_than(a: &[u64], b: &[u64]) -> u64 {
+    let mut borrow: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 8 {
+        let difference = LIMB_BASE + a[i] - b[i] - borrow;
+        borrow = 1 - (difference >> 32);
+        i = i + 1;
+    }
+    borrow
+}
+
+// The input is a 257-bit value less than twice the modulus.
+/// Conditionally subtracts one modulus, accounting for a carry above the highest limb.
+fn reduce_once(value: &[u64], top: u64, modulo: &[u64]) -> [u64; 8] {
+    let mut result: [u64; 8] = [0; 8];
+    let mut borrow: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 8 {
+        let difference = LIMB_BASE + value[i] - modulo[i] - borrow;
+        result[i] = difference & LIMB_MASK;
+        borrow = 1 - (difference >> 32);
+        i = i + 1;
+    }
+    let result = word_select(&result[..], &value[0..8], borrow & (1 - top));
+    result
+}
+
+/// Adds two reduced limb arrays modulo the selected modulus.
+fn modular_add(a: &[u64], b: &[u64], order: bool) -> [u64; 8] {
+    let modulo = modulus(order);
+    let mut result: [u64; 8] = [0; 8];
+    let mut carry: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 8 {
+        let sum = a[i] + b[i] + carry;
+        result[i] = sum & LIMB_MASK;
+        carry = sum >> 32;
+        i = i + 1;
+    }
+    let result = reduce_once(&result[..], carry, &modulo[..]);
+    result
+}
+
+/// Subtracts two reduced limb arrays modulo the selected modulus.
+fn modular_sub(a: &[u64], b: &[u64], order: bool) -> [u64; 8] {
+    let modulo = modulus(order);
+    let mut result: [u64; 8] = [0; 8];
+    let mut borrow: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 8 {
+        let difference = LIMB_BASE + a[i] - b[i] - borrow;
+        result[i] = difference & LIMB_MASK;
+        borrow = 1 - (difference >> 32);
+        i = i + 1;
+    }
+    let mask = word_mask(borrow);
+    let mut carry: u64 = 0;
+    i = 0;
+    while i < 8 {
+        let sum = result[i] + (modulo[i] & mask) + carry;
+        result[i] = sum & LIMB_MASK;
+        carry = sum >> 32;
+        i = i + 1;
+    }
+    result
+}
+
+/// Multiplies two limb arrays and applies Montgomery reduction.
+fn montgomery_mul(a: &[u64], b: &[u64], order: bool) -> [u64; 8] {
+    let modulo = modulus(copy(order));
+    let factor: u64 = if order { ORDER_FACTOR } else { 1 };
+    let mut product: [u64; 17] = [0; 17];
+    let mut i: u64 = 0;
+    while i < 8 {
+        let mut carry: u64 = 0;
+        let mut j: u64 = 0;
+        while j < 8 {
+            // One product and two 32-bit addends fit exactly in u64.
+            let sum = a[i] * b[j] + product[i + j] + carry;
+            product[i + j] = sum & LIMB_MASK;
+            carry = sum >> 32;
+            j = j + 1;
+        }
+        product[i + 8] = carry;
+        i = i + 1;
+    }
+    i = 0;
+    while i < 8 {
+        let scale = (product[i] * factor) & LIMB_MASK;
+        let mut carry: u64 = 0;
+        let mut j: u64 = 0;
+        while j < 8 {
+            let sum = scale * modulo[j] + product[i + j] + carry;
+            product[i + j] = sum & LIMB_MASK;
+            carry = sum >> 32;
+            j = j + 1;
+        }
+        let mut k = i + 8;
+        while k < 17 {
+            let sum = product[k] + carry;
+            product[k] = sum & LIMB_MASK;
+            carry = sum >> 32;
+            k = k + 1;
+        }
+        i = i + 1;
+    }
+    let mut reduced: [u64; 8] = [0; 8];
+    i = 0;
+    while i < 8 {
+        reduced[i] = product[i + 8];
+        i = i + 1;
+    }
+    let result = reduce_once(&reduced[..], product[16], &modulo[..]);
+    result
+}
+
+/// Converts a reduced integer into Montgomery representation.
+fn to_montgomery(value: &[u64], order: bool) -> [u64; 8] {
+    let square = montgomery_square(copy(order));
+    let result = montgomery_mul(&value[0..8], &square[..], order);
+    result
+}
+
+/// Converts a Montgomery value back to its standard residue.
+fn from_montgomery(value: &[u64], order: bool) -> [u64; 8] {
+    let one: [u64; 8] = [1, 0, 0, 0, 0, 0, 0, 0];
+    let result = montgomery_mul(&value[0..8], &one[..], order);
+    result
+}
+
+/// Computes the Montgomery inverse of a nonzero value under the selected modulus.
+fn modular_inverse(value: &[u64], order: bool) -> [u64; 8] {
+    let exponent = inverse_exponent(copy(order));
+    let mut result = montgomery_one(copy(order));
+    let mut bit: u64 = 256;
+    while bit > 0 {
+        bit = bit - 1;
+        let square = montgomery_mul(&result[..], &result[..], copy(order));
+        // The exponent depends only on the public modulus.
+        if scalar_bit(&exponent[..], copy(bit)) == 1 {
+            let next = montgomery_mul(&square[..], &value[0..8], copy(order));
+            word_copy(&mut result, &next[..]);
+        } else {
+            word_copy(&mut result, &square[..]);
+        }
+    }
+    result
+}
+
+/// Reads 32 big-endian bytes into eight arithmetic limbs.
+fn read_words(input: &[u8], offset: usize) -> [u64; 8] {
+    let mut result: [u64; 8] = [0; 8];
+    let mut i: usize = 0;
+    while i < 32 {
+        let limb = (31 - i) / 4;
+        result[limb] = (result[limb] << 8) | (input[offset + i] as u64);
+        i = i + 1;
+    }
+    result
+}
+
+/// Extracts one octet from an arithmetic word.
+fn p256_octet(word: u64, offset: u64) -> u8 {
+    let mut input = word >> offset;
+    let mut output: u8 = 0;
+    let mut bit: u64 = 0;
+    while bit < 8 {
+        let digit: u8 = if (input & 1) == 0 { 0 } else { 1 };
+        output = output | (digit << bit);
+        input = input >> 1;
+        bit = bit + 1;
+    }
+    output
+}
+
+/// Writes eight arithmetic limbs as 32 big-endian bytes.
+fn write_words(value: &[u64], output: &mut [u8], offset: usize) {
+    let mut i: usize = 0;
+    while i < 32 {
+        let reverse = 31 - i;
+        output[offset + i] = p256_octet(value[reverse / 4], ((reverse as u64) % 4) * 8);
+        i = i + 1;
+    }
+}

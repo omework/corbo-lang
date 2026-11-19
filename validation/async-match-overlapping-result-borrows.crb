@@ -1,0 +1,11 @@
+async fn identity(a:&mut Int)->&mut Int {yield;return a;}
+async fn choose(a:&mut Int,b:&mut Int,c:&mut Int)->&mut Int {
+ let h=runtime::spawn(->identity(a));let outcome=h.await;
+ let mut first=match outcome {Ok(r)=>{r},Err(_)=>{b}};
+ let mut second=match outcome {Ok(s)=>{s},Err(_)=>{c}};
+ first.set(4);return second;
+}
+fn main(){let mut p=pool<Int>(3);let mut a=p.new(1);let mut b=p.new(2);let mut c=p.new(3);
+ let h=runtime::spawn(->choose(&mut a,&mut b,&mut c));match h.join(){Ok(r)=>{*r=9;},Err(_)=>{print(999);}}
+ print(a);print(b);print(c);
+}

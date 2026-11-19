@@ -1,0 +1,230 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Linux x86-64 file operations implemented with direct system calls.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    use std::sys::valid_file_path;
+
+    /// Validates the path and opens or creates a file using the Linux system call ABI.
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64) {
+        let perm: u32 = if copy(perm) == 0xffffffff { 438 } else { perm };
+        let length = path.len();
+        if !valid_file_path(&path[0..length]) { return (false, 0); }
+        let access = copy(mode) & 3;
+        let append: i64 = if (copy(mode) & 4) != 0 { 0x400 } else { 0 };
+        let truncate: i64 = if (mode & 8) != 0 { 0x200 } else { 0 };
+        let creation: i64 = if create { 0xc0 } else { 0 };
+        let flags = 0x80000 | access | append | truncate | creation;
+        let mut raw: i64 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            @asm {
+                pushfq
+                push rax
+                push rcx
+                push r11
+                push rdi
+                push rsi
+                push rdx
+                mov rdi, ${address}
+                mov rsi, ${flags}
+                mov edx, ${perm}
+                mov eax, 2
+                syscall
+                mov ${raw}, rax
+                pop rdx
+                pop rsi
+                pop rdi
+                pop r11
+                pop rcx
+                pop rax
+                popfq
+            }
+        }
+        (true, raw)
+    }
+
+    /// Reads into the caller's buffer and returns the system call status and byte count.
+    pub fn read(fd: i64, buffer: &mut [u8]) -> (i64, usize) {
+        let length = buffer.len();
+        if length == 0 {
+            return (0, 0);
+        }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                pushfq
+                push rax
+                push rcx
+                push r11
+                push rdi
+                push rsi
+                push rdx
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                mov eax, 0
+                syscall
+                mov ${raw}, rax
+                mov ${count}, rax
+                pop rdx
+                pop rsi
+                pop rdi
+                pop r11
+                pop rcx
+                pop rax
+                popfq
+            }
+        }
+        (raw, count)
+    }
+
+    /// Writes the caller's bytes and returns the system call status and byte count.
+    pub fn write(fd: i64, buffer: &[u8]) -> (i64, usize) {
+        let length = buffer.len();
+        if length == 0 {
+            return (0, 0);
+        }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                pushfq
+                push rax
+                push rcx
+                push r11
+                push rdi
+                push rsi
+                push rdx
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                mov eax, 1
+                syscall
+                mov ${raw}, rax
+                mov ${count}, rax
+                pop rdx
+                pop rsi
+                pop rdi
+                pop r11
+                pop rcx
+                pop rax
+                popfq
+            }
+        }
+        (raw, count)
+    }
+
+    // The target stat ABI supplies the size field for the already open descriptor.
+    /// Returns the platform's error code for unsupported permission bits.
+    pub fn unsupported_permissions() -> i64 { -95 }
+
+    /// Reads size and mode bits from the descriptor's native stat record.
+    pub fn stats(fd: i64) -> (i64, u64, u32) {
+        let mut status: i64 = 0;
+        let mut size: u64 = 0;
+        let mut permissions: u32 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 144
+                mov rdi, ${fd}
+                mov rsi, rsp
+                mov eax, 5
+                syscall
+                mov ${status}, rax
+                test rax, rax
+                jnz 1f
+                mov rax, QWORD PTR [rsp + 48]
+                mov ${size}, rax
+                mov eax, DWORD PTR [rsp + 24]
+                mov ${permissions}, eax
+                1:
+                add rsp, 144
+            }
+        }
+        (status, size, permissions & 0x1ff)
+    }
+
+    /// Moves the descriptor's file offset relative to the native origin.
+    pub fn seek(fd: i64, offset: i64, origin: i64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut position: u64 = 0;
+        @unchecked {
+            @asm {
+                mov rdi, ${fd}
+                mov rsi, ${offset}
+                mov rdx, ${origin}
+                mov eax, 8
+                syscall
+                test rax, rax
+                js 1f
+                mov ${position}, rax
+                jmp 2f
+                1:
+                mov ${status}, rax
+                2:
+            }
+        }
+        return (status, position);
+    }
+
+    /// Invokes the Linux rename system call for two validated byte paths.
+    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+        if !valid_file_path(&source[0..source.len()]) || !valid_file_path(&destination[0..destination.len()]) {
+            return (false, 0);
+        }
+        let mut status: i64 = 0;
+        @unchecked {
+            let old_address = addr(&source[0]);
+            let new_address = addr(&destination[0]);
+            @asm {
+                mov rdi, ${old_address}
+                mov rsi, ${new_address}
+                mov eax, 82
+                syscall
+                mov ${status}, rax
+            }
+        }
+        return (true, status);
+    }
+
+    /// Invokes the Linux unlink system call for a validated byte path.
+    pub fn delete(path: &[u8]) -> (bool, i64) {
+        let length = path.len();
+        if !valid_file_path(&path[0..length]) { return (false, 0); }
+        let mut raw: i64 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            @asm {
+                mov rdi, ${address}
+                mov eax, 87
+                syscall
+                mov ${raw}, rax
+            }
+        }
+        (true, raw)
+    }
+
+    /// Closes the Linux file descriptor.
+    pub fn close(fd: i64) {
+        @unchecked {
+            @asm {
+                pushfq
+                push rax
+                push rcx
+                push r11
+                push rdi
+                mov rdi, ${fd}
+                mov eax, 3
+                syscall
+                pop rdi
+                pop r11
+                pop rcx
+                pop rax
+                popfq
+            }
+        }
+    }
+#(endif)

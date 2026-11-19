@@ -1,0 +1,33 @@
+--- test_mutable_reference_fields.before
++++ test_mutable_reference_fields.py
+@@ -72,8 +72,8 @@
+         lines=r.stdout.splitlines();self.assertEqual(lines[0],lines[1]);self.assertEqual(lines[2],'W.Bound(30)')
+         self.assertEqual(r.stderr.count('destroy w=W.Bound'),1);self.assertEqual(r.stderr.count('destroy z=W.Bound'),1)
+     def test_reset_holder_releases_target(self):
+-        r=self.run_source(DECL+SETUP+HOLDER+'q.reset();n=30;print(n);p.reset();')
+-        self.assertEqual(r.stdout,'30\n');self.assertEqual(r.stderr.count('destroy w=W.Bound'),1)
++        r=self.run_source(DECL+SETUP+HOLDER+'print(w);q.reset();n=30;print(n);p.reset();')
++        self.assertEqual(r.stdout,'W.Bound(10)\n30\n');self.assertEqual(r.stderr.count('destroy w=W.Bound'),1)
+     def test_moved_holder_retains_capability(self):
+         self.reject(DECL+SETUP+HOLDER+'let z=<-w;print(n);print(z);')
+         self.assertEqual(self.run_source(DECL+SETUP+HOLDER+'let z=<-w;print(z);n=30;print(n);').stdout,'W.Bound(10)\n30\n')
+@@ -93,7 +93,7 @@
+         self.reject(s.replace('print(w);n=30;','n=30;print(w);'))
+     def test_local_target_not_promoted_even_with_durable_pool(self):
+         self.reject(DECL+MAKE+'fn bad(q:&mut Pool<W>,p:&mut Pool<Int>)-><-W{let mut n=new(p)Int(10);let w=make(q,&mut n);return<-w;}')
+-        self.reject(DECL+SETUP+'let w={let mut a=new(p)Int(20);let w=new(q)W.Bound{data:&mut a};<-w};print(w);')
++        self.reject(DECL+SETUP+'print(n);let w={let mut a=new(p)Int(20);let w=new(q)W.Bound{data:&mut a};<-w};print(w);')
+     def test_prepared_holder_argument_protects_target(self):
+         funcs='fn pair(w:&W,n:&Int){print(w);print(n);}fn clear(p:&mut Pool<Int>)->Int{p.reset();return 0;}fn use(w:&W,n:Int){print(w);print(n);}'
+         self.reject(DECL+funcs+SETUP+HOLDER+'pair(&w,&n);')
+@@ -103,8 +103,8 @@
+         d='enum Mix{A{x:&mut Int,b:Int}}fn clear(p:&mut Pool<Int>)->Int{p.reset();return 1;}'
+         self.reject(d+'let mut p=pool<Int>(1);let mut q=pool<Mix>(1);let mut n=new(p)Int(10);let w=new(q)Mix.A{x:&mut n,b:clear(&mut p)};print(w);')
+     def test_replacement_releases_old_and_protects_new(self):
+-        s=DECL+SETUP+HOLDER+'let mut other=new(p)Int(20);w=new(q)W.Bound{data:&mut other};n=30;print(w);other=40;print(other);'
+-        self.assertEqual(self.run_source(s).stdout,'W.Bound(20)\n40\n')
++        s=DECL+SETUP+HOLDER+'print(w);let mut other=new(p)Int(20);w=new(q)W.Bound{data:&mut other};n=30;print(w);other=40;print(other);'
++        self.assertEqual(self.run_source(s).stdout,'W.Bound(10)\nW.Bound(20)\n40\n')
+         self.reject(s.replace('print(w);other=40;','other=40;print(w);'))
+     def test_conditional_targets_all_protected(self):
+         f='fn choose(q:&mut Pool<W>,k:Int,a:&mut Int,b:&mut Int)-><-W{if k==0{let w=new(q)W.Bound{data:a};return<-w;}let w=new(q)W.Bound{data:b};return<-w;}'

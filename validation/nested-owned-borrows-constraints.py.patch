@@ -1,0 +1,27 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -366,9 +366,9 @@
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
+                 borrowed = getattr(self.analyzer.async_functions[typ], 'public_result_borrows', ())
+                 for position, (_, capture, capture_type) in enumerate(self.analyzer.async_functions[typ].args[1]):
+-                    owned_borrows = [f'{arm}.{field}'
+-                        for arm, members in self.analyzer.enums.get(capture_type, {}).items()
+-                        for field, declared in members if reference_type(declared)] if capture in ('owned', 'join_owned', 'join_nested') else []
++                    from array_syntax import owned_reference_paths
++                    owned_borrows = [path for path, _, _ in owned_reference_paths(self.analyzer.enums, capture_type)
++                                    ] if capture in ('owned', 'join_owned', 'join_nested') else []
+                     if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES) or position in returned or owned_borrows:
+                         kind = 'task_borrow_parameter' if capture in ('ref', 'mut', 'array_ref', 'array_mut') or owned_borrows else 'task_utf8_parameter'
+                         for selector in ([f'{position}/{path}' for path in owned_borrows] or [str(position)]):
+@@ -404,7 +404,10 @@
+                 history[asset] = frozenset()
+                 fields = []
+                 content = typ[2:-1] if mode == 'mut' and typ.startswith('A<') else typ
+-                for key, _ in aggregate_reference_paths(self.analyzer.enums, content):
++                from array_syntax import owned_reference_paths
++                reference_paths = dict(aggregate_reference_paths(self.analyzer.enums, content))
++                reference_paths.update((path, pointee) for path, _, pointee in owned_reference_paths(self.analyzer.enums, content))
++                for key in reference_paths:
+                     target = Asset(('field', index, key), Source('allocation_field_parameter', index, key))
+                     history[target] = frozenset()
+                     fields.append((key, frozenset({target})))

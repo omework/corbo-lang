@@ -1,0 +1,44 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -4237,10 +4237,16 @@
+             fail(line, 'écriture de Vector : une liaison mutable est requise')
+         index = expression(expr[2], line)
+         check_access(receiver, line, write=write)
+-        ctype = 'int' if collection_types[receiver] == 'Vector<Int>' else 'uint8_t'
++        ctype = {'Vector<Int>': 'int', HANDLE_VECTOR: 'Cell *'}.get(collection_types[receiver], 'uint8_t')
+         pointer = temporary(ctype + ' *')
+         steps.append(f'{pointer} = ({ctype} *)vector_checked_item(frame->{fields[receiver]}, {index});')
+         return f'*{pointer}'
++
++    def handle_vector_target(expr, line, *, write=False):
++        slot = owned_vector_element(expr, line, write=write)
++        target = temporary('Cell *')
++        steps.append(f'{target} = {slot};')
++        return target
+ 
+     def is_byte_array_element(expr):
+         if expr[0] == 'array_replace':
+@@ -6292,7 +6298,13 @@
+         preparation = []
+         collection = collection_index_type(place)
+         byte_element = collection == 'Vector<u8>' or is_byte_array_element(place)
+-        if view_mode is not None:
++        if place[0] == 'array_deref_slot' and collection_index_type(place[1]) == HANDLE_VECTOR:
++            name, path = place[1][1][1], ()
++            target = handle_vector_target(place[1], line, write=True) + '->value'
++            # Preserve the selected allocation while evaluating the RHS.
++            # Shared reads remain legal; mutation/drop of the carrier does not.
++            preparation = [(name, 'ref')]
++        elif view_mode is not None:
+             if place[1][0] != 'name' or place[1][1] not in mutable_slices:
+                 fail(line, 'écriture interdite à travers une tranche partagée')
+             name, path = place[1][1], ()
+@@ -6620,6 +6632,8 @@
+             if collection_index_type(expr) == 'Vector<Int>':
+                 return owned_vector_element(expr, line)
+             return array_element(expr, line)[0]
++        if op == 'array_deref_slot' and collection_index_type(expr[1]) == HANDLE_VECTOR:
++            return handle_vector_target(expr[1], line) + '->value'
+         if op == 'array_deref_slot' and reference_array_path(expr[1])[0] in reference_rows:
+             return array_element(expr[1], line, dereference=True)[0]
+         if op == 'array_replace':

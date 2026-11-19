@@ -1,0 +1,25 @@
+Generated native-sync-helper.c from recorded counterexample
+OPEN valid program: fn read(v:&Int)->Int{return *v;}fn main(){let mut p=pool<Int>(1);let a=p.new(7);let v=&a;let h=runtime::thread({->(v);return read(v);});match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}} 
+DIAGNOSTIC: ligne 1: prototype : appel synchrone depuis un état : signature scalaire Int, u8, char ou Void requise
+OPEN valid program: fn same(v:Bool)->Bool{return v;}fn main(){if same(true){print(1);}} 
+DIAGNOSTIC: ligne 1: type de paramètre inconnu 'Bool'
+OPEN valid program: // Valid obligation: a native block may consume an allocation made in an async
+// caller's local pool. Local pool creation in that caller is not yet lowered.
+async fn work() -> Int {
+    let mut p = pool<Int>(1);
+    let a = p.new(7);
+    let h = runtime::thread({ -> (a); return *a; });
+    match h.await {
+        Ok(value) => { return value; },
+        Err(_) => { return 99; },
+    }
+}
+fn main() {
+    let h = runtime::spawn(-> work());
+    match h.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(999); },
+    }
+}
+ 
+DIAGNOSTIC: ligne 4: prototype async : expression source non prise en charge

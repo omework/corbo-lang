@@ -1,0 +1,63 @@
+--- before/crust.py
++++ after/crust.py
+@@ -144,6 +144,9 @@
+     compact_transfer: bool = False
+     discarded_pattern: bool = False
+     native_block: bool = False
++    # Backend representation requirements, inferred to a fixed point across
++    # async callers. A captured Int pointer alone cannot be stored as a Cell.
++    cell_reference_parameters: set[int] = field(default_factory=set)
+ 
+ 
+ class Parser:
+@@ -10073,10 +10076,17 @@
+                 elif mode in ASYNC_VALUE_RESULT_FAMILIES and kind != mode:
+                     self.fail(f'capture async : attendu {typ}')
+                 if mode in ('ref', 'mut') and not array_capture and typ == 'Int':
++                    cell_capture = value
+                     value = f'&(({value})->value)'
+                 temporary = f'capture{self.uid()}'
+                 self.lines.append(f'{capture_ctype(mode, typ)} {temporary} = {value};')
+                 captures.append(temporary)
++                if index in node.cell_reference_parameters:
++                    if array_capture:
++                        self.fail('référence stockée : descripteur de la cible inline non disponible pour cette capture')
++                    cell_temporary = f'capture_cell{self.uid()}'
++                    self.lines.append(f'Cell *{cell_temporary} = {cell_capture};')
++                    captures.append(cell_temporary)
+                 if node.native_block and mode not in ('owned', *JOIN_RESULT_TYPES):
+                     # The header transfers the binding, including references;
+                     # the target dependencies remain on the new task record.
+@@ -13634,12 +13644,26 @@
+             self.warnings.add(f"ligne {line}: {message} : '{variable}'")
+         def enable_threads():
+             self.thread_runtime_used = self.async_thread_runtime_used = True
+-        for name, (node, _) in self.async_definitions.items():
+-            self.async_definitions[name] = node, lower_async_function(
+-                node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+-                self.declared_array_type, self.async_frame_slots,
+-                sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+-                struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
++        while True:
++            previous = {name: frozenset(node.cell_reference_parameters)
++                        for name, node in async_functions.items()}
++            for name, (node, _) in self.async_definitions.items():
++                self.async_definitions[name] = node, lower_async_function(
++                    node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
++                    self.declared_array_type, self.async_frame_slots,
++                    sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
++                    struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
++            if all(previous[name] == node.cell_reference_parameters
++                   for name, node in async_functions.items()):
++                break
++            # A synchronous factory may capture its own reference argument.
++            # Publish the new storage requirement before lowering callers again.
++            self.function_results = ResultAnalyzer(self.functions, self.function_effects, Error, self.enums,
++                                                   async_functions).infer_all()
++            self.function_constraints = ConstraintAnalyzer(self.functions, self.function_effects,
++                self.function_results, Error, self.enums, async_functions).infer_all()
++            self.function_contracts = function_contracts(self.functions, self.function_effects,
++                self.function_results, self.function_constraints)
+         self.verify_function_bodies()
+         for parent, callees in self.async_sync_calls.items():
+             self.async_frame_slots[parent] += sum(

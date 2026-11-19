@@ -1,0 +1,44 @@
+--- before/crust.py
++++ crust.py
+@@ -1530,5 +1530,5 @@
+                     and expression[3][0] in ('down', 'transfer')):
+                 expression = ('array_buffered_replace', *expression[1:])
+-            if expression[0] == 'method_call' and expression[2] in ('pop', 'try_push'):
++            if expression[0] == 'method_call' and expression[2] in ('pop', 'try_push', 'remove'):
+                 expression = ('array_drop_result', expression)
+             if expression[0] != 'name':
+@@ -9992,4 +9992,6 @@
+         if symbol.kind == 'task_parameter':
+             return binding.alloc.item_sources
++        if symbol.kind == 'vector_element_parameter':
++            return source_union(*(carrier.item_sources for carrier in binding.referents or (binding.alloc,)))
+         if symbol.kind == 'task_result_parameter':
+             return binding.alloc.task_result_sources
+@@ -11482,4 +11484,6 @@
+             elif symbol.kind == 'task_parameter':
+                 origins.update(binding.alloc.item_origins)
++            elif symbol.kind == 'vector_element_parameter':
++                origins.update(origin for carrier in binding.referents or (binding.alloc,) for origin in carrier.item_origins)
+             elif symbol.kind == 'task_result_parameter':
+                 origins.update(binding.alloc.task_result_origins)
+@@ -13593,5 +13597,11 @@
+                     if expr[1][0] in ('field', 'array_index', 'array_transfer'):
+                         self.fail('déplacement d’un champ ou d’une case interdit')
+-                    value = self.expression(expr[1], scope, 'return')
++                    operand = expr[1]
++                    if (expr[0] == 'array_transfer' and operand[0] == 'method_call'
++                            and operand[1][0] == 'name' and operand[2] == 'remove'
++                            and self.lookup(operand[1][1]).alloc is not None
++                            and self.lookup(operand[1][1]).alloc.typ in (HANDLE_VECTOR, MUT_REF_VECTOR)):
++                        operand = expr
++                    value = self.expression(operand, scope, 'return')
+                     self.expression_clock(expr)
+                     if value[0] not in ('owned', 'task', 'execution', *JOIN_RESULT_TYPES):
+@@ -15330,5 +15340,6 @@
+                     ctype = 'CrustStructureView'
+                 else:
+-                    owned_bridge_fields(allocation, parameter)
++                    if typ != HANDLE_VECTOR:
++                        owned_bridge_fields(allocation, parameter)
+                     ctype = 'Cell *'
+             elif mode in ('ref', 'mut'):

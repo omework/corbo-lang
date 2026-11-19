@@ -1,0 +1,22 @@
+--- crust.py
++++ crust.py
+@@ -3188,7 +3188,8 @@
+                     root.bindings[actual] = Binding(actual, 'source', source.c, source=source, mutable=True)
+                     arguments.append((mode, actual))
+                 else:
+-                    if pname in node.handle_parameters:
++                    if pname in node.handle_parameters or (
++                            typ in self.enums and dict(node.storage_requirements).get(index) == 'pool'):
+                         if source.element_type not in (None, typ):
+                             check.fail('contraintes de sources incompatibles avec le type du handle')
+                         source.element_type = typ
+@@ -4821,6 +4822,9 @@
+             self.fail(f"retour conditionnel : allocation {frame['declared'][1]} attendue, reçu {allocation.typ}")
+         if frame.get('handle_result'):
+             self.check_allocation_handle_type(f'A<{allocation.typ}>', 'owned', allocation)
++        elif mode == 'owned' and typ in self.enums:
++            if any(source.kind != 'local_stack' for source in allocation.sources):
++                self.fail(f'retour {typ} : stockage local requis (T local / allocation A<T>)')
+         required = frame.get('join_storage_result')
+         if required and allocation.absent_owned_payload and allocation.payload_storage != required:
+             self.fail(f'retour Result : stockage {required} requis (T local / allocation A<T>)')

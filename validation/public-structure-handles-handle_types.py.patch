@@ -1,0 +1,119 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -17,7 +17,7 @@
+     return typ.startswith('runtime::Handle<') and typ.endswith('>')
+ 
+ 
+-def public_signature(typ):
++def public_signature(typ, structures=()):
+     if not is_public_handle(typ):
+         return None
+     payload = typ[len('runtime::Handle<'):-1]
+@@ -30,15 +30,43 @@
+         return ('array', payload)
+     if payload.startswith('A<') and payload.endswith('>'):
+         content = payload[2:-1]
+-        if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
++        if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures:
+             return ('owned', content)
++    if payload in structures:
++        return ('owned', payload)
+     if payload.startswith('Result<') and payload.endswith(',runtime::Error>'):
+         inner = payload[len('Result<'):-len(',runtime::Error>')]
+-        signature = public_signature(f'runtime::Handle<{inner}>')
++        signature = public_signature(f'runtime::Handle<{inner}>', structures)
+         if signature is not None and signature[0] == 'owned':
+             return ('join_owned', signature[1])
+     return next((signature for signature, name in SCALAR_RESULTS.items()
+                  if name == payload), None)
++
++
++def public_storage(typ, structures=()):
++    """The public payload keeps local T distinct from an allocation A<T>."""
++    if not is_public_handle(typ):
++        return None
++    payload = typ[len('runtime::Handle<'):-1]
++    if payload.startswith('Result<') and payload.endswith(',runtime::Error>'):
++        return public_storage('runtime::Handle<' + payload[len('Result<'):-len(',runtime::Error>')] + '>', structures)
++    if payload in structures:
++        return 'local'
++    if payload.startswith('A<') and payload[2:-1] in structures:
++        return 'pool'
++    return None
++
++
++def contextual_public_type(nominal, expected, definitions):
++    """Check payload shape here; source constraints separately check T/A<T>."""
++    if is_public_handle(nominal):
++        return nominal
++    from async_lowering import public_handle_type
++    declaration = definitions[nominal]
++    if isinstance(declaration, tuple):
++        declaration = declaration[0]
++    return public_handle_type(declaration.args[2],
++        storage=public_storage(expected, definitions.structures) or 'pool')
+ 
+ 
+ def canonical_captures(fields, parameters):
+@@ -56,35 +84,38 @@
+     return tuple((key, tuple(targets)) for key, targets in groups.items() if targets)
+ 
+ 
+-def common_public_handle(nominals, definitions):
++def common_public_handle(nominals, definitions, *, expected=None, storage='pool'):
+     """Unify distinct execution frames only when their public payload agrees."""
+     names = set(nominals)
+     if len(names) < 2:
+         return None
++    if expected is not None and all(contextual_public_type(name, expected, definitions) == expected for name in names):
++        return expected
+     from async_lowering import public_handle_type
+     payloads = set()
+     for name in names:
+         declaration = definitions[name]
+         if isinstance(declaration, tuple):
+             declaration = declaration[0]
+-        payloads.add(public_handle_type(declaration.args[2]))
++        payloads.add(name if is_public_handle(name) else public_handle_type(declaration.args[2], storage=storage))
+     if len(payloads) == 1:
+         public = payloads.pop()
+-        if public_signature(public) is not None:
++        if public_signature(public, getattr(definitions, 'structures', ())) is not None:
+             return public
+     return None
+ 
+ 
+ class HandleDefinitions(dict):
+-    def __init__(self, values=(), *, compiled=False):
++    def __init__(self, values=(), *, compiled=False, structures=None):
+         super().__init__(values)
+         self.compiled = compiled
++        self.structures = structures if structures is not None else getattr(values, 'structures', {})
+ 
+     def copy(self):
+-        return type(self)(self, compiled=self.compiled)
++        return type(self)(self, compiled=self.compiled, structures=self.structures)
+ 
+     def __missing__(self, key):
+-        signature = public_signature(key)
++        signature = public_signature(key, self.structures)
+         if signature is None:
+             raise KeyError(key)
+         parameters = [
+@@ -114,4 +145,16 @@
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),
+                                       public_result_storage=result_storage,
+                                       public_result_borrows=result_borrows, public_result_views=result_views, native_block=False, line=0)
++        if signature[0] in ('owned', 'join_owned') and signature[1] in self.structures:
++            from array_syntax import owned_reference_paths
++            from results import FunctionResult, ResultCandidate, BorrowTarget
++            enums = {name: layout if isinstance(layout, dict) else {'': layout}
++                     for name, layout in self.structures.items()}
++            fields = tuple((path, frozenset({BorrowTarget('field_parameter', result_storage, path)}))
++                           for path, _, _ in owned_reference_paths(enums, signature[1]))
++            result = FunctionResult(signature[0], signature[1],
++                candidates=frozenset({ResultCandidate('parameter', result_storage)}), borrowed_fields=fields)
++            declaration.field_effect_summary = SimpleNamespace(
++                complete=True, may_complete=True, completion_result=result)
++            declaration.join_storage_result = public_storage(key, self.structures)
+         return (declaration, None) if self.compiled else declaration

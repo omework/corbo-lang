@@ -1,0 +1,28 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1074,7 +1074,7 @@
+                 if kind != 'task':
+                     fail(line, 'allocation attendue : un handle rend un Result, pas une allocation directe')
+             signature = functions[prepared[3]].args[2] if prepared is not None else await_signature(expr)
+-            if signature not in owned_sync_types:
++            if signature not in owned_sync_types and not (signature and signature[0] == 'owned' and signature[1] in owned_structures):
+                 fail(line, 'allocation attendue : résultat async de type incompatible')
+             return await_task(expr, line, returns_value=True, owned=True, prepared=prepared)
+         else:
+@@ -1462,7 +1462,7 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>'))
+            and (mode, typ) not in pool_sync_types
+-           and not (mode == 'owned' and typ in owned_structures)
++           and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_structures)
+            and not (mode in ('ref', 'mut') and typ in reference_structs)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+            for _, mode, typ in parameters):
+@@ -1480,6 +1480,7 @@
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
++            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_structures)
+             and result not in (
+             ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('owned', 'Int'),
+             ('scalar', 'Void'), ('void', 'Void'), ('join_owned', 'Int'), ('join_nested', 'Int'))):

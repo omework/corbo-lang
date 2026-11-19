@@ -1,0 +1,463 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Darwin ARM64 and x86-64 file operations using native entry points.
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    use std::sys::valid_file_path;
+
+    /// Validates the byte path and opens or creates a file through the Darwin backend.
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64) {
+        let length = path.len();
+        if !valid_file_path(&path[0..length]) { return (false, 0); }
+        let access = copy(mode) & 3;
+        let append: i64 = if (copy(mode) & 4) != 0 { 0x8 } else { 0 };
+        let truncate: i64 = if (mode & 8) != 0 { 0x400 } else { 0 };
+        let creation: i64 = if create { 0xa00 } else { 0 };
+        let flags = 0x1000000 | access | append | truncate | creation;
+        // kauth_filesec with an empty ACL and KAUTH_ACL_NO_INHERIT.
+        let security: [u32; 11] = [0x012cc16d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x20000];
+        let mut raw: i64 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            let security_address = addr(&security[0]);
+            @asm {
+                mov x0, ${address}
+                mov x1, ${flags}
+                mov w4, ${perm}
+                cmn w4, #1
+                b.eq 3f
+                mov x5, ${security_address}
+                mov w2, #-101
+                mov w3, #-101
+                bl ___open_extended
+                b 4f
+                3:
+                sub sp, sp, #16
+                mov w9, #438
+                str x9, [sp]
+                bl _open
+                add sp, sp, #16
+                4:
+                sxtw x0, w0
+                mov ${raw}, x0
+                tbnz x0, #63, 1f
+                b 2f
+                1:
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${raw}, x0
+                2:
+            }
+        }
+        return (true, raw);
+    }
+
+    /// Reads file bytes through the Darwin backend and returns its status and byte count.
+    pub fn read(fd: i64, buffer: &mut [u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                mov x0, ${fd}
+                mov x1, ${address}
+                mov x2, ${length}
+                bl _read
+                mov ${raw}, x0
+                mov ${count}, x0
+                tbnz x0, #63, 1f
+                b 2f
+                1:
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${raw}, x0
+                2:
+            }
+        }
+        if raw < 0 {
+            return (raw, 0);
+        }
+        return (raw, count);
+    }
+
+    /// Writes file bytes through the Darwin backend and returns its status and byte count.
+    pub fn write(fd: i64, buffer: &[u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                mov x0, ${fd}
+                mov x1, ${address}
+                mov x2, ${length}
+                bl _write
+                mov ${raw}, x0
+                mov ${count}, x0
+                tbnz x0, #63, 1f
+                b 2f
+                1:
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${raw}, x0
+                2:
+            }
+        }
+        if raw < 0 {
+            return (raw, 0);
+        }
+        return (raw, count);
+    }
+
+    // The target stat ABI supplies the size field for the already open descriptor.
+    /// Returns the platform's error code for unsupported permission bits.
+    pub fn unsupported_permissions() -> i64 { -45 }
+
+    /// Obtains the open descriptor's size and mode bits from Darwin metadata.
+    pub fn stats(fd: i64) -> (i64, u64, u32) {
+        let mut status: i64 = 0;
+        let mut size: u64 = 0;
+        let mut permissions: u32 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #160
+                mov x0, ${fd}
+                mov x1, sp
+                bl _fstat
+                cbnz w0, 1f
+                ldr x0, [sp, #96]
+                mov ${size}, x0
+                ldrh w0, [sp, #4]
+                mov ${permissions}, w0
+                b 2f
+                1:
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${status}, x0
+                2:
+                add sp, sp, #160
+            }
+        }
+        (status, size, permissions & 0x1ff)
+    }
+
+    /// Moves the Darwin file descriptor's offset and reports the resulting position.
+    pub fn seek(fd: i64, offset: i64, origin: i64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut position: u64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${fd}
+                mov x1, ${offset}
+                mov x2, ${origin}
+                bl _lseek
+                tbnz x0, #63, 1f
+                mov ${position}, x0
+                b 2f
+                1:
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${status}, x0
+                2:
+            }
+        }
+        return (status, position);
+    }
+
+    /// Renames a file through the Darwin backend after checking both paths.
+    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+        if !valid_file_path(&source[0..source.len()]) || !valid_file_path(&destination[0..destination.len()]) {
+            return (false, 0);
+        }
+        let mut status: i64 = 0;
+        @unchecked {
+            let old_address = addr(&source[0]);
+            let new_address = addr(&destination[0]);
+            @asm {
+                mov x0, ${old_address}
+                mov x1, ${new_address}
+                bl _rename
+                cbz w0, 1f
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${status}, x0
+                1:
+            }
+        }
+        return (true, status);
+    }
+
+    /// Unlinks a file through the Darwin backend after checking its path.
+    pub fn delete(path: &[u8]) -> (bool, i64) {
+        let length = path.len();
+        if !valid_file_path(&path[0..length]) { return (false, 0); }
+        let mut raw: i64 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            @asm {
+                mov x0, ${address}
+                bl _unlink
+                cbz w0, 1f
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${raw}, x0
+                1:
+            }
+        }
+        (true, raw)
+    }
+
+    /// Closes the Darwin file descriptor.
+    pub fn close(fd: i64) {
+        @unchecked {
+            @asm {
+                mov x0, ${fd}
+                bl _close
+            }
+        }
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "x86_64")
+    use std::sys::valid_file_path;
+
+    /// Validates the byte path and opens or creates a file through the Darwin backend.
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64) {
+        let length = path.len();
+        if !valid_file_path(&path[0..length]) { return (false, 0); }
+        let access = copy(mode) & 3;
+        let append: i64 = if (copy(mode) & 4) != 0 { 0x8 } else { 0 };
+        let truncate: i64 = if (mode & 8) != 0 { 0x400 } else { 0 };
+        let creation: i64 = if create { 0xa00 } else { 0 };
+        let flags = 0x1000000 | access | append | truncate | creation;
+        // kauth_filesec with an empty ACL and KAUTH_ACL_NO_INHERIT.
+        let security: [u32; 11] = [0x012cc16d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x20000];
+        let mut raw: i64 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            let security_address = addr(&security[0]);
+            @asm {
+                mov rdi, ${address}
+                mov rsi, ${flags}
+                mov r8d, ${perm}
+                cmp r8d, -1
+                je 3f
+                mov r9, ${security_address}
+                mov edx, -101
+                mov ecx, -101
+                call ___open_extended
+                jmp 4f
+                3:
+                mov edx, 438
+                xor eax, eax
+                call _open
+                4:
+                cdqe
+                mov ${raw}, rax
+                test rax, rax
+                js 1f
+                jmp 2f
+                1:
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${raw}, rax
+                2:
+            }
+        }
+        return (true, raw);
+    }
+
+    /// Reads file bytes through the Darwin backend and returns its status and byte count.
+    pub fn read(fd: i64, buffer: &mut [u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                call _read
+                mov ${raw}, rax
+                mov ${count}, rax
+                test rax, rax
+                js 1f
+                jmp 2f
+                1:
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${raw}, rax
+                2:
+            }
+        }
+        if raw < 0 {
+            return (raw, 0);
+        }
+        return (raw, count);
+    }
+
+    /// Writes file bytes through the Darwin backend and returns its status and byte count.
+    pub fn write(fd: i64, buffer: &[u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                call _write
+                mov ${raw}, rax
+                mov ${count}, rax
+                test rax, rax
+                js 1f
+                jmp 2f
+                1:
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${raw}, rax
+                2:
+            }
+        }
+        if raw < 0 {
+            return (raw, 0);
+        }
+        return (raw, count);
+    }
+
+    // The target stat ABI supplies the size field for the already open descriptor.
+    /// Returns the platform's error code for unsupported permission bits.
+    pub fn unsupported_permissions() -> i64 { -45 }
+
+    /// Obtains the open descriptor's size and mode bits from Darwin metadata.
+    pub fn stats(fd: i64) -> (i64, u64, u32) {
+        let mut status: i64 = 0;
+        let mut size: u64 = 0;
+        let mut permissions: u32 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 160
+                mov rdi, ${fd}
+                mov rsi, rsp
+                call _fstat$INODE64
+                test eax, eax
+                jne 1f
+                mov rax, QWORD PTR [rsp + 96]
+                mov ${size}, rax
+                movzx eax, WORD PTR [rsp + 4]
+                mov ${permissions}, eax
+                jmp 2f
+                1:
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${status}, rax
+                2:
+                add rsp, 160
+            }
+        }
+        (status, size, permissions & 0x1ff)
+    }
+
+    /// Moves the Darwin file descriptor's offset and reports the resulting position.
+    pub fn seek(fd: i64, offset: i64, origin: i64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut position: u64 = 0;
+        @unchecked {
+            @asm {
+                mov rdi, ${fd}
+                mov rsi, ${offset}
+                mov rdx, ${origin}
+                call _lseek
+                test rax, rax
+                js 1f
+                mov ${position}, rax
+                jmp 2f
+                1:
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${status}, rax
+                2:
+            }
+        }
+        return (status, position);
+    }
+
+    /// Renames a file through the Darwin backend after checking both paths.
+    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+        if !valid_file_path(&source[0..source.len()]) || !valid_file_path(&destination[0..destination.len()]) {
+            return (false, 0);
+        }
+        let mut status: i64 = 0;
+        @unchecked {
+            let old_address = addr(&source[0]);
+            let new_address = addr(&destination[0]);
+            @asm {
+                mov rdi, ${old_address}
+                mov rsi, ${new_address}
+                call _rename
+                test eax, eax
+                jz 1f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${status}, rax
+                1:
+            }
+        }
+        return (true, status);
+    }
+
+    /// Unlinks a file through the Darwin backend after checking its path.
+    pub fn delete(path: &[u8]) -> (bool, i64) {
+        let length = path.len();
+        if !valid_file_path(&path[0..length]) { return (false, 0); }
+        let mut raw: i64 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            @asm {
+                mov rdi, ${address}
+                call _unlink
+                test eax, eax
+                jz 1f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${raw}, rax
+                1:
+            }
+        }
+        (true, raw)
+    }
+
+    /// Closes the Darwin file descriptor.
+    pub fn close(fd: i64) {
+        @unchecked {
+            @asm {
+                mov rdi, ${fd}
+                call _close
+            }
+        }
+    }
+#(endif)

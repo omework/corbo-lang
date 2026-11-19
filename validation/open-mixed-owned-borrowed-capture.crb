@@ -1,0 +1,15 @@
+struct Mixed { item: A<Int>, view: &Int }
+async fn consume(v: -> Mixed) -> Int {
+    yield;
+    return *v.item + *v.view;
+}
+fn main() {
+    let mut ns = pool<Int>(2);
+    let a = ns.new(7);
+    let b = ns.new(9);
+    let mut records = pool<Mixed>(1);
+    let v = records.new(item: <-a, view: &b);
+    let h = runtime::spawn(->consume(->v));
+    match h.join() { Ok(n) => { print(n); }, Err(_) => { print(99); } }
+    drop(->b);
+}

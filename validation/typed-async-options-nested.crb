@@ -1,0 +1,5 @@
+struct Point{x:Int}async fn extract(v:&mut Vector<A<Point>>)-><-Option<A<Point>>{yield;return <-v.pop();}async fn wrapped1(v:&mut Vector<A<Point>>)-><-Result<Option<A<Point>>,runtime::Error>{
+            let h=runtime::spawn(->extract(v));return <-h.await;}async fn wrapped2(v:&mut Vector<A<Point>>)-><-Result<Result<Option<A<Point>>,runtime::Error>,runtime::Error>{
+            let h=runtime::spawn(->wrapped1(v));return <-h.await;}fn main(){let mut p=pool<Point>(1);let mut vp=pool<Vector<A<Point>>>(1);
+        let mut v=vp.new();v.push(->p.new(x:7));let h=runtime::spawn(->wrapped2(&mut v));match h.join(){Ok(inner2)=>{match inner2{Ok(inner1)=>{match inner1{Ok(option)=>{match (->option){Some(n)=>{print(n.x);drop(->n);},None=>{print(0);}}},Err(_)=>{print(90);}}},Err(_)=>{print(91);}}},Err(_)=>{print(92);}}
+        drop(->v);let next=p.new(x:8);print(next.x);}

@@ -1,0 +1,81 @@
+test_completed_child_keeps_target_reserved_in_parent (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_completed_child_keeps_target_reserved_in_parent) ... ok
+test_conditional_child_store_and_snapshot_before_wait (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_conditional_child_store_and_snapshot_before_wait) ... ok
+test_direct_named_nested_waits_and_caller_protection (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_direct_named_nested_waits_and_caller_protection) ... ok
+test_inactive_child_does_not_publish_effects (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_inactive_child_does_not_publish_effects) ... ok
+test_source_field_and_simultaneous_swap (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_source_field_and_simultaneous_swap) ... ok
+test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure) ... ERROR
+test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) ... ok
+test_captured_mutable_input_is_reserved_by_stored_shared_reference (test_async_field_application.AsyncFieldApplicationTests.test_captured_mutable_input_is_reserved_by_stored_shared_reference) ... ok
+test_conditional_handle_keeps_both_possible_writes (test_async_field_application.AsyncFieldApplicationTests.test_conditional_handle_keeps_both_possible_writes) ... ok
+test_conditional_stores_preserve_all_target_descriptors (test_async_field_application.AsyncFieldApplicationTests.test_conditional_stores_preserve_all_target_descriptors) ... ok
+test_detached_old_field_keeps_its_cell_after_change (test_async_field_application.AsyncFieldApplicationTests.test_detached_old_field_keeps_its_cell_after_change) ... ok
+test_distinct_concrete_handles_and_match_keep_effects (test_async_field_application.AsyncFieldApplicationTests.test_distinct_concrete_handles_and_match_keep_effects) ... ok
+test_enum_match_and_loop_transfers_preserve_pending_writes (test_async_field_application.AsyncFieldApplicationTests.test_enum_match_and_loop_transfers_preserve_pending_writes) ... ok
+test_field_reborrow_after_change_uses_new_cell (test_async_field_application.AsyncFieldApplicationTests.test_field_reborrow_after_change_uses_new_cell) ... ok
+test_inactive_task_applies_no_write_and_releases_slot (test_async_field_application.AsyncFieldApplicationTests.test_inactive_task_applies_no_write_and_releases_slot) ... ok
+test_independent_join_retention_model (test_async_field_application.AsyncFieldApplicationTests.test_independent_join_retention_model) ... ok
+test_legacy_reset_tracks_new_pool_until_carrier_destruction (test_async_field_application.AsyncFieldApplicationTests.test_legacy_reset_tracks_new_pool_until_carrier_destruction) ... ok
+test_methods_and_native_threads (test_async_field_application.AsyncFieldApplicationTests.test_methods_and_native_threads) ... ok
+test_new_target_is_protected_after_join (test_async_field_application.AsyncFieldApplicationTests.test_new_target_is_protected_after_join) ... ok
+test_recorded_program_and_launch_failure (test_async_field_application.AsyncFieldApplicationTests.test_recorded_program_and_launch_failure) ... ok
+test_sequential_replacements_and_original_source_cleanup (test_async_field_application.AsyncFieldApplicationTests.test_sequential_replacements_and_original_source_cleanup) ... ok
+test_short_lived_target_cannot_remain_in_parent_carrier (test_async_field_application.AsyncFieldApplicationTests.test_short_lived_target_cannot_remain_in_parent_carrier) ... ok
+test_unconnected_boundaries_do_not_erase_pending_effects (test_async_field_application.AsyncFieldApplicationTests.test_unconnected_boundaries_do_not_erase_pending_effects) ... ok
+
+======================================================================
+ERROR: test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 48, in test_spawned_child_success_and_submission_failure
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15387, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15380, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13881, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13689, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5785, in _lower_async_function
+    returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4256, in match_statement
+    return match_async_result((statement, *tail), statement.line, valued=False, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2561, in match_async_result
+    return emit_branches(test, yes, no, line, valued=valued,
+                         join_payload=(result, payload, status, loans, direct, subject[1] if not direct and subject[0] == 'name' else None), construct='match',
+                         transfer_result=transfer_result, following=following, boolean=boolean,
+                         reference_result=reference_result)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3887, in emit_branches
+    declare(payload, line)
+    ~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1438, in declare
+    check_new_name(variable, line)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1434, in check_new_name
+    fail(line, f"variable '{variable}' déjà déclarée")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 7: variable 'n' déjà déclarée
+
+----------------------------------------------------------------------
+Ran 23 tests in 27.960s
+
+FAILED (errors=1)

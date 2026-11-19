@@ -1,0 +1,15 @@
+async fn count(values: &mut Vector<A<Int>>) -> <- Int {
+    yield;
+    let value=<-values.remove(0);yield;return <-value;
+}
+fn main() {
+    let mut numbers = pool<Int>(1);
+    let mut vectors = pool<Vector<A<Int>>>(1);
+    let mut values = vectors.new();
+    values.push(-> numbers.new(7));
+    let h = runtime::spawn(-> count(&mut values));
+    match h.join() { Ok(n) => { print(*n);drop(->n); }, Err(_) => { print(99); } }
+    drop(-> values);
+    let reused = numbers.new(8);
+    print(*reused);
+}

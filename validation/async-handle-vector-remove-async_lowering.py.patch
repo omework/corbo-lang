@@ -1,0 +1,81 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1257,4 +1257,6 @@
+         if expr[0] in ('array_transfer', 'new_transfer'):
+             return sync_owned_value(expr[1], line, following=following)
++        if handle_remove_receiver(expr) is not None:
++            return vector_remove_value(expr, line, following=following)
+         if structure_copy_source(expr) is not None:
+             return copy_structure_value(expr, line)
+@@ -2017,5 +2019,5 @@
+                         output.append((local_source, 'storage'))
+                         continue
+-                    if source.kind not in ('source_parameter', 'allocation_parameter',
++                    if source.kind not in ('source_parameter', 'allocation_parameter', 'vector_element_parameter',
+                                            'allocation_field_parameter', 'task_output_parameter'):
+                         fail(line, 'prototype : stockage du handle synchrone sans paramètre direct')
+@@ -2088,5 +2090,5 @@
+                     # are visited separately and retain their actual pools.
+                     continue
+-                index = (candidate.parameter if candidate.kind == 'parameter' else
++                index = (candidate.parameter if candidate.kind in ('parameter', 'vector_element') else
+                          candidate.source.index if candidate.kind == 'fresh'
+                          and candidate.source.kind == 'source_parameter' else None)
+@@ -3248,4 +3250,7 @@
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
++        if initializer[0] == 'array_drop_result':
++            inner = initializer[1]
++            initializer = consumed_result_expression(inner, collection_types.get(inner[1][1]))
+         operator = initializer[0]
+         if operator in ('move', 'down') and initializer[1] in local_pools:
+@@ -3333,4 +3338,12 @@
+             return True
+         owned_initializer = initializer[1] if operator in ('array_transfer', 'new_transfer') else initializer
++        if handle_remove_receiver(owned_initializer) is not None:
++            if operator not in ('array_transfer', 'new_transfer'):
++                fail(statement.line, 'remove de A<Int> exige un transfert <- explicite')
++            check_new_name(name, statement.line)
++            require_owned_result_use(statement, body, position, export_name)
++            value = sync_owned_value(owned_initializer, statement.line, following=body[position + 1:])
++            bind_transferred_value(name, 'owned', value, statement)
++            return True
+         if sync_signature(owned_initializer) in output_join_types:
+             check_new_name(name, statement.line)
+@@ -4250,4 +4263,10 @@
+         return None
+ 
++    def handle_remove_receiver(expr):
++        if (expr[0] == 'method_call' and expr[2] == 'remove' and expr[1][0] == 'name'
++                and collection_types.get(expr[1][1]) == HANDLE_VECTOR):
++            return expr[1][1]
++        return None
++
+     def vector_remove_value(expr, line, *, following=None):
+         receiver, arguments = expr[1][1], expr[3]
+@@ -4270,6 +4289,10 @@
+             release_statement_loans(following)
+         check_access(receiver, line, write=True)
+-        result = temporary('int' if vector_remove_type(expr) == 'Int' else 'uint8_t')
++        owned = handle_remove_receiver(expr) is not None
++        result = temporary('Cell *' if owned else 'int' if vector_remove_type(expr) == 'Int' else 'uint8_t')
+         steps.append(f'vector_remove(frame->{fields[receiver]}, {index}, &{result});')
++        if owned:
++            owned_result_types[result] = 'Int'
++            keep_storage(result, storage_bindings.get(receiver, ()))
+         return result
+ 
+@@ -4688,4 +4711,5 @@
+             return 'execution', sync_call(expr, line, execution=True, following=following)
+         if (sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum')
++                or handle_remove_receiver(expr) is not None
+                 or structure_copy_source(expr) is not None):
+             return 'owned', sync_owned_value(expr, line, following=following)
+@@ -6499,5 +6523,6 @@
+             elif (sync_signature(expr) in owned_output_types or operator in ('new', 'new_enum')
+                   or operator in ('new_transfer', 'array_transfer') and (
+-                      expr[1][0] in ('new', 'new_enum') or sync_signature(expr[1]) in owned_output_types)):
++                      expr[1][0] in ('new', 'new_enum') or sync_signature(expr[1]) in owned_output_types
++                      or handle_remove_receiver(expr[1]) is not None)):
+                 kind, replacement = 'owned', sync_owned_value(expr, line, following=following)
+             elif operator in ('if_expr', 'value_match') and has_transfer_result(expr):

@@ -1,0 +1,381 @@
+--- before/array_syntax.py
++++ after/array_syntax.py
+@@ -12,6 +12,7 @@
+ MUT_REF_VECTOR = 'Vector<&mut Int>'
+ REFERENCE_VECTORS = (SHARED_REF_VECTOR, MUT_REF_VECTOR)
+ HANDLE_VECTORS = {HANDLE_VECTOR: 'Int'}
++INLINE_VECTOR_ELEMENTS = {}
+ VECTOR_TYPES = dict.fromkeys((*VECTOR_ELEMENTS, HANDLE_VECTOR, *REFERENCE_VECTORS))
+ 
+ 
+@@ -27,6 +28,16 @@
+     if is_handle_vector(typ):
+         HANDLE_VECTORS[typ] = handle_vector_element(typ)
+         VECTOR_TYPES[typ] = None
++    return typ
++
++
++def register_vector_type(typ):
++    register_handle_vector(typ)
++    if typ.startswith('Vector<') and typ.endswith('>') and typ not in VECTOR_TYPES:
++        element = typ[7:-1]
++        if re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', element):
++            INLINE_VECTOR_ELEMENTS[typ] = element
++            VECTOR_TYPES[typ] = None
+     return typ
+ 
+ VECTOR_METHODS = {
+@@ -43,6 +54,8 @@
+ 
+ 
+ def vector_method(typ, method):
++    if typ in INLINE_VECTOR_ELEMENTS:
++        return VECTOR_METHODS.get(method)
+     if typ in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+         return VECTOR_METHODS.get(method) if method in ('len', 'push', 'remove') else None
+     if typ == SHARED_REF_VECTOR:
+--- before/builtin_signatures.py
++++ after/builtin_signatures.py
+@@ -4,7 +4,7 @@
+ emitter still implement every effect, provenance and runtime operation.
+ """
+ from array_syntax import (fixed_array_shape, reference_array_shape, reference_type,
+-                          VECTOR_ELEMENTS, VECTOR_TYPES, HANDLE_VECTOR,
++                          VECTOR_ELEMENTS, INLINE_VECTOR_ELEMENTS, VECTOR_TYPES, HANDLE_VECTOR,
+                           SHARED_REF_VECTOR, MUT_REF_VECTOR)
+ from effects import method_candidate
+ from utf8_syntax import VALUE_SIGNATURES, VECTOR_SPLIT_TYPES
+@@ -39,10 +39,10 @@
+                                  ((receiver, typ), *parameters)), normalized_type(*result, result=True)))
+ 
+     if typ in VECTOR_TYPES:
+-        element = VECTOR_ELEMENTS.get(typ, 'A<Int>' if typ == HANDLE_VECTOR else
++        element = INLINE_VECTOR_ELEMENTS.get(typ) or VECTOR_ELEMENTS.get(typ, 'A<Int>' if typ == HANDLE_VECTOR else
+                                       '&Int' if typ == SHARED_REF_VECTOR else '&mut Int')
+         capability = reference_type(element)
+-        item = capability if capability else ('owned', element) if element.startswith('A<') else ('scalar', element)
++        item = capability if capability else ('owned', element) if element.startswith('A<') or typ in INLINE_VECTOR_ELEMENTS else ('scalar', element)
+         if method == 'len':
+             add('ref', result=('scalar', 'Int'))
+         elif method in ('push', 'try_push'):
+--- before/constraints.py
++++ after/constraints.py
+@@ -19,7 +19,7 @@
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+ 
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+-from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
++from array_syntax import HANDLE_VECTORS, INLINE_VECTOR_ELEMENTS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression, aggregate_owned_paths, aggregate_reference_paths, nested_reference_fields, replace_shared_vector_item, shared_vector_field_items, update_shared_vector_items, MUT_REF_VECTOR, REFERENCE_VECTORS, merge_exchange_payloads, UNKNOWN_VECTOR_REMOVALS, replace_handle_positions, remaining_handle_items, VECTOR_LAST_ITEM, last_handle_index, merge_handle_items, handle_items_at, handle_items_after_exchange, handle_items_after_removal, possible_handle_items, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, borrowed_array_name, update_array_aliases, update_structure_parameters, update_local_structure_locations, restore_array_binding, reference_array_path, reference_array_projection, replace_reference_fields, swap_reference_fields, reference_array_variable, project_reference_array, merge_container_positions, reference_type, reference_array_element, reference_tree_fields, reference_tree_slot, reference_tree_targets, merge_reference_values, merge_reference_rows, unflatten_reference_value, reference_value_place, replace_reference_rows, swapped_reference_rows, target_row_templates, rebuild_reference_tree, reference_tree_type
+ 
+ 
+@@ -1247,6 +1247,9 @@
+                     return paths, Value('bool', 'Bool')
+                 if values[0].mode in ('byte_option', 'byte_replace', 'byte_try_push', 'join_byte'):
+                     return paths, Value('byte', 'u8')
++            if op == 'array_index' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
++                return paths, Value('inline_vector_slot', INLINE_VECTOR_ELEMENTS[values[0].typ],
++                                    values[0].all_assets, projection_assets=values[0].all_assets)
+             if op == 'array_index' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 vector = values[0]
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+@@ -1318,6 +1321,9 @@
+                 sources = {Source('local', id(expr), 'data stack implicite', original.typ)
+                            if asset.source.kind == 'local' and asset.source.name == 'data stack implicite'
+                            else asset.source for asset in original.assets}
++                if original.mode == 'inline_vector_slot':
++                    self.touch(original, current, line)
++                    sources = {Source('local', id(expr), 'data stack implicite', original.typ)}
+                 for source in sources:
+                     self.copy_write(source, line)
+                 assets = frozenset(self.born(('copy', id(expr), source), source, current)
+--- before/crust.py
++++ after/crust.py
+@@ -25,6 +25,7 @@
+ from handle_option_types import option_type, option_element
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
++from array_syntax import INLINE_VECTOR_ELEMENTS, register_vector_type
+ from array_syntax import consumed_result_expression
+ from integer_syntax import exact_integer_conversion
+ from collections import ChainMap
+@@ -300,7 +301,7 @@
+                 prefix += self.take('mut') + ' '
+             element = prefix + self.type_name()
+             self.take('>')
+-            return register_handle_vector(f'{name}<{element}>')
++            return register_vector_type(f'{name}<{element}>')
+         return name
+ 
+     def is_async_pool_directive(self):
+@@ -8943,6 +8944,76 @@
+                              borrow_parents=outgoing[1])
+         return 'shared_ref_replace', name, payload
+ 
++    def inline_vector_layout(self, typ):
++        element = INLINE_VECTOR_ELEMENTS[typ]
++        if element not in self.struct_fields:
++            self.fail(f'Vector<{element}> : type de structure inconnu')
++        fields = self.enums[element]['']
++        if any(kind != 'Int' for _, kind in fields):
++            self.fail('prototype : champs empruntés ou propriétaires des structures en Vector à raccorder')
++        return element, self.field_offset(fields, len(fields)) or '0'
++
++    def inline_vector_operation(self, expr, binding, method, args, scope, label):
++        element, size = self.inline_vector_layout(binding.alloc.typ)
++        if method == 'index':
++            self.fail('copie de structure explicite requise : copy(v[indice])')
++        if method != 'push':
++            self.fail(f'prototype : {method} sur Vector<{element}> à raccorder')
++        argument = args[0]
++        if argument[0] != 'transfer':
++            self.fail('push de structure : transfert -> explicite requis')
++        reservation = Binding(binding.name, 'mut', binding.c, binding.alloc, borrow_parents=(binding,))
++        self.argument_frames.append([reservation])
++        try:
++            kind, value, incoming = self.expression(argument[1], scope, label)
++            if (kind != 'owned' or incoming.typ != element
++                    or any(source.kind != 'local_stack' for source in incoming.sources)):
++                self.fail(f'push exige une valeur {element}, pas A<{element}>')
++            if argument[1][0] == 'name':
++                self.fail('prototype : insertion de structure nommée à raccorder ; utiliser copy(valeur)')
++            if self.loans(incoming):
++                self.fail('transfert interdit : structure encore empruntée')
++        finally:
++            self.argument_frames.pop()
++        self.expression_clock(expr)
++        self.access(binding, write=True, after=True)
++        # Only the payload occupies the vector case, never a Cell pointer.
++        data = f'{value}->fields' if size != '0' else '&(int){0}'
++        self.lines.append(f'vector_push({binding.c}, {data});')
++        self.destroy(incoming)
++        return 'void', '', None
++
++    def copy_inline_vector_item(self, expr, binding, index_expr, scope, label):
++        element, size = self.inline_vector_layout(binding.alloc.typ)
++        self.access(binding)
++        reservation = Binding(binding.name, 'ref', binding.c, binding.alloc, borrow_parents=(binding,))
++        self.argument_frames.append([reservation])
++        try:
++            kind, index, _ = self.expression(index_expr, scope, label)
++        finally:
++            self.argument_frames.pop()
++        if kind != 'scalar':
++            self.fail('un indice de Vector doit être Int')
++        self.expression_clock(expr)
++        self.access(binding, after=True)
++        reservation = self.local_reservations.get(id(expr))
++        if reservation:
++            destination, layout, reserved = reservation
++        else:
++            destination, layout = self.local_structure_storage(scope, element)
++        allocation = Allocation(self.uid(), scope.id, label, (destination,), typ=element,
++                                variants=frozenset({''}))
++        allocation.c = f'a{allocation.id}'
++        factory = (f'cell_construct_reserved({reserved}, {reserved}->source, 0, "{label}")'
++                   if reservation else f'local_cell_new({destination.c}, &{layout}, {size}, "{label}")')
++        self.lines.append(f'Cell *{allocation.c} = {factory};')
++        data = f'{allocation.c}->fields' if size != '0' else '&(int){0}'
++        self.lines.append(f'vector_read({binding.c}, {index}, {data});')
++        self.allocations.append(allocation)
++        scope.allocations.append(allocation)
++        self.origin_sources[allocation.id] = destination
++        return 'owned', allocation.c, allocation
++
+     def vector_operation(self, expr, binding, method, args, scope, label):
+         typ = binding.alloc.typ
+         write = method != 'index' and method != 'len'
+@@ -8957,6 +9028,8 @@
+             name = f'length{self.uid()}'
+             self.lines.append(f'int {name} = vector_len({binding.c});')
+             return 'scalar', name, None
++        if typ in INLINE_VECTOR_ELEMENTS:
++            return self.inline_vector_operation(expr, binding, method, args, scope, label)
+         if typ == MUT_REF_VECTOR:
+             if method != 'push':
+                 self.fail('Vector<&mut Int> : extraction explicite avec <- v.remove(indice) requise')
+@@ -9163,7 +9236,8 @@
+                                                    memory.element_type in ('Int', 'String', *VECTOR_TYPES))):
+             limits = {limit for _, _, _, limit in candidates}
+             backing = None
+-            if len(limits) == 1 and memory.element_type in ('String', *VECTOR_TYPES):
++            if (len(limits) == 1 and memory.element_type in ('String', *VECTOR_TYPES)
++                    and memory.element_type not in INLINE_VECTOR_ELEMENTS):
+                 limit = limits.pop()
+                 same_size = all(previous == limit for _, _, shorter_limits, _ in candidates
+                                 for previous in shorter_limits)
+@@ -9216,6 +9290,23 @@
+         if id(expr) in visited:
+             return None
+         visited = visited | {id(expr)}
++        if expr[0] == 'array_index' and expr[1][0] == 'name':
++            name = expr[1][1]
++            producer = producers.get(name)
++            if producer and producer[0] == 'inline_vector_parameter':
++                return INLINE_VECTOR_ELEMENTS[producer[1]]
++            if producer and producer[0] == 'new':
++                source = producers.get(producer[1])
++                if source and source[0] == 'source':
++                    return INLINE_VECTOR_ELEMENTS.get(source[3])
++                binding = next((scope.bindings[producer[1]] for scope in reversed(self.scopes)
++                                if producer[1] in scope.bindings), None)
++                if binding and binding.source:
++                    return INLINE_VECTOR_ELEMENTS.get(binding.source.element_type)
++            binding = next((scope.bindings[name] for scope in reversed(self.scopes)
++                            if name in scope.bindings), None)
++            if binding and binding.alloc:
++                return INLINE_VECTOR_ELEMENTS.get(binding.alloc.typ)
+         if expr[0] == 'new_enum' and expr[1] is None:
+             return expr[2]
+         if expr[0] == 'field':
+@@ -9298,7 +9389,7 @@
+         body = expr[2]
+         if not body or body[-1].op not in ('<-', 'if_yield') or body[-1].terminated:
+             return ()
+-        if any(node.op not in ('var', 'print', 'print_expr', 'address', 'drop') for node in body[:-1]):
++        if any(node.op not in ('var', 'print', 'print_expr', 'address', 'drop', 'call', 'array_statement') for node in body[:-1]):
+             return ()
+         if self.flow_outcomes(body[:-1]) != {'next'}:
+             return ()
+@@ -9533,6 +9624,10 @@
+             self.expression_clock(expr)
+             return self.copy_structure(self.lookup(expr[2]), scope, source_name,
+                                        self.memory_source(expr[1]), self.lookup(expr[1]).c)
++        if op == 'array_copy' and expr[1][0] == 'array_index' and expr[1][1][0] == 'name':
++            binding = self.lookup(expr[1][1][1])
++            if binding.alloc and binding.alloc.typ in INLINE_VECTOR_ELEMENTS:
++                return self.copy_inline_vector_item(expr, binding, expr[1][2], scope, source_name)
+         if op == 'array_copy' and expr[1][0] == 'name':
+             binding = self.lookup(expr[1][1])
+             if binding.alloc and binding.alloc.typ in self.struct_fields:
+@@ -9778,7 +9873,7 @@
+                 return ARRAY_SCALAR_MODES[typ], name, None
+             if receiver.alloc is not None and is_handle_vector(receiver.alloc.typ):
+                 self.fail(f'une case A<{handle_vector_element(receiver.alloc.typ)}> exige un emprunt explicite ou une extraction')
+-            if receiver.alloc is not None and receiver.alloc.typ in (*VECTOR_ELEMENTS, *REFERENCE_VECTORS):
++            if receiver.alloc is not None and receiver.alloc.typ in (*VECTOR_ELEMENTS, *REFERENCE_VECTORS, *INLINE_VECTOR_ELEMENTS):
+                 return self.vector_operation(expr, receiver, 'index', expr[2:], scope, source_name)
+         if op == 'array_index' and self.is_indexed_view(expr[1]):
+             result = self.view_index(expr, scope, source_name, borrow=False)
+@@ -9925,7 +10020,13 @@
+             scope.allocations.append(allocation)
+             source_c = self.lookup(expr[1]).c
+             reservation, storage_reserved = self.stack_reservations.get(id(expr), (None, None))
+-            if reservation and typ in ('String', *VECTOR_TYPES):
++            if typ in INLINE_VECTOR_ELEMENTS:
++                _, size = self.inline_vector_layout(typ)
++                # Empty structures still have an addressable, aligned case.
++                size = size if size != '0' else 'sizeof(int)'
++                factory = (f'vector_construct_reserved({reservation or "NULL"}, 0, {source_c}, '
++                           f'UINT64_C({scope.region_limit or 0}), {size}, _Alignof(int), 0, 0, "{source_name}")')
++            elif reservation and typ in ('String', *VECTOR_TYPES):
+                 element_c = self.vector_element_c_type(typ)
+                 factory = (f'vector_construct_reserved({reservation}, {storage_reserved}, {source_c}, UINT64_C({scope.region_limit or 0}), '
+                            f'sizeof({element_c}), _Alignof({element_c}), {int(typ == "String")}, '
+@@ -12320,10 +12421,14 @@
+                         for pname, binding in bindings.items() if binding.alloc is not None
+                         and binding.alloc.sources
+                         and all(source.kind == 'local_stack' for source in binding.alloc.sources)}
++        local_inputs.update((pname, ('inline_vector_parameter', binding.alloc.typ))
++                            for pname, binding in bindings.items() if binding.alloc is not None
++                            and binding.alloc.typ in INLINE_VECTOR_ELEMENTS)
+         local_constructors = self.local_break_constructors(nodes, 'return', local_inputs) if local_result else ()
+         if local_result and not local_constructors:
+             from async_local_placement import result_constructors
+-            known_locals = {pname: producer[2] for pname, producer in local_inputs.items()}
++            known_locals = {pname: producer[2] for pname, producer in local_inputs.items()
++                            if producer[0] == 'new_enum'}
+             for pname, binding in bindings.items():
+                 if binding.kind in ('task', 'execution') and binding.alloc.task_result_sources and all(
+                         source.kind == 'local_stack' for source in binding.alloc.task_result_sources):
+@@ -14390,6 +14495,8 @@
+                     if element is not None and element not in ('Int', 'String', *VECTOR_TYPES) and element not in self.enums:
+                         self.fail(f"prototype : type de pool non pris en charge '{element}'")
+                     self.check_handle_vector_payload(element, local=True)
++                    if element in INLINE_VECTOR_ELEMENTS:
++                        self.inline_vector_layout(element)
+                     source = MemorySource(sid, scope.id, expr[1], name, f'&s{sid}', element)
+                     scope.sources.append(source)
+                     if element == 'String' or element in VECTOR_TYPES:
+@@ -15310,6 +15417,9 @@
+                 if is_handle_vector(typ) and mode in ('ref', 'mut', 'owned'):
+                     self.check_handle_vector_payload(typ, local=True)
+                     continue
++                if typ in INLINE_VECTOR_ELEMENTS and mode in ('ref', 'mut', 'owned'):
++                    self.inline_vector_layout(typ)
++                    continue
+                 if (mode, typ) in (('mut', 'u8'), ('ref', 'A<Int>'), ('mut', 'A<Int>'), ('ref', MUT_REF_VECTOR), ('mut', MUT_REF_VECTOR), ('owned', MUT_REF_VECTOR), ('ref', SHARED_REF_VECTOR), ('mut', SHARED_REF_VECTOR), ('owned', SHARED_REF_VECTOR), ('ref', HANDLE_VECTOR), ('mut', HANDLE_VECTOR), ('owned', HANDLE_VECTOR), ('handle_option', 'Int')):
+                     continue
+                 if mode in ('handle_option', 'buffered_handle_exchange', *JOIN_RESULT_TYPES):
+--- before/effects.py
++++ after/effects.py
+@@ -382,6 +382,9 @@
+             shape = fixed_array_shape(nominal) if nominal else None
+             if op == 'array_index' and is_handle_vector(nominal):
+                 return f'A<{handle_vector_element(nominal)}>'
++            from array_syntax import INLINE_VECTOR_ELEMENTS
++            if op == 'array_index' and nominal in INLINE_VECTOR_ELEMENTS:
++                return INLINE_VECTOR_ELEMENTS[nominal]
+             if op == 'array_index' and nominal == '[Int]':
+                 return 'Int'
+             if op == 'array_index' and nominal in VECTOR_ELEMENTS:
+--- before/results.py
++++ after/results.py
+@@ -18,7 +18,7 @@
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ASYNC_SHARED_VIEW_MODES, VECTOR_SLICE_ELEMENTS, VECTOR_SPLIT_TYPES, SHARED_VECTOR_SLICE_MODES, VECTOR_SLICE_MODES, VECTOR_MUT_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, UTF8_BORROW_MODES, VALUE_MODES, UTF8_VALUE_RESULT_FAMILIES
+ from dataclasses import dataclass, field, replace
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+-from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
++from array_syntax import HANDLE_VECTORS, INLINE_VECTOR_ELEMENTS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import aggregate_owned_paths
+ from array_syntax import merge_structure_choices
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+@@ -2363,6 +2363,10 @@
+                     return flow, Value('bool', 'Bool')
+                 if values[0].mode in ('byte_option', 'byte_replace', 'byte_try_push', 'join_byte'):
+                     return flow, Value('byte', 'u8')
++            if op == 'array_index' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
++                element = INLINE_VECTOR_ELEMENTS[values[0].typ]
++                candidate = ResultCandidate('fresh', source=SourceOrigin('local_value', id(expr), 'data stack implicite', element))
++                return flow, Value('inline_vector_slot', element, copy_candidates=frozenset({candidate}))
+             if op == 'array_index' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 root = values[0]
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+--- before/tests/test_type_features.py
++++ after/tests/test_type_features.py
+@@ -232,7 +232,7 @@
+         with self.assertRaisesRegex(Error,'emprunt|local|survit|retourn'):
+             verify_program(source)
+ 
+-    def test_owned_feature_result_keeps_identity_and_pool_lifetime(self):
++    def test_owned_feature_result_keeps_local_identity_and_rejects_pool_value(self):
+         source='''
+             type feature Fermer{fn fermer(-> self);}
+             struct Item{value:Int}
+@@ -243,6 +243,14 @@
+                 let second=relay(-> first);address(second);print(second.value);
+                 drop(-> second);let reused=p.new(value:9);address(reused);print(reused.value);}
+         '''
++        # The consuming implementation above takes Item, not A<Item> (H3).
++        # A pool allocation cannot silently acquire the local storage contract.
++        for checker in (verify_program, compile_source):
++            with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, 'stockage local.*pool'):
++                checker(source)
++        source=source.replace('let mut p=pool<Item>(1);let first=p.new(value:7);',
++                              'let first=Item{value:7};').replace('let reused=p.new(value:9);',
++                                                                 'let reused=Item{value:9};')
+         result=self.native(source)
+         first,second,value,reused,next_value=result.stdout.splitlines()
+         self.assertEqual((first,second,value,next_value),(reused,reused,'7','9'))
+@@ -252,8 +260,9 @@
+             fn main(){let second={let mut p=pool<Item>(1);let first=p.new(value:7);
+                 let returned=identity(-> first);<- returned};print(second.value);}
+         '''
+-        with self.assertRaisesRegex(Error,'survit|source'):
+-            verify_program(bad)
++        for checker in (verify_program, compile_source):
++            with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, 'stockage local.*pool'):
++                checker(bad)
+ 
+     def test_mutable_feature_result_reserves_caller_until_last_use(self):
+         source='''

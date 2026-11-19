@@ -1,0 +1,33 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1456,8 +1456,8 @@
+             if not holders:
+                 fail(line,'prototype : dépendances de champs async sans porteur suivi')
+             for field, targets in changes:
+-                path = tuple(field.lstrip('.').split('.'))
+-                field_type = dict(reference_structs.get(typ,())).get('.'.join(path))
++                path = stored_field_path(field)
++                field_type = borrowed_field_type(typ, path)
+                 if field_type not in ('&Int', '&mut Int'):
+                     fail(line,'prototype : dépendances de champs async non raccordées')
+                 retained = []
+@@ -1466,8 +1466,8 @@
+                         origins = argument_loans[target.parameter]
+                     elif target.kind in ('field_parameter', 'detached_field_parameter'):
+                         source_type = callee_parameters[target.parameter][2]
+-                        source_path = tuple(target.field.lstrip('.').split('.'))
+-                        if dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) not in ('&Int', '&mut Int'):
++                        source_path = stored_field_path(target.field)
++                        if borrowed_field_type(source_type, source_path) not in ('&Int', '&mut Int'):
+                             fail(line, 'prototype : dépendances de champs sources non partagées non raccordées')
+                         origins = project_result_field_loans(argument_loans[target.parameter], source_type, source_path)
+                     else:
+@@ -1478,7 +1478,7 @@
+                             continue
+                         source_type = reference_types.get(root)
+                         durable_type = (source_type == 'Int' if not source_path else
+-                                        dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) in ('&Int', '&mut Int'))
++                                        borrowed_field_type(source_type, source_path) in ('&Int', '&mut Int'))
+                         local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == 'Int'
+                         local_holder = all(references.get(holder) == 'owned' for holder, _ in holders)
+                         captured_reference = parameter_modes.get(root) == 'owned' and source_path and durable_type

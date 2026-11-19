@@ -1,0 +1,207 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1421,11 +1421,11 @@
+                         fail(line, f"champ '{field}' : valeur Int requise")
+                     snapshot = temporary('int')
+                     steps.append(f'{snapshot} = {value};')
+-                elif field_type in ('&Int', '&mut Int'):
+-                    mode = 'mut' if field_type == '&mut Int' else 'ref'
+-                    pointer, held = sync_borrow_argument(operand, mode, 'Int', line)
+-                    descriptor = stored_reference_cell(pointer, held, line)
+-                    snapshot = temporary('Cell *')
++                elif reference_type(field_type) is not None:
++                    mode, target_type = reference_type(field_type)
++                    pointer, held = sync_borrow_argument(operand, mode, target_type, line)
++                    descriptor = stored_reference_cell(pointer, held, line) if target_type == 'Int' else pointer
++                    snapshot = temporary('Cell *' if target_type == 'Int' else 'CrustStructureView')
+                     steps.append(f'{snapshot} = {descriptor};')
+                     loans.extend(held)
+                     stored_fields[(*((variant,) if variant else ()), *field.split('.'))] = list(held)
+@@ -1466,7 +1466,8 @@
+         else:
+             steps.append(f'{cell} = enum_new({source}, {arm_index}, "{label}");')
+         for index, (field, field_type) in enumerate(layout):
+-            helper = 'cell_store_int' if field_type == 'Int' else 'cell_store_ref'
++            helper = ('cell_store_int' if field_type == 'Int' else
++                      'cell_store_view' if field_type.startswith('&') and field_type not in ('&Int', '&mut Int') else 'cell_store_ref')
+             steps.append(f'{helper}({cell}, {structure_offset(layout, index)}, {values[field]});')
+         for owner in owners:
+             steps.append(f'{owner} = NULL;')
+@@ -1581,7 +1582,8 @@
+             for field, targets in changes:
+                 path = stored_field_path(field)
+                 field_type = borrowed_field_type(typ, path)
+-                if field_type not in ('&Int', '&mut Int'):
++                field_reference = reference_type(field_type or '')
++                if field_reference is None or field_reference[1] not in ('Int', *reference_structs):
+                     fail(line,'prototype : dépendances de champs async non raccordées')
+                 retained = []
+                 for target in targets:
+@@ -1590,7 +1592,7 @@
+                     elif target.kind in ('field_parameter', 'detached_field_parameter'):
+                         source_type = callee_parameters[target.parameter][2]
+                         source_path = stored_field_path(target.field)
+-                        if borrowed_field_type(source_type, source_path) not in ('&Int', '&mut Int'):
++                        if reference_type(borrowed_field_type(source_type, source_path) or '') is None:
+                             fail(line, 'prototype : dépendances de champs sources non partagées non raccordées')
+                         origins = project_result_field_loans(argument_loans[target.parameter], source_type, source_path)
+                     else:
+@@ -1600,12 +1602,12 @@
+                         if root in received_refs:
+                             continue
+                         source_type = reference_types.get(root)
+-                        durable_type = (source_type == 'Int' if not source_path else
+-                                        borrowed_field_type(source_type, source_path) in ('&Int', '&mut Int'))
+-                        local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == 'Int'
++                        durable_type = (source_type == field_reference[1] if not source_path else
++                                        reference_type(borrowed_field_type(source_type, source_path) or '') is not None)
++                        local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == field_reference[1]
+                         local_holder = all(references.get(holder) == 'owned' for holder, _ in holders)
+                         captured_reference = parameter_modes.get(root) == 'owned' and source_path and durable_type
+-                        own_capability = field_type == '&mut Int' and any(
++                        own_capability = field_reference[0] == 'mut' and any(
+                             root == holder and source_path == (*prefix, *path) for holder, prefix in holders)
+                         if not (parameter_modes.get(root) in ('ref','mut') and durable_type
+                                 or captured_reference or local_holder and local_target or own_capability):
+@@ -1622,7 +1624,7 @@
+                     old = active_loans.get(key, initial_stored_field_loans(holder,full_path)) if preserves_input else []
+                     # An unchanged field alternative owns its input capability;
+                     # it is not an outstanding reborrow of that same field.
+-                    current = [(origin, 'stored_mut_target' if field_type == '&mut Int'
++                    current = [(origin, 'stored_mut_target' if field_reference[0] == 'mut'
+                                 and origin == (holder, full_path) else mode) for origin, mode in retained]
+                     field_changes.append((key,list(dict.fromkeys((*old,*current)))))
+         def input_storage(index):
+@@ -1914,7 +1916,7 @@
+                         # Its record already separates live captures from loans
+                         # retained by its completion result.
+                         continue
+-                    elif target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
++                    elif target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter', 'field_parameter'):
+                         held.extend(projected_argument_loans(target))
+                     elif target.kind == 'owned_capture_field':
+                         held.extend(argument_fields[(target.parameter, target.field)])
+@@ -2026,7 +2028,7 @@
+         if signature in reference_sync_types and borrow:
+             retained = []
+             for target in contract.result.reference_targets:
+-                if target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
++                if target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter', 'field_parameter'):
+                     retained.extend(projected_argument_loans(target))
+                 elif target.kind == 'parameter':
+                     retained.extend(argument_loans[target.parameter])
+@@ -2078,7 +2080,7 @@
+             if not targets or any(not (
+                     target.kind in ('parameter', 'exclusive_join_parameter') and parameters[target.parameter][1] in ('ref', 'mut')
+                     or target.kind == 'field_parameter' and parameters[target.parameter][1] in ('owned', *JOIN_PAYLOADS)
+-                    and borrowed_field_type(parameters[target.parameter][2], stored_field_path(target.field)) in ('&Int', '&mut Int')
++                    and reference_type(borrowed_field_type(parameters[target.parameter][2], stored_field_path(target.field)) or '') is not None
+                     ) for target in targets):
+                 fail(node.line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+     returns_int = result == ('scalar', 'Int')
+@@ -2431,7 +2433,7 @@
+                         loans.extend(loan for group in field_loans.values() for loan in group)
+                         for path in result_paths.get(index, ()):
+                             field = '.'.join(path)
+-                            if borrowed_field_type(typ, stored_field_path('.' + field)) == '&Int':
++                            if (borrowed_field_type(typ, stored_field_path('.' + field)) or '').startswith('&') and not (borrowed_field_type(typ, stored_field_path('.' + field)) or '').startswith('&mut '):
+                                 returned_loans.extend(field_loans['.' + field])
+                     if storage_of(value) & implicit_stacks:
+                         if declaration.args[1][index][0] in declaration.handle_parameters:
+@@ -5864,9 +5866,11 @@
+         layout = reference_structs.get(typ, owned_structures.get(typ))
+         if layout is None:
+             return None
+-        if expr[0] == 'field' and dict(layout).get(place[2]) != '&Int':
++        declared = dict(layout).get(place[2], '')
++        if expr[0] == 'field' and not (declared.startswith('&') and not declared.startswith('&mut ')):
+             return None
+-        declared = dict(layout).get(place[2], '')
++        if declared.startswith('&') and declared.removeprefix('&').removeprefix('mut ') in reference_structs:
++            return ('mut' if expr[0] == 'mut_expr' else 'ref', declared.removeprefix('&').removeprefix('mut '))
+         if expr[0] != 'field' and expr[1][0] == 'field_deref' and declared.startswith('A<') and declared[2:-1] in pool_structures:
+             return ('mut' if expr[0] == 'mut_expr' else 'ref', declared[2:-1])
+         # The actual field type/mode is checked by borrow_struct_field. In
+@@ -5885,12 +5889,13 @@
+ 
+     def initial_stored_field_loans(holder, path):
+         typ = borrowed_field_type(reference_types.get(holder, collection_types.get(holder)), path)
+-        return [((holder, path), 'stored_mut_target' if typ == '&mut Int' else 'shared_target')]
++        return [((holder, path), 'stored_mut_target' if typ and typ.startswith('&mut ') else 'shared_target')]
+ 
+     def project_result_field_loans(loans, typ, path):
+         path = stored_field_path('.' + '.'.join(path))
+         projected = project_field_loans(loans, path)
+-        if borrowed_field_type(typ, path) == '&Int':
++        declared = borrowed_field_type(typ, path) or ''
++        if declared.startswith('&') and not declared.startswith('&mut '):
+             # These origins identify the external target. They do not reserve
+             # the carrier slot or its mutable capability (ST13).
+             retained = []
+@@ -5899,7 +5904,7 @@
+                 retained.extend(active_loans.get(('stored_field',root,full_path),
+                     [(target,'shared_target' if mode != 'storage' else mode)]))
+             return retained
+-        if borrowed_field_type(typ, path) == '&mut Int':
++        if declared.startswith('&mut '):
+             # Keep the field capability as well as its current target. A
+             # reborrow suspends access to that field until its final use.
+             retained = list(projected)
+@@ -5915,9 +5920,13 @@
+         name, cell, offset, path, typ = struct_field(place, line, write=mode == 'mut')
+         if indirect:
+             owned_structure = typ.startswith('A<') and typ[2:-1] in pool_structures
+-            if not owned_structure and (typ not in ('&Int', '&mut Int', 'A<Int>') or mode == 'mut' and typ not in ('&mut Int', 'A<Int>')):
++            typed_reference = typ.startswith('&') and typ.removeprefix('&').removeprefix('mut ') in reference_structs
++            if typed_reference and mode == 'mut' and not typ.startswith('&mut '):
++                fail(line, 'réemprunt mutable depuis un champ partagé interdit')
++            if not typed_reference and not owned_structure and (typ not in ('&Int', '&mut Int', 'A<Int>') or mode == 'mut' and typ not in ('&mut Int', 'A<Int>')):
+                 fail(line, 'réemprunt de champ : type ou mode incompatible')
+-            pointer = f'cell_load_ref({cell}, {offset})' if owned_structure else f'&cell_load_ref({cell}, {offset})->value'
++            pointer = (f'cell_load_view({cell}, {offset})' if typed_reference else
++                       f'cell_load_ref({cell}, {offset})' if owned_structure else f'&cell_load_ref({cell}, {offset})->value')
+         else:
+             if typ != 'Int':
+                 fail(line, 'emprunt imbriqué non pris en charge ; utiliser &* ou &mut * pour la cible')
+@@ -5925,7 +5934,7 @@
+         reservation = 'mut' if references.get(name) == 'mut' else mode
+         check_access(name, line, write=reservation == 'mut', path=path)
+         origins = [(name, reservation), *received_refs.get(name, ())]
+-        if references.get(name) == 'owned' and typ not in ('&Int', '&mut Int'):
++        if references.get(name) == 'owned' and not typ.startswith('&'):
+             # A field target is owned by the carrier: retaining the projection
+             # must still prevent transferring/dropping the whole carrier.
+             loans = project_field_loans(origins, path)
+@@ -5977,23 +5986,25 @@
+                 install_field_change(key, held)
+             clear_stored_fields(incoming)
+             return
+-        if typ in ('&Int', '&mut Int'):
++        field_reference = reference_type(typ)
++        if field_reference is not None:
+             if node.field_effect_summary is None or not node.field_effect_summary.complete:
+                 fail(line, 'prototype : remplacement de champ référence sans contrat de terminaison')
+-            access = 'mut' if typ == '&mut Int' else 'ref'
+-            pointer, held = sync_borrow_argument(rhs, access, 'Int', line)
+-            target = stored_reference_cell(pointer, held, line)
+-            saved = temporary('Cell *')
++            access, target_type = field_reference
++            pointer, held = sync_borrow_argument(rhs, access, target_type, line)
++            target = stored_reference_cell(pointer, held, line) if target_type == 'Int' else pointer
++            saved = temporary('Cell *' if target_type == 'Int' else 'CrustStructureView')
+             steps.append(f'{saved} = {target};')
+             release_statement_loans(following)
+             check_access(name, line, write=True, path=path)
+             from results import FunctionResult, BorrowTarget
+             summary = FunctionResult('void', 'Void', structure_fields=(
+                 (0, (('.' + '.'.join(path), frozenset({BorrowTarget('parameter', 1)})),)),))
+-            parameters = (('carrier', 'mut', reference_types[name]), ('target', access, 'Int'))
++            parameters = (('carrier', 'mut', reference_types[name]), ('target', access, target_type))
+             changes = prepare_field_changes(summary, parameters,
+                 [[(name, 'mut'), *received_refs.get(name, ())], held], line)
+-            steps.append(f'cell_store_ref({cell}, {offset}, {saved});')
++            helper = 'cell_store_ref' if target_type == 'Int' else 'cell_store_view'
++            steps.append(f'{helper}({cell}, {offset}, {saved});')
+             for key, loans in changes:
+                 active_loans[key] = list(loans)
+             return

@@ -1,0 +1,12 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1895,7 +1895,8 @@
+             retained.extend(returned)
+             active_loans[id(retained)] = retained
+             pending = prepare_field_changes(
+-                replace(contract.result, structure_fields=contract.result.task_field_updates),
++                replace(contract.result, structure_fields=contract.result.task_field_updates,
++                        owned_field_writes=contract.result.task_owned_updates),
+                 contract.parameters, argument_loans, line)
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]

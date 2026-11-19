@@ -1,0 +1,66 @@
+test_async_chain_and_field_usage_after_wait (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_async_chain_and_field_usage_after_wait) ... ok
+test_factories_and_task_forwarding (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_factories_and_task_forwarding) ... ok
+test_recorded_return_and_failure (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_recorded_return_and_failure) ... ok
+test_returned_graph_cannot_outlive_child_pool (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_returned_graph_cannot_outlive_child_pool) ... FAIL
+
+======================================================================
+FAIL: test_returned_graph_cannot_outlive_child_pool (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_returned_graph_cannot_outlive_child_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15546, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13841, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3014, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9782, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11035, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12349, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12862, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6223, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9078, in expression
+    return self.block_expression(expr)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8576, in block_expression
+    result = self.block(expr[1], expr[2], returns, region_limit=expr[3] if len(expr) > 3 else None,
+                        expected_array=expected_array)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12349, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12734, in statements
+    self.fail('une expression bloc exige une valeur transférée par <-')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 11: une expression bloc exige une valeur transférée par <-
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_returns.py", line 59, in test_returned_graph_cannot_outlive_child_pool
+    self.assertEqual(self.run_source(source.replace('POOLS',pool).replace('INNER','')).stdout,'7\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 11: une expression bloc exige une valeur transférée par <-
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.445s
+
+FAILED (failures=1)

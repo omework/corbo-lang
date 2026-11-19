@@ -1,0 +1,64 @@
+--- before/crust.py
++++ after/crust.py
+@@ -9900,12 +9900,14 @@
+ 
+     def resolve_fresh_owned_fields(self, summary, params, bindings, scope):
+         if summary.same_parameter is not None:
+-            return ()
++            original = bindings[params[summary.same_parameter][0]].alloc
++            replacements = self.resolve_owned_fields(summary.owned_fields, params, bindings, scope)
++            return tuple((dict(original.owned_fields) | dict(replacements)).items())
+         return self.resolve_owned_fields(summary.owned_fields, params, bindings, scope)
+ 
+-    @staticmethod
+-    def owned_field_sources(fields):
+-        return source_union(*(source_union(child.sources, child.item_sources)
++    def owned_field_sources(self, fields):
++        return source_union(*(source_union(child.sources,
++                              self.owned_sources(child) if child.owned_fields else child.item_sources)
+                               for _, children in fields for child in children))
+ 
+     def resolve_owned_fields(self, symbolic_fields, params, bindings, scope):
+@@ -10049,12 +10051,17 @@
+         # The result may be represented by a phi descriptor. Reuse the incoming
+         # nominal identity only after the origin check proved the same object.
+         original = next(attrs for a, attrs in base['allocations'] if a is target)
++        final = next(attrs for a, attrs in path['allocations'] if a is candidate)
++        returned_graph = {key: final[key] for key in ('owned_fields', 'item_sources', 'dependencies',
++                                                     'borrow_parents')}
+         if candidate is not target:
+-            attrs = next(attrs for a, attrs in path['allocations'] if a is candidate)
++            attrs = final
+             attrs['alive'] = False
+             attrs['definite'] = False
+         attrs = next(attrs for a, attrs in path['allocations'] if a is target)
+         attrs.update(original)
++        if self.has_owned_fields(target.typ):
++            attrs.update(returned_graph)
+         attrs.update(alive=True, definite=True, scope=caller.id)
+         for _, binding in path['bindings'].values():
+             if binding['alloc'] is target and binding['kind'] == 'owned':
+@@ -11627,12 +11634,7 @@
+                     allocation = candidate[2]
+                     state = next(attrs for a, attrs in path['allocations'] if a is allocation)
+                     self.check_return_sources(exit_frame, allocation)
+-                    if self.has_owned_fields(declared[1]) and result_contract['same_input'] is not None:
+-                        incoming = result_contract['same_input']
+-                        original = next(attrs for item, attrs in effects_base['allocations'] if item is incoming)
+-                        if self.owned_field_layout(state, path) != self.owned_field_layout(original, effects_base):
+-                            self.fail('prototype : restitution avec remplacement de champ propriétaire')
+-                    elif self.has_owned_fields(declared[1]):
++                    if self.has_owned_fields(declared[1]):
+                         self.check_fresh_owned_fields(result_contract, state, path)
+                     self.check_result_contract(result_contract, allocation, state)
+                 result_contract['item_origins'] |= result_contract['returned_item_origins']
+@@ -12200,6 +12202,9 @@
+         else:
+             target.alive = target.definite = True
+             target.scope, target.c, target.guard = caller.id, c, None
++            if self.has_owned_fields(result.typ):
++                target.owned_fields = self.resolve_fresh_owned_fields(result, params, bindings, caller)
++                item_sources = self.owned_field_sources(target.owned_fields)
+         target.dependencies, target.variants = dependencies, variants
+         if result.typ in REFERENCE_VECTORS:
+             target.reference_positions = (self.resolve_shared_vector_layout(result, params, bindings)

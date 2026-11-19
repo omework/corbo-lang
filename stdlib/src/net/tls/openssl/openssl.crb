@@ -1,0 +1,270 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Native bindings used by the OpenSSL-backed TLS adapter.
+
+// OpenSSL 3 ABI on Darwin ARM64. SSL_set_fd uses a non-owning socket BIO.
+// Each successful SSL_new retains its SSL_CTX until SSL_free.
+#(if: target.os == "macos" && target.arch == "aarch64")
+    /// Builds an OpenSSL context configured for the selected role and certificate settings.
+    fn tls_context() -> usize {
+        let mut context: usize = 0;
+        @unchecked {
+            @asm {
+                bl _TLS_method
+                cbz x0, 2f
+                bl _SSL_CTX_new
+                cbz x0, 2f
+                mov ${context}, x0
+                mov w1, #123
+                mov w2, #0x304
+                mov x3, #0
+                bl _SSL_CTX_ctrl
+                cmp x0, #1
+                b.ne 1f
+                mov x0, ${context}
+                mov w1, #124
+                mov w2, #0x304
+                mov x3, #0
+                bl _SSL_CTX_ctrl
+                cmp x0, #1
+                b.eq 2f
+                1:
+                mov x0, ${context}
+                bl _SSL_CTX_free
+                mov x0, #0
+                mov ${context}, x0
+                2:
+            }
+        }
+        context
+    }
+
+    /// Releases an OpenSSL context.
+    fn free_context(context: usize) {
+        @unchecked {
+            @asm {
+                mov x0, ${context}
+                bl _SSL_CTX_free
+            }
+        }
+    }
+
+    /// Releases an OpenSSL session handle.
+    fn free_session(session: usize) {
+        @unchecked {
+            @asm {
+                mov x0, ${session}
+                bl _SSL_free
+            }
+        }
+    }
+
+    /// Allocates a client session and configures its socket and reference hostname.
+    fn client_session(context: usize, socket: u64, hostname_bytes: &[u8], trust_bytes: &[u8]) -> usize {
+        let mut session: usize = 0;
+        @unchecked {
+            let hostname = addr(&hostname_bytes[0]);
+            let trust = addr(&trust_bytes[0]);
+            @asm {
+                mov x0, ${context}
+                mov x1, ${trust}
+                mov x2, #0
+                bl _SSL_CTX_load_verify_locations
+                cmp w0, #1
+                b.ne 2f
+                mov x0, ${context}
+                mov w1, #1
+                mov x2, #0
+                bl _SSL_CTX_set_verify
+                mov x0, ${context}
+                bl _SSL_new
+                cbz x0, 2f
+                mov ${session}, x0
+                mov x1, ${socket}
+                bl _SSL_set_fd
+                cmp w0, #1
+                b.ne 1f
+                mov x0, ${session}
+                mov w1, #4
+                bl _SSL_set_hostflags
+                mov x0, ${session}
+                mov x1, ${hostname}
+                bl _SSL_set1_host
+                cmp w0, #1
+                b.ne 1f
+                mov x0, ${session}
+                mov w1, #55
+                mov w2, #0
+                mov x3, ${hostname}
+                bl _SSL_ctrl
+                cmp x0, #1
+                b.eq 2f
+                1:
+                mov x0, ${session}
+                bl _SSL_free
+                mov x0, #0
+                mov ${session}, x0
+                2:
+            }
+        }
+        session
+    }
+
+    /// Allocates a server session and associates it with a connected socket.
+    fn server_session(context: usize, socket: u64, certificate_bytes: &[u8], key_bytes: &[u8]) -> usize {
+        let mut session: usize = 0;
+        @unchecked {
+            let certificate = addr(&certificate_bytes[0]);
+            let key = addr(&key_bytes[0]);
+            @asm {
+                mov x0, ${context}
+                mov x1, ${certificate}
+                bl _SSL_CTX_use_certificate_chain_file
+                cmp w0, #1
+                b.ne 2f
+                mov x0, ${context}
+                adr x1, 3f
+                bl _SSL_CTX_set_default_passwd_cb
+                mov x0, ${context}
+                mov x1, ${key}
+                mov w2, #1
+                bl _SSL_CTX_use_PrivateKey_file
+                cmp w0, #1
+                b.ne 2f
+                mov x0, ${context}
+                bl _SSL_CTX_check_private_key
+                cmp w0, #1
+                b.ne 2f
+                mov x0, ${context}
+                bl _SSL_new
+                cbz x0, 2f
+                mov ${session}, x0
+                mov x1, ${socket}
+                bl _SSL_set_fd
+                cmp w0, #1
+                b.eq 2f
+                mov x0, ${session}
+                bl _SSL_free
+                mov x0, #0
+                mov ${session}, x0
+                2:
+                b 4f
+                3:
+                // Fail encrypted PEM input without invoking a terminal prompt.
+                mov w0, #0
+                ret
+                4:
+            }
+        }
+        session
+    }
+
+    /// Invokes the OpenSSL handshake for the selected role.
+    fn handshake(session: usize, server: bool) -> i64 {
+        let role: i64 = if server { 1 } else { 0 };
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                bl _ERR_clear_error
+                mov x0, ${session}
+                mov x9, ${role}
+                cbnz w9, 1f
+                bl _SSL_connect
+                b 2f
+                1:
+                bl _SSL_accept
+                2:
+                sxtw x0, w0
+                mov ${status}, x0
+            }
+        }
+        status
+    }
+
+    /// Returns OpenSSL's certificate verification status.
+    fn verification_result(session: usize) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${session}
+                bl _SSL_get_verify_result
+                mov ${status}, x0
+            }
+        }
+        status
+    }
+
+    /// Reads decrypted application bytes through the OpenSSL session.
+    fn read_session(session: usize, bytes: &mut [u8], length: usize) -> (i64, usize) {
+        let mut status: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let buffer = addr(&mut bytes[0]);
+            @asm {
+                sub sp, sp, #16
+                str xzr, [sp]
+                bl _ERR_clear_error
+                mov x0, ${session}
+                mov x1, ${buffer}
+                mov x2, ${length}
+                mov x3, sp
+                bl _SSL_read_ex
+                cmp w0, #1
+                b.eq 1f
+                mov w1, w0
+                mov x0, ${session}
+                bl _SSL_get_error
+                neg x0, x0
+                b 2f
+                1:
+                ldr x9, [sp]
+                mov ${count}, x9
+                // Reserve one for success. SSL errors are returned negated.
+                mov x0, #1
+                2:
+                mov ${status}, x0
+                add sp, sp, #16
+            }
+        }
+        (status, count)
+    }
+
+    /// Writes application bytes through the OpenSSL session.
+    fn write_session(session: usize, bytes: &[u8], length: usize) -> (i64, usize) {
+        let mut status: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let buffer = addr(&bytes[0]);
+            @asm {
+                sub sp, sp, #16
+                str xzr, [sp]
+                bl _ERR_clear_error
+                mov x0, ${session}
+                mov x1, ${buffer}
+                mov x2, ${length}
+                mov x3, sp
+                bl _SSL_write_ex
+                sxtw x0, w0
+                mov ${status}, x0
+                ldr x9, [sp]
+                mov ${count}, x9
+                add sp, sp, #16
+            }
+        }
+        (status, count)
+    }
+
+    /// Requests TLS shutdown through OpenSSL.
+    fn shutdown_session(session: usize) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                bl _ERR_clear_error
+                mov x0, ${session}
+                bl _SSL_shutdown
+                sxtw x0, w0
+                mov ${status}, x0
+            }
+        }
+        status
+    }
+#(endif)

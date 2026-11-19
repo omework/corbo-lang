@@ -1,0 +1,60 @@
+test_conditional_factory_preserves_both_captures (test_factory_suspension_contracts.FactorySuspensionContractTests.test_conditional_factory_preserves_both_captures) ... FAIL
+test_nested_factory_permutation_and_task_forwarding (test_factory_suspension_contracts.FactorySuspensionContractTests.test_nested_factory_permutation_and_task_forwarding) ... ok
+test_normal_completion_restores_and_inactive_drop_does_not_write (test_factory_suspension_contracts.FactorySuspensionContractTests.test_normal_completion_restores_and_inactive_drop_does_not_write) ... ERROR
+test_recorded_select_loser_keeps_suspended_write (test_factory_suspension_contracts.FactorySuspensionContractTests.test_recorded_select_loser_keeps_suspended_write) ... ok
+
+======================================================================
+ERROR: test_normal_completion_restores_and_inactive_drop_does_not_write (test_factory_suspension_contracts.FactorySuspensionContractTests.test_normal_completion_restores_and_inactive_drop_does_not_write)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_factory_suspension_contracts.py", line 51, in test_normal_completion_restores_and_inactive_drop_does_not_write
+    end = source.index('\n}', start)
+ValueError: substring not found
+
+======================================================================
+FAIL: test_conditional_factory_preserves_both_captures (test_factory_suspension_contracts.FactorySuspensionContractTests.test_conditional_factory_preserves_both_captures)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16271, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14407, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 936, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1989, in _lower_async_function
+    fail(node.line, 'prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 970, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 7: prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_factory_suspension_contracts.py", line 87, in test_conditional_factory_preserves_both_captures
+    self.assertEqual(self.run_source(case).stdout, f'99\n{expected}\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 7: prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.977s
+
+FAILED (failures=1, errors=1)

@@ -1,0 +1,54 @@
+test_borrowed_descendant_update_keeps_new_target (test_inline_owned_views.InlineOwnedViewTests.test_borrowed_descendant_update_keeps_new_target) ... FAIL
+test_direct_replacement_updates_root_and_releases_old_slot (test_inline_owned_views.InlineOwnedViewTests.test_direct_replacement_updates_root_and_releases_old_slot) ... ok
+test_mutable_child_and_disjoint_sibling (test_inline_owned_views.InlineOwnedViewTests.test_mutable_child_and_disjoint_sibling) ... ok
+test_replacement_on_returned_view_and_direct_argument (test_inline_owned_views.InlineOwnedViewTests.test_replacement_on_returned_view_and_direct_argument) ... ok
+test_replacement_via_contract (test_inline_owned_views.InlineOwnedViewTests.test_replacement_via_contract) ... ok
+test_returned_child_retains_root_until_last_use (test_inline_owned_views.InlineOwnedViewTests.test_returned_child_retains_root_until_last_use) ... ok
+test_shared_read_preserves_cleanup_and_slot_reuse (test_inline_owned_views.InlineOwnedViewTests.test_shared_read_preserves_cleanup_and_slot_reuse) ... ok
+
+======================================================================
+FAIL: test_borrowed_descendant_update_keeps_new_target (test_inline_owned_views.InlineOwnedViewTests.test_borrowed_descendant_update_keeps_new_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16480, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14544, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 594, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 637, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 941, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 3305, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 1295, in collect
+    self.fail(line, 'retour de match : porteur emprunté avec &mut requis')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 689, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 5: retour de match : porteur emprunté avec &mut requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_owned_views.py", line 86, in test_borrowed_descendant_update_keeps_new_target
+    self.assertEqual(self.run_source(source).stdout, '9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: retour de match : porteur emprunté avec &mut requis
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.123s
+
+FAILED (failures=1)

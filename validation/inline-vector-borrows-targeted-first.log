@@ -1,0 +1,167 @@
+test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorBorrowTests.test_functions_and_returned_element) ... FAIL
+test_mutable_field_transfer_and_release (test_inline_vector_borrows.InlineVectorBorrowTests.test_mutable_field_transfer_and_release) ... FAIL
+test_recorded_shared_remove_and_drop (test_inline_vector_borrows.InlineVectorBorrowTests.test_recorded_shared_remove_and_drop) ... ok
+test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) ... 
+  test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) (checker='verify_program') ... FAIL
+  test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) (checker='compile_source') ... FAIL
+test_shared_copy_preserves_target_not_vector (test_inline_vector_borrows.InlineVectorBorrowTests.test_shared_copy_preserves_target_not_vector) ... ok
+test_two_positions_release_only_extracted_loan (test_inline_vector_borrows.InlineVectorBorrowTests.test_two_positions_release_only_extracted_loan) ... FAIL
+
+======================================================================
+FAIL: test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorBorrowTests.test_functions_and_returned_element)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17697, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15687, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3270, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10923, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12459, in invoke_arguments
+    result_contract = self.resolve_result_contract(name, params, bindings, effects_base)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10646, in resolve_result_contract
+    dependencies, variants, parents = self.resolve_borrowed_result(payload_summary, params, bindings) if payload_summary.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2715, in resolve_borrowed_result
+    self.fail('contrat de champ : provenance du descendant introuvable')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2016, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: contrat de champ : provenance du descendant introuvable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 61, in test_functions_and_returned_element
+    self.assertEqual(self.run_source(s).stdout,'7\n19\n')
+                     ~~~~~~~~~~~~~~~^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: contrat de champ : provenance du descendant introuvable
+
+======================================================================
+FAIL: test_mutable_field_transfer_and_release (test_inline_vector_borrows.InlineVectorBorrowTests.test_mutable_field_transfer_and_release)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17697, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1635, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1623, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1453, in statement
+    return self.function(line)
+           ~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 594, in function
+    body = self.block()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 397, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1623, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1591, in statement
+    self.take('=')
+    ~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 215, in take
+    raise Error(f"ligne {line}: attendu {expected!r}, reçu {word!r}")
+crust.Error: ligne 2: attendu '=', reçu '.'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 34, in test_mutable_field_transfer_and_release
+    self.assertEqual(self.run_source(s).stdout,'11\n19\n')
+                     ~~~~~~~~~~~~~~~^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: attendu '=', reçu '.'
+
+======================================================================
+FAIL: test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 1: résultat reçu 'number' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "durable|survit|scope" does not match "ligne 1: résultat reçu 'number' sans usage explicite"
+
+======================================================================
+FAIL: test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 1: résultat reçu 'number' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "durable|survit|scope" does not match "ligne 1: résultat reçu 'number' sans usage explicite"
+
+======================================================================
+FAIL: test_two_positions_release_only_extracted_loan (test_inline_vector_borrows.InlineVectorBorrowTests.test_two_positions_release_only_extracted_loan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17697, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1635, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1623, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1453, in statement
+    return self.function(line)
+           ~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 594, in function
+    body = self.block()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 397, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1623, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1591, in statement
+    self.take('=')
+    ~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 215, in take
+    raise Error(f"ligne {line}: attendu {expected!r}, reçu {word!r}")
+crust.Error: ligne 4: attendu '=', reçu '.'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 45, in test_two_positions_release_only_extracted_loan
+    self.assertEqual(self.run_source(s).stdout,'11\n13\n')
+                     ~~~~~~~~~~~~~~~^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: attendu '=', reçu '.'
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.275s
+
+FAILED (failures=5)

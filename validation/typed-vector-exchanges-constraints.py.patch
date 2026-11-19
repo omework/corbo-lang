@@ -1,0 +1,50 @@
+--- /tmp/crust-before-typed-vector-exchanges/constraints.py
++++ /Users/jabarkarim/sources/crust/constraints.py
+@@ -18,6 +18,7 @@
+ from dataclasses import dataclass, field, replace
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+ 
++from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression, aggregate_owned_paths, aggregate_reference_paths, nested_reference_fields, replace_shared_vector_item, shared_vector_field_items, update_shared_vector_items, MUT_REF_VECTOR, REFERENCE_VECTORS, merge_exchange_payloads, UNKNOWN_VECTOR_REMOVALS, replace_handle_positions, remaining_handle_items, VECTOR_LAST_ITEM, last_handle_index, merge_handle_items, handle_items_at, handle_items_after_exchange, handle_items_after_removal, possible_handle_items, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, borrowed_array_name, update_array_aliases, update_structure_parameters, update_local_structure_locations, restore_array_binding, reference_array_path, reference_array_projection, replace_reference_fields, swap_reference_fields, reference_array_variable, project_reference_array, merge_container_positions, reference_type, reference_array_element, reference_tree_fields, reference_tree_slot, reference_tree_targets, merge_reference_values, merge_reference_rows, unflatten_reference_value, reference_value_place, replace_reference_rows, swapped_reference_rows, target_row_templates, rebuild_reference_tree, reference_tree_type
+ 
+@@ -459,7 +460,7 @@
+                                           frozenset({reservation}),
+                                           handle_items=fields[0][1] if tracks_reference_items else None)
+                 if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+-                    payloads = (frozenset() if typ == 'Result<(),A<Int>>' or exchange_is_try_push(mode) else frozenset({asset}),
++                    payloads = (frozenset() if exchange_optional(typ) or exchange_is_try_push(mode) else frozenset({asset}),
+                                 frozenset({asset}))
+                     environment[name] = replace(environment[name], exchange_payloads=payloads)
+                 if mode == 'mut' and typ.startswith('A<'):
+@@ -993,10 +994,10 @@
+                 if op in ('array_buffered_replace', 'array_buffered_try_push'):
+                     self.publish_handle_exchange(current, exchange, exact=False)
+                     old = frozenset() if append else handle_items_at(items, index) or frozenset()
+-                    typ = 'Result<(),A<Int>>' if append else 'Result<A<Int>,A<Int>>'
++                    typ = exchange_type(handle_vector_element(vector.typ), append)
+                     return paths, Value('buffered_handle_exchange', typ, incoming | old,
+                                        exchange_payloads=(old, incoming))
+-                return paths, Value('handle_exchange', '?', incoming,
++                return paths, Value('handle_exchange', handle_vector_element(vector.typ), incoming,
+                                     handle_items=handle_items_at(items, index), handle_exchange=exchange)
+             if op == 'array_handle_exchange_status':
+                 return paths, SCALAR
+@@ -1008,7 +1009,7 @@
+                                           if exchange.mode == 'mutable_ref_replace' and expr[2][1] == 0
+                                           else frozenset())
+                 assets = exchange.assets if expr[2][1] != 0 else exchange.handle_items or frozenset()
+-                result = Value('owned', 'Int', assets)
++                result = Value('owned', exchange.typ, assets)
+                 self.touch(result, paths['next'], line)
+                 return paths, result
+             if op == 'array_handle_len':
+@@ -1028,7 +1029,7 @@
+                 if not isinstance(exchange, Value) or len(exchange.exchange_payloads) != 2:
+                     self.fail(line, 'match (-> résultat) exige un résultat de replace ou try_push')
+                 assets = exchange.exchange_payloads[arm == 5]
+-                result = Value('owned', 'Int', assets)
++                result = Value('owned', exchange_element(exchange.typ), assets)
+                 self.touch(result, paths['next'], line)
+                 return paths, result
+             if op == 'array_handle_option_status':

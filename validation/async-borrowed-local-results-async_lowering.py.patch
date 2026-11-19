@@ -1,0 +1,368 @@
+--- /tmp/crust-before-async-borrowed-local-results/async_lowering.py
++++ /Users/jabarkarim/sources/crust/async_lowering.py
+@@ -1002,7 +1002,11 @@
+                                  for mode in ('join_owned', 'join_nested') for typ in owned_structures})
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+                             for mode in ('ref', 'mut') for typ in pool_structures})
++    owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
++    output_join_types = owned_join_sync_types | {(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
++                                               for mode in ('join_owned', 'join_nested') for typ in reference_structs}
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
++    output_types = sync_types | owned_output_types | output_join_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+                          and public_signature(contract.result_type[1]) is not None}
+@@ -1038,6 +1042,15 @@
+                 target = ('stored_field', destination, key[2])
+                 held = active_loans.pop(key)
+                 active_loans[target] = list(dict.fromkeys((*active_loans.get(target, ()), *held)))
++
++    def retain_result_fields(holder, summary_fields, argument_loans, line):
++        for field, targets in summary_fields:
++            held = []
++            for target in targets:
++                if target.kind not in ('parameter', 'exclusive_join_parameter'):
++                    fail(line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
++                held.extend(argument_loans[target.parameter])
++            active_loans[('stored_field', holder, tuple(field.lstrip('.').split('.')))] = list(dict.fromkeys(held))
+ 
+     def clear_stored_fields(holder):
+         for key in list(active_loans):
+@@ -1147,7 +1160,7 @@
+     def sync_owned_value(expr, line, *, following=None):
+         if expr[0] in ('array_transfer', 'new_transfer'):
+             return sync_owned_value(expr[1], line, following=following)
+-        if sync_signature(expr) in owned_sync_types:
++        if sync_signature(expr) in owned_output_types:
+             return sync_call(expr, line, following=following, owned=True)[0]
+         if expr[0] in ('new', 'new_enum'):
+             return pool_new_value(expr, line, following=following)
+@@ -1161,7 +1174,7 @@
+                 if kind != 'task':
+                     fail(line, 'allocation attendue : un handle rend un Result, pas une allocation directe')
+             signature = functions[prepared[3]].args[2] if prepared is not None else await_signature(expr)
+-            if signature not in owned_sync_types and not (signature and signature[0] == 'owned' and signature[1] in owned_structures):
++            if signature not in owned_output_types:
+                 fail(line, 'allocation attendue : résultat async de type incompatible')
+             return await_task(expr, line, returns_value=True, owned=True, prepared=prepared)
+         else:
+@@ -1181,7 +1194,7 @@
+             if expr[0] == 'down':
+                 require_local_async_value(expr[1], line)
+             return consume_owned_join(expr[1], line)
+-        if sync_signature(expr) in owned_join_sync_types:
++        if sync_signature(expr) in output_join_types:
+             mode, _ = sync_signature(expr)
+             value, _ = sync_call(expr, line, following=following, owned=True)
+             return value, JOIN_PAYLOADS[mode], None
+@@ -1212,6 +1225,8 @@
+         return value
+ 
+     def pool_new_value(expr, line, *, following=None, label='async allocation'):
++        if expr[0] == 'new_enum' and expr[1] is None and expr[2] in pool_structures:
++            return pool_structure_value(expr, line, following=following, label=label)
+         pool_type = pool_types.get(expr[1])
+         if pool_type is None:
+             fail(line, 'prototype : création directe dans un état exige un pool injecté')
+@@ -1247,8 +1262,9 @@
+                           for _, kind in layout[:index]) or '0'
+ 
+     def pool_structure_value(expr, line, *, following=None, label='async allocation'):
+-        pool_type = pool_types[expr[1]]
+-        typ = pool_type[5:-1]
++        local = expr[0] == 'new_enum' and expr[1] is None
++        pool_type = None if local else pool_types[expr[1]]
++        typ = expr[2] if local else pool_type[5:-1]
+         layout = pool_structures[typ]
+         if expr[0] == 'new_enum':
+             if expr[2] not in (None, typ) or expr[3] != '':
+@@ -1270,11 +1286,15 @@
+                 if field_type != 'Int':
+                     fail(line, f"champ '{field}' : aucune valeur par défaut")
+                 values[field] = '0'
+-        source, loans = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]), 'mut', pool_type, line)
++        if local:
++            destination = local_destinations.get(id(expr)) or implicit_stack()
++            source, loans = '&' + local_pools[destination], []
++        else:
++            source, loans = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]), 'mut', pool_type, line)
+         # Already evaluated owners must be cleaned if a later field suspends
+         # or exits. Publish the complete object only after every field exists.
+         owners, stored_fields = [], {}
+-        storage = set(pool_storage(expr[1]))
++        storage = {destination} if local else set(pool_storage(expr[1]))
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, owners, loans))
+         argument_depth = len(argument_tails)
+@@ -1315,7 +1335,15 @@
+             pending_capture_groups.pop()
+             active_loans.pop(id(loans), None)
+         cell = temporary('Cell *')
+-        steps.append(f'{cell} = enum_new({source}, 0, "{label}");')
++        if local:
++            # Layout metadata must outlive the frame when its local result is
++            # received by the caller. Emit immutable static metadata, not a
++            # pointer into the producer's state slot.
++            layout_name = local_layouts.setdefault(typ, f'{prefix}_local_layout_{len(local_layouts)}')
++            steps.append(f'{cell} = local_cell_new({source}, &{layout_name}, '
++                         f'{structure_offset(layout, len(layout))}, "{label}");')
++        else:
++            steps.append(f'{cell} = enum_new({source}, 0, "{label}");')
+         for index, (field, field_type) in enumerate(layout):
+             helper = 'cell_store_int' if field_type == 'Int' else 'cell_store_ref'
+             steps.append(f'{helper}({cell}, {structure_offset(layout, index)}, {values[field]});')
+@@ -1464,12 +1492,12 @@
+         signature = contract.result_type
+         local_result = any(candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
+                            for candidate in contract.result.candidates)
+-        if (signature not in sync_types and signature not in handle_sync_types and signature not in task_sync_types and signature != ('void', 'Void')
++        if (signature not in output_types and signature not in handle_sync_types and signature not in task_sync_types and signature != ('void', 'Void')
+                 or any((mode, typ) not in sync_types for _, mode, typ in contract.parameters)):
+             fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+         if expected is not None and signature != expected:
+             fail(line, f'appel synchrone : résultat {signature[1]}, attendu {expected[1]}')
+-        if signature in owned_sync_types | owned_join_sync_types and not owned:
++        if signature in owned_output_types | output_join_types and not owned:
+             fail(line, 'résultat propriétaire : recevoir, transférer ou drop explicitement')
+         if signature in handle_sync_types and not execution:
+             fail(line, 'handle lancé : recevoir puis attendre explicitement le résultat')
+@@ -1594,7 +1622,7 @@
+             if diverges:
+                 raise NoAsyncContinuation()
+             return '', 'Void'
+-        value = temporary((sync_types | handle_sync_types | task_sync_types)[signature])
++        value = temporary((output_types | handle_sync_types | task_sync_types)[signature])
+         steps.append(f'{value} = {call};')
+         if signature in handle_sync_types or signature in task_sync_types:
+             retained, returned = [], []
+@@ -1639,6 +1667,8 @@
+                 contract.parameters, argument_loans, line)
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]
++                from async_result_storage import borrowed_result_fields
++                retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line)
+                 task_prefix_changes[value] = ((definition.field_effect_summary, definition.args[1],
+                     tuple(tuple(capture_loans.get(index, ())) for index in range(len(definition.args[1])))),)
+                 return value, definition.args[2] == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+@@ -1646,7 +1676,7 @@
+             handle = temporary('CrustAsyncExecution')
+             steps.append(f'task_async_adopt(&{handle}, &{value});')
+             return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+-        if signature in owned_sync_types | owned_join_sync_types:
++        if signature in owned_output_types | output_join_types:
+             owned_result_types[value] = signature[1]
+             if local_source is not None:
+                 keep_storage(value, (local_source,))
+@@ -1667,6 +1697,7 @@
+                          and candidate.source.kind == 'source_parameter' else None)
+                 keep_storage(value, argument_storage[index] if index is not None else
+                              frozenset().union(*argument_storage))
++            retain_result_fields(value, contract.result.borrowed_fields, argument_loans, line)
+             return value, signature[1]
+         if signature in view_sync_types:
+             retained_views = []
+@@ -1713,6 +1744,7 @@
+     local_pools = {}
+     implicit_stacks = set()
+     local_destinations = {}
++    local_layouts = {}
+     pool_alias_origins = {}
+     region_limits = [0]
+     storage_bindings = {}
+@@ -1721,11 +1753,20 @@
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
+-            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_structures)
++            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in pool_structures)
+             and result not in (
+             ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('owned', 'Int'),
+             ('scalar', 'Void'), ('void', 'Void'), ('join_owned', 'Int'), ('join_nested', 'Int'))):
+         fail(node.line, 'prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis')
++    if result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in reference_structs and any(
++            typ.startswith('&') for _, typ in reference_structs[result[1]]):
++        completion = node.field_effect_summary
++        if completion is None or not completion.complete:
++            fail(node.line, 'résultat struct async : contrat des cibles empruntées incomplet')
++        for _, targets in completion.completion_result.borrowed_fields:
++            if not targets or any(target.kind not in ('parameter', 'exclusive_join_parameter') or
++                    parameters[target.parameter][1] not in ('ref', 'mut') for target in targets):
++                fail(node.line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+     returns_int = result == ('scalar', 'Int')
+     returns_bool = result == ('scalar', 'Bool')
+     returns_byte = result == ('byte', 'u8')
+@@ -2110,6 +2151,8 @@
+                     returned_loans.append((destination, 'storage'))
+                 captures.append('&' + local_pools[destination] if destination else 'NULL')
+             steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
++            from async_result_storage import borrowed_result_fields
++            retain_result_fields(task, borrowed_result_fields(declaration), argument_loans, line)
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
+                        if effects is not None and effects.complete else ())
+             # Resolve only when Select needs it; ordinary awaits may use types
+@@ -2133,6 +2176,7 @@
+     def discard_task(name, line):
+         task, _, loans, _, _, _ = consume_task(name, line)
+         steps.append(f'task_discard({task});')
++        clear_stored_fields(task)
+         del active_loans[id(loans)]
+ 
+     def create_selection(expr, line):
+@@ -2183,6 +2227,8 @@
+         steps.append(f'if (!task_select_discardable(&{selection.c})) fail("unresolved Select cleanup");')
+         steps.append(f'task_select_drop(&{selection.c});')
+         active_loans.pop(id(selection.loans), None)
++        for record in selection.branches:
++            clear_stored_fields(record[0])
+         selections[name] = None
+ 
+     def selection_poll_paths(selection, line):
+@@ -2307,6 +2353,13 @@
+             del active_loans[id(loans)]
+             apply_child_field_changes(field_changes, line, launched=False)
+         if owned or joined:
++            if selection is not None:
++                for path in poll_paths:
++                    for record, candidates in path:
++                        if any(effects.may_complete for effects, _, _ in candidates):
++                            move_stored_fields(record[0], result)
++            else:
++                move_stored_fields(task, result)
+             owned_result_types[result] = result_type
+             keep_storage(result, (target for target, mode in returned_loans if mode == 'storage'))
+         if result_mode in ASYNC_CAPTURE_VIEW_MODES:
+@@ -2390,6 +2443,7 @@
+ 
+     def discard_owned_join(name, line):
+         result, payload, _ = consume_owned_join(name, line)
++        clear_stored_fields(result)
+         cell = f'{result}.allocation'
+         success = f'{result}.status == 0'
+         if payload == 'nested':
+@@ -2450,6 +2504,7 @@
+         del active_loans[id(loans)]
+         apply_child_field_changes(field_changes, line, launched=True)
+         if mode in ('owned', *JOIN_PAYLOADS):
++            move_stored_fields(handle, result)
+             owned_result_types[result] = typ
+             keep_storage(result, (target for target, access in returned_loans if access == 'storage'))
+         if mode in ('ref', 'mut') or mode in ASYNC_CAPTURE_VIEW_MODES and returned_loans:
+@@ -2808,14 +2863,14 @@
+             scopes[-1][0][name] = None
+             return True
+         owned_initializer = initializer[1] if operator in ('array_transfer', 'new_transfer') else initializer
+-        if sync_signature(owned_initializer) in owned_join_sync_types:
++        if sync_signature(owned_initializer) in output_join_types:
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+             mode, typ = sync_signature(owned_initializer)
+             value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+             bind_transferred_value(name, mode, (value, JOIN_PAYLOADS[mode], None), statement)
+             return True
+-        if sync_signature(owned_initializer) in owned_sync_types or owned_initializer[0] in ('new', 'new_enum'):
++        if sync_signature(owned_initializer) in owned_output_types or owned_initializer[0] in ('new', 'new_enum'):
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+             value = (pool_new_value(owned_initializer, statement.line, following=body[position + 1:],
+@@ -3192,7 +3247,7 @@
+             result, payload, loans = value, PLAIN_JOIN_FIELDS[mode], None
+         elif direct:
+             result, payload, loans = execution_await(subject, line, prepared=prepared_execution)
+-        elif sync_signature(subject) in owned_join_sync_types:
++        elif sync_signature(subject) in output_join_types:
+             mode, _ = sync_signature(subject)
+             result, _ = sync_call(subject, line, following=following, owned=True)
+             payload, loans, direct = JOIN_PAYLOADS[mode], None, True
+@@ -4141,7 +4196,7 @@
+         place_local_result(expr)
+         if expr[0] == 'task_select':
+             return 'selection', create_selection(expr, line)
+-        if sync_signature(expr) in owned_sync_types or expr[0] in ('new', 'new_enum'):
++        if sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum'):
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+             return 'execution', spawn_task(expr[1], line,
+@@ -4175,6 +4230,7 @@
+         start = ('task_native_async_start' if native else
+                  'task_async_start_blocking' if blocking else 'task_async_start')
+         steps.append(f'{start}(&{handle}, {task});')
++        move_stored_fields(task, f'&{handle}')
+         return f'&{handle}', returns_int, loans, nominal, returned_loans, field_changes
+ 
+     def prepare_utf8_loop(body, following, line):
+@@ -4487,6 +4543,7 @@
+         if kind != 'array':
+             if kind in ('owned', 'join_owned', 'join_nested'):
+                 keep_storage(target, storage_of(result))
++            if kind in ('owned', 'join_owned', 'join_nested', 'task', 'execution'):
+                 move_stored_fields(result, target)
+             steps.append(f'{target} = {result};')
+         elif all(returns_int):
+@@ -4564,6 +4621,8 @@
+             if join_payload:
+                 result, payload_field, status, result_loans, direct, result_carrier = join_payload
+                 success = (status == 0) == (index == 0)
++                if not success:
++                    clear_stored_fields(result)
+                 binds_payload = body and body[0].op == 'var' and body[0].args[1][0] == 'utf8_value'
+                 if result_loans is not None and (not success or (direct and not binds_payload)):
+                     active_loans.pop(id(result_loans), None)
+@@ -4645,6 +4704,9 @@
+                             references[payload] = 'owned'
+                             payload_type = owned_result_types.get(result, 'Int')
+                             storage_bindings[payload] = storage_of(result)
++                            move_stored_fields(result, payload)
++                            if payload_type in reference_structs:
++                                reference_types[payload] = payload_type
+                             if payload_type != 'Int':
+                                 collection_types[payload] = payload_type
+                             scopes[-1][0][payload] = None
+@@ -4812,6 +4874,7 @@
+                         if kind != 'array':
+                             if kind in ('owned', 'join_owned', 'join_nested'):
+                                 keep_storage(target, storage_of(result))
++                            if kind in ('owned', 'join_owned', 'join_nested', 'task', 'execution'):
+                                 move_stored_fields(result, target)
+                             steps.append(f'{target} = {result};')
+                         elif all(shape):
+@@ -5712,9 +5775,9 @@
+                 kind, replacement = export_async_value(source, (), line)
+             elif operator == 'scope' and ends_in_transfer(expr[2]):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
+-            elif (sync_signature(expr) in owned_sync_types or operator in ('new', 'new_enum')
++            elif (sync_signature(expr) in owned_output_types or operator in ('new', 'new_enum')
+                   or operator in ('new_transfer', 'array_transfer') and (
+-                      expr[1][0] in ('new', 'new_enum') or sync_signature(expr[1]) in owned_sync_types)):
++                      expr[1][0] in ('new', 'new_enum') or sync_signature(expr[1]) in owned_output_types)):
+                 kind, replacement = 'owned', sync_owned_value(expr, line, following=following)
+             elif operator in ('if_expr', 'value_match') and has_transfer_result(expr):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
+@@ -6472,6 +6535,9 @@
+         if mode == 'owned':
+             received_type = owned_result_types.get(value, 'Int')
+             storage_bindings[name] = storage_of(value)
++            move_stored_fields(value, name)
++            if received_type in reference_structs:
++                reference_types[name] = received_type
+             if received_type != 'Int':
+                 collection_types[name] = received_type
+             scopes[-1][0][name] = None
+@@ -6767,7 +6833,17 @@
+         else:
+             suspended_cleanup.extend(f'        {step}\n' for step in path)
+         suspended_cleanup.append('        break;\n')
+-    return f"""
++    layout_definitions = []
++    for typ, symbol in local_layouts.items():
++        layout = pool_structures[typ]
++        offsets = ', '.join(structure_offset(layout, i) for i in range(len(layout))) or '0'
++        kinds = ', '.join(str(2 if field_type.startswith('A<') else 1 if field_type.startswith('&') else 0)
++                          for _, field_type in layout) or '0'
++        layout_definitions.append(f'static const size_t {symbol}_offsets[] = {{{offsets}}};\n'
++            f'static const unsigned char {symbol}_kinds[] = {{{kinds}}};\n'
++            f'static const Source {symbol} = {{.enum_name="{typ}", .arm_name="", '
++            f'.field_count={len(layout)}, .field_offsets={symbol}_offsets, .field_kinds={symbol}_kinds}};')
++    return '\n'.join(layout_definitions) + f"""
+ typedef struct {{
+     CrustTask task;
+     CrustTaskSlot slot;

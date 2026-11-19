@@ -1,0 +1,45 @@
+--- before/async_result_storage.py
++++ after/async_result_storage.py
+@@ -41,3 +41,42 @@
+             unknown = True
+     return ResultStorage(destination, None if unknown or summary.owned_fields else frozenset(parameters),
+                          len(kinds)>1, bool(summary.owned_fields))
++
++
++def output_origin(source, typ):
++    """A copy uses caller output storage for local values, its pool otherwise."""
++    from results import SourceOrigin
++    if source.kind in ('local_value', 'task_output'):
++        return SourceOrigin('task_output', -1, element=typ)
++    if source.kind in ('allocation_parameter', 'task_output_parameter'):
++        return SourceOrigin('task_output_parameter', source.index, element=typ)
++    return source
++
++
++def task_result_origins(node, actuals):
++    """Symbolic sources of the future result, distinct from captured inputs."""
++    if not node.result_storage or node.field_effect_summary.completion_result.owned_fields:
++        return None
++    summary = node.field_effect_summary.completion_result
++    sources = set()
++    for candidate in summary.candidates:
++        if candidate.kind == 'fresh' and candidate.source.kind == 'local_value':
++            sources.add(output_origin(candidate.source, summary.typ))
++        elif candidate.kind == 'fresh' and candidate.source.kind == 'allocation_parameter':
++            actual = actuals[candidate.source.index]
++            candidates = getattr(actual, 'candidates', ())
++            if not candidates:
++                return None
++            sources.update(output_origin(item.storage(), summary.typ) for item in candidates)
++        elif candidate.kind == 'fresh' and candidate.source.kind == 'source_parameter':
++            sources.add(actuals[candidate.source.index])
++        elif candidate.kind == 'parameter':
++            sources.update(item.storage() for item in actuals[candidate.parameter].candidates)
++        else:
++            return None
++    return frozenset(sources)
++
++
++def needs_task_output(symbols, local_parameter):
++    return any(symbol.kind == 'task_output' or symbol.kind == 'task_output_parameter'
++               and local_parameter(symbol.index) for symbol in symbols)

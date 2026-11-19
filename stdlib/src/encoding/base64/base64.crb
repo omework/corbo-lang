@@ -1,0 +1,127 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Standard Base64 encoding with canonical padding and caller-owned buffers.
+
+/// Reports an undersized output or invalid Base64 length, alphabet, or padding.
+pub enum Error {
+    /// The caller-provided output buffer cannot hold the result.
+    BufferTooSmall,
+    /// The input length is incompatible with this encoding.
+    InvalidLength,
+    /// An input byte is outside the encoding alphabet.
+    InvalidCharacter,
+    /// The Base64 padding or unused tail bits are invalid.
+    InvalidPadding
+}
+
+/// Maps a six-bit value to a byte of the standard Base64 alphabet.
+fn symbol(value: u8) -> u8 {
+    if value < 26 { return value + 65; }
+    if value < 52 { return value - 26 + 97; }
+    if value < 62 { return value - 52 + 48; }
+    if value == 62 { return 43; }
+    47
+}
+
+/// Maps Base64 input to a six-bit value, with sentinel values for padding and invalid bytes.
+fn sextet(byte: u8) -> u8 {
+    if byte >= 65 && byte <= 90 { return byte - 65; }
+    if byte >= 97 && byte <= 122 { return byte - 97 + 26; }
+    if byte >= 48 && byte <= 57 { return byte - 48 + 52; }
+    if byte == 43 { return 62; }
+    if byte == 47 { return 63; }
+    if byte == 61 { return 64; }
+    65
+}
+
+/// Writes standard padded Base64 and returns the bytes written. A short output is left unchanged.
+pub fn encode(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    let size = input.len();
+    let groups = size / 3;
+    let occupied: usize = if size % 3 == 0 { 0 } else { 1 };
+    if groups + occupied > output.len() / 4 { return Err(Error.BufferTooSmall); }
+    let mut i: usize = 0;
+    let mut written: usize = 0;
+    while i < size {
+        let available = size - i;
+        let a = input[i];
+        let b: u8 = if available > 1 { input[i + 1] } else { 0 };
+        let c: u8 = if available > 2 { input[i + 2] } else { 0 };
+        output[written] = symbol(a >> 2);
+        output[written + 1] = symbol(((a & 3) << 4) | (b >> 4));
+        output[written + 2] = if available > 1 { symbol(((b & 15) << 2) | (c >> 6)) } else { 61 };
+        output[written + 3] = if available > 2 { symbol(c & 63) } else { 61 };
+        let step: usize = if available < 3 { available } else { 3 };
+        i = i + step;
+        written = written + 4;
+    }
+    Ok(written)
+}
+
+/// Validates Base64 groups and counts decoded bytes, optionally writing them into prechecked storage.
+fn scan(input: &[u8], output: &mut [u8], write: bool, wrapped: bool) -> Result<usize, Error> {
+    let size = input.len();
+    let mut quartet: [u8; 4] = [0; 4];
+    let mut count: usize = 0;
+    let mut written: usize = 0;
+    let mut i: usize = 0;
+    let mut padded = false;
+    while i < size {
+        let byte = input[i];
+        i = i + 1;
+        if wrapped && (byte == 9 || byte == 10 || byte == 13 || byte == 32) { continue; }
+        let value = sextet(byte);
+        if value == 65 { return Err(Error.InvalidCharacter); }
+        if padded || (count < 2 && value == 64) { return Err(Error.InvalidPadding); }
+        quartet[count] = value;
+        count = count + 1;
+        if count == 4 {
+            let a = quartet[0];
+            let b = quartet[1];
+            let c = quartet[2];
+            let d = quartet[3];
+            let mut width: usize = 3;
+            if c == 64 {
+                if d != 64 || (b & 15) != 0 { return Err(Error.InvalidPadding); }
+                width = 1;
+            } else if d == 64 {
+                if (c & 3) != 0 { return Err(Error.InvalidPadding); }
+                width = 2;
+            }
+            if write {
+                output[written] = (a << 2) | (b >> 4);
+                if width > 1 { output[written + 1] = ((b & 15) << 4) | (c >> 2); }
+                if width > 2 { output[written + 2] = ((c & 3) << 6) | d; }
+            }
+            padded = width < 3;
+            written = written + width;
+            count = 0;
+        }
+    }
+    if count != 0 { return Err(Error.InvalidLength); }
+    Ok(written)
+}
+
+/// Validates the complete input and capacity before writing decoded bytes.
+fn decode_mode(input: &[u8], output: &mut [u8], wrapped: bool) -> Result<usize, Error> {
+    let size = input.len();
+    let capacity = output.len();
+    let mut empty: [u8; 0] = [];
+    let length = match scan(&input[0..size], &mut empty[..], false, copy(wrapped)) {
+        Ok(value) => { value },
+        Err(error) => { return Err(error); },
+    };
+    if length > capacity { return Err(Error.BufferTooSmall); }
+    scan(&input[0..size], &mut output[0..capacity], true, wrapped)
+}
+
+// RFC 4648 standard alphabet, with canonical padding and zero pad bits.
+/// Decodes canonical padded Base64 without whitespace. Errors leave the output unchanged.
+pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    decode_mode(&input[0..input.len()], &mut output[0..output.len()], false)
+}
+
+// Same alphabet and padding, allowing ASCII space, tab, CR and LF.
+/// Decodes canonical Base64 while allowing ASCII spaces, tabs, CR and LF.
+pub fn decode_wrapped(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    decode_mode(&input[0..input.len()], &mut output[0..output.len()], true)
+}

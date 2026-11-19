@@ -1,0 +1,80 @@
+--- before/results.py
++++ after/results.py
+@@ -21,6 +21,10 @@
+     element: str | None = field(default=None, compare=False)
+ 
+     def describe(self, params):
++        if self.kind == 'task_output':
++            return {'kind': 'task_output', 'type': self.element}
++        if self.kind == 'task_output_parameter':
++            return {'kind': self.kind, 'parameter': params[self.index][0], 'type': self.element}
+         if self.kind == 'local_value':
+             return {'kind': 'local_value', 'type': self.element}
+         if self.kind == 'source_parameter':
+@@ -96,7 +100,13 @@
+ def async_owned_candidates(sources):
+     candidates = set()
+     for source in sources:
+-        if source.kind == 'allocation_parameter':
++        if source.kind == 'task_output':
++            candidates.add(ResultCandidate('fresh', source=SourceOrigin(
++                'local_value', source.index, 'data stack implicite', source.element)))
++        elif source.kind == 'task_output_parameter':
++            candidates.add(ResultCandidate('fresh', source=SourceOrigin(
++                'allocation_parameter', source.index, element=source.element)))
++        elif source.kind == 'allocation_parameter':
+             candidates.add(ResultCandidate('parameter', source.index))
+         elif source.kind == 'task_result_parameter':
+             candidates.add(ResultCandidate('task_capture', source.index))
+@@ -707,8 +717,11 @@
+                 indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {},
+                                                      sync_result_contract=self.analyzer.sync_result_contract)
+                 targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')
+-                result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if owned_result_parameters(
+-                    definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary) else frozenset()
++                result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if (
++                    getattr(definition, 'result_storage', False) or owned_result_parameters(
++                    definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary)) else frozenset()
++                if getattr(definition, 'result_storage', False):
++                    sources |= frozenset({SourceOrigin('task_parameter', index)})
+                 environment[name] = Value(mode, typ, fields=fields, reference_targets=targets, task_sources=sources,
+                                           task_result_sources=result_sources, task_parameters=frozenset({index}),
+                                           task_result_fields=tuple((path, frozenset({SourceOrigin(
+@@ -1009,7 +1022,7 @@
+                 value = self.public_handle_value(value, typ, line)
+             if not isinstance(value, Value) or (value.mode, value.typ) != (mode, typ):
+                 self.fail(line, f"retour de '{self.name}' : {mode} de {typ} attendu")
+-            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter', 'task_result_field_parameter')
++            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter', 'task_result_field_parameter', 'task_output', 'task_output_parameter')
+                    for source in value.task_sources | value.task_result_sources):
+                 self.fail(line, 'retour de tâche refusé : le pool de capture ne survit pas au retour')
+             self.returned_task_sources.update(value.task_sources)
+@@ -2300,6 +2313,11 @@
+                                 origin = replace(origin, kind='exclusive_join_parameter')
+                             targets.add(origin)
+                 field_summary = getattr(declaration, 'field_effect_summary', None)
++                from async_result_storage import task_result_origins
++                output_sources = task_result_origins(declaration, captured_actuals)
++                if output_sources is not None:
++                    task_result_sources = set(output_sources)
++                    task_sources.update(output_sources)
+                 pending = self.instantiate_deferred_fields(field_summary.structure_fields, captured_actuals) if (
+                     field_summary and field_summary.complete) else frozenset()
+                 return flow, Value('task', name, fields=tuple(captures), reference_targets=frozenset(targets),
+@@ -2508,8 +2526,15 @@
+                 def resolve_sources(symbols):
+                     sources = set()
+                     for source in symbols:
++                        if source.kind == 'task_output':
++                            sources.add(source)
++                            continue
+                         actual = actuals[source.index]
+-                        if source.kind == 'source_parameter' and isinstance(actual, SourceOrigin):
++                        if source.kind == 'task_output_parameter' and isinstance(actual, Value):
++                            from async_result_storage import output_origin
++                            sources.update(output_origin(candidate.storage(), source.element)
++                                           for candidate in actual.candidates)
++                        elif source.kind == 'source_parameter' and isinstance(actual, SourceOrigin):
+                             sources.add(actual)
+                         elif source.kind == 'allocation_parameter' and isinstance(actual, Value) and actual.candidates:
+                             sources.update(candidate.storage() for candidate in actual.candidates)

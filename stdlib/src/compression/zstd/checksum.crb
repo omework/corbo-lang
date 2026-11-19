@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Allocation-free XXH64 content checksum for Zstandard frames.
+
+/// Adds modulo 2^64 using representable half-word arithmetic.
+fn add64(a: u64, b: u64) -> u64 {
+    let low = (a & 0xffffffff) + (b & 0xffffffff);
+    let high = ((a >> 32) + (b >> 32) + (low >> 32)) & 0xffffffff;
+    (low & 0xffffffff) | (high << 32)
+}
+
+/// Multiplies modulo 2^64 without overflowing a checked intermediate.
+fn mul64(a: u64, b: u64) -> u64 {
+    let low = (a & 0xffffffff) * (b & 0xffffffff);
+    let high = ((low >> 32) + (((a >> 32) * (b & 0xffffffff)) & 0xffffffff)
+        + (((b >> 32) * (a & 0xffffffff)) & 0xffffffff)) & 0xffffffff;
+    (low & 0xffffffff) | (high << 32)
+}
+
+/// Rotates a word by a nonzero count smaller than sixty-four.
+fn rot(value: u64, count: u64) -> u64 { ((value & (0xffffffffffffffff >> copy(count))) << copy(count)) | (value >> (64 - count)) }
+
+/// Applies one XXH64 stripe lane round.
+fn round64(state: u64, word: u64) -> u64 {
+    mul64(rot(add64(state, mul64(word, 14029467366897019727)), 31), 11400714785074694791)
+}
+
+/// Combines one stripe lane into the content checksum.
+fn merge64(state: u64, word: u64) -> u64 {
+    add64(mul64(state ^ round64(0, word), 11400714785074694791), 9650029242287828579)
+}
+
+/// Computes the seed-zero XXH64 checksum specified for Zstandard content.
+fn checksum(input: &[u8]) -> u64 {
+    let size = input.len() as u64; let mut at: u64 = 0; let mut hash: u64 = 2870177450012600261;
+    if size >= 32 {
+        let mut a = add64(11400714785074694791, 14029467366897019727);
+        let mut b: u64 = 14029467366897019727; let mut c: u64 = 0; let mut d: u64 = 7046029288634856825;
+        while size - at >= 32 {
+            a = round64(a, little(&input[0..input.len()], copy(at), 8));
+            b = round64(b, little(&input[0..input.len()], at + 8, 8));
+            c = round64(c, little(&input[0..input.len()], at + 16, 8));
+            d = round64(d, little(&input[0..input.len()], at + 24, 8)); at = at + 32;
+        }
+        hash = add64(add64(rot(copy(a), 1), rot(copy(b), 7)), add64(rot(copy(c), 12), rot(copy(d), 18)));
+        hash = merge64(hash, a); hash = merge64(hash, b); hash = merge64(hash, c); hash = merge64(hash, d);
+    }
+    hash = add64(hash, copy(size));
+    while size - at >= 8 {
+        hash = add64(mul64(rot(hash ^ round64(0, little(&input[0..input.len()], copy(at), 8)), 27), 11400714785074694791), 9650029242287828579); at = at + 8;
+    }
+    if size - at >= 4 {
+        hash = add64(mul64(rot(hash ^ mul64(little(&input[0..input.len()], copy(at), 4), 11400714785074694791), 23), 14029467366897019727), 1609587929392839161); at = at + 4;
+    }
+    while at < size {
+        hash = mul64(rot(hash ^ mul64(input[at] as u64, 2870177450012600261), 11), 11400714785074694791); at = at + 1;
+    }
+    hash = mul64(hash ^ (hash >> 33), 14029467366897019727);
+    hash = mul64(hash ^ (hash >> 29), 1609587929392839161);
+    hash ^ (hash >> 32)
+}

@@ -1,0 +1,22 @@
+--- /tmp/crust-before-recursive-owned-joins/test_async_runtime.py
++++ tests/test_async_runtime.py
+@@ -2210,9 +2210,16 @@
+         run = self.run_c_oracle(compile_source(inactive))
+         self.assertEqual(run.stdout, '2\n')
+         self.assertEqual(run.stderr.count('destroy n=7\n'), 1)
+-        triple = asynchronous.replace('let moved = child.await;', 'let third = runtime::spawn(-> child);')
+-        with self.assertRaisesRegex(Error, 'trois niveaux'):
+-            verify_program(triple)
++        triple = asynchronous.replace(
++            'let moved = child.await; yield;' + matching.replace('READ', '*v'),
++            'let third = runtime::spawn(-> child); let outer = third.await; '
++            'match outer { Ok(moved) => {' + matching.replace('READ', '*v') +
++            '} Err(_) => { print(10); } }')
++        run = self.run_c_oracle(compile_source(triple))
++        self.assertEqual(run.stdout, '7\n2\n')
++        self.assertEqual(run.stderr.count('destroy n=7\n'), 1)
++        with self.assertRaisesRegex(Error, 'attente|join requis'):
++            verify_program(triple.replace('let outer = third.await;', 'return; let outer = third.await;'))
+ 
+     def test_join_retains_only_the_directly_returned_capture_sources(self):
+         source = """

@@ -1,0 +1,19 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13947,13 +13947,15 @@
+         runtime = runtime.replace(UTF8_VALUE_TYPES_C, UTF8_VALUE_TYPES_C + plain_join_layouts(layout_depth), 1)
+         if self.async_definitions:
+             from async_lowering import lower_task_context, task_factory_signature
+-            from async_runtime import TASK_ASYNC_THREAD_RUNTIME, TASK_POOL_RUNTIME, TASK_RUNTIME_BODY, TASK_THREAD_RUNTIME
++            from async_runtime import TASK_ASYNC_THREAD_RUNTIME, TASK_POOL_RUNTIME, TASK_RUNTIME_BODY, TASK_THREAD_RUNTIME, TASK_SELECT_RUNTIME
+             definitions = {name: node for name, (node, _) in self.async_definitions.items()}
+             runtime += TASK_RUNTIME_BODY + TASK_POOL_RUNTIME + '\nstatic void task_discard(CrustTask *);\n'
+             if self.thread_runtime_used:
+                 runtime = '#define CRUST_THREAD_RUNTIME 1\n' + runtime + TASK_THREAD_RUNTIME
+             if self.async_thread_runtime_used:
+                 runtime += TASK_ASYNC_THREAD_RUNTIME
++            if any('task_select_init(' in code for _, code in self.async_definitions.values()):
++                runtime += TASK_SELECT_RUNTIME
+             if self.async_thread_runtime_used:
+                 runtime += '\nstatic void task_abandon_async(CrustAsyncExecution *);\n'
+             runtime += '\n' + '\n'.join(self.array_definitions) + '\n'

@@ -1,0 +1,16 @@
+--- before/tests/test_cell_reference_bridges.py
++++ after/tests/test_cell_reference_bridges.py
+@@ -137,11 +137,9 @@
+           return edit(&mut n,{n.set(12);11});''')
+         self.rejected(source)
+ 
+-    def test_raw_inline_and_untracked_captured_pointer_are_not_fabricated(self):
+-        # These are still representation gaps, not new normative prohibitions.
++    def test_raw_inline_pointer_is_not_fabricated(self):
++        # Inline storage still lacks a Cell; captured allocations now keep it.
+         self.rejected(self.program('let mut n=7;return forward(&n);'),'descripteur')
+-        self.rejected(self.program('return forward(n);',parameters='n:&Int',argument='&n',
+-            setup='let mut p=pool<Int>(1);let n=p.new(7);'),'descripteur')
+ 
+     def test_slot_reuse_after_helper_scope_and_target_drop(self):
+         source=self.program('''let mut p=pool<Int>(1);let mut total=0;let mut i=0;

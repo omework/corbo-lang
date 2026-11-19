@@ -1,0 +1,45 @@
+--- before/storage_requirements.py
++++ after/storage_requirements.py
+@@ -5,6 +5,7 @@
+ """
+ from constraints import ConstraintAnalyzer, Context, Value, UNKNOWN, join_values
+ from dataclasses import replace
++from handle_types import public_storage
+ 
+ 
+ class StorageContext(Context):
+@@ -117,7 +118,9 @@
+         context.node.storage_requirements = tuple(sorted(demands.items()))
+ 
+     def annotation(context, value, typ, line):
+-        if typ in structures:
++        if (kind := public_storage(typ, structures)) is not None:
++            require(context, value, kind, line)
++        elif typ in structures:
+             require(context, value, 'local', line)
+         elif typ.startswith('A<') and typ[2:-1] in structures:
+             require(context, value, 'pool', line)
+@@ -133,11 +136,13 @@
+         node.storage_requirements = tuple((i, joined.get(name, 'pool'))
+                                           for i, (name, _, typ) in enumerate(node.args[1])
+                                           if typ in structures and (name in node.handle_parameters or name in joined))
++        node.storage_requirements += tuple((i, kind) for i, (_, _, typ) in enumerate(node.args[1])
++                                           if (kind := public_storage(typ, structures)) is not None)
+ 
+     def relevant(value):
+         if hasattr(value, 'op'):
+             annotation = getattr(value, 'annotation', None)
+-            if annotation in structures or (annotation and annotation.startswith('A<')
++            if annotation and public_storage(annotation, structures) or annotation in structures or (annotation and annotation.startswith('A<')
+                                              and annotation[2:-1] in structures):
+                 return True
+             return relevant(value.args)
+@@ -155,7 +160,7 @@
+     while True:
+         previous = {name: node.storage_requirements for name, node in catalog.items()}
+         for node in catalog.values():
+-            if (node.handle_result and node.args[2][1] in structures) or relevant(node.args[3]):
++            if (node.handle_result and node.args[2][1] in structures) or public_storage(node.args[2][1], structures) or relevant(node.args[3]):
+                 StorageContext(analyzer, node).infer()
+         if all(node.storage_requirements == previous[name] for name, node in catalog.items()):
+             return

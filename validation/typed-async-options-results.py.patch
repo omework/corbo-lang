@@ -1,0 +1,15 @@
+--- before/results.py
++++ after/results.py
+@@ -1900,7 +1900,11 @@
+                     value = self.async_owned_result_value(mode, typ, execution.task_result_sources, execution.task_result_fields)
+                     return flow, replace(value, mode=exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]), typ='Int')
+                 if mode in ('owned', 'join_owned', *OWNED_JOIN_TYPES, 'handle_option', *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES):
+-                    kind = owned_join_mode(mode) if mode in OWNED_JOIN_TYPES else option_join_mode(OPTION_JOIN_TYPES[mode]) if mode in OPTION_JOIN_TYPES else {'owned': 'join_owned', 'join_owned': 'join_nested', 'handle_option': 'join_option'}[mode]
++                    if mode in ('owned', *OWNED_JOIN_TYPES):
++                        kind = owned_join_mode(mode)
++                    else:
++                        inner = OPTION_JOIN_TYPES[mode] if mode in OPTION_JOIN_TYPES else f'Option<A<{typ}>>'
++                        kind = option_join_mode(inner)
+                     effects = getattr(declaration, 'field_effect_summary', None)
+                     if effects is not None and effects.complete and (
+                             effects.may_complete is False or

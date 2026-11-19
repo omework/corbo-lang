@@ -1,0 +1,69 @@
+test_mutable_payloads (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_mutable_payloads) ... FAIL
+test_nested_payload (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_nested_payload) ... ok
+test_parent_receiver_requires_both_payload_pools (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_parent_receiver_requires_both_payload_pools) ... ok
+test_relay_both_arms (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_relay_both_arms) ... ok
+test_return_both_arms (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_return_both_arms) ... ok
+test_try_push_success_and_capacity_failure (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_try_push_success_and_capacity_failure) ... ok
+
+======================================================================
+FAIL: test_mutable_payloads (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_mutable_payloads)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17350, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15378, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3271, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10673, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12322, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13797, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13885, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5051, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13797, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14056, in statements
+    kind, value, _ = self.expression(args[0], scope, 'print')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9516, in expression
+    view = self.struct_mutable_field_loan(expr[1], write=False)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5922, in struct_mutable_field_loan
+    self.array_access(view, write=write)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6532, in array_access
+    self.fail(f"accès à '{binding.name}' incompatible avec un emprunt actif")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2023, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: accès à 'old' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_vector_payload_exchanges.py", line 70, in test_mutable_payloads
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: accès à 'old' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 6 tests in 4.657s
+
+FAILED (failures=1)

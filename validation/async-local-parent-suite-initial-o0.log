@@ -1,0 +1,116 @@
+test_conditional_results_and_early_return (test_async_local_parent.AsyncLocalParentTests.test_conditional_results_and_early_return) ... ok
+test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) ... 
+  test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) (parameter='->Point') ... FAIL
+test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) ... ok
+test_loop_result_with_continue (test_async_local_parent.AsyncLocalParentTests.test_loop_result_with_continue) ... ok
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... ok
+test_replacement_keeps_old_until_new_is_evaluated (test_async_local_parent.AsyncLocalParentTests.test_replacement_keeps_old_until_new_is_evaluated) ... FAIL
+test_result_borrow_reserves_value (test_async_local_parent.AsyncLocalParentTests.test_result_borrow_reserves_value) ... ok
+
+======================================================================
+FAIL: test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) (parameter='->Point')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6365, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2681, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3923, in emit_computed_transfer
+    return emit_region_block(body[:-1], expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4287, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4607, in emit_branches
+    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4720, in export_async_value
+    require_durable_storage(result, depth, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1012, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 61, in test_copies_do_not_retain_original_child_stack
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+======================================================================
+FAIL: test_replacement_keeps_old_until_new_is_evaluated (test_async_local_parent.AsyncLocalParentTests.test_replacement_keeps_old_until_new_is_evaluated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6371, in _lower_async_function
+    assign(*args, line, following=body[index + 1:])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5519, in assign
+    fail(line, 'réaffectation de collection : transfert explicite du même type requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: réaffectation de collection : transfert explicite du même type requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 52, in test_replacement_keeps_old_until_new_is_evaluated
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: réaffectation de collection : transfert explicite du même type requis
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.191s
+
+FAILED (failures=2)

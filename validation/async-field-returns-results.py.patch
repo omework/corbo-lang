@@ -1,0 +1,18 @@
+--- before/results.py
++++ after/results.py
+@@ -2066,6 +2066,15 @@
+                         _, capture_mode, capture_type = declaration.args[1][index]
+                         if isinstance(value, Value) and int_reference_row(capture_type, capture_mode):
+                             origins = self.reference_row_result_targets(value, capture_type, capture_mode, result_paths[index])
++                        elif isinstance(value, Value) and '' in self.analyzer.enums.get(capture_type, {}):
++                            projected = set()
++                            fields = dict(self.analyzer.enums[capture_type][''])
++                            for path in result_paths[index]:
++                                field = '.'.join(path)
++                                kind = ('indirect_field_parameter' if fields.get(field) == '&mut Int'
++                                        else 'inline_field_parameter')
++                                projected.update(self.inline_field_targets(value, field, kind))
++                            origins = frozenset(projected)
+                         for origin in origins or (BorrowTarget('local'),):
+                             if (result_mode == 'ref' and origin.kind == 'parameter'
+                                     and self.params[origin.parameter][1] == 'mut'):

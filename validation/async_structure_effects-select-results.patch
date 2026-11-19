@@ -1,0 +1,113 @@
+--- before/async_structure_effects.py
++++ async_structure_effects.py
+@@ -7,10 +7,16 @@
+ """
+ 
+ from dataclasses import dataclass, replace
++from collections import ChainMap
+ from types import SimpleNamespace
+ 
+ from results import FunctionResult, ResultAnalyzer, ResultContext, Value, VOID
+-from array_syntax import REFERENCE_VECTORS, reference_array_shape
++from array_syntax import REFERENCE_VECTORS, reference_array_shape, merge_owned_values
++from utf8_syntax import UTF8_BORROW_MODES, VALUE_MODES, PLAIN_RETURN_JOINS, PLAIN_JOIN_TYPES
++
++
++FIELD_RESULT_MODES = ChainMap(dict.fromkeys(('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut',
++                                           'owned', 'join_owned', 'join_nested', 'array')), VALUE_MODES)
+ 
+ 
+ class IncompleteStructureEffects(Exception):
+@@ -109,7 +115,8 @@
+     def __init__(self, effects, node):
+         # Result checking belongs to the existing checker. This pass collects
+         # the states of injected structures at each continuing/returning exit.
+-        declared = node.args[2] if node.args[2][0] in ('ref', 'mut') else ('void', 'Void')
++        declared = node.args[2] if node.args[2][0] in (
++            'ref', 'mut', 'owned', 'join_owned', 'join_nested', *UTF8_BORROW_MODES) else ('void', 'Void')
+         super().__init__(effects.results, replace(node, args=(
+             node.args[0], node.args[1], declared, node.args[3])))
+         self.effects = effects
+@@ -188,7 +195,38 @@
+ 
+     def collect(self, value, line, environment=None):
+         self.has_completion = True
+-        super().collect(value if self.declared[0] in ('ref', 'mut') else VOID, line, environment)
++        super().collect(VOID if self.declared[0] == 'void' else value, line, environment)
++
++    def completed_value(self, mode, typ, values, *, joined=False):
++        if mode in ('ref', 'mut'):
++            if (mode, typ) not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
++                raise IncompleteStructureEffects('résultat emprunté agrégé non raccordé aux effets de champs')
++            value = Value(mode, typ,
++                reference_targets=frozenset(target for value in values for target in value.reference_targets),
++                payload_reference=any(value.payload_reference for value in values))
++        elif mode in ('owned', 'join_owned', 'join_nested', *UTF8_BORROW_MODES):
++            if not values or any((value.mode, value.typ) != (mode, typ) for value in values):
++                raise IncompleteStructureEffects('résultat async sans contrat de provenance compatible')
++            value = merge_owned_values(values)
++        elif mode in FIELD_RESULT_MODES:
++            # Plain scalars/arrays and error envelopes carry no memory target.
++            value = Value(mode, typ)
++        else:
++            raise IncompleteStructureEffects('origine du résultat async non raccordée aux effets de champs')
++        if not joined:
++            return value
++        if mode in ('owned', 'join_owned'):
++            return replace(value, mode='join_owned' if mode == 'owned' else 'join_nested')
++        if mode in ('ref', 'mut', *UTF8_BORROW_MODES):
++            return replace(value, mode='join_' + mode)
++        if mode == 'array':
++            return replace(value, mode='join_array')
++        if (plain := PLAIN_RETURN_JOINS.get((mode, typ))) is not None:
++            return Value(plain, PLAIN_JOIN_TYPES[plain])
++        if mode == 'join_nested':
++            raise IncompleteStructureEffects('troisième enveloppe propriétaire non raccordée')
++        return Value({'Int': 'join_int', 'Bool': 'join_bool', 'bool': 'join_bool',
++                      'u8': 'join_byte', 'char': 'join_char'}.get(typ, 'join_void'), typ)
+ 
+     def check_call_actuals(self, name, actuals, line):
+         if any(isinstance(value, Value) and value.pending_structure_calls for value in actuals):
+@@ -270,13 +308,7 @@
+             return set(), VOID
+         self.join_environments(environment, exits)
+         mode, typ = signatures.pop()
+-        if mode in ('ref', 'mut'):
+-            return {'next'}, Value(mode, typ,
+-                reference_targets=frozenset(t for value in values for t in value.reference_targets),
+-                payload_reference=any(value.payload_reference for value in values))
+-        if mode not in ('scalar', 'bool', 'byte', 'char', 'void'):
+-            raise IncompleteStructureEffects('résultat Select agrégé non raccordé aux effets de champs')
+-        return {'next'}, Value(mode, typ)
++        return {'next'}, self.completed_value(mode, typ, values)
+ 
+     def expression(self, expr, environment, line, expected_array=None):
+         if expr is None:
+@@ -372,24 +404,7 @@
+             if len(signatures) != 1:
+                 raise IncompleteStructureEffects('résultats différents dans un choix de tâches')
+             mode, typ = signatures.pop()
+-            if mode in ('ref', 'mut'):
+-                if (mode, typ) not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
+-                    raise IncompleteStructureEffects('résultat emprunté agrégé non raccordé aux effets de champs')
+-                # Failure supplies no payload. Only successful completions
+-                # contribute result targets; their field effects were applied
+-                # using the same saved input values above.
+-                targets = frozenset(target for value in completed_values
+-                                    for target in value.reference_targets)
+-                return flow, Value('join_' + mode if task.mode == 'execution' else mode, typ,
+-                    reference_targets=targets,
+-                    payload_reference=any(value.payload_reference for value in completed_values))
+-            if mode not in ('scalar', 'bool', 'byte', 'char', 'void'):
+-                raise IncompleteStructureEffects('origine du résultat async non raccordée aux effets de champs')
+-            # Match payloads still require the handle's execution envelope,
+-            # even though scalar data itself carries no field dependency.
+-            if task.mode == 'execution':
+-                return flow, Value({'Int': 'join_int', 'Bool': 'join_bool',
+-                    'bool': 'join_bool', 'u8': 'join_byte', 'char': 'join_char'}
+-                    .get(typ, 'join_void'), typ)
+-            return flow, Value(mode, typ)
++            # LaunchFailed contributes an unchanged environment, not a result
++            # target. Only successful completions supply these payload values.
++            return flow, self.completed_value(mode, typ, completed_values, joined=task.mode == 'execution')
+         return super().expression(expr, environment, line, expected_array)

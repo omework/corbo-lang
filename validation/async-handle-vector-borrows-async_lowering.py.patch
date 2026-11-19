@@ -1,0 +1,45 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -3116,6 +3116,8 @@
+         if expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('array_index', 'array_deref_slot'):
+             projection = expr[1][1] if expr[1][0] == 'array_deref_slot' else expr[1]
+             collection = collection_index_type(projection)
++            if collection == HANDLE_VECTOR and expr[1][0] == 'array_deref_slot':
++                return ('mut' if expr[0] == 'mut_expr' else 'ref', 'Int')
+             if collection in ('Vector<Int>', 'Vector<u8>'):
+                 return ('mut' if expr[0] == 'mut_expr' else 'ref', 'Int' if collection == 'Vector<Int>' else 'u8')
+             root, _ = reference_array_path(projection)
+@@ -6376,10 +6378,14 @@
+         steps.append('}')
+ 
+     def capture_array_place(projection, mode, line, *, remaining=(), expected_element='int'):
+-        collection = collection_index_type(projection)
+-        if collection in ('Vector<Int>', 'Vector<u8>'):
++        dereference = projection[0] == 'array_deref_slot'
++        vector_projection = projection[1] if dereference else projection
++        collection = collection_index_type(vector_projection)
++        handle_target = dereference and collection == HANDLE_VECTOR
++        if (not dereference and collection in ('Vector<Int>', 'Vector<u8>')) or handle_target:
++            projection = vector_projection
+             name = projection[1][1]
+-            element = 'int' if collection == 'Vector<Int>' else 'uint8_t'
++            element = 'int' if collection == 'Vector<Int>' or handle_target else 'uint8_t'
+             if element != expected_element or remaining:
+                 fail(line, 'emprunt de case Vector : type incompatible')
+             if mode == 'mut' and not (references.get(name) == 'mut'
+@@ -6394,9 +6400,13 @@
+             finally:
+                 active_loans.pop(id(loans), None)
+             pointer = temporary(element + ' *')
+-            steps.append(f'{pointer} = ({element} *)vector_checked_item(frame->{fields[name]}, {index});')
++            if handle_target:
++                # Borrow the stable allocation contents, not the Cell* slot.
++                # The carrier loan keeps that allocation alive until last use.
++                steps.append(f'{pointer} = &(*(Cell **)vector_checked_item(frame->{fields[name]}, {index}))->value;')
++            else:
++                steps.append(f'{pointer} = ({element} *)vector_checked_item(frame->{fields[name]}, {index});')
+             return pointer, (name, reservation)
+-        dereference = projection[0] == 'array_deref_slot'
+         if dereference:
+             projection = projection[1]
+             if reference_array_path(projection)[0] not in reference_rows:

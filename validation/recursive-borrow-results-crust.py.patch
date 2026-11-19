@@ -1,0 +1,46 @@
+--- before/crust.py
++++ crust.py
+@@ -5582,7 +5582,13 @@
+             # field. Its own ancestry determines what the detached result holds.
+             targets = {}
+             for carrier in binding.referents or (binding.alloc,):
++                arm, _, member = head.partition('.')
++                if skip_unreachable and carrier.variants and arm not in carrier.variants:
++                    continue
+                 children = dict(carrier.owned_fields).get(head)
++                declared = dict(self.enums.get(carrier.typ, {}).get(arm, ())).get(member, '')
++                if children is None and declared.startswith('A<') and carrier.recursive_projection_sources:
++                    children = self.symbolic_owned_projection(carrier, head, declared[2:-1])
+                 if children is None:
+                     children, _ = self.struct_shared_reference(
+                         Binding(binding.name, binding.kind, binding.c, carrier), head,
+@@ -5598,6 +5604,7 @@
+                 skip_unreachable=skip_unreachable)
+         targets, parents = {}, {}
+         for carrier in binding.referents or (binding.alloc,):
++            self.prepare_recursive_reference_fields(carrier)
+             field = key.partition(':')[0]
+             arm = field.partition('.')[0]
+             if skip_unreachable and arm and carrier.variants and arm not in carrier.variants:
+@@ -12795,6 +12802,9 @@
+                     continue
+                 if destination is not None and statement.op == 'if_yield':
+                     expression = statement.args[0]
++                    if expression[0] == 'match_expr':
++                        general_branches = True
++                        continue
+                     if (expression[0] == 'array_split' or
+                             (expression[0] == 'call' and expression[1] in self.functions
+                              and self.functions[expression[1]].args[2][0] == 'vector_split')):
+@@ -13172,8 +13182,9 @@
+                     self.lines.append(f'{ctype} {value} = {helper}({binding.c}, {offset});')
+                     bindings[name] = Binding(name, mode, value, next(iter(targets), None),
+                                              static_type=reference_type(field_type)[1], referents=targets,
+-                                             borrow_parents=(binding.alloc.borrow_parents if node.consuming
+-                                                             else (*subject_loans, *binding.alloc.borrow_parents)))
++                                             borrow_parents=(binding.alloc.borrow_parents
++                                                 if node.consuming or not field_type.startswith('&mut ')
++                                                 else (*subject_loans, *binding.alloc.borrow_parents)))
+                 else:
+                     self.lines.append(f'int {value} = cell_load_int({binding.c}, {offset});')
+                     bindings[name] = Binding(name, 'scalar', value)

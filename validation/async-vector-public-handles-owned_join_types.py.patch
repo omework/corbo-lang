@@ -1,0 +1,12 @@
+--- before/owned_join_types.py
++++ owned_join_types.py
+@@ -49,7 +49,8 @@
+     payload = typ[2:-1] if storage == 'pool' else typ
+     if storage == 'local' and payload in ('Int', 'Bool', 'bool', 'u8', 'char', 'Void', 'runtime::Error'):
+         return None
+-    if payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload):
++    from array_syntax import is_handle_vector
++    if payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or is_handle_vector(payload) or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload):
+         return owned_mode_at_depth(depth), payload, storage
+     return None
+ 

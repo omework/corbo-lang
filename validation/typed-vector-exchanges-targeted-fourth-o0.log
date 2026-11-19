@@ -1,0 +1,102 @@
+test_consumer_returns_handle_from_either_arm (test_typed_vector_exchanges.TypedVectorExchangeTests.test_consumer_returns_handle_from_either_arm) ... FAIL
+test_direct_drop_and_branch_results (test_typed_vector_exchanges.TypedVectorExchangeTests.test_direct_drop_and_branch_results) ... ok
+test_growing_payloads_through_typed_result (test_typed_vector_exchanges.TypedVectorExchangeTests.test_growing_payloads_through_typed_result) ... ok
+test_immediate_consuming_match (test_typed_vector_exchanges.TypedVectorExchangeTests.test_immediate_consuming_match) ... ok
+test_replace_direct_named_and_moved (test_typed_vector_exchanges.TypedVectorExchangeTests.test_replace_direct_named_and_moved) ... ok
+test_returned_and_relayed_result (test_typed_vector_exchanges.TypedVectorExchangeTests.test_returned_and_relayed_result) ... 
+  test_returned_and_relayed_result (test_typed_vector_exchanges.TypedVectorExchangeTests.test_returned_and_relayed_result) (checker='verify_program') ... FAIL
+  test_returned_and_relayed_result (test_typed_vector_exchanges.TypedVectorExchangeTests.test_returned_and_relayed_result) (checker='compile_source') ... FAIL
+test_separate_arm_can_escape_short_other_pool (test_typed_vector_exchanges.TypedVectorExchangeTests.test_separate_arm_can_escape_short_other_pool) ... ok
+test_try_push_both_outcomes_through_contract (test_typed_vector_exchanges.TypedVectorExchangeTests.test_try_push_both_outcomes_through_contract) ... ok
+test_type_transfer_and_result_usage (test_typed_vector_exchanges.TypedVectorExchangeTests.test_type_transfer_and_result_usage) ... ok
+
+======================================================================
+FAIL: test_consumer_returns_handle_from_either_arm (test_typed_vector_exchanges.TypedVectorExchangeTests.test_consumer_returns_handle_from_either_arm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4996, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13639, in block
+    raise signal
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13605, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13827, in statements
+    raise FunctionReturn(value)
+crust.FunctionReturn: ('owned', 'v12', Allocation(id=11, scope=6, label='n', sources=(MemorySource(id=2, scope=1, kind='symbolic', name='input_0', c='symbolic_source_2', element_type=None),), c='p4.value', alive=True, typ='Point', guard=None, definite=True, origins=frozenset({3}), dependencies=(), owned_fields=(), variants=frozenset(), borrow_parents=(), reference_targets=(), item_sources=(), task_result_sources=(), task_result_origins=frozenset(), task_result_fields=(), task_result_variants=frozenset(), async_field_updates=(), item_positions=(), item_origins=frozenset(), item_position_origins=(), item_removal_epoch=0, handle_revision=0, optional_payload=False, absent_owned_payload=False, payload_storage=None, exchange_payloads=(), reference_positions=None, optional_reference_targets=(), reference_outcome=None, reference_exchange=None, recursive_projection_sources=(), array_capture=None, async_reference_type='Int', async_reference_slot=None, optional_utf8_parameter=None, pool_capture=None, inline_root=None, inline_path=''))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17144, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15172, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3232, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10514, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12163, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13605, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13693, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4998, in conditional
+    self.branch_return(returning.result)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4707, in branch_return
+    self.check_return_sources(frame, returned)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4815, in check_return_sources
+    self.check_allocation_handle_type(f'A<{allocation.typ}>', 'owned', allocation)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3714, in check_allocation_handle_type
+    self.fail(f'annotation {annotation} : une allocation de Pool<{element}> est requise')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2021, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: annotation A<Point> : une allocation de Pool<Point> est requise
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_vector_exchanges.py", line 58, in test_consumer_returns_handle_from_either_arm
+    self.assertEqual(self.run_source(source.replace('INDEX',str(index))).stdout,expected)
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: annotation A<Point> : une allocation de Pool<Point> est requise
+
+======================================================================
+FAIL: test_returned_and_relayed_result (test_typed_vector_exchanges.TypedVectorExchangeTests.test_returned_and_relayed_result) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_returned_and_relayed_result (test_typed_vector_exchanges.TypedVectorExchangeTests.test_returned_and_relayed_result) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 10.227s
+
+FAILED (failures=3)

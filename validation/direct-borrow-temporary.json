@@ -1,0 +1,8 @@
+{
+  "case": "temporary target in caller, last use then reset and reuse",
+  "configuration": "CRUST_SANITIZE=undefined",
+  "source": "fn borrow(data:&Int)->&Int{return &data;} var p=pool<Int>(1);var r=borrow(&new(p)Int(42));address(r);print(r);p.reset();var fresh=new(p)Int(7);print(fresh);",
+  "stdout": "0x102d94000\n42\n7\n",
+  "stderr": "destroy data=42\nreclaim data\nreset\ndestroy fresh=7\nreclaim fresh\n",
+  "status": "OK"
+}

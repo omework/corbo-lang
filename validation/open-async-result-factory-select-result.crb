@@ -1,0 +1,2 @@
+struct Point{x:Int}fn make(n:Int)-><-Point{let p=Point{x:n};return <-p;}async fn leaf(n:Int)-><-Point{let p=make(n);yield;return <-p;}fn prepare(n:Int)-><-leaf{let t=leaf(n);return <-t;}async fn relay(n:Int)-><-Point{let a=prepare(n);let b=prepare(n+1);
+let mut s=runtime::select(->a,->b);let q=s.await;drop(->s);return <-q;}fn main(){let h=runtime::spawn(->relay(7));match h.join(){Ok(q)=>{print(q.x);drop(->q);},Err(_)=>{}}}

@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Only complete pages beyond the last live byte may be returned to the OS.
+/// Returns complete unused pages beyond live to the OS when forced or above threshold; updates committed only on success.
+fn reclaim_after(start:usize,live:usize,done_slot:usize,threshold:usize,force:bool) {
+    let page=get_page_size();
+    let done=read_word(copy(done_slot));
+    if copy(start)==0 || copy(page)==0 || (!copy(force) && copy(threshold)==0) || copy(live)>=copy(done) {
+        return;
+    }
+    let boundary=copy(live)+(copy(page)-copy(live)%copy(page))%copy(page);
+    if copy(boundary)>=copy(done) {
+        return;
+    }
+    let bytes=copy(done)-copy(boundary);
+    if (copy(force) || copy(bytes)>=copy(threshold)) && os_decommit(copy(start)+copy(boundary),copy(bytes)) {
+        write_word(copy(done_slot),copy(boundary));
+    }
+}
+/// Computes the last live byte across active regions before considering complete tail pages for reclamation.
+fn reclaim_band(band:usize,force:bool) {
+    let mut live:usize=0;
+    let mut region=g_RegionBand_active(copy(band));
+    while copy(region)!=0 {
+        let stop=g_Region_offset(copy(region))+g_Region_len(copy(region))*g_Region_width(copy(region));
+        if copy(stop)>copy(live) {
+            live=copy(stop);
+        }
+        region=g_Region_next(copy(region));
+    }
+    reclaim_after(g_RegionBand_base(copy(band)),copy(live),a_RegionBand_committed(copy(band)),get_region_reclaim_threshold(),copy(force));
+}
+/// Reclaims unused fixed/region tail pages using the configured thresholds or force, without releasing live storage.
+fn reclaim_scope(force:bool) {
+    let fixed=get_committed();
+    let page=get_page_size();
+    let live=get_cursor();
+    if get_base()!=0 && copy(page)!=0 && (copy(force) || get_fixed_reclaim_threshold()!=0) && copy(live)<copy(fixed) {
+        let boundary=copy(live)+(copy(page)-copy(live)%copy(page))%copy(page);
+        if copy(boundary)<copy(fixed) {
+            let bytes=copy(fixed)-copy(boundary);
+            if (copy(force) || copy(bytes)>=get_fixed_reclaim_threshold()) && os_decommit(get_base()+copy(boundary),copy(bytes)) {
+                set_committed(copy(boundary));
+            }
+        }
+    }
+    if copy(force) || get_region_reclaim_threshold()!=0 {
+        lock();
+        let mut band=get_current_band();
+        while copy(band)!=0 {
+            reclaim_band(copy(band),copy(force));
+            band=g_RegionBand_parent(copy(band));
+        }
+        reclaim_band(global_band_address(),copy(force));
+        unlock();
+    }
+}
+/// Requests OS decommit/discard for a page range; reports whether the platform operation succeeded.
+fn release_pages(start:usize,size:usize)->bool {
+    os_decommit(copy(start),copy(size))
+}

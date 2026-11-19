@@ -1,0 +1,15 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -810,7 +810,11 @@
+                     return paths, Value(exchange_join_mode(inner), 'Int', execution.task_result_assets,
+                         exchange_payloads=tuple(fields.get(arm, execution.task_result_assets) for arm in ('ok', 'err')))
+                 if mode in ('owned', 'join_owned', *OWNED_JOIN_TYPES, 'handle_option', *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES):
+-                    kind = owned_join_mode(mode) if mode in OWNED_JOIN_TYPES else option_join_mode(OPTION_JOIN_TYPES[mode]) if mode in OPTION_JOIN_TYPES else {'owned': 'join_owned', 'join_owned': 'join_nested', 'handle_option': 'join_option'}[mode]
++                    if mode in ('owned', *OWNED_JOIN_TYPES):
++                        kind = owned_join_mode(mode)
++                    else:
++                        inner = OPTION_JOIN_TYPES[mode] if mode in OPTION_JOIN_TYPES else f'Option<A<{definition.args[2][1]}>>'
++                        kind = option_join_mode(inner)
+                     effects = getattr(definition, 'field_effect_summary', None)
+                     if effects is not None and effects.complete and (
+                             effects.may_complete is False or effects.completion_result.absent_owned_payload):

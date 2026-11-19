@@ -1,0 +1,24 @@
+async fn first() -> Int {
+    yield;
+    return 7;
+}
+
+async fn second() -> Int {
+    let values = [8, 9];
+    yield;
+    return values[1];
+}
+
+fn finish(handle: -> runtime::Handle<Int>) -> Int {
+    match handle.join() {
+        Ok(value) => { return value; },
+        Err(_) => { return 99; }
+    }
+}
+
+fn main() {
+    let a = runtime::spawn(-> first());
+    let b = runtime::spawn(-> second());
+    print(finish(-> a));
+    print(finish(-> b));
+}

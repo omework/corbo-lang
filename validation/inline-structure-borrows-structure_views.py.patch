@@ -1,0 +1,46 @@
+--- before/structure_views.py
++++ after/structure_views.py
+@@ -13,6 +13,20 @@
+     typ: str
+     first: int
+     count: int
++
++
++class StructureSchemas(dict):
++    """Existing aggregate leaf schemas plus nominal interior projections."""
++    inline_structures = None
++
++
++def contained_field(schemas, typ, path):
++    return next((view for view in (getattr(schemas, 'inline_structures', None) or {}).get(typ, ())
++                 if view.path == path), None)
++
++
++def paths_overlap(left, right):
++    return left == right or left.startswith(right + '.') or right.startswith(left + '.')
+ 
+ 
+ def contained_layouts(structures):
+@@ -100,4 +114,22 @@
+ static void structure_view_store_ref(CrustStructureView view, size_t offset, Cell *value) {
+     memcpy(structure_view_address(view, offset, sizeof value), &value, sizeof value);
+ }
++
++static void structure_view_print(CrustStructureView view) {
++    printf("%s(", view.layout->enum_name);
++    for (size_t i=0;i<view.layout->field_count;++i) {
++        size_t offset=view.layout->field_offsets[i];
++        int value=view.layout->field_kinds[i]
++            ? structure_view_load_ref(view,offset)->value : structure_view_load_int(view,offset);
++        printf(i ? ", %d" : "%d",value);
++    }
++    puts(")");
++}
++
++/* Bodies are specialized for the concrete reference representation. */
++#define cell_load_int(cell,offset) _Generic((cell), CrustStructureView: structure_view_load_int, default: cell_load_int)(cell,offset)
++#define cell_store_int(cell,offset,value) _Generic((cell), CrustStructureView: structure_view_store_int, default: cell_store_int)(cell,offset,value)
++#define cell_load_ref(cell,offset) _Generic((cell), CrustStructureView: structure_view_load_ref, default: cell_load_ref)(cell,offset)
++#define cell_store_ref(cell,offset,value) _Generic((cell), CrustStructureView: structure_view_store_ref, default: cell_store_ref)(cell,offset,value)
++#define cell_print(cell) _Generic((cell), CrustStructureView: structure_view_print, default: cell_print)(cell)
+ '''

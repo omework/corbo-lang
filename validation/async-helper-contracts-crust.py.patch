@@ -1,0 +1,47 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2105,12 +2105,17 @@
+             return True
+         for target in summary.reference_targets:
+             binding = bindings[params[target.parameter][0]]
+-            if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter') or binding.array_root:
++            if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter',
++                               'inline_field_parameter', 'indirect_field_parameter') or binding.array_root:
+                 return True
+             if target.kind == 'task_capture_parameter' and any(
+                     candidate.array_capture is not None
+                     for _, candidates in capture_fields(binding.alloc.dependencies, target.field)
+                     for candidate in candidates):
++                return True
++            if target.kind == 'task_capture_parameter' and any(
++                    index == int(target.field) and path
++                    for index, path in self.async_reference_paths[params[target.parameter][2]]):
+                 return True
+         return False
+ 
+@@ -2633,7 +2638,7 @@
+ 
+             sources, arguments = {}, []
+ 
+-            def add_field_dependencies(allocation, index):
++            def add_field_dependencies(allocation, index, prefix=''):
+                 dependencies = {'': (allocation, [])}
+                 fields = aggregate_reference_paths(self.enums, allocation.typ)
+                 if allocation.typ in REFERENCE_VECTORS:
+@@ -2642,7 +2647,7 @@
+                              and symbol.name.startswith('.items:')}
+                     fields = ((slot, 'Int') for slot in ('.items', *sorted(slots)))
+                 for field_name, pointee in fields:
+-                    group = find(('allocation_field_parameter', index, field_name))
++                    group = find(('allocation_field_parameter', index, prefix + field_name))
+                     if group not in sources:
+                         sid = check.uid()
+                         sources[group] = MemorySource(sid, root.id, 'symbolic', field_name, f'symbolic_source_{sid}')
+@@ -2775,6 +2780,7 @@
+                         root.allocations.append(target)
+                         check.allocations.append(target)
+                         check.origin_sources[target.id] = source
++                        add_field_dependencies(target, index, prefix=f'capture.{position}/')
+                         dependencies.append((f'{capture}.{position}', (target,)))
+                     allocation = Allocation(check.uid(), root.id, pname, (), c=actual,
+                                             typ=f'{mode.capitalize()}<{typ}>', dependencies=tuple(dependencies),

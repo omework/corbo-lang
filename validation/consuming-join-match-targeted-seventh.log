@@ -1,0 +1,59 @@
+test_async_named_result_and_suspend_in_arm (test_consuming_join_match.ConsumingJoinMatchTests.test_async_named_result_and_suspend_in_arm) ... ok
+test_borrowed_payload_keeps_target_reserved (test_consuming_join_match.ConsumingJoinMatchTests.test_borrowed_payload_keeps_target_reserved) ... ok
+test_error_arm_and_failed_launch (test_consuming_join_match.ConsumingJoinMatchTests.test_error_arm_and_failed_launch) ... ok
+test_local_struct_return_and_relay (test_consuming_join_match.ConsumingJoinMatchTests.test_local_struct_return_and_relay) ... ok
+test_owned_payload_receiver_and_slot_reuse (test_consuming_join_match.ConsumingJoinMatchTests.test_owned_payload_receiver_and_slot_reuse) ... ok
+test_recorded_scalar_and_public_vector (test_consuming_join_match.ConsumingJoinMatchTests.test_recorded_scalar_and_public_vector) ... ok
+test_unit_result_in_sync_and_async_matches (test_consuming_join_match.ConsumingJoinMatchTests.test_unit_result_in_sync_and_async_matches) ... ok
+test_buffered_handle_exchange_wildcard_consumes_remaining_arm (test_foundation_rules.FoundationTests.test_buffered_handle_exchange_wildcard_consumes_remaining_arm) ... ERROR
+
+======================================================================
+ERROR: test_buffered_handle_exchange_wildcard_consumes_remaining_arm (test_foundation_rules.FoundationTests.test_buffered_handle_exchange_wildcard_consumes_remaining_arm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 11892, in test_buffered_handle_exchange_wildcard_consumes_remaining_arm
+    run = self.native("""
+        let mut vp = pool<Vector<A<Int>>>(1);
+    ...<4 lines>...
+        drop(-> v);
+    """)
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 722, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17657, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17650, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16111, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15659, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3292, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14063, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14612, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6785, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9572, in expression
+    result = self.utf8_expression(expr, scope, source_name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 7514, in utf8_expression
+    return self.expression(lowered, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9791, in expression
+    self.fail('match de try_push exige Ok(()), replace exige Ok(handle)')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2016, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: match de try_push exige Ok(()), replace exige Ok(handle)
+
+----------------------------------------------------------------------
+Ran 8 tests in 6.197s
+
+FAILED (errors=1)

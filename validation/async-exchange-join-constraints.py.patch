@@ -1,0 +1,104 @@
+--- /tmp/crust-before-async-exchange-join/constraints.py
++++ constraints.py
+@@ -1,5 +1,6 @@
+ """Infer ordered source equality/disjointness obligations independently of calls."""
+ 
++from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
+ from capture_paths import result_capture_selector, capture_index, capture_slots
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+@@ -368,7 +369,7 @@
+                 history[asset] = frozenset()
+                 environment[name] = Value(mode, typ, frozenset({asset}))
+             elif mode in ('task', 'execution'):
+-                owned_capture = any(capture in ('owned', 'join_owned', 'join_nested', 'join_option') or capture_type.startswith('Pool<')
++                owned_capture = any(capture in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES) or capture_type.startswith('Pool<')
+                                     for _, capture, capture_type in
+                                     self.analyzer.async_functions[typ].args[1])
+                 assets = frozenset()
+@@ -378,7 +379,7 @@
+                     assets = frozenset({asset})
+                 from async_lowering import owned_result_parameters, utf8_result_parameters
+                 result_assets = frozenset()
+-                if self.analyzer.async_functions[typ].args[2][0] in ('owned', 'join_owned', 'join_nested', 'join_option'):
++                if self.analyzer.async_functions[typ].args[2][0] in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES):
+                     asset = Asset(('task_result_parameter', index), Source('task_result_parameter', index))
+                     history[asset] = frozenset()
+                     result_assets = frozenset({asset})
+@@ -389,7 +390,7 @@
+                 for position, (_, capture, capture_type) in enumerate(self.analyzer.async_functions[typ].args[1]):
+                     from array_syntax import owned_reference_paths
+                     owned_borrows = [path for path, _, _ in owned_reference_paths(self.analyzer.enums, capture_type)
+-                                    ] if capture in ('owned', 'join_owned', 'join_nested', 'join_option') else []
++                                    ] if capture in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES) else []
+                     if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES) or position in returned or owned_borrows:
+                         kind = 'task_borrow_parameter' if capture in ('ref', 'mut', 'array_ref', 'array_mut') or owned_borrows else 'task_utf8_parameter'
+                         for selector in ([f'{position}/{path}' for path in owned_borrows] or [str(position)]):
+@@ -448,8 +449,8 @@
+                 environment[name] = Value(mode, typ, frozenset({asset}), tuple(fields),
+                                           frozenset({reservation}),
+                                           handle_items=fields[0][1] if tracks_reference_items else None)
+-                if mode == 'buffered_handle_exchange':
+-                    payloads = (frozenset() if typ == 'Result<(),A<Int>>' else frozenset({asset}),
++                if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
++                    payloads = (frozenset() if typ == 'Result<(),A<Int>>' or mode == 'join_try_push' else frozenset({asset}),
+                                 frozenset({asset}))
+                     environment[name] = replace(environment[name], exchange_payloads=payloads)
+                 if mode == 'mut' and typ.startswith('A<'):
+@@ -788,6 +789,11 @@
+                         paths['next'].pending_executions.pop(token, None)
+                 definition = self.analyzer.async_functions[execution.typ]
+                 mode = definition.args[2][0]
++                if mode == 'buffered_handle_exchange':
++                    inner = definition.args[2][1]
++                    fields = dict(execution.task_result_fields)
++                    return paths, Value(exchange_join_mode(inner), 'Int', execution.task_result_assets,
++                        exchange_payloads=tuple(fields.get(arm, execution.task_result_assets) for arm in ('ok', 'err')))
+                 if mode in ('owned', 'join_owned', 'handle_option'):
+                     kind = {'owned': 'join_owned', 'join_owned': 'join_nested', 'handle_option': 'join_option'}[mode]
+                     effects = getattr(definition, 'field_effect_summary', None)
+@@ -1092,6 +1098,8 @@
+                     return paths, Value(mode, VALUE_MODES[mode])
+                 if values[0].mode == 'join_runtime_error':
+                     return paths, Value('runtime_error', 'runtime::Error')
++                if values[0].mode in EXCHANGE_JOIN_TYPES:
++                    return paths, replace(values[0], mode='buffered_handle_exchange', typ=EXCHANGE_JOIN_INNERS[values[0].mode])
+                 if values[0].mode == 'join_option':
+                     return paths, replace(values[0], mode='handle_option')
+                 if values[0].mode == 'join_nested':
+@@ -1542,7 +1550,7 @@
+                 hook(self, catalog[name], actuals, line)
+             if asynchronous:
+                 assets = frozenset(asset for (_, mode, _), value in zip(params, actuals)
+-                                   if mode in ('owned', 'join_owned', 'join_nested', 'join_option') and isinstance(value, Value) for asset in value.all_assets)
++                                   if mode in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES) and isinstance(value, Value) for asset in value.all_assets)
+                 from async_lowering import owned_result_parameters, utf8_result_parameters
+                 returned = utf8_result_parameters(catalog[name], catalog,
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
+@@ -1552,7 +1560,7 @@
+                                      or position in returned) and isinstance(value, Value))
+                 captures += tuple((f'{position}/{path}', targets)
+                     for position, ((_, mode, _), value) in enumerate(zip(params, actuals))
+-                    if mode in ('owned', 'join_owned', 'join_nested', 'join_option') and isinstance(value, Value)
++                    if mode in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES) and isinstance(value, Value)
+                     for path, targets in value.fields)
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+                 self.touch_assets(reservations, paths['next'], line)
+@@ -1589,7 +1597,7 @@
+                 if typ != 'Allocator' and not typ.startswith('Pool<') and mode not in ('scalar', *VALUE_MODES, 'array', 'array_ref', 'array_mut', 'array_refs', 'array_refs_owned'):
+                     if not isinstance(value, Value) or (
+                             not value.assets and value.mode not in ('array_ref', 'array_mut')
+-                            and not (mode == value.mode and mode in ('join_owned', 'join_nested', 'join_option')
++                            and not (mode == value.mode and mode in ('join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES)
+                                      and value.absent_owned_payload)
+                             and (mode, value.mode) != ('handle_option', 'handle_option')):
+                         self.fail(line, f"'{pname}' attend une allocation {typ}")
+@@ -1958,7 +1966,7 @@
+                 return paths, value
+             if result.mode in VALUE_MODES:
+                 return paths, Value(result.mode, result.typ)
+-            if result.mode not in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option'):
++            if result.mode not in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES):
+                 return paths, SCALAR if result.mode == 'scalar' else UNKNOWN if result.mode == 'array' else VOID
+             def resolve_assets(entries):
+                 result_sources = set()

@@ -1,0 +1,22 @@
+--- before/handle_types.py
++++ handle_types.py
+@@ -41,7 +41,8 @@
+         return ('array', payload)
+     if payload.startswith('A<') and payload.endswith('>'):
+         content = payload[2:-1]
+-        if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures:
++        from array_syntax import is_handle_vector
++        if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures or is_handle_vector(content):
+             return ('owned', content)
+     if exchange_element(payload) is not None:
+         return ('buffered_handle_exchange', payload)
+@@ -165,7 +166,8 @@
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),
+                                       public_result_storage=result_storage,
+                                       public_result_borrows=result_borrows, public_result_views=result_views, native_block=False, line=0)
+-        if signature[0] in ('owned', *OWNED_JOIN_TYPES) and signature[1] in self.structures:
++        from array_syntax import is_handle_vector
++        if signature[0] in ('owned', *OWNED_JOIN_TYPES) and (signature[1] in self.structures or is_handle_vector(signature[1])):
+             from array_syntax import owned_reference_paths
+             from results import FunctionResult, ResultCandidate, BorrowTarget
+             enums = {name: layout if isinstance(layout, dict) else {'': layout}

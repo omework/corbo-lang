@@ -1,0 +1,14 @@
+--- before/crust.py
++++ crust.py
+@@ -2594,6 +2594,11 @@
+                     if holder.variants and arm not in holder.variants:
+                         continue
+                     owned = dict(holder.owned_fields).get(target.field, ())
++                    declared = dict(self.enums.get(holder.typ, {}).get(arm, ())).get(
++                        target.field.partition('.')[2], '')
++                    if not owned and declared.startswith('A<') and holder.recursive_projection_sources:
++                        owned = self.symbolic_owned_projection(holder, target.field, declared[2:-1])
++                    self.prepare_recursive_reference_fields(holder)
+                     field_mode = 'mut' if owned else self.field_modes(holder.typ).get(target.field)
+                     if field_mode is None or (summary.mode == 'mut' and field_mode != 'mut'):
+                         self.fail('invariant interne : champ incompatible avec le contrat de retour')

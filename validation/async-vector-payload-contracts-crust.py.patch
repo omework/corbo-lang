@@ -1,0 +1,77 @@
+--- crust.py (before)
++++ crust.py
+@@ -15575,6 +15575,49 @@
+             allocation.item_sources = check.owned_field_sources(fields)
+             allocation.variants = frozenset(check.enums.get(allocation.typ, {}))
+ 
++        def vector_bridge_payload(allocation):
++            # Unknown input positions have no element that can be inspected at
++            # bridge entry (the vector may be empty). Build only the symbolic
++            # ownership/borrow graph; extraction emits access to the real Cell.
++            def payload(typ, label, source=None, origins=None, ancestors=frozenset()):
++                if source is None:
++                    source = MemorySource(check.uid(), external.id, 'symbolic', label, 'NULL', element_type=typ)
++                    external.sources.append(source)
++                child = Allocation(check.uid(), allocation.scope, label, (source,), c='NULL', typ=typ,
++                                   variants=frozenset(check.enums.get(typ, {})))
++                child.origins = origins if origins is not None else frozenset({child.id})
++                for origin in child.origins:
++                    check.origin_sources[origin] = source
++                if typ in ancestors:
++                    return child
++                owned, borrowed = [], []
++                for arm, fields in check.enums.get(typ, {}).items():
++                    for name, declared in fields:
++                        key = arm + '.' + name
++                        if (reference := reference_type(declared)) is not None:
++                            target = payload(reference[1], label + '/' + key, ancestors=ancestors | {typ})
++                            target.scope = external.id
++                            check.allocations.append(target)
++                            external.allocations.append(target)
++                            borrowed.append((key, (target,)))
++                        elif declared.startswith('A<'):
++                            target = payload(declared[2:-1], label + '/' + key, ancestors=ancestors | {typ})
++                            owned.append((key, (target,)))
++                child.dependencies = tuple(borrowed)
++                child.owned_fields = tuple(owned)
++                child.item_sources = check.owned_field_sources(owned)
++                return child
++            element = handle_vector_element(allocation.typ)
++            source = MemorySource(check.uid(), external.id, 'symbolic', allocation.label + '_items',
++                                  'NULL', element_type=element)
++            external.sources.append(source)
++            origin = check.uid()
++            check.origin_sources[origin] = source
++            allocation.item_sources = (source,)
++            allocation.item_origins = frozenset({origin})
++            allocation.item_positions = allocation.item_position_origins = None
++            allocation.item_payloads = (payload(element, allocation.label + '[]', source, frozenset({origin})),)
++
+         def task_bridge_fields(allocation, index, prefix=''):
+             # Captures of an opaque task are tracked symbolically, never read
+             # by this bridge. The task's own generated code accesses its frame.
+@@ -15616,6 +15659,8 @@
+                 root.allocations.append(allocation)
+                 check.origin_sources[allocation.id] = source
+                 owned_bridge_fields(allocation, parameter)
++                if is_handle_vector(typ):
++                    vector_bridge_payload(allocation)
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
+             elif mode == 'buffered_handle_exchange':
+@@ -15703,14 +15748,7 @@
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 if is_handle_vector(typ):
+-                    item_source = MemorySource(check.uid(), external.id, 'symbolic', parameter + '_items',
+-                                               'NULL', element_type=handle_vector_element(typ))
+-                    external.sources.append(item_source)
+-                    origin = check.uid()
+-                    check.origin_sources[origin] = item_source
+-                    allocation.item_sources = (item_source,)
+-                    allocation.item_origins = frozenset({origin})
+-                    allocation.item_positions = allocation.item_position_origins = None
++                    vector_bridge_payload(allocation)
+                 if typ in self.struct_fields:
+                     # The async ABI carries an interior descriptor even when
+                     # the actual target happens to be an entire structure.

@@ -1,0 +1,344 @@
+--- before/crust.py
++++ after/crust.py
+@@ -1628,6 +1628,7 @@
+     task_result_sources: tuple = ()
+     task_result_origins: frozenset = frozenset()
+     task_result_fields: tuple = ()
++    task_result_variants: frozenset = frozenset()
+     async_field_updates: tuple = ()
+     item_positions: tuple | None = ()
+     item_origins: frozenset = frozenset()
+@@ -1945,7 +1946,7 @@
+         self.body_call_contracts = {}
+         self.enums = {}
+         self.struct_fields = {}
+-        self.async_definitions.structures = self.struct_fields
++        self.async_definitions.structures = self.enums
+         self.definitions = []
+         self.call_stack = []
+         self.position_serial = 0
+@@ -2824,7 +2825,8 @@
+                                 item_sources=tuple(capture_sources), item_origins=frozenset(capture_origins),
+                                 task_result_sources=tuple(result_sources),
+                                 task_result_origins=frozenset(result_origins),
+-                                task_result_fields=tuple(result_fields))
++                                task_result_fields=tuple(result_fields),
++                                task_result_variants=frozenset(check.enums.get(definition.args[2][1], {})))
+         root.allocations.append(allocation)
+         check.allocations.append(allocation)
+         return allocation
+@@ -3146,6 +3148,9 @@
+         return self.serial
+ 
+     def index(self, nodes):
++        # Contract-only clients may install an aggregate registry without any
++        # function bodies. Public handle descriptors use that same registry.
++        self.async_definitions.structures = self.enums
+         for node in nodes:
+             self.position_serial += 1
+             self.positions[id(node)] = self.position_serial
+@@ -4122,6 +4127,7 @@
+             task_result_sources=source_union(*(a.task_result_sources for a in values)),
+             task_result_origins=frozenset(o for a in values for o in a.task_result_origins),
+             task_result_fields=self.merge_async_result_fields(*(a.task_result_fields for a in values)),
++            task_result_variants=self.merge_task_variants(a.task_result_variants for a in values),
+             async_field_updates=tuple(update for a in values for update in a.async_field_updates),
+             item_positions=self.merge_handle_positions([vars(a) for a in values]),
+             item_position_origins=self.merge_handle_positions([vars(a) for a in values], origins=True),
+@@ -4365,6 +4371,7 @@
+             allocation.task_result_sources = source_union(*(s['task_result_sources'] for s in live))
+             allocation.task_result_origins = frozenset(o for state in live for o in state['task_result_origins'])
+             allocation.task_result_fields = self.merge_async_result_fields(*(state['task_result_fields'] for state in live))
++            allocation.task_result_variants = self.merge_task_variants(state['task_result_variants'] for state in live)
+             allocation.async_field_updates = tuple(update for state in live for update in state['async_field_updates'])
+             allocation.owned_fields = self.merge_dependencies(*(s['owned_fields'] for s in live))
+             allocation.item_positions = self.merge_handle_positions(live)
+@@ -4585,7 +4592,7 @@
+         actual = contextual_public_type(nominal, expected, self.async_definitions)
+         if actual != expected:
+             self.fail(f'{"annotation de " if annotation else ""}handle {expected} attendu, reçu {actual}')
+-        required = public_storage(expected, self.struct_fields)
++        required = public_storage(expected, self.enums)
+         if required is not None:
+             kinds = {source.kind == 'local_stack' for source in allocation.task_result_sources}
+             if kinds != {required == 'local'}:
+@@ -5028,6 +5035,8 @@
+                                                                   for o in state['task_result_origins']),
+                                     task_result_fields=self.merge_async_result_fields(
+                                         *(state['task_result_fields'] for state in selected_item_states)),
++                                    task_result_variants=self.merge_task_variants(
++                                        state['task_result_variants'] for state in selected_item_states),
+                                     async_field_updates=tuple(update for state in selected_item_states
+                                                               for update in state['async_field_updates']),
+                                     item_positions=self.merge_handle_positions(selected_item_states),
+@@ -5684,7 +5693,7 @@
+         try:
+             for name, value in fields:
+                 if structure is None and types[name] in ('&Int', '&mut Int') and value[0] not in (
+-                        'mut' if types[name] == '&mut Int' else 'ref', 'name'):
++                        'mut' if types[name] == '&mut Int' else 'ref', 'name', 'reborrow'):
+                     self.fail(f"champ '{name}' : emprunt nommé &allocation Int requis")
+                 read_parent = None
+                 targets, reference_parents = (), ()
+@@ -7847,6 +7856,42 @@
+     def task_owned_result_fields(self, roots):
+         return self.merge_async_result_fields(*(self.owned_field_storage(root.owned_fields) for root in roots))
+ 
++    @staticmethod
++    def merge_task_variants(groups):
++        groups = tuple(groups)
++        # An unknown alternative must not be narrowed by a known one.
++        return frozenset().union(*groups) if groups and all(groups) else frozenset()
++
++    def resolve_task_variants(self, summary, params, bindings):
++        definition = self.async_definitions[summary.typ][0]
++        output = definition.args[2][1]
++        all_variants = frozenset(self.enums.get(output, {}))
++        if not all_variants:
++            return frozenset()
++        groups = []
++        for source in summary.task_result_sources:
++            if source.kind in ('task_result_parameter', 'task_parameter'):
++                groups.append(bindings[params[source.index][0]].alloc.task_result_variants or all_variants)
++            elif source.kind == 'allocation_parameter' and params[source.index][2] == output:
++                groups.append(bindings[params[source.index][0]].alloc.variants or all_variants)
++            else:
++                effect = getattr(definition, 'field_effect_summary', None)
++                result = effect.completion_result if effect and effect.complete else None
++                groups.append(result.fresh_variants if result and result.fresh_variants
++                              and all(c.kind == 'fresh' for c in result.candidates) else all_variants)
++        return self.merge_task_variants(groups) or all_variants
++
++    def owned_path_possible(self, allocation, path):
++        """Exclude only a path whose arm is proven absent on every owned route."""
++        field, separator, rest = path.partition('/')
++        arm = field.partition('.')[0]
++        if allocation.variants and arm not in allocation.variants:
++            return False
++        if not separator:
++            return True
++        children = dict(allocation.owned_fields).get(field, ())
++        return not children or any(self.owned_path_possible(child, rest) for child in children)
++
+     def owned_field_storage(self, fields, prefix=''):
+         output = []
+         for key, targets in fields:
+@@ -7857,11 +7902,13 @@
+                 output.extend(self.owned_field_storage(child.owned_fields, path + '/'))
+         return self.merge_async_result_fields(output)
+ 
+-    def restore_async_owned_fields(self, allocation, fields):
++    def restore_async_owned_fields(self, allocation, fields, variants=frozenset()):
+         storage = {path: (sources, origins) for path, sources, origins in fields}
+         def restore(typ, prefix=''):
+             children = []
+             for arm, members in self.enums.get(typ, {}).items():
++                if not prefix and variants and arm not in variants:
++                    continue
+                 for name, declared in members:
+                     if not declared.startswith('A<'):
+                         continue
+@@ -7879,7 +7926,7 @@
+             return tuple(children)
+         if not allocation.absent_owned_payload:
+             allocation.owned_fields = restore(allocation.typ)
+-            allocation.variants = frozenset(self.enums.get(allocation.typ, {}))
++            allocation.variants = variants or frozenset(self.enums.get(allocation.typ, {}))
+             if allocation.owned_fields:
+                 allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+         return allocation
+@@ -7894,7 +7941,7 @@
+             self.fail('branches Result : stockage incompatible (T local / allocation A<T>)')
+         return next(iter(kinds), None)
+ 
+-    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, storage=None, owned_fields=(), borrowed_fields=(), borrow_parents=()):
++    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, storage=None, owned_fields=(), borrowed_fields=(), borrow_parents=(), variants=frozenset()):
+         cell = f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+@@ -7906,7 +7953,7 @@
+             payload.origins = frozenset()
+             payload.sources = payload.item_sources = ()
+             borrowed_fields, borrow_parents = (), ()
+-        self.restore_async_owned_fields(payload, owned_fields)
++        self.restore_async_owned_fields(payload, owned_fields, variants)
+         def restore_borrowed_fields(holder, fields):
+             owned_prefixes = tuple(key + '/' for key, _ in holder.owned_fields)
+             holder.dependencies = tuple((path, targets) for path, targets in fields
+@@ -10518,6 +10565,10 @@
+                                 task_result_sources=source_union(tuple(pool_result_sources), *(target.sources for target in result_targets)),
+                                 task_result_origins=frozenset(pool_origins) | frozenset(origin for target in result_targets for origin in target.origins),
+                                 task_result_fields=result_fields,
++                                task_result_variants=(self.resolve_borrowed_result(
++                                    field_summary.completion_result, parameters, field_bindings)[1]
++                                    if node.args[2][1] in self.enums and field_summary and field_summary.complete
++                                    else frozenset()),
+                                 borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents) +
+                                                tuple(parent for target in transferred for parent in self.retained_borrow_parents(target)))
+         if field_updates:
+@@ -10577,6 +10628,7 @@
+                                 task_result_sources=allocation.task_result_sources,
+                                 task_result_origins=allocation.task_result_origins,
+                                 task_result_fields=allocation.task_result_fields,
++                                task_result_variants=allocation.task_result_variants,
+                                 async_field_updates=allocation.async_field_updates)
+             scope.allocations.append(handle)
+             self.allocations.append(handle)
+@@ -10613,14 +10665,16 @@
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+                                                allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields,
+                                                storage=payload_storage,
+-                                               borrowed_fields=result_borrows, borrow_parents=result_parents)
++                                               borrowed_fields=result_borrows, borrow_parents=result_parents,
++                                               variants=allocation.task_result_variants)
+         if mode == 'owned':
+             self.flag_declarations.append(f'CrustJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins,
+                                                typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields,
+                                                storage=payload_storage,
+-                                               borrowed_fields=result_borrows, borrow_parents=result_parents)
++                                               borrowed_fields=result_borrows, borrow_parents=result_parents,
++                                               variants=allocation.task_result_variants)
+         if mode in ('ref', 'mut'):
+             dependencies, parents = reference_result
+             kind = 'join_' + mode
+@@ -10744,6 +10798,8 @@
+                     captured = tuple(target for field, _, targets in self.owned_dependency_fields(binding.alloc)
+                                      if field == origin.field for target in targets)
+                     if not captured:
++                        if not self.owned_path_possible(binding.alloc, origin.field):
++                            continue
+                         self.fail('contrat de capture propriétaire : cible de champ absente')
+                     roots.update((root.id, root) for root in captured)
+                     chain = self.retained_borrow_parents(binding.alloc)
+@@ -10826,6 +10882,7 @@
+                                 task_result_origins=result_origins,
+                                 task_result_fields=tuple((path, *self.resolve_async_sources(symbols, params, bindings, fresh_origins))
+                                     for path, symbols in summary.task_result_fields),
++                                task_result_variants=self.resolve_task_variants(summary, params, bindings),
+                                 async_field_updates=tuple(update for index in summary.task_forward_parameters
+                                     for update in bindings[params[index][0]].alloc.async_field_updates)
+                                     + tuple(self.prepare_structure_updates(
+@@ -12734,6 +12791,7 @@
+             task_result_sources=source_union(*(item.task_result_sources for item in items)),
+             task_result_origins=frozenset(o for item in items for o in item.task_result_origins),
+             task_result_fields=self.merge_async_result_fields(*(item.task_result_fields for item in items)),
++            task_result_variants=self.merge_task_variants(item.task_result_variants for item in items),
+             async_field_updates=tuple(update for item in items for update in item.async_field_updates),
+             item_positions=self.merge_handle_positions(states),
+             item_position_origins=self.merge_handle_positions(states, origins=True),
+@@ -14081,7 +14139,7 @@
+                 if is_public_handle(typ):
+                     if mode != 'owned':
+                         self.fail('un runtime::Handle exige un transfert -> explicite')
+-                    if public_signature(typ, self.struct_fields) is None:
++                    if public_signature(typ, self.enums) is None:
+                         self.fail('prototype : forme de résultat du contrat Handle non encore prise en charge')
+                     normalized.append((pname, 'execution', typ))
+                     continue
+@@ -14150,7 +14208,7 @@
+             if is_public_handle(result[1]):
+                 if result[0] != 'owned':
+                     self.fail('un retour runtime::Handle exige un transfert <- explicite')
+-                if public_signature(result[1], self.struct_fields) is None:
++                if public_signature(result[1], self.enums) is None:
+                     self.fail('prototype : forme de résultat du contrat Handle non encore prise en charge')
+                 result = ('execution', result[1])
+                 node = replace(node, args=(name, params, result, node.args[3]))
+@@ -14282,6 +14340,7 @@
+                     self.declared_array_type, self.async_frame_slots,
+                     sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+                     struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
++                    enum_layouts={typ: arms for typ, arms in self.enums.items() if '' not in arms},
+                     local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+                     specialize=self.reserve_async_local_variant)
+             self.lower_async_local_variants(refresh=True)
+@@ -14341,6 +14400,7 @@
+                     enable_threads, self.async_reference_paths, self.declared_array_type, self.async_frame_slots,
+                     sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+                     struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
++                    enum_layouts={typ: arms for typ, arms in self.enums.items() if '' not in arms},
+                     local_parameters=local_parameters, variant_name=symbol,
+                     specialize=self.reserve_async_local_variant)
+                 self.async_local_variants[key] = symbol, code
+@@ -14378,40 +14438,41 @@
+ 
+         def owned_bridge_fields(allocation, pointer):
+             """Describe the live graph without relocating or separately owning children."""
+-            members = check.enums.get(allocation.typ, {}).get('', ())
+             fields = []
+             borrowed = []
+-            for field_index, (name, declared) in enumerate(members):
+-                if declared in ('&Int', '&mut Int'):
+-                    target_pointer = f'bridge_borrowed_field_{check.uid()}'
++            for tag, (variant, members) in enumerate(check.enums.get(allocation.typ, {}).items()):
++                present = f'{pointer} && {pointer}->source->arm_tag == {tag}'
++                for field_index, (name, declared) in enumerate(members):
++                    if declared in ('&Int', '&mut Int'):
++                        target_pointer = f'bridge_borrowed_field_{check.uid()}'
++                        offset = check.field_offset(members, field_index)
++                        check.lines.append(f'Cell *{target_pointer} = {present} ? cell_load_ref({pointer}, {offset}) : NULL;')
++                        check.lines.append(f'(void){target_pointer};')
++                        source = MemorySource(check.uid(), external.id, 'symbolic', name,
++                                              f'({target_pointer} ? {target_pointer}->source : NULL)', element_type='Int')
++                        external.sources.append(source)
++                        target = Allocation(check.uid(), external.id, name, (source,), c=target_pointer)
++                        check.origin_sources[target.id] = source
++                        check.allocations.append(target)
++                        external.allocations.append(target)
++                        borrowed.append((variant + '.' + name, (target,)))
++                        continue
++                    if not declared.startswith('A<'):
++                        continue
++                    child_pointer = f'bridge_owned_field_{check.uid()}'
+                     offset = check.field_offset(members, field_index)
+-                    check.lines.append(f'Cell *{target_pointer} = {pointer} ? cell_load_ref({pointer}, {offset}) : NULL;')
+-                    check.lines.append(f'(void){target_pointer};')
++                    # A Result::Err has no root. Inspect no field on that path.
++                    check.lines.append(f'Cell *{child_pointer} = {present} ? cell_load_ref({pointer}, {offset}) : NULL;')
++                    check.lines.append(f'(void){child_pointer};')
+                     source = MemorySource(check.uid(), external.id, 'symbolic', name,
+-                                          f'({target_pointer} ? {target_pointer}->source : NULL)', element_type='Int')
++                                          f'({child_pointer} ? {child_pointer}->source : NULL)',
++                                          element_type=declared[2:-1])
+                     external.sources.append(source)
+-                    target = Allocation(check.uid(), external.id, name, (source,), c=target_pointer)
+-                    check.origin_sources[target.id] = source
+-                    check.allocations.append(target)
+-                    external.allocations.append(target)
+-                    borrowed.append(('.' + name, (target,)))
+-                    continue
+-                if not declared.startswith('A<'):
+-                    continue
+-                child_pointer = f'bridge_owned_field_{check.uid()}'
+-                offset = check.field_offset(members, field_index)
+-                # A Result::Err has no root. Inspect no field on that path.
+-                check.lines.append(f'Cell *{child_pointer} = {pointer} ? cell_load_ref({pointer}, {offset}) : NULL;')
+-                check.lines.append(f'(void){child_pointer};')
+-                source = MemorySource(check.uid(), external.id, 'symbolic', name,
+-                                      f'({child_pointer} ? {child_pointer}->source : NULL)',
+-                                      element_type=declared[2:-1])
+-                external.sources.append(source)
+-                child = Allocation(check.uid(), allocation.scope, name, (source,), c=child_pointer,
+-                                   typ=declared[2:-1], variants=frozenset(check.enums.get(declared[2:-1], {})))
+-                check.origin_sources[child.id] = source
+-                owned_bridge_fields(child, child_pointer)
+-                fields.append(('.' + name, (child,)))
++                    child = Allocation(check.uid(), allocation.scope, name, (source,), c=child_pointer,
++                                       typ=declared[2:-1], variants=frozenset(check.enums.get(declared[2:-1], {})))
++                    check.origin_sources[child.id] = source
++                    owned_bridge_fields(child, child_pointer)
++                    fields.append((variant + '.' + name, (child,)))
+             allocation.owned_fields = tuple(fields)
+             allocation.dependencies = tuple(borrowed)
+             allocation.item_sources = check.owned_field_sources(fields)
+@@ -14507,7 +14568,7 @@
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 ctype = 'Cell *'
+-            elif mode in ('ref', 'mut') and typ in self.struct_fields:
++            elif mode in ('ref', 'mut') and typ in self.enums:
+                 source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)

@@ -1,0 +1,11 @@
+--- storage_requirements.py
++++ storage_requirements.py
+@@ -193,7 +193,7 @@
+     while True:
+         previous = {name: (node.storage_requirements, node.copied_structure_parameters) for name, node in catalog.items()}
+         for node in catalog.values():
+-            if (node.handle_result and node.args[2][1] in structures) or public_storage(node.args[2][1], structures) or relevant(node.args[3]):
++            if (node.args[2][0] == 'owned' and node.args[2][1] in structures) or public_storage(node.args[2][1], structures) or relevant(node.args[3]):
+                 StorageContext(analyzer, node).infer()
+         if all((node.storage_requirements, node.copied_structure_parameters) == previous[name] for name, node in catalog.items()):
+             return

@@ -1,0 +1,58 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10485,6 +10485,18 @@
+             for target in candidates:
+                 paths = capture_paths
+                 loan = target.array_capture
++                if target.typ == HANDLE_VECTOR:
++                    # The result is an int* into an owned item, not a pointer
++                    # to the vector Cell. Keep its carrier reserved while
++                    # exposing the ordinary scalar-reference representation.
++                    mode = key.split('.')[0]
++                    binding = Binding(target.label, mode, '', target,
++                                      borrow_parents=(*ancestry, *target.borrow_parents))
++                    for root, parent in self.growing_storage_paths(binding):
++                        view = self.array_borrow_binding(target.label, 'array_' + mode, '',
++                                                        ('int', ((root, parent),)))
++                        projected.append(self.async_array_capture(view, root))
++                    continue
+                 nested_paths = tuple(path for path in paths if '/' in '.'.join(path))
+                 if nested_paths and target.typ in self.enums:
+                     for path in nested_paths:
+@@ -10639,7 +10651,7 @@
+         elif (loan.static_type == 'int' and (
+                 root.alloc.typ == 'Int' or self.struct_field_roots.get((root.alloc.id, root.name)) is root)
+                 or loan.static_type == 'uint8_t' and root.alloc.typ in ('String', 'Vector<u8>')
+-                or loan.static_type == 'int' and root.alloc.typ == 'Vector<Int>'):
++                or loan.static_type == 'int' and root.alloc.typ in ('Vector<Int>', HANDLE_VECTOR)):
+             storage_scope, sources = root.alloc.scope, root.alloc.sources
+         else:
+             self.fail('capture synchrone : une cible Int stable est requise')
+@@ -13724,6 +13736,27 @@
+                 place, rhs = args
+                 if op == 'array_deref_store' and place[0] == 'array_deref_slot':
+                     slot = place[1]
++                    if slot[0] == 'array_index' and slot[1][0] == 'name':
++                        vector = self.lookup(slot[1][1])
++                        if vector.alloc is not None and vector.alloc.typ == HANDLE_VECTOR:
++                            borrow = ('mut_expr', slot)
++                            self.positions[id(borrow)] = self.positions[id(place)]
++                            _, pointer, descriptor = self.expression(borrow, scope, 'tableau')
++                            target = f'handle_content{self.uid()}'
++                            self.lines.append(f'int *{target} = &(*{pointer})->value;')
++                            loan = self.array_borrow_binding(vector.name, 'array_mut', target,
++                                                             ('int', descriptor[1]))
++                            self.argument_frames.append([Binding(vector.name, 'ref', vector.c,
++                                                                  vector.alloc, borrow_parents=(vector,))])
++                            try:
++                                value, actual = self.array_value(rhs, scope, 'tableau', 'int')
++                            finally:
++                                self.argument_frames.pop()
++                            self.array_access(loan, write=True, after=True)
++                            if actual != 'int':
++                                self.fail('une écriture doit conserver le type de la case')
++                            self.lines.append(f'*{target} = {value};')
++                            continue
+                     if (vector := self.mutable_vector_target(slot)) is not None:
+                         _, pointer, descriptor = self.reborrow_mutable_vector_target(slot, vector, 'ref', scope, 'tableau')
+                         self.argument_frames.append([Binding(vector.name, 'ref', pointer, descriptor)])

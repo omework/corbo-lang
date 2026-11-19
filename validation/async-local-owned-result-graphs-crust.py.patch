@@ -1,0 +1,20 @@
+--- /tmp/crust-before-async-local-owned-result-graphs/crust.py
++++ crust.py
+@@ -10278,6 +10278,8 @@
+                 pool_sources.append(destination)
+                 pool_result_sources.append(destination)
+             captures.append(destination_c)
++            if destination is not None:
++                field_bindings['\0task-output'] = Binding('\0task-output', 'source', destination_c, source=destination)
+             pool_origins.clear()
+             for source in pool_result_sources:
+                 origin = self.uid()
+@@ -10290,7 +10292,7 @@
+             target.alive = target.definite = False
+         result_fields = self.task_owned_result_fields(result_targets)
+         from async_result_storage import pool_result_graph
+-        graph = pool_result_graph(node)
++        graph = pool_result_graph(node, self.enums)
+         if graph is not None:
+             fresh_origins = {}
+             root_sources, root_origins = self.resolve_async_sources(graph[0], parameters, field_bindings, fresh_origins)

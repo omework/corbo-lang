@@ -1,0 +1,14 @@
+--- before/results.py
++++ after/results.py
+@@ -322,6 +322,11 @@
+ def projected_field_origin(origin, target):
+     if origin.kind == 'parameter':
+         return replace(target, parameter=origin.parameter)
++    if (origin.kind == 'inline_field_parameter' and not origin.carrier_kind
++            and target.field.startswith('.')):
++        prefix = '.' + origin.field
++        return replace(target, parameter=origin.parameter, field=prefix + target.field,
++                       detached_prefix=prefix + target.detached_prefix if target.detached_prefix else '')
+     if origin.kind == 'detached_field_parameter' and target.kind == 'shared_field_parameter':
+         prefix = '/'.join(part for part in (origin.field, target.detached_prefix) if part)
+         return BorrowTarget(target.kind, origin.parameter, origin.field + '/' + target.field, prefix)

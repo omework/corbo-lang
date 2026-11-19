@@ -1,0 +1,12 @@
+--- before/results.py
++++ after/results.py
+@@ -839,7 +839,8 @@
+                         (f'{arm}.{field}', Value('owned', declared[2:-1], frozenset({
+                             ResultCandidate('owned_field_input', index, SourceOrigin(
+                                 'allocation_field_parameter', index, f'{prefix}{arm}.{field}'))
+-                        }), owned_fields=initial_fields(declared[2:-1], f'{prefix}{arm}.{field}/', visited | {typ})))
++                        }), fields=nested_reference_fields(environment[name].fields, f'{prefix}{arm}.{field}'),
++                            owned_fields=initial_fields(declared[2:-1], f'{prefix}{arm}.{field}/', visited | {typ})))
+                         for arm, fields in self.analyzer.enums.get(typ, {}).items()
+                         for field, declared in fields if declared.startswith('A<'))
+                 initial_owned = initial_fields(typ)

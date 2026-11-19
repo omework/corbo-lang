@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Descriptor cohorts carry generations; detach before wakeup so resumed tasks can release their frames.
+/// Combines active reader/writer interests for one socket generation; caller holds the scheduler lock.
+fn socket_interest(token:usize)->usize {
+    let mut mask:usize=0;
+    let mut pointer=get_socket_waiters();
+    while copy(pointer)!=0 {
+        if g_Task_io_token(copy(pointer))==copy(token) {
+            mask=copy(mask)|(if g_Task_io_write(copy(pointer)) {
+                2
+            } else {
+                1
+            });
+        }
+        pointer=g_Task_io_next(copy(pointer));
+    }
+    copy(mask)
+}
+/// Publishes a socket readiness/error to one waiter and resumes its parked root; caller holds the scheduler lock.
+fn socket_signal(token:usize,mask:usize,status:i64) {
+    let mut link=socket_waiters_address();
+    while read_word(copy(link))!=0 {
+        let child=read_word(copy(link));
+        let interest:usize=if g_Task_io_write(copy(child)) {
+            2
+        } else {
+            1
+        };
+        if g_Task_io_token(copy(child))!=copy(token) || (copy(mask)&copy(interest))==0 {
+            link=a_Task_io_next(copy(child));
+            continue;
+        }
+        write_word(copy(link),g_Task_io_next(copy(child)));
+        s_Task_io_next(copy(child),0);
+        s_Task_io_error(copy(child),copy(status));
+        s_Task_io_ready(copy(child),true);
+        let parent=g_Task_root(copy(child));
+        let root:usize=if copy(parent)!=0 {
+            copy(parent)
+        } else {
+            copy(child)
+        };
+        s_Task_waiting(copy(root),false);
+        if g_Task_parked(copy(root)) {
+            s_Task_parked(copy(root),false);
+            if !g_Task_blocking(copy(root)) {
+                task_enqueue(copy(root));
+            }
+        }
+    }
+    broadcast();
+}
+/// Detaches matching waiters, publishes readiness and rearms remaining interests; ignores stale generation tokens.
+fn socket_dispatch(event:usize) {
+    let token=copy(event)&0xfffffffffffffffc;
+    let mask=copy(event)&3;
+    if copy(token)==0 || copy(mask)==0 {
+        return;
+    }
+    lock();
+    let mut first=get_socket_waiters();
+    while copy(first)!=0 && g_Task_io_token(copy(first))!=copy(token) {
+        first=g_Task_io_next(copy(first));
+    }
+    if copy(first)!=0 {
+        let descriptor=g_Task_io_socket(copy(first));
+        socket_signal(copy(token),copy(mask),0);
+        let remaining=socket_interest(copy(token));
+        let status=queue_watch(get_socket_queue(),copy(descriptor),copy(remaining),if copy(remaining)!=0 {
+            copy(token)
+        } else {
+            0
+        });
+        if copy(status)<0 && copy(remaining)!=0 {
+            socket_signal(copy(token),3,copy(status));
+        }
+    }
+    unlock();
+}
+/// Waits on the platform readiness queue and dispatches returned events under the scheduler lock.
+fn socket_events(unused:usize)->usize {
+    drop(copy(unused));
+    if get_base()==0 {
+        reserve(1);
+        worker_regions();
+    }
+    loop {
+        socket_dispatch(queue_wait(get_socket_queue()));
+    }
+    0
+}
+/// Creates the readiness queue and its detached event thread once; records initialization failure for future waits.
+fn socket_initialize() {
+    let queue=queue_create();
+    set_socket_queue(copy(queue));
+    if copy(queue)<0 {
+        set_socket_init_error(copy(queue));
+        return;
+    }
+    let slot=temporary_thread_slot();
+    let status=thread_create(copy(slot),pointer_socket_events(),0);
+    if copy(status)!=0 {
+        set_socket_init_error(0-(copy(status) as i64));
+        queue_close(copy(queue));
+        set_socket_queue(-1);
+        return;
+    }
+    thread_detach(copy(slot));
+    set_socket_init_error(0);
+}
+/// Registers one task wait for socket readability or writability without losing an intervening wake; returns readiness or a platform error.
+fn corbo_socket_wait(child:usize,descriptor:u64,write:bool,out:usize)->bool {
+    once_socket();
+    let error=get_socket_init_error();
+    if copy(error)!=0 {
+        write_word(copy(out),unsigned_bits(copy(error)));
+        return true;
+    }
+    let parent=g_Task_root(copy(child));
+    let root:usize=if copy(parent)!=0 {
+        copy(parent)
+    } else {
+        copy(child)
+    };
+    lock();
+    if g_Task_io_registered(copy(child)) && g_Task_io_ready(copy(child)) {
+        s_Task_io_registered(copy(child),false);
+        s_Task_io_ready(copy(child),false);
+        write_word(copy(out),unsigned_bits(g_Task_io_error(copy(child))));
+        unlock();
+        return true;
+    }
+    s_Task_waiting(copy(root),true);
+    if !g_Task_io_registered(copy(child)) {
+        let mut token:usize=0;
+        let mut pointer=get_socket_waiters();
+        while copy(pointer)!=0 {
+            if g_Task_io_socket(copy(pointer))==copy(descriptor) {
+                token=g_Task_io_token(copy(pointer));
+                break;
+            }
+            pointer=g_Task_io_next(copy(pointer));
+        }
+        if copy(token)==0 {
+            let serial=get_socket_serial();
+            if copy(serial)>=max_size()/4 {
+                fault(5);
+            }
+            set_socket_serial(copy(serial)+1);
+            token=(copy(serial)+1)*4;
+        }
+        s_Task_io_socket(copy(child),copy(descriptor));
+        s_Task_io_write(copy(child),copy(write));
+        s_Task_io_token(copy(child),copy(token));
+        s_Task_io_error(copy(child),0);
+        s_Task_io_ready(copy(child),false);
+        s_Task_io_registered(copy(child),true);
+        s_Task_io_next(copy(child),get_socket_waiters());
+        set_socket_waiters(copy(child));
+        let status=queue_watch(get_socket_queue(),copy(descriptor),socket_interest(copy(token)),copy(token));
+        if copy(status)<0 {
+            socket_signal(copy(token),3,copy(status));
+            s_Task_io_registered(copy(child),false);
+            s_Task_io_ready(copy(child),false);
+            write_word(copy(out),unsigned_bits(copy(status)));
+            unlock();
+            return true;
+        }
+    }
+    unlock();
+    false
+}

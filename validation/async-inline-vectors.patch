@@ -1,0 +1,454 @@
+--- before/async_local_placement.py
++++ async_local_placement.py
+@@ -3,6 +3,8 @@
+ This is a placement plan, not a validity checker. Unknown producers are left
+ to the normal lifetime/type checker; no target borrowed by a value is promoted.
+ """
++
++from array_syntax import INLINE_VECTOR_ELEMENTS
+ 
+ 
+ def result_constructors(expression, contracts, known_locals, *, assigned_to=None, returns=False,
+@@ -24,9 +26,19 @@
+         if not expr:
+             return None
+         op = expr[0]
++        if op == 'source' and expr[1] == 'pool' and expr[3] in INLINE_VECTOR_ELEMENTS:
++            return ('inline_vector_pool', expr[3]), {}
++        if op == 'new':
++            source = env.get(expr[1])
++            if source and isinstance(source[0], tuple) and source[0][0] == 'inline_vector_pool':
++                return ('inline_vector', source[0][1]), {}
+         if op == 'new_enum' and expr[1] is None:
+             return expr[2], {id(expr): expr}
+         if op == 'array_copy':
++            if expr[1][0] == 'array_index':
++                vector = evaluate(expr[1][1], env)
++                if vector and isinstance(vector[0], tuple) and vector[0][0] == 'inline_vector':
++                    return INLINE_VECTOR_ELEMENTS[vector[0][1]], {id(expr): expr}
+             original = evaluate(expr[1], env)
+             if original is not None and isinstance(original[0], str):
+                 return original[0], {id(expr): expr}
+@@ -60,6 +72,9 @@
+         call_name, arguments = (expr[1], expr[2]) if op == 'call' else (None, ())
+         if op == 'method_call':
+             receiver = evaluate(expr[1], env)
++            if (expr[2] == 'remove' and receiver and isinstance(receiver[0], tuple)
++                    and receiver[0][0] == 'inline_vector'):
++                return INLINE_VECTOR_ELEMENTS[receiver[0][1]], {id(expr): expr}
+             if receiver is not None and isinstance(receiver[0], str):
+                 call_name = receiver[0] + '.' + expr[2]
+                 arguments = (expr[1], *expr[3])
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -19,7 +19,7 @@
+ 
+ from collections import ChainMap
+ from dataclasses import dataclass, replace
+-from array_syntax import HANDLE_VECTOR, HANDLE_VECTORS, is_handle_vector, handle_vector_element, consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
++from array_syntax import INLINE_VECTOR_ELEMENTS, HANDLE_VECTOR, HANDLE_VECTORS, is_handle_vector, handle_vector_element, consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, ERROR_VALUE_MODES, ERROR_VALUE_TAGS, RESULT_ERROR_MODES
+ from utf8_syntax import (
+@@ -1063,7 +1063,17 @@
+     reference_aggregates = reference_structs.keys() | owned_enums.keys()
+     pool_structures = owned_structures | reference_structs
+ 
++    def inline_vector_layout(typ, line):
++        element = INLINE_VECTOR_ELEMENTS[typ]
++        layout = struct_layouts.get(element)
++        if layout is None or any(kind != 'Int' for _, kind in layout):
++            fail(line, 'prototype async : Vector de structure exige des champs Int raccordés')
++        return element, layout
++
+     def check_handle_payload(typ, line):
++        if typ in INLINE_VECTOR_ELEMENTS:
++            inline_vector_layout(typ, line)
++            return
+         element = handle_vector_element(typ)
+         if element is None:
+             return
+@@ -1075,7 +1085,7 @@
+         check_handle_payload(typ[5:-1] if typ.startswith('Pool<') else typ, node.line)
+     reference_sync_types.update({(mode, typ): capture_type(mode, typ) for typ in reference_aggregates for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_type(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+-    owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS)}
++    owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS)}
+     owned_join_sync_types = {(mode, typ): OWNED_WRAPPER_TYPES[mode]
+                             for mode in ('join_owned', 'join_nested', *OWNED_JOIN_TYPES) for _, typ in owned_sync_types}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+@@ -1095,7 +1105,8 @@
+     owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
+     output_join_types = owned_join_sync_types | {(mode, typ): OWNED_WRAPPER_TYPES[mode]
+                                                for mode in ('join_owned', 'join_nested', *OWNED_JOIN_TYPES) for typ in reference_structs}
+-    collection_sync_types = {(mode, typ): 'Cell *' for mode in ('ref', 'mut') for typ in HANDLE_VECTORS}
++    collection_sync_types = {(mode, typ): 'Cell *' for mode in ('ref', 'mut')
++                             for typ in (*HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS)}
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
+     output_types = sync_types | owned_output_types | output_join_types
+     sync_types |= collection_sync_types
+@@ -1259,10 +1270,18 @@
+         steps.append(f'{storage} = source_stack(16 * 1024 * 1024);')
+         return name
+ 
++    def inline_vector_placement_inputs():
++        known = {name: ('inline_vector', typ) for name, typ in collection_types.items()
++                 if typ in INLINE_VECTOR_ELEMENTS and name not in consumed}
++        known.update((name, ('inline_vector_pool', typ[5:-1])) for name, typ in pool_types.items()
++                     if typ[5:-1] in INLINE_VECTOR_ELEMENTS)
++        return known
++
+     def place_local_result(expr, *, destination=None):
+         from async_local_placement import result_constructors
+         locals_ = {name: collection_types.get(name, 'Int') for name, origins in storage_bindings.items()
+                    if origins & implicit_stacks and name not in consumed}
++        locals_.update(inline_vector_placement_inputs())
+         constructors = result_constructors(expr, sync_contracts, locals_, async_functions=functions)
+         unplaced = [constructor for constructor in constructors if id(constructor) not in local_destinations]
+         if unplaced:
+@@ -1277,6 +1296,7 @@
+         if not targets:
+             return
+         locals_ = {name: collection_types.get(name, 'Int') for name in targets}
++        locals_.update(inline_vector_placement_inputs())
+         plans = result_constructors(('scope', '', body), sync_contracts, locals_, assigned_to=targets,
+                                     async_functions=functions)
+         depths = {name: depth for depth, scope in enumerate(scopes) for name in scope[0] if name in implicit_stacks}
+@@ -1362,6 +1382,8 @@
+     def sync_owned_value(expr, line, *, following=None):
+         if expr[0] in ('array_transfer', 'new_transfer'):
+             return sync_owned_value(expr[1], line, following=following)
++        if inline_vector_source(expr) is not None:
++            return inline_vector_value(expr, line, following=following)
+         if handle_remove_receiver(expr) is not None:
+             return vector_remove_value(expr, line, following=following)
+         if structure_copy_source(expr) is not None:
+@@ -1462,6 +1484,11 @@
+             factory = f'string_new({source}, UINT64_C({region_limits[-1]}), "{label}")'
+         elif is_handle_vector(typ):
+             factory = f'vector_new_handles({source}, UINT64_C({region_limits[-1]}), "{label}")'
++        elif typ in INLINE_VECTOR_ELEMENTS:
++            _, layout = inline_vector_layout(typ, line)
++            size = structure_offset(layout, len(layout)) if layout else 'sizeof(int)'
++            factory = (f'vector_new({source}, UINT64_C({region_limits[-1]}), {size}, '
++                       f'_Alignof(int), 0, "{label}")')
+         else:
+             element = 'int' if typ == 'Vector<Int>' else 'uint8_t'
+             factory = (f'vector_new({source}, UINT64_C({region_limits[-1]}), sizeof({element}), '
+@@ -1483,6 +1510,50 @@
+             if reference_types.get(name, collection_types.get(name)) in pool_structures:
+                 return name
+         return None
++
++    def inline_vector_source(expr):
++        if expr[0] == 'array_copy' and expr[1][0] == 'array_index':
++            receiver, index = expr[1][1:]
++            remove = False
++        elif expr[0] == 'method_call' and expr[2] == 'remove' and len(expr[3]) == 1:
++            receiver, index, remove = expr[1], expr[3][0], True
++        else:
++            return None
++        if receiver[0] == 'name' and collection_types.get(receiver[1]) in INLINE_VECTOR_ELEMENTS:
++            return receiver[1], index, remove
++        return None
++
++    def inline_vector_value(expr, line, *, following=None):
++        receiver, index_expr, remove = inline_vector_source(expr)
++        element, layout = inline_vector_layout(collection_types[receiver], line)
++        if remove and not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable):
++            fail(line, 'remove exige un Vector mutable')
++        if following is not None:
++            release_statement_loans(following, earlier=(expr,))
++        check_access(receiver, line, write=remove)
++        loan = [(receiver, 'mut' if remove else 'ref')]
++        active_loans[id(loan)] = loan
++        try:
++            value = expression(index_expr, line)
++            index = temporary('int')
++            steps.append(f'{index} = {value};')
++        finally:
++            del active_loans[id(loan)]
++        if following is not None:
++            release_statement_loans(following)
++        check_access(receiver, line, write=remove)
++        destination = local_destinations.get(id(expr)) or implicit_stack()
++        source = '&' + local_pools[destination]
++        layout_name = local_layouts.setdefault(element, f'{prefix}_local_layout_{len(local_layouts)}')
++        size = structure_offset(layout, len(layout))
++        cell = temporary('Cell *')
++        steps.append(f'{cell} = local_cell_new({source}, &{layout_name}, {size}, "async element");')
++        data = f'{cell}->fields' if layout else '&(int){0}'
++        operation = 'vector_remove' if remove else 'vector_read'
++        steps.append(f'{operation}(frame->{fields[receiver]}, {index}, {data});')
++        owned_result_types[cell] = element
++        keep_storage(cell, frozenset({destination}))
++        return cell
+ 
+     def copy_structure_value(expr, line):
+         name = structure_copy_source(expr)
+@@ -2280,7 +2351,7 @@
+            if mode in ('array', *ARRAY_BORROWS) else
+            (mode, typ) not in (('mut', 'u8'), ('runtime_error', 'runtime::Error'), ('scalar', 'Bool'), ('byte', 'u8'), ('char', 'char'), ('text', 'str'), ('byte_ref', 'u8'))
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+-           and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS))
++           and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS))
+            and (mode, typ) not in pool_sync_types
+            and not (mode == 'buffered_handle_exchange' and (mode, typ) in owned_join_sync_types)
+            and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_aggregates)
+@@ -2306,7 +2377,7 @@
+             and not ((result[0] in EXCHANGE_JOIN_TYPES or result[0] in OPTION_JOIN_TYPES or result[0] in OWNED_JOIN_TYPES) and result[1] == 'Int')
+             and not (result[0] == 'buffered_handle_exchange' and result in owned_join_sync_types)
+             and not (result[0] in ('ref', 'mut') and result[1] in reference_structs)
+-            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS))
++            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS))
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_aggregates)
+             and result not in (
+             ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('owned', 'Int'),
+@@ -2339,7 +2410,7 @@
+     result_ctype = array_result_ctype or (capture_type(*result) if returns_value else 'int')
+     parameter_modes = {name: mode for name, mode, _ in parameters}
+     collection_types = {name: typ for name, mode, typ in parameters
+-                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS)
++                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS)
+                          or mode == 'owned' and typ in owned_aggregates}
+     boolean_bindings = {name for name, mode, typ in parameters if (mode, typ) == ('scalar', 'Bool')}
+     byte_bindings = {name for name, mode, _ in parameters if mode == 'byte'}
+@@ -3545,7 +3616,7 @@
+             return True
+         if operator == 'source':
+             check_handle_payload(initializer[3], statement.line)
+-            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *pool_structures, *owned_enums):
++            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS, *pool_structures, *owned_enums):
+                 fail(statement.line, 'prototype async : type de pool local non pris en charge')
+             if statement.annotation is not None or statement.compact_transfer:
+                 fail(statement.line, 'un pool local ne peut être transféré ni annoté comme allocation')
+@@ -3577,7 +3648,8 @@
+             scopes[-1][0][name] = None
+             return True
+         owned_initializer = initializer[1] if operator in ('array_transfer', 'new_transfer') else initializer
+-        if handle_remove_receiver(owned_initializer) is not None:
++        if (handle_remove_receiver(owned_initializer) is not None
++                or inline_vector_source(owned_initializer) is not None and inline_vector_source(owned_initializer)[2]):
+             if operator not in ('array_transfer', 'new_transfer'):
+                 fail(statement.line, 'remove de A<Int> exige un transfert <- explicite')
+             check_new_name(name, statement.line)
+@@ -3593,7 +3665,7 @@
+             bind_transferred_value(name, owned_wrapper_kind(mode, typ), (value, owned_wrapper_payload(mode, typ), None), statement)
+             return True
+         if (sync_signature(owned_initializer) in owned_output_types or owned_initializer[0] in ('new', 'new_enum')
+-                or structure_copy_source(owned_initializer) is not None):
++                or structure_copy_source(owned_initializer) is not None or inline_vector_source(owned_initializer) is not None):
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+             value = (pool_new_value(owned_initializer, statement.line, following=body[position + 1:],
+@@ -5066,7 +5138,7 @@
+             return 'execution', sync_call(expr, line, execution=True, following=following)
+         if (sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum')
+                 or handle_remove_receiver(expr) is not None
+-                or structure_copy_source(expr) is not None):
++                or structure_copy_source(expr) is not None or inline_vector_source(expr) is not None):
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+             return 'execution', spawn_task(expr[1], line,
+@@ -6589,7 +6661,7 @@
+             return True
+         if initializer[0] == 'array_transfer':
+             initializer = initializer[1]
+-        if structure_copy_source(initializer) is not None:
++        if structure_copy_source(initializer) is not None or inline_vector_source(initializer) is not None:
+             return False
+         row_replace = None
+         if initializer[0] == 'array_replace':
+@@ -7079,7 +7151,7 @@
+             return f'text_byte_len({static_text_value(receiver, line, following=following)})'
+         if op == 'method_call' and expr[2] == 'len' and expr[1][0] == 'name':
+             receiver = expr[1][1]
+-            if collection_types.get(receiver) not in ('Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS) or expr[3]:
++            if collection_types.get(receiver) not in ('Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS) or expr[3]:
+                 fail(line, 'len exige un Vector sans argument')
+             check_access(receiver, line)
+             return f'vector_len(frame->{fields[receiver]})'
+@@ -7106,7 +7178,7 @@
+             return store_array(('array_index', expr[1], expr[2]), expr[3], line,
+                                following=following, returns_old=True)
+         if op == 'array_len':
+-            if expr[1][0] == 'name' and collection_types.get(expr[1][1]) in ('Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS):
++            if expr[1][0] == 'name' and collection_types.get(expr[1][1]) in ('Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS):
+                 receiver = expr[1][1]
+                 check_access(receiver, line)
+                 return f'vector_len(frame->{fields[receiver]})'
+@@ -7745,7 +7817,7 @@
+             return False
+         _, (_, receiver), method, arguments = call
+         collection = collection_types.get(receiver)
+-        if collection in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS) and following is not None:
++        if collection in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS) and following is not None:
+             # A parent-scope view can end in the preceding nested statement.
+             # Keep uses in this call alive while expiring those earlier loans
+             # before reserving the receiver for its arguments.
+@@ -7785,6 +7857,28 @@
+             check_access(receiver, line, write=True)
+             steps.extend((f'string_push_str(frame->{fields[receiver]}, string_view({value}));',
+                           f'cell_drop({value});', f'{value} = NULL;'))
++            return True
++        if collection in INLINE_VECTOR_ELEMENTS and method == 'push':
++            line = statement.line
++            element, layout = inline_vector_layout(collection, line)
++            if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable) or len(arguments) != 1:
++                fail(line, 'push exige un Vector mutable et un argument')
++            if arguments[0][0] != 'transfer':
++                fail(line, 'push de structure exige -> explicite et une construction ou copie')
++            check_access(receiver, line, write=True)
++            loan = [(receiver, 'mut')]
++            active_loans[id(loan)] = loan
++            try:
++                incoming = sync_owned_value(arguments[0][1], line, following=following)
++                if owned_result_types.get(incoming) != element or not storage_of(incoming) & implicit_stacks:
++                    fail(line, f'push exige une valeur locale {element}, pas une allocation A<T>')
++            finally:
++                del active_loans[id(loan)]
++            release_statement_loans(following)
++            check_access(receiver, line, write=True)
++            data = f'{incoming}->fields' if layout else '&(int){0}'
++            steps.extend((f'vector_push(frame->{fields[receiver]}, {data});',
++                          f'cell_drop({incoming});', f'{incoming} = NULL;'))
+             return True
+         if is_handle_vector(collection) and method == 'push':
+             line = statement.line
+@@ -7902,6 +7996,7 @@
+         implicit_stacks.add(destination)
+         local_pools[destination] = '(*frame->result_storage)'
+         local_inputs = {parameter: typ for index, (parameter, _, typ) in enumerate(parameters) if index in local_parameters}
++        local_inputs.update(inline_vector_placement_inputs())
+         constructors = result_constructors(('scope', None, body), sync_contracts, local_inputs, returns=True,
+                                            async_functions=functions)
+         for constructor in constructors:
+--- before/handle_types.py
++++ handle_types.py
+@@ -41,8 +41,9 @@
+         return ('array', payload)
+     if payload.startswith('A<') and payload.endswith('>'):
+         content = payload[2:-1]
+-        from array_syntax import is_handle_vector
+-        if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures or is_handle_vector(content):
++        from array_syntax import is_handle_vector, INLINE_VECTOR_ELEMENTS
++        if (content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures
++                or is_handle_vector(content) or INLINE_VECTOR_ELEMENTS.get(content) in structures):
+             return ('owned', content)
+     if exchange_element(payload) is not None:
+         return ('buffered_handle_exchange', payload)
+--- before/owned_join_types.py
++++ owned_join_types.py
+@@ -49,8 +49,9 @@
+     payload = typ[2:-1] if storage == 'pool' else typ
+     if storage == 'local' and payload in ('Int', 'Bool', 'bool', 'u8', 'char', 'Void', 'runtime::Error'):
+         return None
+-    from array_syntax import is_handle_vector
+-    if payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or is_handle_vector(payload) or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload):
++    from array_syntax import is_handle_vector, INLINE_VECTOR_ELEMENTS
++    if (payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *INLINE_VECTOR_ELEMENTS)
++            or is_handle_vector(payload) or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload)):
+         return owned_mode_at_depth(depth), payload, storage
+     return None
+ 
+--- /dev/null
++++ tests/test_async_inline_vectors.py
+@@ -0,0 +1,98 @@
++"""Inline struct vector payloads survive suspension and keep their storage kinds."""
++import unittest
++import test_select_source as harness
++
++POINT = 'struct Point{x:Int,y:Int}'
++
++
++class AsyncInlineVectorTests(unittest.TestCase):
++    run_source = harness.SelectSourceTests.run_source
++    run_c_oracle = harness.SelectSourceTests.run_c_oracle
++    refused = harness.SelectSourceTests.refused
++
++    @staticmethod
++    def launch(body, helpers=''):
++        return POINT+helpers+'async fn work()->Int{'+body+'''}
++            fn main(){let h=runtime::spawn(->work());match h.join(){
++            Ok(n)=>{print(n);},Err(_)=>{print(99);}}}'''
++
++    def test_local_vectors_copy_remove_two_fronts_and_region(self):
++        body='''let mut p=pool<Vector<Point>>(2);let mut a=p.new();let mut b=p.new();
++            a.push(->Point{x:7,y:70});b.push(->Point{x:9,y:90});yield;
++            let c=copy(a[0]);let d=<-b.remove(0);drop(->a);drop(->b);yield;
++            print(c.y);print(d.y);return c.x+d.x;'''
++        self.assertEqual(self.run_source(self.launch(body)).stdout, '70\n90\n16\n')
++        region='let r=#(directive, stack_region_max_size=1M){'+body.replace('return c.x+d.x;',
++            'let r=Point{x:c.x+d.x,y:0};<-r')+'};return r.x;'
++        self.assertEqual(self.run_source(self.launch(region)).stdout, '70\n90\n16\n')
++        self.refused(self.launch(body.replace('copy(a[0])', 'a[0]')), 'copie|tableau|expression|Int')
++        self.refused(self.launch(body.replace('<-b.remove', 'b.remove')), 'transfert|explicite')
++
++    def test_captured_mutable_vector_reserves_caller_until_join(self):
++        source=POINT+'''async fn work(v:&mut Vector<Point>)->Int{yield;
++            let r=<-v.remove(0);yield;return r.x;}
++            fn main(){let mut p=pool<Vector<Point>>(1);let mut v=p.new();
++            v.push(->Point{x:7,y:70});let h=runtime::spawn(->work(&mut v));
++            match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}print(v.len());}'''
++        self.assertEqual(self.run_source(source).stdout, '7\n0\n')
++        for access in ('print(v.len());', 'drop(->v);'):
++            self.refused(source.replace('match h.join()', access+'match h.join()'), 'emprunt|réserv')
++
++    def test_owned_capture_completion_and_inactive_cleanup(self):
++        source=POINT+'''async fn work(mut v:->A<Vector<Point>>)->Int{yield;
++            let r=<-v.remove(0);return r.x;}
++            fn main(){let mut p=pool<Vector<Point>>(1);let mut v=p.new();
++            v.push(->Point{x:7,y:70});let task=work(->v);ACTION
++            let mut fresh=p.new();fresh.push(->Point{x:9,y:90});let r=copy(fresh[0]);print(r.x);}'''
++        active='let h=runtime::spawn(->task);match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}'
++        self.assertEqual(self.run_source(source.replace('ACTION',active)).stdout, '7\n9\n')
++        self.assertEqual(self.run_source(source.replace('ACTION','drop(->task);')).stdout, '9\n')
++        self.refused(source.replace('ACTION','print(v.len());drop(->task);'), 'utilisable|déplac|invalid')
++
++    def test_local_results_return_by_join_and_await(self):
++        for extraction in ('copy(v[0])', '<-v.remove(0)'):
++            helper='''async fn leaf()-><-Point{let mut p=pool<Vector<Point>>(1);let mut v=p.new();
++                v.push(->Point{x:7,y:70});let r=EXTRACT;drop(->v);yield;return <-r;}'''.replace('EXTRACT',extraction)
++            self.assertEqual(self.run_source(self.launch('let r=leaf().await;yield;return r.x;',helper)).stdout, '7\n')
++            source=POINT+helper+'''fn main(){let h=runtime::spawn(->leaf());match h.join(){
++                Ok(r)=>{print(r.y);drop(->r);},Err(_)=>{print(99);}}}'''
++            self.assertEqual(self.run_source(source).stdout, '70\n')
++            self.refused(source.replace('-><-Point', '-><-A<Point>'), 'stockage|local|A<T>|provenance')
++
++    def test_injected_pool_and_whole_vector_result(self):
++        source=POINT+'''async fn make(p:&mut Pool<Vector<Point>>)-><-A<Vector<Point>>{
++            let mut v=p.new();v.push(->Point{x:7,y:70});yield;return <-v;}
++            fn main(){let mut p=pool<Vector<Point>>(1);let h=runtime::spawn(->make(&mut p));
++            match h.join(){Ok(v)=>{let mut received=<-v;let r=<-received.remove(0);
++                print(r.x);drop(->received);},Err(_)=>{print(99);}}let fresh=p.new();print(fresh.len());}'''
++        self.assertEqual(self.run_source(source).stdout, '7\n0\n')
++        helpers='''fn wait(h:->runtime::Handle<A<Vector<Point>>>)-><-Result<A<Vector<Point>>,runtime::Error>{return <-h.join();}
++            fn relay(r:->Result<A<Vector<Point>>,runtime::Error>)-><-Result<A<Vector<Point>>,runtime::Error>{return <-r;}'''
++        public=source.replace('fn main()',helpers+'fn main()').replace('match h.join()',
++            'let result=wait(->h);let next=relay(->result);match next')
++        self.assertEqual(self.run_source(public).stdout, '7\n0\n')
++        self.refused(source.replace('let h=runtime::spawn(->make(&mut p));',
++            'let h={let mut short=pool<Vector<Point>>(1);let h=runtime::spawn(->make(&mut short));<-h};'),
++            'pool|source|survi|emprunt|join')
++
++    def test_suspended_index_and_drop_result(self):
++        helper='async fn index()->Int{yield;return 0;}'
++        body='''let mut p=pool<Vector<Point>>(1);let mut v=p.new();
++            v.push(->Point{x:7,y:70});v.push(->Point{x:9,y:90});
++            let r=<-v.remove(index().await);yield;drop(->v.remove(0));return r.x+v.len();'''
++        self.assertEqual(self.run_source(self.launch(body,helper)).stdout, '7\n')
++
++    def test_scope_and_branch_results_survive_suspension(self):
++        body='''let mut p=pool<Vector<Point>>(1);let mut v=p.new();v.push(->Point{x:7,y:70});
++            let r=if true{let r=<-v.remove(0);yield;<-r}else{let r=copy(v[0]);yield;<-r};
++            drop(->v);yield;return r.x;'''
++        self.assertEqual(self.run_source(self.launch(body)).stdout, '7\n')
++
++    def test_empty_struct(self):
++        source=self.launch('''let mut p=pool<Vector<Empty>>(1);let mut v=p.new();v.push(->Empty{});
++            yield;let e=<-v.remove(0);drop(->e);return v.len();''','struct Empty{}')
++        self.assertEqual(self.run_source(source).stdout, '0\n')
++
++
++if __name__ == '__main__':
++    unittest.main()

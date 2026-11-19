@@ -1,0 +1,1620 @@
+omit_completed_writes DETECTED
+test_nested_awaits_and_parameter_permutation (test_async_structure_effects.AsyncStructureEffectsTests.test_nested_awaits_and_parameter_permutation) ... FAIL
+
+======================================================================
+FAIL: test_nested_awaits_and_parameter_permutation (test_async_structure_effects.AsyncStructureEffectsTests.test_nested_awaits_and_parameter_permutation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 77, in test_nested_awaits_and_parameter_permutation
+    self.assertEqual(self.effects('return top(view,b).await;', prefix),
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     {0: {'.data': {('parameter', 2, '')}}})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.061s
+
+FAILED (failures=1)
+
+forget_launch_failure DETECTED
+test_launch_failure_preserves_old_field_alternative (test_async_structure_effects.AsyncStructureEffectsTests.test_launch_failure_preserves_old_field_alternative) ... FAIL
+
+======================================================================
+FAIL: test_launch_failure_preserves_old_field_alternative (test_async_structure_effects.AsyncStructureEffectsTests.test_launch_failure_preserves_old_field_alternative)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 100, in test_launch_failure_preserves_old_field_alternative
+    self.assertEqual(self.effects('let h=runtime::spawn(->child(view,a));let n=h.await;return 0;', child),
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     {0: {'.data': {('field_parameter',0,'.data'), ('parameter',1,'')}}})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {0: {'.data': {('parameter', 1, '')}}} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 1, '')}}}
+- {0: {'.data': {('parameter', 1, '')}}}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 1, '')}}}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.061s
+
+FAILED (failures=1)
+
+invent_divergent_continuation DETECTED
+test_noncompleting_child_does_not_invent_a_continuation (test_async_structure_effects.AsyncStructureEffectsTests.test_noncompleting_child_does_not_invent_a_continuation) ... FAIL
+
+======================================================================
+FAIL: test_noncompleting_child_does_not_invent_a_continuation (test_async_structure_effects.AsyncStructureEffectsTests.test_noncompleting_child_does_not_invent_a_continuation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 152, in test_noncompleting_child_does_not_invent_a_continuation
+    self.assertEqual({(x.kind,x.parameter,x.field) for x in summary.structure_fields[0][1][0][1]},
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     {('parameter',2,'')})
+                     ^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the first set but not the second:
+('parameter', 1, '')
+
+----------------------------------------------------------------------
+Ran 1 test in 0.061s
+
+FAILED (failures=1)
+
+unknown_becomes_empty DETECTED
+test_incomplete_is_not_an_empty_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_incomplete_is_not_an_empty_contract) ... 
+  test_incomplete_is_not_an_empty_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_incomplete_is_not_an_empty_contract) (source='async fn work(v:&mut View)->Int{let mut p=pool<Int>(1);\n               let a=p.new(7);change(v,&a);return 0;}') ... FAIL
+  test_incomplete_is_not_an_empty_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_incomplete_is_not_an_empty_contract) (source='async fn work(v:&mut View)->Int{return work(v).await;}') ... FAIL
+
+======================================================================
+FAIL: test_incomplete_is_not_an_empty_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_incomplete_is_not_an_empty_contract) (source='async fn work(v:&mut View)->Int{let mut p=pool<Int>(1);\n               let a=p.new(7);change(v,&a);return 0;}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 166, in test_incomplete_is_not_an_empty_contract
+    self.assertFalse(summary.complete)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_incomplete_is_not_an_empty_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_incomplete_is_not_an_empty_contract) (source='async fn work(v:&mut View)->Int{return work(v).await;}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 166, in test_incomplete_is_not_an_empty_contract
+    self.assertFalse(summary.complete)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 0.060s
+
+FAILED (failures=2)
+
+lose_choice_captures DETECTED
+test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives) ... 
+  test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives) (initializer='if flag {let t=child(view,a);<-t}else{let t=child(view,b);<-t}') ... FAIL
+test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives) ... FAIL
+
+======================================================================
+FAIL: test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives) (initializer='if flag {let t=child(view,a);<-t}else{let t=child(view,b);<-t}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 133, in test_task_choices_keep_capture_alternatives
+    self.assertEqual(self.effects('let t='+initializer+';return t.await;',child),
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 40, in effects
+    self.assertTrue(summary.complete, summary.reason)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : attente sans captures de champs identifiables
+
+======================================================================
+FAIL: test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 136, in test_task_choices_keep_capture_alternatives
+    self.assertEqual(self.effects('''let h=if flag {
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+        let h=runtime::spawn(->child(view,a));<-h
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      }else{let h=runtime::spawn(->other(view,b));<-h};
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      let result=h.await;return 0;''',distinct),
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 40, in effects
+    self.assertTrue(summary.complete, summary.reason)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : attente sans captures de champs identifiables
+
+----------------------------------------------------------------------
+Ran 1 test in 0.062s
+
+FAILED (failures=2)
+
+skip_sync_field_effect DETECTED
+test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) ... 
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='none', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='none', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='none', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='discard_b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='discard_b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='discard_b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='none', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='none', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='none', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='none') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='await_a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='discard_b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='discard_b', right='a') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='discard_b', right='b') ... FAIL
+  test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='discard_b', right='await_a') ... FAIL
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='none', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='none', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='none', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='await_a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='discard_b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='discard_b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='none', left='discard_b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='none', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='await_a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='a', left='discard_b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='none', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='await_a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='b', left='discard_b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='none', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='await_a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='await_a', left='discard_b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='none', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='none', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='none', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='b', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='none')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, '')}}}
+- {}
++ {0: {'.data': {('parameter', 1, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='await_a', right='discard_b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='discard_b', right='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='discard_b', right='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+- {}
++ {0: {'.data': {('field_parameter', 0, '.data'), ('parameter', 2, '')}}}
+
+======================================================================
+FAIL: test_independent_branch_model (test_async_structure_effects.AsyncStructureEffectsTests.test_independent_branch_model) (before='discard_b', left='discard_b', right='await_a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 314, in test_independent_branch_model
+    self.assertEqual(self.effects(body,child),expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {} != {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+- {}
++ {0: {'.data': {('parameter', 1, ''), ('field_parameter', 0, '.data')}}}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.131s
+
+FAILED (failures=117)
+
+forget_deferred_sync_boundary DETECTED
+test_deferred_writes_cannot_disappear_inside_sync_handle_helper (test_async_structure_effects.AsyncStructureEffectsTests.test_deferred_writes_cannot_disappear_inside_sync_handle_helper) ... FAIL
+
+======================================================================
+FAIL: test_deferred_writes_cannot_disappear_inside_sync_handle_helper (test_async_structure_effects.AsyncStructureEffectsTests.test_deferred_writes_cannot_disappear_inside_sync_handle_helper)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 281, in test_deferred_writes_cannot_disappear_inside_sync_handle_helper
+    self.assertFalse(summary.complete)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 0.063s
+
+FAILED (failures=1)
+
+drop_completed_reference_targets DETECTED
+test_completion_pairs_field_writes_with_detached_result (test_async_structure_effects.AsyncStructureEffectsTests.test_completion_pairs_field_writes_with_detached_result) ... FAIL
+
+======================================================================
+FAIL: test_completion_pairs_field_writes_with_detached_result (test_async_structure_effects.AsyncStructureEffectsTests.test_completion_pairs_field_writes_with_detached_result)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 185, in test_completion_pairs_field_writes_with_detached_result
+    self.assertTrue(summary.complete,summary.reason)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : ligne 3: retour sans provenance symbolique vérifiable
+
+----------------------------------------------------------------------
+Ran 1 test in 0.060s
+
+FAILED (failures=1)
+
+lose_mutable_result_carrier DETECTED
+test_mutable_return_preserves_carrier_in_completion_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_mutable_return_preserves_carrier_in_completion_contract) ... FAIL
+
+======================================================================
+FAIL: test_mutable_return_preserves_carrier_in_completion_contract (test_async_structure_effects.AsyncStructureEffectsTests.test_mutable_return_preserves_carrier_in_completion_contract)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 227, in test_mutable_return_preserves_carrier_in_completion_contract
+    self.assertEqual({(t.kind,t.parameter,t.field) for t in summary.completion_result.reference_targets},
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     {('indirect_field_parameter',0,'data')})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the first set but not the second:
+('parameter', 0, '')
+Items in the second set but not the first:
+('indirect_field_parameter', 0, 'data')
+
+----------------------------------------------------------------------
+Ran 1 test in 0.061s
+
+FAILED (failures=1)
+
+use_current_field_instead_of_input_snapshot DETECTED
+test_result_detached_before_write_uses_input_snapshot (test_async_structure_effects.AsyncStructureEffectsTests.test_result_detached_before_write_uses_input_snapshot) ... FAIL
+
+======================================================================
+FAIL: test_result_detached_before_write_uses_input_snapshot (test_async_structure_effects.AsyncStructureEffectsTests.test_result_detached_before_write_uses_input_snapshot)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 199, in test_result_detached_before_write_uses_input_snapshot
+    self.assertEqual({(t.kind,t.parameter,t.field) for t in summary.completion_result.reference_targets},
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     {('detached_field_parameter',0,'.data')})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the first set but not the second:
+('field_parameter', 0, '.data')
+Items in the second set but not the first:
+('detached_field_parameter', 0, '.data')
+
+----------------------------------------------------------------------
+Ran 1 test in 0.060s
+
+FAILED (failures=1)
+

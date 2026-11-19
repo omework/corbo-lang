@@ -1,0 +1,62 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13,7 +13,7 @@
+ from utf8_syntax import ASYNC_VALUE_RESULT_FAMILIES, ASYNC_VALUE_RESULT_FIELDS
+ from utf8_syntax import FALLIBLE_VALUE_MODES, VALUE_SIGNATURES, VALUE_ANNOTATIONS, PLAIN_JOIN_TYPES, PLAIN_JOIN_C_TYPES, PLAIN_JOIN_INNER_MODES, PLAIN_RETURN_JOINS, register_plain_join_type, plain_join_layouts
+ from dataclasses import dataclass, field, replace
+-from handle_types import HandleDefinitions, canonical_captures, is_public_handle, public_signature
++from handle_types import HandleDefinitions, canonical_captures, common_public_handle, is_public_handle, public_signature
+ from pathlib import Path
+ import re
+ import shutil
+@@ -3876,6 +3876,11 @@
+             allocation = tuple(alternatives.values())
+         else:
+             typ = allocation if kind == 'array' else 'Int' if allocation is None else allocation.typ
++        if kind == 'execution' and frame['values'] and all(mode == kind for mode, _, _ in frame['values']):
++            previous = [value for _, _, value in frame['values']]
++            if self.unify_execution_allocations([*previous, allocation]) is not None:
++                typ = allocation.typ
++                frame['values'] = [(mode, typ, value) for mode, _, value in frame['values']]
+         if frame['values'] and (kind, typ) != frame['values'][0][:2]:
+             self.fail('break : même type et même mode requis sur toutes les sorties')
+         if kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested',
+@@ -4416,6 +4421,14 @@
+             self.fail(f'handle {expected} attendu, reçu {actual}')
+         allocation.dependencies = canonical_captures(allocation.dependencies, self.async_definitions[nominal][0].args[1])
+         allocation.typ = f'Execution<{expected}>'
++
++    def unify_execution_allocations(self, allocations):
++        public = common_public_handle((a.typ[len('Execution<'):-1] for a in allocations),
++                                      self.async_definitions)
++        if public is not None:
++            for allocation in allocations:
++                self.canonicalize_handle(allocation, public)
++        return public
+ 
+     def check_return_sources(self, frame, allocation):
+         mode, typ = frame['declared']
+@@ -4670,6 +4683,12 @@
+                     else:
+                         typ = (kind if kind == 'handle_option' else allocation if kind == 'array'
+                                else allocation.typ if allocation is not None else kind)
++                    if selected_kind == kind == 'execution' and selected_type != typ:
++                        previous = Allocation(-1, -1, 'branche précédente', (), typ=selected_type,
++                                              dependencies=selected_dependencies)
++                        if self.unify_execution_allocations([previous, allocation]) is not None:
++                            selected_type = typ = allocation.typ
++                            selected_dependencies = previous.dependencies
+                     if selected_type is not None and selected_type != typ:
+                         self.fail('expression if : même type requis dans toutes les branches')
+                     if selected_kind is not None and selected_kind != kind:
+@@ -11948,6 +11967,10 @@
+                         result_signature = kind[6:], 'Int'
+                     else:
+                         result_signature = kind, typ
++                    if signature is not None and signature[0] == kind == 'execution':
++                        if self.unify_execution_allocations(selected_allocations) is not None:
++                            typ = selected_allocations[-1].typ
++                            signature = result_signature = kind, typ
+                     if signature is not None and signature != result_signature:
+                         self.fail('expression match : même type et même mode requis dans tous les bras continuants')
+                     signature = result_signature

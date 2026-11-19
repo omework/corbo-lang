@@ -1,0 +1,165 @@
+--- before/crust.py
++++ after/crust.py
+@@ -144,6 +144,7 @@
+     join_storage_parameters: tuple[tuple[str, str], ...] = ()
+     join_storage_result: str | None = None
+     storage_requirements: tuple[tuple[int, str], ...] = ()
++    copied_structure_parameters: frozenset[int] = frozenset()
+     result_storage: bool = False
+     terminated: bool = False
+     consuming: bool = False
+@@ -5448,7 +5449,7 @@
+         targets, parents = [], []
+         for holder in binding.referents or (binding.alloc,):
+             root = holder.inline_root or holder
+-            full_path = holder.inline_path + '.' + path if holder.inline_root else path
++            full_path = holder.inline_path + '.' + path if holder.inline_path else path
+             key = root.id, full_path
+             if key not in self.inline_views:
+                 self.inline_views[key] = Allocation(self.uid(), root.scope, full_path, root.sources,
+@@ -5555,7 +5556,7 @@
+ 
+     def struct_int_roots(self, binding, path):
+         for allocation in binding.referents or (binding.alloc,):
+-            actual_path = allocation.inline_path + '.' + path if allocation.inline_root else path
++            actual_path = allocation.inline_path + '.' + path if allocation.inline_path else path
+             allocation = allocation.inline_root or allocation
+             key = allocation.id, actual_path
+             if key not in self.struct_field_roots:
+@@ -5636,7 +5637,7 @@
+         holders = binding.referents or (binding.alloc,)
+         key = '.' + place[2]
+         destinations = tuple((holder.inline_root or holder,
+-                              '.' + holder.inline_path + key if holder.inline_root else key)
++                              '.' + holder.inline_path + key if holder.inline_path else key)
+                              for holder in holders)
+         for destination, field in destinations:
+             self.check_external_owned_write((destination,), field)
+@@ -5739,7 +5740,7 @@
+         alternatives = binding.referents or (original,)
+         sources = (source,) if source is not None else source_union(*(item.sources for item in alternatives))
+         local = source is None and any(item.kind == 'local_stack' for item in sources)
+-        if interior and source is None and not local:
++        if interior and source is None and not local and any(item.element_type != typ for item in sources):
+             self.fail('copie de sous-structure : fournir un Pool du type de la sous-structure avec pool.copy')
+         reservation = None
+         if local:
+@@ -5771,7 +5772,8 @@
+                        if reservation else f'local_cell_new({destination.c}, &{layout}, {size}, "{label}")')
+             self.lines.append(f'Cell *{allocation.c} = {factory};')
+         else:
+-            self.lines.append(f'Cell *{allocation.c} = cell_new({binding.c}->source, 0, "{label}");')
++            pointer = f'{binding.c}.root' if interior else binding.c
++            self.lines.append(f'Cell *{allocation.c} = cell_new({pointer}->source, 0, "{label}");')
+         size = self.field_offset(fields, len(fields))
+         data = (f'structure_view_address({binding.c}, 0, {size})' if interior else f'{binding.c}->fields')
+         self.lines.append(f'memcpy({allocation.c}->fields, {data}, {size});')
+@@ -10617,9 +10619,12 @@
+                         target = self.reference_descriptor(value, binding.referents or (binding.alloc,), parents)
+                 else:
+                     kind, value, target = self.expression(argument, scope, label)
+-                if target is not None and kind in ('ref', 'mut', 'owned') and (
+-                        self.is_structure_view(target) or any(
+-                            item.inline_root is not None for item in self.retained_dependencies(target))):
++                if (index in node.copied_structure_parameters and self.is_structure_view(target)
++                        and any(source.kind != 'local_stack' and source.element_type != typ
++                                for source in target.sources)):
++                    self.fail('copie implicite de sous-structure : racine locale ou pool de destination explicite requis')
++                if target is not None and kind in ('ref', 'mut', 'owned') and any(
++                        item.inline_root is not None for item in self.retained_dependencies(target)):
+                     self.fail('prototype : capture async de sous-structure non encore raccordée')
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
+                 if not array_capture and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
+@@ -10737,7 +10742,9 @@
+                     cell_capture = value
+                     value = f'&(({value})->value)'
+                 temporary = f'capture{self.uid()}'
+-                self.lines.append(f'{capture_ctype(mode, typ)} {temporary} = {value};')
++                if mode in ('ref', 'mut') and typ in self.struct_fields:
++                    value = f'structure_reference_for((CrustStructureView){{0}}, {value})'
++                self.lines.append(f'{capture_ctype(mode, typ, structures=self.struct_fields)} {temporary} = {value};')
+                 captures.append(temporary)
+                 if index in node.cell_reference_parameters:
+                     if array_capture:
+@@ -12067,7 +12074,7 @@
+             holders = binding.referents or (binding.alloc,)
+             groups = {}
+             for holder in holders:
+-                actual_path = '.' + holder.inline_path + path if holder.inline_root else path
++                actual_path = '.' + holder.inline_path + path if holder.inline_path else path
+                 groups.setdefault(actual_path, []).append(holder.inline_root or holder)
+             writes.extend((tuple(group), actual_path, child, len(holders) > 1)
+                           for actual_path, group in groups.items())
+@@ -14755,7 +14762,7 @@
+             fields = []
+             borrowed = []
+             for tag, (variant, members) in enumerate(check.enums.get(allocation.typ, {}).items()):
+-                present = f'{pointer} && {pointer}->source->arm_tag == {tag}'
++                present = '1' if check.is_structure_view(allocation) else f'{pointer} && {pointer}->source->arm_tag == {tag}'
+                 for field_index, (name, declared) in enumerate(members):
+                     if declared in ('&Int', '&mut Int'):
+                         target_pointer = f'bridge_borrowed_field_{check.uid()}'
+@@ -14890,8 +14897,23 @@
+                 check.allocations.append(allocation)
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+-                owned_bridge_fields(allocation, parameter)
+-                ctype = 'Cell *'
++                if typ in self.struct_fields:
++                    # The async ABI carries an interior descriptor even when
++                    # the actual target happens to be an entire structure.
++                    source.c = f'{parameter}.root->source'
++                    allocation.c = f'{parameter}.root'
++                    view = replace(allocation, id=check.uid(), c=parameter,
++                                   inline_root=allocation, inline_path='')
++                    owned_bridge_fields(view, parameter)
++                    allocation.owned_fields = view.owned_fields
++                    allocation.dependencies = view.dependencies
++                    allocation.variants = view.variants
++                    allocation.item_sources = view.item_sources
++                    root.bindings[parameter] = Binding(parameter, mode, parameter, view)
++                    ctype = 'CrustStructureView'
++                else:
++                    owned_bridge_fields(allocation, parameter)
++                    ctype = 'Cell *'
+             elif mode in ('ref', 'mut'):
+                 element = check.borrowed_element_type(typ)
+                 storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+@@ -14940,7 +14962,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[key]
+         mode = contract.result_type[0]
+-        ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         qualifier = '_Noreturn ' if not contract.effects.may_return else ''
+         signature = f'static {qualifier}{ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+@@ -14953,6 +14975,8 @@
+                 lines.append(f'(void)*({result[2].guard});')
+             if result[0] in ('ref', 'mut') and contract.result_type[1] == 'Int':
+                 value = f'&({value})->value'
++            if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields:
++                value = f'structure_reference_for((CrustStructureView){{0}}, {value})'
+             lines.append(f'return {value};')
+         self.definitions.extend(check.definitions)
+         self.definitions.append(signature + ' {\n' + '\n'.join('    ' + line for line in lines) + '\n}\n')
+@@ -15047,15 +15071,16 @@
+             if self.async_thread_runtime_used:
+                 runtime += '\nstatic void task_abandon_async(CrustAsyncExecution *);\n'
+             runtime += '\n' + '\n'.join(self.array_definitions) + '\n'
+-            runtime += '\n'.join(task_factory_signature(name, node) + ';' for name, node in definitions.items())
+-            runtime += '\n' + '\n'.join(task_factory_signature(name, node) + ';' for name, node in variants.items())
++            runtime += '\n'.join(task_factory_signature(name, node, structures=self.struct_fields) + ';' for name, node in definitions.items())
++            runtime += '\n' + '\n'.join(task_factory_signature(name, node, structures=self.struct_fields) + ';' for name, node in variants.items())
+             runtime += '\n' + '\n'.join(self.async_sync_prototypes) + '\n'
+             runtime += '\n'.join(code for _, code in self.async_definitions.values())
+             runtime += '\n'.join(code for _, code in self.async_local_variants.values())
+             runtime += lower_task_context(
+                 definitions, capacities=self.async_pool_capacities,
+                 threaded=self.thread_runtime_used, async_threaded=self.async_thread_runtime_used,
+-                variants={symbol: name for (name, _), (symbol, _) in self.async_local_variants.items()})
++                variants={symbol: name for (name, _), (symbol, _) in self.async_local_variants.items()},
++                structures=self.struct_fields)
+             self.lines.insert(0, 'crust_task_context_init();')
+             self.lines.append('crust_task_context_close();')
+         declarations = self.definitions if self.async_definitions else self.array_definitions + self.definitions

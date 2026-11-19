@@ -1,0 +1,7 @@
+async fn read(n:&Int)->Int{yield;return *n;}
+async fn work()->Int{
+    let mut p=pool<Int>(1);let mut n=p.new(7);
+    let mut s=runtime::select(->read(&n));let r=s.await;
+    n=20;drop(->s);return r;
+}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(r)=>{print(r);},Err(_)=>{}}}

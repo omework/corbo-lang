@@ -1,0 +1,33 @@
+fn read(data: &i32) {
+    print(*data);
+}
+
+fn release(mut data: A<i32>) {
+    drop(data);
+}
+
+fn replace(memory: &mut Pool<i32>, mut old: A<i32>) -> A<i32> {
+    release(old);
+    let mut fresh = memory.new(43);
+    return fresh;
+}
+
+fn main() {
+    let mut memory = pool<i32>(2);
+    let mut data = memory.new(42);
+    let mut guard = memory.new(99); // Maintient le slot de data à l'intérieur.
+    let view = data.vref();
+    read(view); // Dernière utilisation de l'emprunt.
+
+    address(data);
+    let mut next = replace(&mut memory, data);
+    address(next); // Même adresse, nouvelle allocation.
+    print(*next);
+    print(*guard);
+
+    // read(&data); // Refusé : l'accès a été consommé.
+    // read(&view); // Refusé : cet usage empêcherait le transfert vers replace.
+
+    drop(next);
+    drop(guard);
+}

@@ -1,0 +1,19 @@
+struct View { data: &Int }
+async fn leaf(v: &mut View, n: &Int) -> Int {
+    v.data = &*n;
+    loop { yield; }
+}
+async fn ready() -> Int { return 1; }
+async fn work(v: &mut View, a: &Int, b: &Int, flag: Bool) -> Int {
+    let first = if flag {
+        let s = runtime::select(-> leaf(v, a), -> ready());
+        <- s
+    } else {
+        let s = runtime::select(-> leaf(v, b), -> ready());
+        <- s
+    };
+    let mut s = <- first;
+    let result = s.await;
+    drop(-> s);
+    return result;
+}

@@ -1,0 +1,25 @@
+fn choose(a: A<i32>, b: A<i32>, n: i32) -> A<i32> {
+    if n == 0 {
+        return a;
+    }
+    return b;
+}
+
+fn main() {
+    let mut first = pool<i32>(1);
+    let mut second = pool<i32>(1);
+    let a = first.new(10);
+    let b = second.new(20);
+    address(a);
+    address(b);
+
+    let result = choose(a, b, 1);
+    address(result); // Même adresse que b, sans déplacement de l'objet.
+    print(*result);
+
+    let fresh = first.new(30); // Le slot de a est disponible dans first.
+    address(fresh);
+    print(*fresh);
+    drop(result);
+    drop(fresh);
+}

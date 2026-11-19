@@ -1,0 +1,134 @@
+test_async_caller_transfers_field_loans (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_async_caller_transfers_field_loans) ... ok
+test_direct_launch_failure_and_inactive_cleanup (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_direct_launch_failure_and_inactive_cleanup) ... ok
+test_factory_and_relay_keep_field_contract (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_factory_and_relay_keep_field_contract) ... ok
+test_mutable_field_exclusive_until_join (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_mutable_field_exclusive_until_join) ... ok
+test_native_thread_capture (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_native_thread_capture) ... ERROR
+test_prepared_owner_keeps_target_across_later_argument (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_prepared_owner_keeps_target_across_later_argument) ... ok
+test_select_retains_losing_carrier_until_drop (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_select_retains_losing_carrier_until_drop) ... FAIL
+test_source_and_target_scope_model (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_source_and_target_scope_model) ... ok
+test_two_fields_keep_modes_and_sources (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_two_fields_keep_modes_and_sources) ... ok
+
+======================================================================
+ERROR: test_native_thread_capture (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_native_thread_capture)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_borrowed_captures.py", line 108, in test_native_thread_capture
+    run=self.run_native(source,fail_native=failure)
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15986, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15979, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14467, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14125, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 139, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 448, in infer
+    self.nodes(self.node.args[3], initial,
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               valued=self.node.args[2][0] == 'owned')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 52, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2132, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 48, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 745, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 48, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1364, in expression
+    paths, value = self.expression(expr[1], state, line, expected_array if op != 'new_transfer' else None)
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 48, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1449, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1485, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 107, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 76, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 317, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: exigence de stockage pool incompatible avec la valeur local (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_select_retains_losing_carrier_until_drop (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_select_retains_losing_carrier_until_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15993, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14146, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 932, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6746, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6206, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6140, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6039, in expression
+    return await_task(expr, line, returns_value=True)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2315, in await_task
+    poll_paths = selection_poll_paths(selection, line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2263, in selection_poll_paths
+    fail(line, 'prototype : effets suspendus de la branche Select non raccordés')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 965, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: prototype : effets suspendus de la branche Select non raccordés
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_borrowed_captures.py", line 122, in test_select_retains_losing_carrier_until_drop
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: prototype : effets suspendus de la branche Select non raccordés
+
+----------------------------------------------------------------------
+Ran 9 tests in 6.254s
+
+FAILED (failures=1, errors=1)

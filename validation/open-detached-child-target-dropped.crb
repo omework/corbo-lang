@@ -1,0 +1,16 @@
+struct Pair { left: &Int, right: &Int }
+async fn detach(v: -> Pair) -> &Int { yield; return v.left; }
+async fn work() -> Int {
+    let mut ns = pool<Int>(2);
+    let a = ns.new(7);
+    let b = ns.new(9);
+    let v = Pair { left: &a, right: &b };
+    let view = detach(->v).await;
+    drop(->a);
+    yield;
+    return *view;
+}
+fn main() {
+    let h = runtime::spawn(->work());
+    match h.join() { Ok(n) => { print(n); }, Err(_) => { print(99); } }
+}

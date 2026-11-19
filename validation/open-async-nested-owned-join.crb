@@ -1,0 +1,12 @@
+async fn work(n:->A<Int>)-><-A<Int>{yield;return <-n;}
+async fn first(n:->A<Int>)-><-Result<A<Int>,runtime::Error>{
+    let h=runtime::spawn(->work(->n));return <-h.await;
+}
+async fn second(n:->A<Int>)-><-Result<Result<A<Int>,runtime::Error>,runtime::Error>{
+    let h=runtime::spawn(->first(->n));return <-h.await;
+}
+fn main(){
+    let mut p=pool<Int>(1);let n=p.new(7);
+    let h=runtime::spawn(->second(->n));let result=h.join();drop(->result);
+    let next=p.new(8);print(*next);
+}

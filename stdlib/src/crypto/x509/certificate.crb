@@ -1,0 +1,500 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! X.509 certificate parsing, issued-by checks and ordered P-256 server path validation.
+
+use std::encoding::der::{der, bytes_equal, uint_valid, oid_valid};
+use std::crypto::p256::{PublicKey as P256PublicKey, spki_point_offset, verify_sha256};
+use std::crypto::sha256::digest;
+use std::encoding::pem::{encode as encode_pem, decode as decode_pem, Error as PemError};
+use std::crypto::p256::Error as KeyError;
+
+/// Reports certificate encoding, time, usage, trust, DNS or buffer errors.
+pub enum CertificateError {
+    /// The caller-provided output buffer cannot hold the result.
+    BufferTooSmall,
+    /// The certificate encoding is malformed or outside the supported profile.
+    InvalidCertificate,
+    /// The certificate is not valid at the supplied time.
+    InvalidTime,
+    /// The certificate constraints do not permit the requested purpose.
+    WrongUsage,
+    /// No acceptable chain to the supplied trust anchor was established.
+    UntrustedChain,
+    /// The certificate identity does not match the requested server name.
+    NameMismatch,
+}
+
+/// Tracks validated field ranges and extension properties in the original DER.
+struct ParsedCertificate {
+    /// Start of the to-be-signed certificate encoding.
+    tbs_start: u64,
+    /// Exclusive end of the signed certificate encoding.
+    tbs_end: u64,
+    /// Start of the encoded issuer name.
+    issuer: u64,
+    /// Exclusive end of the issuer name.
+    issuer_end: u64,
+    /// Start of the encoded subject name.
+    subject: u64,
+    /// Exclusive end of the subject name.
+    subject_end: u64,
+    /// Start offset of the certificate's SEC1 public point.
+    point: u64,
+    /// Start offset of the encoded signature.
+    signature: u64,
+    /// Exclusive end offset of the signature.
+    signature_end: u64,
+    /// Parsed certificate constraints and usage properties.
+    rules: Properties,
+}
+
+/// Matches the DER identifier for ECDSA with SHA-256 and absent parameters.
+fn signature_algorithm(input: &[u8], start: u64, end: u64) -> bool {
+    // ecdsa-with-SHA256 has absent parameters.
+    let encoded: [u8; 10] = [6, 8, 42, 134, 72, 206, 61, 4, 3, 2];
+    bytes_equal(&input[start..end], &encoded[..])
+}
+
+/// Checks the structure and supported string tags of an X.509 distinguished name.
+fn name_valid(input: &[u8], start: u64, end: u64) -> bool {
+    let mut at = start;
+    while at < end {
+        let set = der(&input[0..end], copy(at), copy(end), 49);
+        if set.end == 0 || set.body == set.end { return false; }
+        let mut member = set.body;
+        while member < set.end {
+            let seq = der(&input[0..end], copy(member), set.end, 48);
+            if seq.end == 0 { return false; }
+            let oid = der(&input[0..end], seq.body, seq.end, 6);
+            if oid.end == 0 || oid.end == seq.end || !oid_valid(&input[0..end], oid.body, oid.end) {
+                return false;
+            }
+            let tag = input[oid.end];
+            if tag != 12 && tag != 18 && tag != 19 && tag != 20 && tag != 22
+               && tag != 26 && tag != 28 && tag != 30 { return false; }
+            let value = der(&input[0..end], oid.end, seq.end, tag);
+            if value.end != seq.end || value.body == value.end { return false; }
+            member = seq.end;
+        }
+        at = set.end;
+    }
+    true
+}
+
+/// Parses the supported X.509 DER profile and checks validity at the supplied Unix time.
+fn parse_certificate(input: &[u8], now: i64) -> Result<ParsedCertificate, CertificateError> {
+    let end = input.len() as u64;
+    if end < 2 { return Err(CertificateError.InvalidCertificate); }
+    let outer = der(&input[0..end], 0, copy(end), 48);
+    if outer.end != end { return Err(CertificateError.InvalidCertificate); }
+    let tbs = der(&input[0..end], outer.body, copy(end), 48);
+    if tbs.end == 0 { return Err(CertificateError.InvalidCertificate); }
+    let alg = der(&input[0..end], tbs.end, copy(end), 48);
+    if alg.end == 0 || !signature_algorithm(&input[0..end], alg.body, alg.end) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let signature = der(&input[0..end], alg.end, copy(end), 3);
+    if signature.end != end || end - signature.body < 9 || input[signature.body] != 0 {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let version = der(&input[0..end], tbs.body, tbs.end, 160);
+    let v3: [u8; 3] = [2, 1, 2];
+    if version.end == 0 || !bytes_equal(&input[version.body..version.end], &v3[..]) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let serial = der(&input[0..end], version.end, tbs.end, 2);
+    if serial.end == 0 || serial.end - serial.body > 20
+       || !uint_valid(&input[0..end], serial.body, serial.end)
+       || (serial.end - serial.body == 1 && input[serial.body] == 0) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let tbs_alg = der(&input[0..end], serial.end, tbs.end, 48);
+    if tbs_alg.end == 0 || !signature_algorithm(&input[0..end], tbs_alg.body, tbs_alg.end) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let issuer = der(&input[0..end], tbs_alg.end, tbs.end, 48);
+    if issuer.end == 0 || issuer.end == issuer.body || !name_valid(&input[0..end], issuer.body, issuer.end) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let validity = der(&input[0..end], issuer.end, tbs.end, 48);
+    if validity.end == 0 || !certificate_current(&input[0..end], validity.body, validity.end, now) {
+        return Err(CertificateError.InvalidTime);
+    }
+    let subject = der(&input[0..end], validity.end, tbs.end, 48);
+    if subject.end == 0 || !name_valid(&input[0..end], subject.body, subject.end) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let key = der(&input[0..end], subject.end, tbs.end, 48);
+    if key.end == 0 { return Err(CertificateError.InvalidCertificate); }
+    let point = spki_point_offset(&input[0..end], key.body, key.end);
+    if point == 0 { return Err(CertificateError.InvalidCertificate); }
+
+    let mut rules = properties();
+    if key.end < tbs.end {
+        let extensions = der(&input[0..end], key.end, tbs.end, 163);
+        if extensions.end != tbs.end
+           || !certificate_extensions(&input[0..end], extensions.body, extensions.end, &mut rules) {
+            return Err(CertificateError.InvalidCertificate);
+        }
+    }
+    if subject.body == subject.end && (rules.is_ca || !rules.san_critical) {
+        return Err(CertificateError.InvalidCertificate);
+    }
+    let parsed = ParsedCertificate {
+        tbs_start: outer.body, tbs_end: tbs.end,
+        issuer: tbs_alg.end, issuer_end: issuer.end, subject: validity.end, subject_end: subject.end,
+        point: point, signature: signature.body + 1, signature_end: signature.end, rules: rules,
+    };
+    Ok(parsed)
+}
+
+/// Checks encoded issuer and subject names and verifies the child's signature using the issuer key.
+fn verify_issuer(child: &[u8], subject: &ParsedCertificate, issuer: &[u8], authority: &ParsedCertificate) -> bool {
+    if !bytes_equal(&child[(*subject).issuer..(*subject).issuer_end],
+                    &issuer[(*authority).subject..(*authority).subject_end]) {
+        return false;
+    }
+    let point = (*authority).point;
+    let key = match P256PublicKey::from_sec1_uncompressed(&issuer[point..point + 65]) {
+        Ok(value) => { value },
+        Err(error) => { drop(error); return false; },
+    };
+    match verify_sha256(&key, &child[(*subject).tbs_start..(*subject).tbs_end],
+                        &child[(*subject).signature..(*subject).signature_end]) {
+        Ok(valid) => { valid },
+        Err(error) => { drop(error); false },
+    }
+}
+
+// The caller keeps the original DER. This value owns its parsed metadata,
+// fingerprint, and encoded public key.
+/// Owns parsed certificate metadata, a DER fingerprint and an encoded public point.
+pub struct Certificate {
+    /// Validated DER offsets and certificate properties used by this certificate wrapper.
+    parsed: ParsedCertificate,
+    /// SHA-256 certificate fingerprint binding the wrapper to its original DER bytes.
+    fingerprint: [u8; 32],
+    /// Uncompressed SEC1 P-256 public-key bytes extracted from the certificate.
+    encoded_key: [u8; 65],
+}
+
+/// Wraps the P-256 verification key used by the X.509 profile.
+pub struct PublicKey {
+    /// Owned parsed P-256 verification key.
+    p256: P256PublicKey,
+}
+
+impl PublicKey {
+    /// Checks and wraps a P-256 public point encoded in uncompressed SEC1 form.
+    fn from_p256_sec1(encoded: &[u8]) -> Result<PublicKey, CertificateError> {
+        let length = encoded.len();
+        let key = match P256PublicKey::from_sec1_uncompressed(&encoded[0..length]) {
+            Ok(value) => { value },
+            Err(error) => { drop(error); return Err(CertificateError.InvalidCertificate); },
+        };
+        let result = PublicKey { p256: key };
+        Ok(result)
+    }
+
+    /// Imports a P-256 SubjectPublicKeyInfo for X.509 signature verification.
+    fn from_der(input: &[u8]) -> Result<PublicKey, CertificateError> {
+        let length = input.len();
+        let key = match P256PublicKey::from_der(&input[0..length]) {
+            Ok(value) => { value },
+            Err(error) => { drop(error); return Err(CertificateError.InvalidCertificate); },
+        };
+        let result = PublicKey { p256: key };
+        Ok(result)
+    }
+
+    /// Imports one PEM PUBLIC KEY block using caller-owned scratch.
+    fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<PublicKey, CertificateError> {
+        let length = input.len();
+        let capacity = scratch.len();
+        let key = match P256PublicKey::from_pem(&input[0..length], &mut scratch[0..capacity]) {
+            Ok(value) => { value },
+            Err(error) => {
+                match error {
+                    KeyError.BufferTooSmall => { return Err(CertificateError.BufferTooSmall); },
+                    KeyError.InvalidPrivateKey => { return Err(CertificateError.InvalidCertificate); },
+                    KeyError.InvalidPublicKey => { return Err(CertificateError.InvalidCertificate); },
+                    KeyError.InvalidSignature => { return Err(CertificateError.InvalidCertificate); },
+                    KeyError.RandomFailed => { return Err(CertificateError.InvalidCertificate); },
+                    KeyError.InputTooLong => { return Err(CertificateError.InvalidCertificate); },
+                };
+            },
+        };
+        let result = PublicKey { p256: key };
+        Ok(result)
+    }
+
+    /// Writes the public key as DER SubjectPublicKeyInfo and returns the bytes written.
+    fn to_der(&self, output: &mut [u8]) -> Result<usize, CertificateError> {
+        let key = &(*self).p256;
+        match key.to_der(output) {
+            Ok(written) => { Ok(written) },
+            Err(error) => { drop(error); Err(CertificateError.BufferTooSmall) },
+        }
+    }
+
+    /// Writes the public key as one PUBLIC KEY PEM block and returns the bytes written.
+    fn to_pem(&self, output: &mut [u8]) -> Result<usize, CertificateError> {
+        let key = &(*self).p256;
+        match key.to_pem(output) {
+            Ok(written) => { Ok(written) },
+            Err(error) => { drop(error); Err(CertificateError.BufferTooSmall) },
+        }
+    }
+
+    /// Verifies a DER ECDSA signature over the SHA-256 digest of the supplied message.
+    fn verify_ecdsa_sha256(&self, message: &[u8], signature: &[u8]) -> Result<bool, CertificateError> {
+        let length = message.len();
+        let sig_len = signature.len();
+        match verify_sha256(&(*self).p256, &message[0..length], &signature[0..sig_len]) {
+            Ok(valid) => { Ok(valid) },
+            Err(error) => { drop(error); Err(CertificateError.InvalidCertificate) },
+        }
+    }
+}
+
+/// Checks whether the supplied bytes have the fingerprint of the parsed certificate.
+fn matches_der(certificate: &Certificate, input: &[u8]) -> bool {
+    let length = input.len();
+    let hash = match digest(&input[0..length]) {
+        Ok(value) => { value },
+        Err(error) => { drop(error); return false; },
+    };
+    let mut i: usize = 0;
+    while i < 32 {
+        if hash[i] != (*certificate).fingerprint[i] { return false; }
+        i = i + 1;
+    }
+    true
+}
+
+impl Certificate {
+    /// Parses one DER certificate and validates its time window at the supplied Unix time.
+    fn from_der(input: &[u8], now: i64) -> Result<Certificate, CertificateError> {
+        let length = input.len();
+        let parsed = match parse_certificate(&input[0..length], now) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        let point = parsed.point;
+        let hash = match digest(&input[0..length]) {
+            Ok(value) => { value },
+            Err(error) => { drop(error); return Err(CertificateError.InvalidCertificate); },
+        };
+        let mut certificate = Certificate { parsed: parsed, fingerprint: [0; 32], encoded_key: [0; 65] };
+        let mut i: u64 = 0;
+        while i < 32 {
+            let byte = &mut certificate.fingerprint[i];
+            *byte = hash[i];
+            i = i + 1;
+        }
+        i = 0;
+        while i < 65 {
+            let byte = &mut certificate.encoded_key[i];
+            *byte = input[point + i];
+            i = i + 1;
+        }
+        Ok(certificate)
+    }
+
+    /// Decodes one CERTIFICATE block into scratch and parses its DER at the supplied Unix time.
+    fn from_pem(input: &[u8], scratch: &mut [u8], now: i64) -> Result<Certificate, CertificateError> {
+        let length = input.len();
+        let capacity = scratch.len();
+        let label: [u8; 11] = [67,69,82,84,73,70,73,67,65,84,69]; // CERTIFICATE
+        match decode_pem(&input[0..length], &label[..], &mut scratch[0..capacity]) {
+            Ok(size) => { Certificate::from_der(&scratch[0..size], now) },
+            Err(error) => {
+                match error {
+                    PemError.BufferTooSmall => { Err(CertificateError.BufferTooSmall) },
+                    PemError.InvalidEnvelope => { Err(CertificateError.InvalidCertificate) },
+                    PemError.InvalidBase64 => { Err(CertificateError.InvalidCertificate) },
+                }
+            },
+        }
+    }
+
+    /// Returns the exact DER length for slicing the caller's original or decoded bytes.
+    fn der_len(&self) -> u64 {
+        // The signature is the last field of the complete DER sequence.
+        (*self).parsed.signature_end
+    }
+
+    /// Verifies the caller's backing DER and writes its original signed bytes to output.
+    fn to_der(&self, input: &[u8], output: &mut [u8]) -> Result<usize, CertificateError> {
+        let length = input.len();
+        if !matches_der(&*self, &input[0..length]) { return Err(CertificateError.InvalidCertificate); }
+        if length > output.len() { return Err(CertificateError.BufferTooSmall); }
+        let mut i: usize = 0;
+        while i < length {
+            output[i] = input[i];
+            i = i + 1;
+        }
+        Ok(length)
+    }
+
+    /// Verifies the backing DER and writes it in a CERTIFICATE PEM block.
+    fn to_pem(&self, input: &[u8], output: &mut [u8]) -> Result<usize, CertificateError> {
+        let length = input.len();
+        if !matches_der(&*self, &input[0..length]) { return Err(CertificateError.InvalidCertificate); }
+        let label: [u8; 11] = [67,69,82,84,73,70,73,67,65,84,69]; // CERTIFICATE
+        match encode_pem(&input[0..length], &label[..], output) {
+            Ok(written) => { Ok(written) },
+            // The label and the nonempty backing DER were checked above.
+            Err(error) => { drop(error); Err(CertificateError.BufferTooSmall) },
+        }
+    }
+
+    /// Returns a validated P-256 verification key from the certificate's encoded public point.
+    fn public_key(&self) -> Result<PublicKey, CertificateError> {
+        let mut bytes: [u8; 65] = [0; 65];
+        let mut i: usize = 0;
+        while i < 65 {
+            bytes[i] = (*self).encoded_key[i];
+            i = i + 1;
+        }
+        PublicKey::from_p256_sec1(&bytes[..])
+    }
+
+    /// Checks a reference DNS name against the certificate's DNS SANs using its original DER.
+    fn matches_dns_name(&self, input: &[u8], name: &[u8]) -> Result<bool, CertificateError> {
+        let length = input.len();
+        let size = name.len();
+        if !matches_der(&*self, &input[0..length]) { return Err(CertificateError.InvalidCertificate); }
+        if !valid_dns_name(&name[0..size]) { return Ok(false); }
+        let start = (*self).parsed.rules.san;
+        let end = (*self).parsed.rules.san_end;
+        if start == 0 { return Ok(false); }
+        Ok(check_san(&input[0..length], start, end, &name[0..size]) == 2)
+    }
+
+    /// Checks the original DER of both certificates, then verifies the issuer name and signature.
+    fn verify_issued_by(&self, input: &[u8], issuer: &Certificate,
+                        issuer_der: &[u8]) -> Result<bool, CertificateError> {
+        let length = input.len();
+        let issuer_size = issuer_der.len();
+        if !matches_der(&*self, &input[0..length]) || !matches_der(&*issuer, &issuer_der[0..issuer_size]) {
+            return Err(CertificateError.InvalidCertificate);
+        }
+        let valid = verify_issuer(&input[0..length], &(*self).parsed, &issuer_der[0..issuer_size],
+                                  &(*issuer).parsed);
+        Ok(valid)
+    }
+}
+
+/// Checks whether a certificate's constraints permit signing at the given path depth.
+fn signing_authority(properties: &Properties, depth: u64) -> bool {
+    let usage = (*properties).usage;
+    (*properties).is_ca && (*properties).server_usage && depth <= (*properties).path_limit
+        && (usage == 256 || (usage & 4) != 0)
+}
+
+/// Verifies each issuer link along an ordered leaf-first path to the supplied trust anchor.
+fn check_path(chain: &[u8], ranges: &[u64; 16], count: u64, anchor: &[u8], now: i64) -> Result<(), CertificateError> {
+    let anchor_len = anchor.len();
+    let root = match parse_certificate(&anchor[0..anchor_len], copy(now)) {
+        Ok(value) => { value },
+        Err(error) => { return Err(error); },
+    };
+    let mut at: u64 = 0;
+    let mut depth: u64 = 0;
+    while at < count {
+        let child_bytes = &chain[(*ranges)[2 * at]..(*ranges)[2 * at + 1]];
+        let size = child_bytes.len();
+        let child = match parse_certificate(&child_bytes[0..size], copy(now)) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        if child.rules.is_ca && !bytes_equal(&child_bytes[child.issuer..child.issuer_end],
+                                              &child_bytes[child.subject..child.subject_end]) {
+            depth = depth + 1;
+        }
+        if at + 1 == count {
+            if !signing_authority(&root.rules, copy(depth)) { return Err(CertificateError.WrongUsage); }
+            if !verify_issuer(&child_bytes[0..size], &child, &anchor[0..anchor_len], &root) {
+                return Err(CertificateError.UntrustedChain);
+            }
+            return Ok(());
+        }
+        let parent_bytes = &chain[(*ranges)[2 * at + 2]..(*ranges)[2 * at + 3]];
+        let parent_size = parent_bytes.len();
+        let parent = match parse_certificate(&parent_bytes[0..parent_size], copy(now)) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        if !signing_authority(&parent.rules, copy(depth)) { return Err(CertificateError.WrongUsage); }
+        if !verify_issuer(&child_bytes[0..size], &child, &parent_bytes[0..parent_size], &parent) {
+            return Err(CertificateError.UntrustedChain);
+        }
+        if bytes_equal(&parent_bytes[0..parent_size], &anchor[0..anchor_len]) {
+            if at + 2 != count { return Err(CertificateError.UntrustedChain); }
+            return Ok(());
+        }
+        at = at + 1;
+    }
+    Err(CertificateError.UntrustedChain)
+}
+
+// Offsets specify the DER ranges in a caller-owned byte slice, leaf first.
+/// Validates ranged DER entries in a leaf-first chain and returns the verified DNS server key.
+pub fn validate_server_path(chain: &[u8], ranges: &[u64; 16], count: u64, anchor: &[u8],
+                            hostname: &[u8], now: i64) -> Result<PublicKey, CertificateError> {
+    let size = chain.len() as u64;
+    let name_size = hostname.len();
+    if !valid_dns_name(&hostname[0..name_size]) { return Err(CertificateError.NameMismatch); }
+    if count == 0 || count > 8 { return Err(CertificateError.InvalidCertificate); }
+    let mut i: u64 = 0;
+    let mut previous: u64 = 0;
+    while i < count {
+        let start = (*ranges)[2 * i];
+        let end = (*ranges)[2 * i + 1];
+        if start < previous || end <= start || end > size { return Err(CertificateError.InvalidCertificate); }
+        previous = end;
+        i = i + 1;
+    }
+    let leaf_bytes = &chain[(*ranges)[0]..(*ranges)[1]];
+    let leaf_len = leaf_bytes.len();
+    let leaf = match parse_certificate(&leaf_bytes[0..leaf_len], copy(now)) {
+        Ok(value) => { value },
+        Err(error) => { return Err(error); },
+    };
+    let usage = leaf.rules.usage;
+    if leaf.rules.is_ca || !leaf.rules.server_usage || (usage != 256 && (usage & 128) == 0) {
+        return Err(CertificateError.WrongUsage);
+    }
+    if leaf.rules.san == 0 || check_san(&leaf_bytes[0..leaf_len], leaf.rules.san, leaf.rules.san_end,
+                                        &hostname[0..name_size]) != 2 {
+        return Err(CertificateError.NameMismatch);
+    }
+    let anchor_len = anchor.len();
+    match check_path(&chain[0..size], &*ranges, count, &anchor[0..anchor_len], now) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
+    };
+    let point = leaf.point;
+    PublicKey::from_p256_sec1(&leaf_bytes[point..point + 65])
+}
+
+// A standalone chain is a sequence of concatenated DER certificates.
+/// Validates up to eight concatenated DER certificates against the trust anchor and DNS name.
+pub fn validate_server_chain(chain: &[u8], anchor: &[u8], hostname: &[u8], now: i64)
+                             -> Result<PublicKey, CertificateError> {
+    let end = chain.len() as u64;
+    let mut ranges: [u64; 16] = [0; 16];
+    let mut count: u64 = 0;
+    let mut at: u64 = 0;
+    while at < end {
+        if count == 8 { return Err(CertificateError.InvalidCertificate); }
+        let item = der(&chain[0..end], copy(at), copy(end), 48);
+        if item.end == 0 { return Err(CertificateError.InvalidCertificate); }
+        ranges[2 * count] = copy(at);
+        ranges[2 * count + 1] = item.end;
+        at = item.end;
+        count = count + 1;
+    }
+    validate_server_path(&chain[0..end], &ranges, count, &anchor[0..anchor.len()],
+                         &hostname[0..hostname.len()], now)
+}

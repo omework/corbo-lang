@@ -1,0 +1,153 @@
+{
+  "cycle": "reference values passed and returned by name; no flattening of &reference",
+  "date": "2026-11-02",
+  "historical_baseline": {
+    "standard_tests": 632,
+    "ubsan_tests": 632
+  },
+  "approved_rule": "& creates a new borrow; a name supplies the reference already held; no implicit borrow of allocations",
+  "final_runs": [
+    {
+      "command": "python3 -m unittest discover -s tests -q",
+      "tests": 647,
+      "seconds": 420.021,
+      "status": "OK",
+      "output": "----------------------------------------------------------------------\nRan 647 tests in 420.021s\n\nOK\n"
+    },
+    {
+      "command": "CRUST_SANITIZE=undefined python3 -m unittest discover -s tests -q",
+      "tests": 647,
+      "seconds": 420.331,
+      "status": "OK",
+      "output": "----------------------------------------------------------------------\nRan 647 tests in 420.331s\n\nOK\n"
+    }
+  ],
+  "new_test_methods": 15,
+  "new_fixtures": {
+    "accepted_executable": 8,
+    "rejected_by_check_and_compilation": 23,
+    "additional_result_inference_only": 1,
+    "note": "counts only the new fixture cases; inference-only example overlaps a rejected fixture"
+  },
+  "reference_models": [
+    "pool requirements: 40 seeds, unchanged graph oracle",
+    "reference fields: 32 scenarios, unchanged dependency oracle",
+    "borrowed holders: 24 seeds, unchanged frontier oracle",
+    "direct references: 24 seeds, unchanged leaf-target oracle",
+    "cleanup and C runtime oracle included in full suites"
+  ],
+  "fixture_migration_report": "reference-values-fixture-migration.json",
+  "mutations": [
+    {
+      "report": "reference-values-mutations.json",
+      "selected_detected": 5,
+      "checkout_unchanged": true
+    },
+    {
+      "report": "reference-values-direct-mutations.json",
+      "selected_detected": 5,
+      "checkout_unchanged": true
+    },
+    {
+      "report": "reference-values-holder-mutations.json",
+      "selected_detected": 5,
+      "checkout_unchanged": true
+    },
+    {
+      "report": "reference-values-field-mutations.json",
+      "selected_detected": 4,
+      "checkout_unchanged": true
+    }
+  ],
+  "c_campaigns": [
+    {
+      "report": "reference-values-direct-c.json",
+      "executions": 12,
+      "toolchains": [
+        {
+          "family": "clang",
+          "path": "/opt/homebrew/opt/llvm/bin/clang",
+          "version": "Homebrew clang version 20.1.3"
+        }
+      ]
+    },
+    {
+      "report": "reference-values-holder-c.json",
+      "executions": 12,
+      "toolchains": [
+        {
+          "family": "clang",
+          "path": "/opt/homebrew/opt/llvm/bin/clang",
+          "version": "Homebrew clang version 20.1.3"
+        }
+      ]
+    },
+    {
+      "report": "reference-values-pool-c.json",
+      "executions": 12,
+      "toolchains": [
+        {
+          "family": "clang",
+          "path": "/opt/homebrew/opt/llvm/bin/clang",
+          "version": "Homebrew clang version 20.1.3"
+        }
+      ]
+    }
+  ],
+  "additional_checks": [
+    "CLI direct_borrow_returns example executed",
+    "links in updated main documentation resolved"
+  ],
+  "defect_corrected": "&reference used to be contextually flattened to a reference to its target in calls, returns and field construction; named values now express reference reuse",
+  "remaining_counterexamples_in_tested_scope": [],
+  "limits": [
+    "no nested-reference types or general alias assignment",
+    "direct results readonly Int only",
+    "one C compiler family",
+    "ASan not rerun due prior host limitation",
+    "CLI example not instrumented by CRUST_SANITIZE",
+    "bounded tests, no formal safety proof"
+  ],
+  "python_sha256": {
+    "constraints.py": "7968401b744a144811fe2815700b5236adee6bea1dc5588f71d894a928cba4da",
+    "contracts.py": "9cd808d3b6d8ae775178d26ba423f8bc808b4b2e38c7b15759ddc8c05a923a1c",
+    "crust.py": "77acb09e2e7ae0b3f5314f3574f9039687f767f8e905119f21af8948d1fec7fe",
+    "effects.py": "9aa834891cbda09b5925e01d06e619a505c7bfe647ba050d36202d1b8d994c8a",
+    "results.py": "9c4fc4f94e68e7028c78d41c1fd60e077a3c26f97ba5b325a3a7607a39ede6a7",
+    "tests/pool_requirement_model.py": "d1e906c0ccc6227f60be923878ff6c27da058f6856e1970fc8de9e61a028d4e3",
+    "tests/run_borrowed_return_mutations.py": "87b3dcd1ea8fa26102064a2a91ca9ac70f0ab97eb1e9a0478c4e70270bb4542e",
+    "tests/run_direct_borrow_mutations.py": "4ffabcbbc79ec0ddd65107c07608114314ae36c55771169420d06af7236b06b5",
+    "tests/run_pool_requirement_mutations.py": "b316381d9d739b166c55dbb95e348a06be697409c4ed0d1c236fc2af2dce5dd6",
+    "tests/run_reference_field_mutations.py": "8839a32f176f2001ff6fc28b37028be13bb01a4dff50906e1d5c6f2f94a443d3",
+    "tests/run_reference_value_mutations.py": "e49cc2af7ba80a188b8d0f7ae658edd863cfd820fa64967cfa8bca656e09749e",
+    "tests/test_arguments.py": "314a3c61942af38bb0651a8494d8dc925bcfa6ebc0a09fede7f6681fd8cb8973",
+    "tests/test_audit_regressions.py": "bf11f2411218774c23b0fc0544e5a8e4e2c3c002087988d6b4cc4b818ea17bbe",
+    "tests/test_borrowed_returns.py": "be463d9cedd59230272250333b72b99841f447a00c3358b2b1695ed7b534582b",
+    "tests/test_conditional_returns.py": "69296cd00708c65a0a1492a1b07c5b58f779204b4910915c9d2120ea0c267e3f",
+    "tests/test_conditionals.py": "6886dc2ca25434bb4480fe21ec620094255d604067dc805fca4fd1881b7d5f1e",
+    "tests/test_constraints.py": "23b0cd89786f8b680a347c9075a531ac4408d832a16e0bf068cf6a7672594cea",
+    "tests/test_continue.py": "cc566a0310dc47b357520f845109f3bb4abb1a49f6c420a516bcd40685e14b77",
+    "tests/test_crust.py": "84345c50aa88281cb20bdfa422e7835d3011cf6c1fde37f59837172b0040da2f",
+    "tests/test_direct_borrow_returns.py": "bc6b18b2e8fe3fdcffa0f6821d7c34c97d4fed9f0a215bde3393c8376c5cf402",
+    "tests/test_drop_transitions.py": "f8c0cf79aab152f05812f7b6cb0fe05617964ec8c92fc7fe3d40804e730dbca9",
+    "tests/test_effects.py": "1e73810b2c6b379672c075d96c4ca80331b4bf1dbbee278de7d696faa710cc52",
+    "tests/test_function_bodies.py": "3713d4b39c1cbd5bcdaddae372ac607328d4d6e128773e453ee18b455648b2dd",
+    "tests/test_if_expressions.py": "5b64d344ac84ad41850ba0f99607a10783d99a67ff037588601539a23310d568",
+    "tests/test_loops.py": "5bbf5fe50a41bd20837aef3842039dcb5efc20bfb5bacd5b5001556917eaa7c4",
+    "tests/test_modular_calls.py": "8370e5bc31fb96397d510ce40e7f21b7e933ef126ac93ba18d3256883be79146",
+    "tests/test_pool_requirements.py": "fb6e54e6f5c93eee2fcd37d6f0d3b3f8a34be00700abca190578eeacbf4e60c1",
+    "tests/test_provenances.py": "e31a99e1d2ce935793535a2aba5ebe5939f9087b8994ae067623633ea4548e78",
+    "tests/test_reassignment.py": "fe5848a2836593e8b48d81891b91c6c083f30b5b4c0fc9f660e4aa8f8cb49565",
+    "tests/test_reference_fields.py": "39ecff85bf0f9586ff315459ad671d62856afe9aeadaada40672dacc9ab0e01c",
+    "tests/test_reference_values.py": "7af208057bdd4bed7bf359e6c5999ef50bd8f0aa6838bd97cd8d69454bc1c409",
+    "tests/test_reset_transitions.py": "379ca0cd7dfb42ce08bda9c4b9cf05f24429b898e39698ac03940edda47e7d58",
+    "tests/test_results.py": "7bb6d94666dfd70cac0ee8e14b3f4ee70899a153eda0a9484aa87294f9b365c4",
+    "tests/test_safety.py": "9035b21d53d0163d740be258ded3b510e04006d288255409dce0256193e25a05",
+    "tests/test_scope_exit.py": "7b4dd6673c706ba2ade2423ea82fcb3161a7c9d1c146e8395eee4f32ed00051e",
+    "tests/test_while.py": "4761b763c915e369235bd029c5d1d2a213a6262bc4185cb46b7917032984a818",
+    "tests/validate_borrowed_return_c.py": "9de580387b55aad624f431f66ccfdae386a7c87577aaf8436aa80d594ddc00c5",
+    "tests/validate_direct_borrow_c.py": "e9209b5d78cff7120da193d8ea707ee024f5bc4eaf4404a684abf13abc4f4cb3",
+    "tests/validate_pool_contract_c.py": "83197f2a8f4dcfd75a4f04f59e2d99372c9be2742124d8b30dd6d8570670f0b4",
+    "tests/validate_reference_field_c.py": "a70a32526dcde0fc3c806d38b5ba53173fce3eb48ce1f6f73f087fa15fe5aea0"
+  }
+}

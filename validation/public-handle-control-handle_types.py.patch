@@ -1,0 +1,28 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -42,6 +42,25 @@
+     return tuple((key, tuple(targets)) for key, targets in groups.items() if targets)
+ 
+ 
++def common_public_handle(nominals, definitions):
++    """Unify distinct execution frames only when their public payload agrees."""
++    names = set(nominals)
++    if len(names) < 2:
++        return None
++    from async_lowering import public_handle_type
++    payloads = set()
++    for name in names:
++        declaration = definitions[name]
++        if isinstance(declaration, tuple):
++            declaration = declaration[0]
++        payloads.add(public_handle_type(declaration.args[2]))
++    if len(payloads) == 1:
++        public = payloads.pop()
++        if public_signature(public) is not None:
++            return public
++    return None
++
++
+ class HandleDefinitions(dict):
+     def __init__(self, values=(), *, compiled=False):
+         super().__init__(values)

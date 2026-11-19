@@ -1,0 +1,9 @@
+struct Point{x:Int}
+        async fn exchange(v:&mut Vector<A<Point>>,incoming:->A<Point>)-><-Result<A<Point>,A<Point>>{
+            yield;let r=<-v.replace(0,->incoming);yield;return <-r;}async fn wrapped1(v:&mut Vector<A<Point>>,incoming:->A<Point>)-><-Result<Result<A<Point>,A<Point>>,runtime::Error>{
+            let h=runtime::spawn(->exchange(v,->incoming));return <-h.await;}async fn wrapped2(v:&mut Vector<A<Point>>,incoming:->A<Point>)-><-Result<Result<Result<A<Point>,A<Point>>,runtime::Error>,runtime::Error>{
+            let h=runtime::spawn(->wrapped1(v,->incoming));return <-h.await;}fn main(){let mut p=pool<Point>(1);let mut q=pool<Point>(1);
+        let mut vp=pool<Vector<A<Point>>>(1);let mut v=vp.new();v.push(->p.new(x:7));
+        let incoming=q.new(x:9);let h=runtime::spawn(->wrapped2(&mut v,->incoming));match h.join(){Ok(inner2)=>{match inner2{Ok(inner1)=>{match inner1{Ok(leaf)=>{match (->leaf){Ok(n)=>{print(n.x);drop(->n);},Err(n)=>{print(n.x);drop(->n);}}},Err(_)=>{print(90);}}},Err(_)=>{print(91);}}},Err(_)=>{print(92);}}
+        let resident=<-v.remove(0);print(resident.x);drop(->resident);drop(->v);
+        let a=p.new(x:11);let b=q.new(x:12);print(a.x);print(b.x);}

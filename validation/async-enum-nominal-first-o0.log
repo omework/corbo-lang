@@ -1,0 +1,133 @@
+test_mutable_projection_reborrow (test_async_enum_nominal.AsyncEnumNominalTests.test_mutable_projection_reborrow) ... FAIL
+test_shared_projection_and_return (test_async_enum_nominal.AsyncEnumNominalTests.test_shared_projection_and_return) ... FAIL
+
+======================================================================
+FAIL: test_mutable_projection_reborrow (test_async_enum_nominal.AsyncEnumNominalTests.test_mutable_projection_reborrow)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16590, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14670, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 939, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7351, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6807, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6651, in infer_scalar_value
+    return match_enum(expr[1], valued=True, following=following, boolean=None)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5029, in match_enum
+    return emit_branches(tag, None, None, line, valued=valued, construct='match',
+        following=following, boolean=boolean, transfer_result=transfer_result,
+        reference_result=reference_result, enum_match=(statement, typ, cell))
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5094, in emit_branches
+    fail(line, 'match async : type de champ non représentable')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 975, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: match async : type de champ non représentable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_enum_nominal.py", line 35, in test_mutable_projection_reborrow
+    self.assertEqual(self.run_source(source).stdout,'30\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: match async : type de champ non représentable
+
+======================================================================
+FAIL: test_shared_projection_and_return (test_async_enum_nominal.AsyncEnumNominalTests.test_shared_projection_and_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16590, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14645, in verify
+    self.function_results, Error, self.enums, async_functions).infer_all()
+                                                               ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 219, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 231, in infer
+    result = context.infer()
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 478, in infer
+    self.nodes(self.node.args[3], initial,
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               valued=self.node.args[2][0] == 'owned')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2210, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 775, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1418, in expression
+    paths, value = self.expression(expr[1], state, line, expected_array if op != 'new_transfer' else None)
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1504, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1577, in call
+    reference_assets = self.async_reference_assets(catalog[name], actuals, line)
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 313, in async_reference_assets
+    paths = borrowed_result_paths(definition, self.analyzer.async_functions, self.fail, {},
+                                  sync_result_contract=self.analyzer.sync_result_contract)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 701, in borrowed_result_paths
+    cache[name] = frozenset(scan(body, {}, {}))
+                  ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 678, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 696, in scan
+    mode, origins = reference_origin(expr, task_calls, awaited, value.line)
+                    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 661, in reference_origin
+    mode, origins = awaited_origin(*awaited[expr[1]], line)
+                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 528, in awaited_origin
+    return reference_origin(operand[1], tasks, awaited, line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 669, in reference_origin
+    fail(line, diagnostic)
+    ~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 340, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 4: retour async &Int : un paramètre partagé durable ou un réemprunt est requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_enum_nominal.py", line 24, in test_shared_projection_and_return
+    self.assertEqual(self.run_source(source).stdout,'7\n20\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: retour async &Int : un paramètre partagé durable ou un réemprunt est requis
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.018s
+
+FAILED (failures=2)

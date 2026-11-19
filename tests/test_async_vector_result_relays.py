@@ -1,0 +1,53 @@
+"""Joined vector results retain payload graphs across explicit relays."""
+from pathlib import Path
+import unittest
+import test_select_source as harness
+from crust import compile_source
+from scheduler_faults import inject_submission_failure
+BASE=Path(__file__).resolve().parents[1].joinpath('validation/open-async-vector-result-relay.crb').read_text()
+RESULT='Result<A<Vector<A<Item>>>,runtime::Error>'
+
+class AsyncVectorResultRelayTests(unittest.TestCase):
+    run_source=harness.SelectSourceTests.run_source
+    run_c_oracle=harness.SelectSourceTests.run_c_oracle
+    refused=harness.SelectSourceTests.refused
+
+    def check_return(self,source):
+        source=source.replace('match forward(->result)', 'let saved=forward(->result);match saved')
+        run=self.run_source(source)
+        self.assertEqual(run.stdout,'7\n')
+        self.refused(source.replace('drop(->n);','').replace('match saved','drop(->n);match saved'),'emprunt|réserv|référenc')
+        return run
+
+    def test_direct_result_relay(self):
+        self.check_return(BASE)
+        self.refused(BASE.replace('forward(->result)','forward(result)'),'transfert|->')
+
+    def test_successive_result_relays(self):
+        helper=f'fn again(r:->{RESULT})-><-{RESULT}{{return <-forward(->r);}}'
+        source=helper+BASE.replace('let result=wait(->h);','let result=again(->wait(->h));')
+        self.check_return(source)
+
+    def test_mutable_result_target(self):
+        source=BASE.replace('value:&Int','value:&mut Int').replace('let n=ns.new','let mut n=ns.new').replace('value:&n','value:&mut n')
+        self.check_return(source)
+        source=source.replace('match forward(->result)','let saved=forward(->result);match saved')
+        for access in ('print(*n);','n=20;'):
+            self.refused(source.replace('match saved',access+'match saved'),'emprunt|réserv|référenc')
+
+    def test_nested_owned_element(self):
+        source=BASE.replace('struct Item{value:&Int}','struct Inner{value:&Int}struct Item{inner:A<Inner>}').replace(
+            'let mut p=pool<Item>(1);','let mut p=pool<Item>(1);let mut ip=pool<Inner>(1);').replace(
+            'v.push(->p.new(value:&n));','let inner=ip.new(value:&n);v.push(->p.new(inner:<-inner));').replace(
+            'print(*item.value);','print(inspect(&*item.inner));')
+        run=self.check_return('fn inspect(i:&Inner)->Int{return *i.value;}'+source)
+        self.assertEqual(run.stderr.count('=Inner\n'),1)
+
+    def test_empty_and_failed_launch(self):
+        empty=BASE.replace('v.push(->p.new(value:&n));','').replace('let item=<-items.remove(0);print(*item.value);drop(->item);','print(items.len());')
+        self.assertEqual(self.run_source(empty).stdout,'0\n')
+        run=self.run_c_oracle(inject_submission_failure(compile_source(BASE),asynchronous=False,at=1))
+        self.assertEqual(run.stdout,'0\n')
+        self.assertEqual(run.stderr.count('=Item\n'),1)
+
+if __name__=='__main__':unittest.main()

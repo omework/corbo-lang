@@ -1,0 +1,24 @@
+--- before/results.py
++++ results.py
+@@ -1149,10 +1149,10 @@
+                 environment[name] = Value(mode, typ, frozenset({ResultCandidate('parameter', index)}), fields,
+                                           structure_origins=origins,
+                                           handle_items=(frozenset({ResultCandidate('vector_element', index)})
+-                                                        if is_handle_vector(typ) and mode in ('owned', 'mut')
++                                                        if is_handle_vector(typ) and mode in ('owned', 'mut', *OWNED_JOIN_TYPES)
+                                                         else fields[0][1] if tracks_reference_items else None),
+                                           input_item_history=InputVectorHistory()
+-                                          if (is_handle_vector(typ) and mode in ('owned', 'mut'))
++                                          if (is_handle_vector(typ) and mode in ('owned', 'mut', *OWNED_JOIN_TYPES))
+                                           or (typ in REFERENCE_VECTORS and mode == 'mut') else None)
+         def vector_payload(index, typ, path='[]', seen=frozenset()):
+             if typ in seen:
+@@ -3483,7 +3483,7 @@
+                 for arm in actuals[candidate.parameter].fresh_variants)
+             if is_handle_vector(summary.typ):
+                 vectors = self.apply_vector_result_candidates(summary.candidates, actuals, id(expr))
+-                return flow, Value('owned', summary.typ, frozenset(candidates), fresh_variants=fresh_variants,
++                return flow, Value(summary.mode, summary.typ, frozenset(candidates), fresh_variants=fresh_variants,
+                                    handle_items=merge_handle_items(vectors),
+                                    handle_payloads=tuple(self.resolve_owned_child(value, actuals, map_fields=True)
+                                                          for value in summary.vector_values),

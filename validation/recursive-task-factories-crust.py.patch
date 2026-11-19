@@ -1,0 +1,116 @@
+--- before/crust.py
++++ crust.py
+@@ -10672,6 +10672,10 @@
+                     if kind != mode or target.typ != typ or target.scope != scope.id:
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
++                    from array_syntax import owned_reference_paths
++                    for field, access, _ in owned_reference_paths(self.enums, target.typ):
++                        if not self.owned_path_possible(target, field):
++                            dependencies.append((f'{access}.{index}/{field}', ()))
+                     for field, access, borrowed in self.owned_dependency_fields(target):
+                         dependencies.append((f'{access}.{index}/{field}', borrowed))
+                     field_bindings[parameters[index][0]] = Binding(parameters[index][0], 'owned', value, target)
+@@ -11139,6 +11143,7 @@
+                                      if field == origin.field for target in targets)
+                     if not captured:
+                         if not self.owned_path_possible(binding.alloc, origin.field):
++                            dependencies.append((key, ()))
+                             continue
+                         self.fail('contrat de capture propriétaire : cible de champ absente')
+                     roots.update((root.id, root) for root in captured)
+@@ -11208,10 +11213,29 @@
+                     chain = (*binding.borrow_parents, *((binding.read_parent,) if binding.read_parent else ()))
+                 parents.update((id(parent), parent) for parent in chain)
+             index = key.partition('.')[2]
+-            if roots:
+-                dependencies.append((f'{"mut" if exclusive else "ref"}.{index}', tuple(roots.values())))
++            dependencies.append((f'{"mut" if exclusive else "ref"}.{index}', tuple(roots.values())))
++        # Whole captured owners and forwarded tasks retain finite paths beyond
++        # the first repeated type. Published origin mappings identify the input;
++        # no callee body is traversed here.
++        owner_captures = {(capture_index(key.partition('.')[2]), origin.parameter)
++                          for key, origins in summary.borrowed_fields for origin in origins
++                          if origin.kind == 'owned_capture_field'
++                          and key.partition('/')[2] == origin.field}
++        for position, index in owner_captures:
++            owner = bindings[params[index][0]].alloc
++            dependencies.extend((f'{access}.{position}/{path}', targets)
++                                for path, access, targets in self.owned_dependency_fields(owner))
++            parents.update((id(parent), parent) for parent in self.retained_borrow_parents(owner))
++        for index in summary.task_forward_parameters:
++            forwarded = bindings[params[index][0]].alloc
++            dependencies.extend(forwarded.dependencies)
++            parents.update((id(parent), parent) for parent in forwarded.borrow_parents)
++        dependencies = self.merge_dependencies(tuple(dependencies))
+         fresh_origins = {}
+         sources, origins = self.resolve_async_sources(summary.task_sources, params, bindings, fresh_origins)
++        captured_storage = self.inherited_async_storage(summary.task_sources, params, bindings)
++        sources = source_union(sources, *(record.sources for record in captured_storage))
++        origins |= frozenset(origin for record in captured_storage for origin in record.origins)
+         result_sources, result_origins = self.resolve_async_sources(summary.task_result_sources, params, bindings,
+                                                                      fresh_origins)
+         kind = summary.mode
+@@ -11228,8 +11252,7 @@
+                                 borrow_parents=tuple(parents.values()), item_sources=sources,
+                                 item_origins=origins, task_result_sources=result_sources,
+                                 task_result_origins=result_origins,
+-                                task_result_fields=tuple((path, *self.resolve_async_sources(symbols, params, bindings, fresh_origins))
+-                                    for path, symbols in summary.task_result_fields),
++                                task_result_fields=self.instantiate_async_result_fields(summary, params, bindings, fresh_origins),
+                                 task_result_variants=self.resolve_task_variants(summary, params, bindings),
+                                 async_field_updates=tuple(update for index in summary.task_forward_parameters
+                                     for update in bindings[params[index][0]].alloc.async_field_updates)
+@@ -11238,6 +11261,52 @@
+         caller.allocations.append(allocation)
+         self.allocations.append(allocation)
+         return kind, c, allocation
++
++    def inherited_async_storage(self, symbols, params, bindings):
++        """Instantiate a finite graph carried by a parameter, including its root."""
++        groups = []
++        for symbol in symbols:
++            if symbol.kind not in ('allocation_parameter', 'allocation_field_parameter',
++                                   'task_result_parameter', 'task_result_field_parameter'):
++                continue
++            binding = bindings[params[symbol.index][0]]
++            if symbol.kind.startswith('allocation'):
++                roots = binding.referents or (binding.alloc,)
++                if symbol.kind == 'allocation_field_parameter':
++                    roots = tuple(child for root in roots
++                                  for child in self.aggregate_field_targets(root, symbol.name))
++                for root in roots:
++                    groups.append((AsyncFieldStorage('', root.sources, root.origins, root.variants),
++                                   *self.owned_field_storage(root.owned_fields)))
++            else:
++                allocation = binding.alloc
++                if symbol.kind == 'task_result_parameter':
++                    groups.append((AsyncFieldStorage('', allocation.task_result_sources,
++                        allocation.task_result_origins, allocation.task_result_variants),
++                        *allocation.task_result_fields))
++                else:
++                    prefix = symbol.name + '/'
++                    groups.append(tuple(AsyncFieldStorage(path[len(prefix):] if path.startswith(prefix) else '',
++                        sources, origins, getattr(record, 'variants', frozenset()))
++                        for record in allocation.task_result_fields
++                        for path, sources, origins in (record,)
++                        if path == symbol.name or path.startswith(prefix)))
++        return self.merge_async_result_fields(*groups)
++
++    def instantiate_async_result_fields(self, summary, params, bindings, fresh_origins):
++        fields = {record.path: record for record in self.inherited_async_storage(
++            summary.task_result_sources, params, bindings) if record.path}
++        for path, symbols in summary.task_result_fields:
++            inherited = self.inherited_async_storage(symbols, params, bindings)
++            root = next((record for record in inherited if not record.path), None)
++            sources, origins = self.resolve_async_sources(symbols, params, bindings, fresh_origins)
++            fields[path] = AsyncFieldStorage(path, sources, origins,
++                                             root.variants if root else frozenset())
++            for record in inherited:
++                if record.path:
++                    nested_path = path + '/' + record.path
++                    fields[nested_path] = replace(record, path=nested_path)
++        return tuple(fields[path] for path in sorted(fields))
+ 
+     def resolve_async_sources(self, symbols, params, bindings, fresh_origins):
+         sources, origins = (), set()

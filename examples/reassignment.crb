@@ -1,0 +1,18 @@
+fn make(memory: &mut Pool<i32>, old: &i32) -> A<i32> {
+    print(*old); // L'ancienne valeur reste vivante pendant l'évaluation.
+    memory.new(20)
+}
+
+fn main() {
+    let mut first = pool<i32>(2);
+    let mut second = pool<i32>(1);
+    let mut data = first.new(10);
+    let view = data.vref();
+
+    let fresh = make(&mut first, view);
+    data = fresh; // Dernier usage de view, puis destruction de 10.
+    print(*data);
+
+    data = second.new(30); // Évaluation de 30, puis destruction de 20.
+    print(*data);
+}

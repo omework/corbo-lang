@@ -1,0 +1,12 @@
+async fn append(v:&mut Vector<A<Int>>,incoming:->Int)->Int{
+    yield;
+    match <-v.try_push(->incoming){
+        Ok(())=>{return 1;},
+        Err(rejected)=>{let n=*rejected;drop(->rejected);return n;}
+    }
+}
+fn main(){let mut p=pool<Int>(2);let mut vp=pool<Vector<A<Int>>>(1);let mut v=vp.new();
+    let incoming=p.new(8);let h=runtime::spawn(->append(&mut v,->incoming));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+    print(*v[0]);drop(->v);let reused=p.new(9);print(*reused);
+}

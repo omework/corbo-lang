@@ -1,0 +1,77 @@
+use std::net::asyn::tcp::{connect, Listener, ReadHalf, WriteHalf};
+use std::net::ipv4::{SocketAddr, Addr};
+use std::net::SocketError;
+async fn receive(mut half: ReadHalf) -> Result<u8, SocketError> {
+    let mut empty: [u8; 0] = [];
+    if half.read(&mut empty[..]).await? != 0 { return Err(SocketError.Os { code: -704 }); }
+    let mut output: [u8; 1] = [0];
+    let n = half.read(&mut output[..]).await?;
+    if n != 1 { return Err(SocketError.Os { code: -700 }); }
+    Ok(output[0])
+}
+async fn send(mut half: WriteHalf) -> Result<usize, SocketError> {
+    let empty: [u8; 0] = [];
+    if half.write(&empty[..]).await? != 0 { return Err(SocketError.Os { code: -705 }); }
+    let output: [u8; 1] = [42];
+    half.write(&output[..]).await
+}
+async fn client(address: SocketAddr) -> Result<usize, SocketError> {
+    let mut connection = connect(address).await?;
+    let mut output: [u8; 1] = [0];
+    let n = connection.read(&mut output[..]).await?;
+    if n != 1 { return Err(SocketError.Os { code: -701 }); }
+    let sent = connection.write(&output[..]).await?;
+    let eof = connection.read(&mut output[..]).await?;
+    if eof != 0 { return Err(SocketError.Os { code: -702 }); }
+    Ok(sent)
+}
+async fn accept(listener: &mut Listener) -> Result<std::net::asyn::tcp::Connection, SocketError> {
+    listener.accept().await
+}
+async fn refused(address: SocketAddr) -> bool {
+    match connect(address).await {
+        Ok(connection) => { drop(connection); false },
+        Err(error) => {
+            match error {
+                SocketError.ConnectionRefused => { true },
+                SocketError.AddressInUse => { false },
+                SocketError.DatagramTooLarge => { false },
+                SocketError.Os { code: code } => { print(code); false },
+            }
+        },
+    }
+}
+fn main() {
+    let mut listener = match Listener::bind(SocketAddr::new(Addr::new(127, 0, 0, 1), 0), None) {
+        Ok(value) => { value }, Err(error) => { drop(error); return; },
+    };
+    let local = listener.addr();
+    let server = runtime::spawn(accept(&mut listener));
+    let peer = runtime::spawn(client(local));
+    let mut connection = match server.join() {
+        Ok(result) => { match result { Ok(value) => { value }, Err(error) => { drop(error); return; }, } },
+        Err(error) => { drop(error); return; },
+    };
+    let (reader, writer) = connection.split();
+    let reading = runtime::spawn(receive(reader));
+    let writing = runtime::spawn(send(writer));
+    match reading.join() {
+        Ok(result) => { match result { Ok(value) => { print(value); }, Err(error) => { drop(error); print(701); }, } },
+        Err(error) => { drop(error); print(1402); },
+    };
+    match writing.join() {
+        Ok(result) => { match result { Ok(value) => { print(value); }, Err(error) => { drop(error); print(702); }, } },
+        Err(error) => { drop(error); print(1404); },
+    };
+    drop(connection);
+    match peer.join() {
+        Ok(result) => { match result { Ok(value) => { print(value); }, Err(error) => { drop(error); print(703); }, } },
+        Err(error) => { drop(error); print(1406); },
+    };
+    let closed = listener.addr();
+    drop(listener);
+    let attempt = runtime::spawn(refused(closed));
+    match attempt.join() {
+        Ok(value) => { print(value); }, Err(error) => { drop(error); print(false); },
+    };
+}

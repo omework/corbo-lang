@@ -1,0 +1,70 @@
+"""Nested async Result receptions preserve owned vector payload graphs."""
+from pathlib import Path
+import unittest
+import test_select_source as harness
+from crust import compile_source
+from scheduler_faults import inject_submission_failure
+BASE=Path(__file__).resolve().parents[1].joinpath('validation/open-async-vector-result-capture.crb').read_text()
+RECEIVE='let resumed=match h2.join(){Ok(value)=>{<-value},Err(_)=>{return;}};'
+
+class AsyncVectorResultCaptureTests(unittest.TestCase):
+    run_source=harness.SelectSourceTests.run_source
+    run_c_oracle=harness.SelectSourceTests.run_c_oracle
+    refused=harness.SelectSourceTests.refused
+
+    def check_return(self,source):
+        run=self.run_source(source)
+        self.assertEqual(run.stdout,'7\n')
+        self.refused(source.replace('drop(->n);','').replace('match forward(->resumed)','drop(->n);match forward(->resumed)'), 'emprunt|réserv|référenc')
+        return run
+
+    def test_recorded_nested_reception(self):
+        self.check_return(BASE)
+
+    def test_mutable_result(self):
+        source=BASE.replace('value:&Int','value:&mut Int').replace('let n=ns.new','let mut n=ns.new').replace('value:&n','value:&mut n')
+        self.check_return(source)
+        for access in ('print(*n);','n=20;'):
+            self.refused(source.replace('match forward(->resumed)',access+'match forward(->resumed)'), 'emprunt|réserv|référenc')
+
+    def test_nested_owned_child(self):
+        source=BASE.replace('struct Item{value:&Int}','struct Inner{value:&Int}struct Item{inner:A<Inner>}').replace(
+            'let mut p=pool<Item>(1);','let mut p=pool<Item>(1);let mut ip=pool<Inner>(1);').replace(
+            'v.push(->p.new(value:&n));','let inner=ip.new(value:&n);v.push(->p.new(inner:<-inner));').replace(
+            'print(*item.value);','print(inspect(&*item.inner));')
+        run=self.check_return('fn inspect(i:&Inner)->Int{return *i.value;}'+source)
+        self.assertEqual(run.stderr.count('=Inner\n'),1)
+
+    def test_successive_async_envelopes(self):
+        result='Result<A<Vector<A<Item>>>,runtime::Error>'
+        helper=f'async fn wrap(r:->{result})-><-Result<{result},runtime::Error>{{let h=runtime::spawn(->resume(->r));return <-h.await;}}'
+        source=helper+BASE.replace('let h2=runtime::spawn(->resume(->result));',
+            'let h2=runtime::spawn(->wrap(->result));').replace(RECEIVE,
+            RECEIVE.replace('let resumed=', 'let outer=')+
+            'let resumed=match outer{Ok(value)=>{<-value},Err(_)=>{return;}};')
+        self.check_return(source)
+
+    def test_conditional_and_loop_receivers(self):
+        for receiver in (
+            RECEIVE.replace('let resumed=', 'let first=')+'let resumed=if true{first ->;<-first}else{first ->;<-first};',
+            RECEIVE.replace('let resumed=', 'let first=')+'let resumed=loop{first ->;break <-first;};',
+        ):
+            self.check_return(BASE.replace(RECEIVE,receiver))
+
+    def test_inactive_capture_cleanup(self):
+        prefix=BASE.split('let h2=runtime::spawn')[0]
+        source=prefix+'''let task=resume(->result);drop(->task);let next=p.new(value:&n);
+            print(*next.value);drop(->next);drop(->n);}'''
+        run=self.run_source(source)
+        self.assertEqual(run.stdout,'7\n')
+        self.assertEqual(run.stderr.count('=Item\n'),2)
+        self.refused(source.replace('drop(->n);','').replace('drop(->task);','drop(->n);drop(->task);'),'emprunt|réserv|référenc')
+
+    def test_empty_and_failed_second_launch(self):
+        empty=BASE.replace('v.push(->p.new(value:&n));','').replace('let item=<-items.remove(0);print(*item.value);drop(->item);','print(items.len());')
+        self.assertEqual(self.run_source(empty).stdout,'0\n')
+        run=self.run_c_oracle(inject_submission_failure(compile_source(BASE),asynchronous=False,at=2))
+        self.assertEqual(run.stdout,'')
+        self.assertEqual(run.stderr.count('=Item\n'),1)
+
+if __name__=='__main__':unittest.main()

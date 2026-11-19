@@ -1,0 +1,46 @@
+test_initial_owned_contract_example (test_public_owned_handles.PublicOwnedHandleTests.test_initial_owned_contract_example) ... ok
+test_nested_result_keeps_two_error_levels_and_result_pool (test_public_owned_handles.PublicOwnedHandleTests.test_nested_result_keeps_two_error_levels_and_result_pool) ... ERROR
+test_opaque_contract_preserves_result_source_through_join_helper (test_public_owned_handles.PublicOwnedHandleTests.test_opaque_contract_preserves_result_source_through_join_helper) ... ok
+test_result_borrow_blocks_drop_and_legacy_reset (test_public_owned_handles.PublicOwnedHandleTests.test_result_borrow_blocks_drop_and_legacy_reset) ... ok
+test_result_outlives_unrelated_capture_pool_for_each_owned_type (test_public_owned_handles.PublicOwnedHandleTests.test_result_outlives_unrelated_capture_pool_for_each_owned_type) ... ok
+test_wrong_owned_payload_rejected_even_if_only_dropped (test_public_owned_handles.PublicOwnedHandleTests.test_wrong_owned_payload_rejected_even_if_only_dropped) ... ok
+
+======================================================================
+ERROR: test_nested_result_keeps_two_error_levels_and_result_pool (test_public_owned_handles.PublicOwnedHandleTests.test_nested_result_keeps_two_error_levels_and_result_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_public_owned_handles.py", line 114, in test_nested_result_keeps_two_error_levels_and_result_pool
+    code = compile_source(source.replace('CHECK', ''))
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15186, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15179, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13680, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13520, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 859, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1161, in _lower_async_function
+    fail(node.line, 'prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 885, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis
+
+----------------------------------------------------------------------
+Ran 6 tests in 6.450s
+
+FAILED (errors=1)

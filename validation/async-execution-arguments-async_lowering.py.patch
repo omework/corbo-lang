@@ -1,0 +1,114 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1008,6 +1008,10 @@
+     task_argument_types = {('task', typ): 'CrustTask *' for contract in sync_contracts.values()
+                            for _, mode, typ in contract.parameters if mode == 'task' and typ in functions}
+     sync_types.update(task_argument_types)
++    execution_argument_types = {('execution', typ): 'CrustExecution' for contract in sync_contracts.values()
++        for _, mode, typ in contract.parameters if mode == 'execution'
++        and (typ in functions or public_signature(typ, struct_layouts) is not None)}
++    sync_types.update(execution_argument_types)
+ 
+     def pool_argument(argument, mode, typ, line):
+         local = argument[1] in local_pools if argument[0] in ('name', 'ref', 'mut') else False
+@@ -1546,21 +1550,23 @@
+                 argument_tails.append((len(scopes) - 1, expr[2][index + 1:]))
+                 held = []
+                 argument_ctype = sync_types[(mode, typ)]
+-                if mode == 'task':
++                if mode in ('task', 'execution'):
+                     if argument[0] == 'down':
+                         require_local_async_value(argument[1], line)
+-                        record = consume_task(argument[1], line)
++                        record = (consume_task if mode == 'task' else consume_execution)(argument[1], line)
+                     elif argument[0] == 'transfer':
+                         operand = argument[1]
+-                        if operand[0] == 'call':
++                        if mode == 'task' and operand[0] == 'call':
+                             record = create_task(operand, line)
+                         else:
+                             kind, record = emit_computed_transfer(operand, line)
+-                            if kind != 'task':
+-                                fail(line, 'argument de tâche : tâche inactive requise')
++                            if kind != mode:
++                                fail(line, 'argument async : même mode de tâche ou de handle requis')
+                     else:
+                         fail(line, 'argument de tâche : transfert -> explicite requis')
+-                    if record[3] != typ:
++                    from handle_types import is_public_handle
++                    actual = public_execution_type(record, typ, line) if mode == 'execution' and is_public_handle(typ) else record[3]
++                    if actual != typ:
+                         fail(line, f'argument de tâche : type {typ} attendu')
+                     argument_tasks[index] = record
+                     if any(target in implicit_stacks for target, access in record[4] if access == 'storage'):
+@@ -1630,7 +1636,11 @@
+                     if actual != expected_type:
+                         fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
+                 snapshot = temporary(argument_ctype)
+-                steps.append(f'{snapshot} = {value};')
++                if mode == 'execution':
++                    steps.append(f'task_sync_adopt(&{snapshot}, {value});')
++                    prepared_owners.append(('execution', snapshot))
++                else:
++                    steps.append(f'{snapshot} = {value};')
+                 if mode == 'task':
+                     prepared_owners.append(('task', snapshot))
+                     steps.append(f'{value} = NULL;')
+@@ -1647,7 +1657,7 @@
+                     prepared_owners.append(pending)
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
+-                argument_storage.append((frozenset(target for target, access in held if access == 'storage') if mode == 'task'
++                argument_storage.append((frozenset(target for target, access in held if access == 'storage') if mode in ('task', 'execution')
+                                          else pool_storage(argument[1]) if (mode, typ) in pool_sync_types
+                                          else storage_of(value) if mode == 'owned' or (mode, typ) in owned_join_sync_types
+                                          else frozenset(origin for target, _ in held
+@@ -1678,6 +1688,9 @@
+             prepared.append('&' + local_pools[local_source])
+         for key, held in prepare_field_changes(contract.result, contract.parameters, argument_loans, line):
+             active_loans[key] = list(held)
++        for index in contract.result.task_wait_parameters:
++            if index in argument_tasks:
++                apply_child_field_changes(argument_tasks[index][5], line, launched=True)
+         call = symbol + '(' + ', '.join(prepared) + ')'
+         if signature == ('void', 'Void') or diverges:
+             steps.append(call + ';')
+@@ -1985,7 +1998,7 @@
+ 
+     def temporary(ctype, suffix=''):
+         nonlocal task_holder_count
+-        if ctype in ('CrustTask *', 'CrustAsyncExecution', 'CrustAsyncExecution *'):
++        if ctype in ('CrustTask *', 'CrustAsyncExecution', 'CrustAsyncExecution *', 'CrustExecution'):
+             task_holder_count += 1
+         name = f'temporary_{len(internal_members)}'
+         internal_members.append(f'    {ctype} {name}{suffix};\n')
+@@ -3202,7 +3215,10 @@
+         for _, cells, _ in reversed(pending_capture_groups):
+             for cell in reversed(cells):
+                 if isinstance(cell, tuple):
+-                    owned_child(cell[1])
++                    if cell[0] == 'execution':
++                        blocked = True
++                    else:
++                        owned_child(cell[1])
+                 else:
+                     cleanup.extend((f'if ({cell}) cell_drop({cell});', f'{cell} = NULL;'))
+         for names, *_ in reversed(scopes):
+@@ -4351,6 +4367,8 @@
+             return 'selection', create_selection(expr, line)
+         if sync_signature(expr) in task_sync_types:
+             return 'task', create_task(expr, line)
++        if sync_signature(expr) in handle_sync_types:
++            return 'execution', sync_call(expr, line, execution=True, following=following)
+         if sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum'):
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+@@ -4598,6 +4616,8 @@
+             active_loans.pop(id(loans), None)
+             for cell in reversed(cells):
+                 if isinstance(cell, tuple):
++                    if cell[0] == 'execution':
++                        fail(node.line, 'attente requise : sortie abandonnant un handle préparé comme argument')
+                     steps.extend((f'task_discard({cell[1]});', f'{cell[1]} = NULL;'))
+                 else:
+                     steps.append(f'if ({cell}) cell_drop({cell});')

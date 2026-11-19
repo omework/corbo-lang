@@ -1,0 +1,466 @@
+compiler: /tmp/crust-before-vector-payload-graphs/crust.py
+test_conditional_return_conserves_all_possible_targets (test_nested_owned_borrows.NestedOwnedBorrowTests.test_conditional_return_conserves_all_possible_targets) ... ok
+test_deeper_paths_preserve_target_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_deeper_paths_preserve_target_after_return) ... 
+  test_deeper_paths_preserve_target_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_deeper_paths_preserve_target_after_return) (depth=2) ... FAIL
+  test_deeper_paths_preserve_target_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_deeper_paths_preserve_target_after_return) (depth=4) ... FAIL
+test_factories_and_task_relay (test_nested_owned_borrows.NestedOwnedBorrowTests.test_factories_and_task_relay) ... ok
+test_inactive_failure_and_slot_reuse (test_nested_owned_borrows.NestedOwnedBorrowTests.test_inactive_failure_and_slot_reuse) ... ok
+test_mutable_target_stays_exclusive (test_nested_owned_borrows.NestedOwnedBorrowTests.test_mutable_target_stays_exclusive) ... ok
+test_native_thread_owns_graph_but_not_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_native_thread_owns_graph_but_not_target) ... ok
+test_nested_addresses_survive_suspensions_and_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_nested_addresses_survive_suspensions_and_return) ... ok
+test_reads_across_owned_edges_and_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_reads_across_owned_edges_and_after_return) ... FAIL
+test_recorded_capture_and_early_drop (test_nested_owned_borrows.NestedOwnedBorrowTests.test_recorded_capture_and_early_drop) ... ok
+test_returned_mutable_graph_and_child_reborrow (test_nested_owned_borrows.NestedOwnedBorrowTests.test_returned_mutable_graph_and_child_reborrow) ... FAIL
+test_select_loser_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_select_loser_keeps_nested_target) ... ok
+test_sync_caller_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_sync_caller_result_keeps_nested_target) ... FAIL
+test_three_lifetime_model (test_nested_owned_borrows.NestedOwnedBorrowTests.test_three_lifetime_model) ... ok
+test_two_same_named_fields_keep_distinct_targets (test_nested_owned_borrows.NestedOwnedBorrowTests.test_two_same_named_fields_keep_distinct_targets) ... ok
+test_whole_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_whole_result_keeps_nested_target) ... 
+  test_whole_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_whole_result_keeps_nested_target) (call='relay') ... FAIL
+  test_whole_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_whole_result_keeps_nested_target) (call='make') ... FAIL
+
+======================================================================
+FAIL: test_deeper_paths_preserve_target_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_deeper_paths_preserve_target_after_return) (depth=2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 52, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 182, in test_deeper_paths_preserve_target_after_return
+    run = self.run_source(self.program(body, prefix))
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_deeper_paths_preserve_target_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_deeper_paths_preserve_target_after_return) (depth=4)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 52, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 182, in test_deeper_paths_preserve_target_after_return
+    run = self.run_source(self.program(body, prefix))
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_reads_across_owned_edges_and_after_return (test_nested_owned_borrows.NestedOwnedBorrowTests.test_reads_across_owned_edges_and_after_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 52, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 5: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 138, in test_reads_across_owned_edges_and_after_return
+    self.assertEqual(self.run_source(self.program(body, prefix)).stdout, '9\n9\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_returned_mutable_graph_and_child_reborrow (test_nested_owned_borrows.NestedOwnedBorrowTests.test_returned_mutable_graph_and_child_reborrow)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 52, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 6: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 216, in test_returned_mutable_graph_and_child_reborrow
+    self.assertEqual(self.run_source(self.program(body, prefix)).stdout, '9\n9\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_sync_caller_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_sync_caller_result_keeps_nested_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 791, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1448, in expression
+    paths, value = self.expression(expr[1], state, line, expected_array if op != 'new_transfer' else None)
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 5: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 72, in test_sync_caller_result_keeps_nested_target
+    self.assertEqual(self.run_source(source).stdout, '9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_whole_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_whole_result_keeps_nested_target) (call='relay')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 52, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 4: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 61, in test_whole_result_keeps_nested_target
+    self.assertEqual(self.run_source(self.program(body, prefix)).stdout, '1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+======================================================================
+FAIL: test_whole_result_keeps_nested_target (test_nested_owned_borrows.NestedOwnedBorrowTests.test_whole_result_keeps_nested_target) (call='make')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 17161, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/crust.py", line 15147, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 205, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 2240, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 52, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1534, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 1570, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 165, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/storage_requirements.py", line 101, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-before-vector-payload-graphs/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 4: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_owned_borrows.py", line 61, in test_whole_result_keeps_nested_target
+    self.assertEqual(self.run_source(self.program(body, prefix)).stdout, '1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: exigence de stockage local incompatible avec la valeur pool (T local / allocation A<T>)
+
+----------------------------------------------------------------------
+Ran 15 tests in 7.604s
+
+FAILED (failures=7)

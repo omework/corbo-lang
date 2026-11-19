@@ -1,0 +1,21 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1437,6 +1437,9 @@
+             active_loans.pop(id(loans), None)
+         symbol, diverges = (sync_bridge(expr[1], node.args[0], local_parameters=frozenset(local_parameters))
+                             if local_parameters else sync_bridge(expr[1], node.args[0]))
++        for index, required in contract.storage_requirements:
++            if (index in local_parameters) != (required == 'local'):
++                fail(line, f'exigence de stockage {required} (T local / allocation A<T>) non satisfaite dans un appel synchrone')
+         local_result |= any(candidate.kind == 'fresh' and candidate.source.kind == 'allocation_parameter'
+                             and candidate.source.index in local_parameters for candidate in contract.result.candidates)
+         local_source = None
+@@ -1926,7 +1929,7 @@
+                 argument_loans.append(tuple(loans[argument_loan_start:]))
+                 argument_tails.pop()
+             task = temporary('CrustTask *')
+-            target = specialize(callee, frozenset(local_captures)) if local_captures else callee
++            target = specialize(callee, frozenset(local_captures)) if specialize else callee
+             steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
+                        if effects is not None and effects.complete else ())

@@ -1,0 +1,13 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1045,7 +1045,9 @@
+         storage_values[value] = storage_values.get(value, frozenset()) | frozenset(origins)
+ 
+     def stored_field_path(field):
+-        return tuple(field.replace('/.', '.').lstrip('.').split('.'))
++        # Contract projections use both '.child/.view' and '.child/view'.
++        # They denote the same owned descent followed by a member access.
++        return tuple(component for component in field.replace('/', '.').split('.') if component)
+ 
+     def owned_borrow_fields(typ):
+         from array_syntax import owned_reference_paths

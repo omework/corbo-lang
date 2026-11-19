@@ -1,0 +1,32 @@
+--- before/array_syntax.py
++++ after/array_syntax.py
+@@ -145,7 +145,10 @@
+         if name not in keys and getattr(value, 'storage_owner', None) not in keys:
+             continue
+         fields = dict(value.fields)
+-        for field, targets in changes.items():
++        from structure_views import project_fields
++        incoming = (project_fields(changes.items(), value.inline_path)
++                    if getattr(value, 'inline_path', '') else changes.items())
++        for field, targets in incoming:
+             fields[field] = (fields.get(field, frozenset()) | targets
+                              if conditional or len(keys) > 1 else targets)
+         environment[name] = replace(value, fields=tuple(fields.items()))
+@@ -400,7 +403,7 @@
+ 
+ def merge_structure_choices(values):
+     """Preserve alternative borrowed places, including a whole-object arm."""
+-    if not any(getattr(value, 'structure_choices', ()) or getattr(value, 'owned_path', ())
++    if not any(getattr(value, 'structure_choices', ()) or getattr(value, 'owned_path', ()) or getattr(value, 'inline_path', '')
+                for value in values):
+         return ()
+     return tuple(dict.fromkeys(choice for value in values
+@@ -411,7 +414,7 @@
+     first = values[0]
+     changes = {}
+     for attribute in ('candidates', 'fresh_variants', 'reference_targets', 'container_origins',
+-                      'structure_origins', 'assets', 'reservations',
++                      'structure_origins', 'copy_candidates', 'assets', 'reservations',
+                       'task_sources', 'task_result_sources', 'task_result_assets', 'pending_structure_calls', 'task_parameters', 'deferred_field_updates'):
+         if hasattr(first, attribute):
+             changes[attribute] = frozenset(item for value in values for item in getattr(value, attribute))

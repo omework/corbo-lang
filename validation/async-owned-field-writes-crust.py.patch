@@ -1,0 +1,46 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10289,7 +10289,8 @@
+         node, _ = self.async_definitions[name]
+         parameters = node.args[1]
+         field_summary = node.field_effect_summary
+-        field_updates = bool(field_summary and field_summary.complete and field_summary.structure_fields)
++        field_updates = bool(field_summary and field_summary.complete and (
++            field_summary.structure_fields or field_summary.completion_result.owned_field_writes))
+         if len(args) != len(parameters):
+             self.fail(f"'{name}' attend {len(parameters)} argument(s), reçu {len(args)}")
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+@@ -10590,8 +10591,13 @@
+                                 borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents) +
+                                                tuple(parent for target in transferred for parent in self.retained_borrow_parents(target)))
+         if field_updates:
+-            allocation.async_field_updates = tuple(self.prepare_structure_updates(
+-                field_summary.completion_result, parameters, field_bindings).values())
++            completed = field_summary.completion_result
++            updates = self.prepare_structure_updates(completed, parameters, field_bindings)
++            for holder, fields in self.prepare_owned_field_writes(completed, parameters, field_bindings):
++                proposed = updates.get(holder.id, (holder, holder))[1]
++                proposed = replace(proposed, owned_fields=tuple((dict(proposed.owned_fields) | fields).items()))
++                updates[holder.id] = holder, proposed
++            allocation.async_field_updates = tuple(updates.values())
+         self.check_borrow_destination(allocation, scope)
+         scope.allocations.append(allocation)
+         self.allocations.append(allocation)
+@@ -10734,6 +10740,8 @@
+             previous = updates.get(holder.id, (holder, holder))[1]
+             proposed = self.propose_field_update(previous, incoming.dependencies,
+                                                  incoming.borrow_parents, True)
++            proposed.owned_fields = self.merge_dependencies(previous.owned_fields, incoming.owned_fields)
++            proposed.item_sources = self.owned_sources(proposed)
+             updates[holder.id] = holder, proposed
+         for holder, proposed in updates.values():
+             destination = next(active for active in self.scopes if active.id == holder.scope)
+@@ -10741,6 +10749,8 @@
+         for holder, proposed in updates.values():
+             holder.dependencies = proposed.dependencies
+             holder.borrow_parents = proposed.borrow_parents
++            holder.owned_fields = proposed.owned_fields
++            holder.item_sources = proposed.item_sources
+ 
+     def utf8_task_capture_paths(self, allocation, position=None):
+         groups = allocation.dependencies if position is None else capture_fields(allocation.dependencies, position)

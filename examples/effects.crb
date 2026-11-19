@@ -1,0 +1,22 @@
+fn clear(memory: &mut Allocator) {
+    memory.reset();
+}
+
+fn relay(memory: &mut Allocator) {
+    clear(memory);
+}
+
+fn make(memory: &mut Allocator) -> <- Int {
+    let mut fresh = new(memory) Int(42);
+    return <- fresh;
+}
+
+fn main() {
+    let mut memory = pool<Int>(2);
+    let mut old = new(memory) Int(10);
+    let mut view = &old;
+    let mut result = make(&mut memory);
+    print(view); // make n'invalide pas les allocations existantes.
+    print(result);
+    relay(&mut memory); // Le reset transitif détruit result puis old.
+}

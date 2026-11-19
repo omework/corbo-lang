@@ -1,0 +1,87 @@
+--- /tmp/crust-before-nested-exchange-joins/exchange_join_types.py
++++ exchange_join_types.py
+@@ -1,14 +1,74 @@
+-"""Owned vector-operation results wrapped by a runtime execution result."""
++"""Runtime Result envelopes around the owned results of vector operations.
+ 
+-EXCHANGE_JOIN_INNERS = {
+-    'join_exchange': 'Result<A<Int>,A<Int>>',
+-    'join_try_push': 'Result<(),A<Int>>',
+-}
+-EXCHANGE_JOIN_TYPES = {
+-    mode: f'Result<{inner},runtime::Error>'
+-    for mode, inner in EXCHANGE_JOIN_INNERS.items()
+-}
++Descriptors are registered structurally, without a fixed nesting limit. The
++leaf keeps its two provenance arms; runtime errors never own a leaf payload.
++"""
++
++EXCHANGE_LEAVES = ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')
++EXCHANGE_JOIN_INNERS = {}
++EXCHANGE_JOIN_TYPES = {}
++EXCHANGE_JOIN_CTYPES = {}
++EXCHANGE_JOIN_CELLS = {}
++EXCHANGE_JOIN_PAYLOADS = {}
++EXCHANGE_PAYLOAD_MODES = {}
++EXCHANGE_JOIN_DEPTHS = {}
++
++
++def exchange_type_mode(typ):
++    if not (typ.startswith('Result<') and typ.endswith(',runtime::Error>')):
++        return None
++    inner = typ[len('Result<'):-len(',runtime::Error>')]
++    if inner not in EXCHANGE_LEAVES and exchange_type_mode(inner) is None:
++        return None
++    return exchange_join_mode(inner)
+ 
+ 
+ def exchange_join_mode(inner):
+-    return next(mode for mode, typ in EXCHANGE_JOIN_INNERS.items() if typ == inner)
++    if inner in EXCHANGE_LEAVES:
++        family = 'join_exchange' if inner == EXCHANGE_LEAVES[0] else 'join_try_push'
++        depth = 1
++    else:
++        previous = exchange_type_mode(inner)
++        if previous is None:
++            raise ValueError(f'not an exchange result: {inner}')
++        family = 'join_try_push' if exchange_is_try_push(previous) else 'join_exchange'
++        depth = EXCHANGE_JOIN_DEPTHS[previous] + 1
++    mode = family if depth == 1 else f'{family}_{depth}'
++    EXCHANGE_JOIN_INNERS[mode] = inner
++    EXCHANGE_JOIN_TYPES[mode] = f'Result<{inner},runtime::Error>'
++    EXCHANGE_JOIN_DEPTHS[mode] = depth
++    EXCHANGE_JOIN_CTYPES[mode] = 'CrustExchangeJoinResult' + (str(depth) if depth > 1 else '')
++    EXCHANGE_JOIN_CELLS[mode] = '.'.join(['value'] * (depth + 1))
++    payload = ('rejected_nested' if family == 'join_try_push' else 'exchange_nested') + (str(depth) if depth > 1 else '')
++    EXCHANGE_JOIN_PAYLOADS[mode] = payload
++    EXCHANGE_PAYLOAD_MODES[payload] = mode
++    return mode
++
++
++def exchange_is_try_push(mode):
++    return mode.startswith('join_try_push')
++
++
++def exchange_inner_signature(mode):
++    inner = EXCHANGE_JOIN_INNERS[mode]
++    if inner in EXCHANGE_LEAVES:
++        return 'buffered_handle_exchange', inner
++    return exchange_type_mode(inner), 'Int'
++
++
++def exchange_cleanup(value, mode):
++    depth = EXCHANGE_JOIN_DEPTHS[mode]
++    conditions = [f'{value}.' + 'value.' * level + 'status == 0' for level in range(depth)]
++    if exchange_is_try_push(mode):
++        conditions.append(f'{value}.' + 'value.' * depth + 'status != 0')
++    return f'{value}.{EXCHANGE_JOIN_CELLS[mode]}', ' && '.join(conditions)
++
++
++def exchange_join_layouts(depth):
++    return '\n'.join('typedef struct { int status; ' +
++        ('CrustExchangeJoinResult' if level == 2 else f'CrustExchangeJoinResult{level - 1}') +
++        f' value; }} CrustExchangeJoinResult{level};' for level in range(2, depth + 1))
++
++
++for _leaf in EXCHANGE_LEAVES:
++    exchange_join_mode(_leaf)

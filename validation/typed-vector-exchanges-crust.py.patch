@@ -1,0 +1,190 @@
+--- /tmp/crust-before-typed-vector-exchanges/crust.py
++++ /Users/jabarkarim/sources/crust/crust.py
+@@ -22,6 +22,7 @@
+ import copy
+ from contextlib import ExitStack, contextmanager
+ import json
++from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression
+ from integer_syntax import exact_integer_conversion
+@@ -535,7 +536,7 @@
+                 typ = typ[2:-1]
+             if mode == 'owned' and typ == 'Option<A<Int>>':
+                 mode, typ = 'handle_option', 'Int'
+-            elif mode == 'owned' and typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>'):
++            elif mode == 'owned' and exchange_element(typ) is not None:
+                 mode = 'buffered_handle_exchange'
+             if mode == 'owned' and (joined := join_allocation_signature(typ)) is not None:
+                 mode, typ, storage = joined
+@@ -572,7 +573,7 @@
+             if mode == 'owned' and typ == 'Option<A<Int>>':
+                 mode, typ = 'handle_option', 'Int'
+             result = mode, typ[2:-1] if handle_result else typ
+-            if mode == 'owned' and typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>'):
++            if mode == 'owned' and exchange_element(typ) is not None:
+                 result = 'buffered_handle_exchange', typ
+             if mode == 'owned' and (joined := join_allocation_signature(typ)) is not None:
+                 result = joined[:2]
+@@ -591,6 +592,9 @@
+                 body = self.block()
+         finally:
+             self.async_body = previous
++        if asynchronous and any(mode == 'buffered_handle_exchange' and exchange_element(typ) != 'Int'
++                                for mode, typ in (result, *((mode, typ) for _, mode, typ in params))):
++            raise Error('prototype : résultats typés de replace/try_push dans une signature async non raccordés')
+         if asynchronous and (result[0] == 'buffered_handle_exchange' or result[0] in EXCHANGE_JOIN_TYPES):
+             exchange_join_mode(result[1] if result[0] == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[result[0]])
+         if asynchronous and (result[0] == 'handle_option' or result[0] in OPTION_JOIN_TYPES):
+@@ -3184,7 +3188,11 @@
+                         if source.element_type not in (None, typ):
+                             check.fail('contraintes de sources incompatibles avec le type du handle')
+                         source.element_type = typ
+-                    content = 'Int' if mode == 'buffered_handle_exchange' else typ
++                    content = exchange_element(typ) if mode == 'buffered_handle_exchange' else typ
++                    if mode == 'buffered_handle_exchange':
++                        if source.element_type not in (None, content):
++                            check.fail('contraintes de sources incompatibles avec le type du résultat propriétaire')
++                        source.element_type = content
+                     allocation = Allocation(check.uid(), root.id, pname, (source,), typ=content,
+                                             variants=frozenset(self.enums.get(typ, {})))
+                     parameter_c = f'symbolic_allocation_{allocation.id}'
+@@ -3193,12 +3201,12 @@
+                     if mode in JOIN_RESULT_TYPES:
+                         allocation.c = f'{parameter_c}.{JOIN_RESULT_CELLS[mode]}'
+                         allocation.item_sources = allocation.sources
+-                    if mode in ('handle_option', *JOIN_RESULT_TYPES) or typ == 'Result<(),A<Int>>':
++                    if mode in ('handle_option', *JOIN_RESULT_TYPES) or exchange_optional(typ):
+                         allocation.optional_payload = True
+                         check.ensure_guard(allocation)
+                     if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                         payload = (allocation.sources, allocation.origins)
+-                        allocation.exchange_payloads = (((), frozenset()) if typ == 'Result<(),A<Int>>' or exchange_is_try_push(mode) else payload,
++                        allocation.exchange_payloads = (((), frozenset()) if exchange_optional(typ) or exchange_is_try_push(mode) else payload,
+                                                         payload)
+                     root.allocations.append(allocation)
+                     check.allocations.append(allocation)
+@@ -8010,8 +8018,6 @@
+         return 'void', '', None
+ 
+     def exchange_int_handle(self, expr, binding, index_expr, argument, scope, label, *, buffered=False):
+-        if handle_vector_element(binding.alloc.typ) != 'Int':
+-            self.fail('prototype : résultats typés de replace/try_push de handles non raccordés')
+         self.access(binding, write=True)
+         reservation = Binding(binding.name, 'mut', binding.c, binding.alloc, borrow_parents=(binding,))
+         self.argument_frames.append([reservation])
+@@ -8058,7 +8064,7 @@
+                             for i, origins in enumerate(vector.item_position_origins))
+             sources = source_union(incoming.sources, () if append else old_sources)
+             origins = incoming.origins | (frozenset() if append else old_origins or frozenset())
+-            _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins)
++            _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=handle_vector_element(vector.typ))
+             allocation.exchange_payloads = (((), frozenset()) if append else (old_sources, old_origins),
+                                             (incoming.sources, incoming.origins))
+             if append:
+@@ -8374,7 +8380,7 @@
+ 
+     @staticmethod
+     def exchange_result_type(allocation):
+-        return 'Result<(),A<Int>>' if allocation.optional_payload else 'Result<A<Int>,A<Int>>'
++        return exchange_type(allocation.typ, allocation.optional_payload)
+ 
+     def join_buffered_exchange(self, name, states, scope, label):
+         payloads = tuple((source_union(*(sources for sources, _ in arm)),
+@@ -8382,7 +8388,7 @@
+                          for arm in zip(*(state['exchange_payloads'] for state in states)))
+         _, _, allocation = self.receive_extracted_handle(
+             f'{name}.value', source_union(*(sources for sources, _ in payloads)), scope, label,
+-            origins=frozenset().union(*(origins for _, origins in payloads)))
++            origins=frozenset().union(*(origins for _, origins in payloads)), typ=states[0]['typ'])
+         allocation.exchange_payloads = payloads
+         if states[0]['optional_payload']:
+             self.guard_buffered_handle(name, allocation, '!=')
+@@ -9450,14 +9456,14 @@
+                 return 'scalar', f'{binding.c}.status', None
+             if binding.kind in ('mutable_ref_replace', 'mutable_ref_try_push'):
+                 return self.take_mutable_vector_exchange(binding, expr[2][1])
+-            _, old_sources, incoming_sources, _, _, incoming_origins, old_origins = binding.handle_exchange
++            vector, old_sources, incoming_sources, _, _, incoming_origins, old_origins = binding.handle_exchange
+             success = expr[2][1] == 0
+             sources = old_sources if success else incoming_sources
+             if not sources:
+                 self.lines.append('fail("replace de handle : aucun élément possible");')
+                 raise PathsReturned()
+             return self.receive_extracted_handle(f'{binding.c}.value', sources, scope, source_name,
+-                                                 origins=old_origins if success else incoming_origins)
++                                                 origins=old_origins if success else incoming_origins, typ=handle_vector_element(vector.typ))
+         if op in ('array_buffered_exchange_status', 'array_buffered_exchange_take'):
+             binding = self.lookup(expr[1][1])
+             if binding.kind not in ('buffered_handle_exchange', 'mutable_ref_replace', 'mutable_ref_try_push'):
+@@ -9489,7 +9495,7 @@
+             if not sources:
+                 self.lines.append('fail("replace de handle : aucun élément possible");')
+                 raise PathsReturned()
+-            return self.receive_extracted_handle(f'{binding.c}.value', sources, scope, source_name, origins=origins)
++            return self.receive_extracted_handle(f'{binding.c}.value', sources, scope, source_name, origins=origins, typ=allocation.typ)
+         if op in ('array_handle_option_status', 'array_handle_option_value', 'array_handle_option_empty'):
+             binding = self.lookup(expr[1][1])
+             if binding.kind not in ('handle_option', 'mutable_ref_option'):
+@@ -10894,7 +10900,7 @@
+                         captures.append(temporary)
+                         field_bindings[parameters[index][0]] = Binding(parameters[index][0], mode, value)
+                         continue
+-                    if (kind != mode or target is None or target.typ != ('Int' if mode == 'buffered_handle_exchange' else typ)
++                    if (kind != mode or target is None or target.typ != (exchange_element(typ) if mode == 'buffered_handle_exchange' else typ)
+                             or mode == 'buffered_handle_exchange' and self.exchange_result_type(target) != typ
+                             or target.scope != scope.id):
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+@@ -11055,7 +11061,7 @@
+                 if mode in ('ref', 'mut') and typ in self.struct_fields:
+                     value = f'structure_reference_for((CrustStructureView){{0}}, {value})'
+                 self.lines.append(f'{capture_ctype(mode, typ, structures=self.struct_fields)} {temporary} = {value};')
+-                if mode == 'buffered_handle_exchange' and typ == 'Result<(),A<Int>>':
++                if mode == 'buffered_handle_exchange' and exchange_optional(typ):
+                     self.lines.append(f'if ({temporary}.status == 0) {temporary}.value = NULL;')
+                 captures.append(temporary)
+                 if index in node.cell_reference_parameters:
+@@ -12831,7 +12837,7 @@
+                     self.origin_sources[origin] = source
+                     arm_origins.add(origin)
+                 payloads.append((arm['sources'], frozenset(arm_origins)))
+-            state = {'exchange_payloads': tuple(payloads), 'optional_payload': result.typ == 'Result<(),A<Int>>'}
++            state = {'exchange_payloads': tuple(payloads), 'optional_payload': exchange_optional(result.typ), 'typ': exchange_element(result.typ)}
+             return self.join_buffered_exchange(c, [state], caller, f'retour {name}')
+         if result.mode in ('task', 'execution'):
+             return self.receive_async_result(result, params, bindings, caller, c, detached_captures, updated_arrays)
+@@ -15003,6 +15009,8 @@
+                 if (mode, typ) in (('mut', 'u8'), ('ref', 'A<Int>'), ('mut', 'A<Int>'), ('ref', MUT_REF_VECTOR), ('mut', MUT_REF_VECTOR), ('owned', MUT_REF_VECTOR), ('ref', SHARED_REF_VECTOR), ('mut', SHARED_REF_VECTOR), ('owned', SHARED_REF_VECTOR), ('ref', HANDLE_VECTOR), ('mut', HANDLE_VECTOR), ('owned', HANDLE_VECTOR), ('handle_option', 'Int')):
+                     continue
+                 if mode in ('buffered_handle_exchange', *JOIN_RESULT_TYPES):
++                    if mode == 'buffered_handle_exchange':
++                        self.check_handle_vector_payload(f'Vector<A<{exchange_element(typ)}>>')
+                     continue
+                 if mode in ('ref', 'mut') and typ.startswith('A<') and typ[2:-1] in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                     continue
+@@ -15029,6 +15037,8 @@
+                 result = ('execution', definition)
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             content = result[1][2:-1] if result[1].startswith('A<') else result[1]
++            if result[0] == 'buffered_handle_exchange':
++                self.check_handle_vector_payload(f'Vector<A<{exchange_element(result[1])}>>')
+             if result[0] in JOIN_RESULT_TYPES and result[1] not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                 self.fail('type de charge propriétaire inconnu dans Result')
+             if self.has_owned_fields(content) and not (
+@@ -15378,13 +15388,13 @@
+             elif mode == 'buffered_handle_exchange':
+                 pointer = f'{parameter}.value'
+                 source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
+-                                      f'({pointer} ? {pointer}->source : NULL)', element_type='Int')
++                                      f'({pointer} ? {pointer}->source : NULL)', element_type=exchange_element(typ))
+                 external.sources.append(source)
+                 origin = check.uid()
+                 check.origin_sources[origin] = source
+                 _, _, allocation = check.receive_extracted_handle(pointer, (source,), root, parameter,
+-                                                                  origins=frozenset({origin}))
+-                optional = typ == 'Result<(),A<Int>>'
++                                                                  origins=frozenset({origin}), typ=exchange_element(typ))
++                optional = exchange_optional(typ)
+                 allocation.exchange_payloads = (((), frozenset()) if optional else ((source,), frozenset({origin})),
+                                                 ((source,), frozenset({origin})))
+                 if optional:

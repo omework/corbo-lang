@@ -1,0 +1,188 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -994,6 +994,8 @@
+     owned_sync_types.update({('owned', typ): 'Cell *' for typ in owned_structures})
+     owned_join_sync_types.update({(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                                  for mode in ('join_owned', 'join_nested') for typ in owned_structures})
++    pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
++                            for mode in ('ref', 'mut') for typ in owned_structures})
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+@@ -1129,7 +1131,7 @@
+             return sync_owned_value(expr[1], line, following=following)
+         if sync_signature(expr) in owned_sync_types:
+             return sync_call(expr, line, following=following, owned=True)[0]
+-        if expr[0] == 'new':
++        if expr[0] in ('new', 'new_enum'):
+             return pool_new_value(expr, line, following=following)
+         if expr[0] in ('down', 'move'):
+             require_local_async_value(expr[1], line)
+@@ -1195,6 +1197,8 @@
+         pool_type = pool_types.get(expr[1])
+         if pool_type is None:
+             fail(line, 'prototype : création directe dans un état exige un pool injecté')
++        if pool_type[5:-1] in owned_structures:
++            return pool_structure_value(expr, line, following=following, label=label)
+         typ = pool_type[5:-1] if expr[4:] == ('pool_default',) else expr[3]
+         if pool_type != f'Pool<{typ}>' or (typ != 'Int' and expr[4:] != ('pool_default',)):
+             fail(line, f'création directe async : type incompatible avec {pool_type}')
+@@ -1217,6 +1221,82 @@
+         steps.append(f'{cell} = {factory};')
+         owned_result_types[cell] = typ
+         keep_storage(cell, pool_storage(expr[1]))
++        return cell
++
++    def structure_offset(layout, index):
++        # Same packed payload layout as cell_load/store (which use memcpy).
++        return ' + '.join('sizeof(int)' if kind == 'Int' else 'sizeof(Cell *)'
++                          for _, kind in layout[:index]) or '0'
++
++    def pool_structure_value(expr, line, *, following=None, label='async allocation'):
++        pool_type = pool_types[expr[1]]
++        typ = pool_type[5:-1]
++        layout = owned_structures[typ]
++        if expr[0] == 'new_enum':
++            if expr[2] not in (None, typ) or expr[3] != '':
++                fail(line, 'construction : type incompatible avec le pool de structures')
++            provided = expr[4]
++        elif expr[4:] == ('pool_default',):
++            provided = []
++        else:
++            fail(line, 'construction de structure : champs nommés requis')
++        declared = dict(layout)
++        names = [name for name, _ in provided]
++        if len(names) != len(set(names)):
++            fail(line, 'champ initialisé plusieurs fois')
++        if set(names) - declared.keys():
++            fail(line, f'champ inconnu dans {typ}')
++        values = {}
++        for field, field_type in layout:
++            if field not in names:
++                if field_type != 'Int':
++                    fail(line, f"champ '{field}' : aucune valeur par défaut")
++                values[field] = '0'
++        source, loans = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]), 'mut', pool_type, line)
++        # Already evaluated owners must be cleaned if a later field suspends
++        # or exits. Publish the complete object only after every field exists.
++        owners = []
++        storage = set(pool_storage(expr[1]))
++        active_loans[id(loans)] = loans
++        pending_capture_groups.append((len(scopes) - 1, owners, loans))
++        argument_depth = len(argument_tails)
++        try:
++            for index, (field, operand) in enumerate(provided):
++                argument_tails.append((len(scopes) - 1, [value for _, value in provided[index + 1:]]))
++                field_type = declared[field]
++                if field_type == 'Int':
++                    value, actual = infer_scalar_value(operand, line)
++                    if actual != 'Int':
++                        fail(line, f"champ '{field}' : valeur Int requise")
++                    snapshot = temporary('int')
++                    steps.append(f'{snapshot} = {value};')
++                else:
++                    if operand[0] not in ('move', 'new_transfer', 'array_transfer'):
++                        fail(line, f"champ '{field}' : transfert explicite <- requis")
++                    value = sync_owned_value(operand, line)
++                    if owned_result_types.get(value, 'Int') != field_type[2:-1]:
++                        fail(line, f"champ '{field}' : {field_type} requis")
++                    if storage_of(value) & implicit_stacks:
++                        fail(line, 'un champ A<T> exige une allocation de pool, pas une valeur locale')
++                    snapshot = temporary('Cell *')
++                    steps.extend((f'{snapshot} = {value};', f'{value} = NULL;'))
++                    owners.append(snapshot)
++                    storage.update(storage_of(value))
++                values[field] = snapshot
++                argument_tails.pop()
++        finally:
++            del argument_tails[argument_depth:]
++            pending_capture_groups.pop()
++            active_loans.pop(id(loans), None)
++        cell = temporary('Cell *')
++        steps.append(f'{cell} = enum_new({source}, 0, "{label}");')
++        for index, (field, field_type) in enumerate(layout):
++            helper = 'cell_store_int' if field_type == 'Int' else 'cell_store_ref'
++            steps.append(f'{helper}({cell}, {structure_offset(layout, index)}, {values[field]});')
++        for owner in owners:
++            steps.append(f'{owner} = NULL;')
++        owned_result_types[cell] = typ
++        keep_storage(cell, storage)
+         return cell
+ 
+     def stored_reference_cell(pointer, loans, line):
+@@ -2612,6 +2692,8 @@
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
+         operator = initializer[0]
++        if operator in ('move', 'down') and initializer[1] in local_pools:
++            fail(statement.line, 'un pool local ne peut être transféré')
+         if operator == 'task_select' or operator == 'move' and initializer[1] in selections:
+             check_new_name(name, statement.line)
+             if statement.annotation is not None or statement.compact_transfer:
+@@ -2662,15 +2744,27 @@
+             steps.append(f'frame->{member} = frame->{fields[source_name]};')
+             return True
+         if operator == 'source':
+-            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
+-                fail(statement.line, 'prototype async : pool local Int/String/Vector<Int/u8> requis')
++            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *owned_structures):
++                fail(statement.line, 'prototype async : type de pool local non pris en charge')
+             if statement.annotation is not None or statement.compact_transfer:
+                 fail(statement.line, 'un pool local ne peut être transféré ni annoté comme allocation')
+             member = declare(name, statement.line)
+             source = temporary('Source')
+             typ = initializer[3]
+             factory = f'source_pool({initializer[2]})'
+-            if typ != 'Int':
++            if typ in owned_structures:
++                layout = owned_structures[typ]
++                arm = temporary('Source', '[1]')
++                offsets = temporary('size_t', f'[{max(1, len(layout))}]')
++                kinds = temporary('unsigned char', f'[{max(1, len(layout))}]')
++                steps.append(f'{arm}[0] = source_pool_layout({initializer[2]}, {structure_offset(layout, len(layout))});')
++                for index, (_, field_type) in enumerate(layout):
++                    steps.extend((f'{offsets}[{index}] = {structure_offset(layout, index)};',
++                                  f'{kinds}[{index}] = {2 if field_type.startswith("A<") else 0};'))
++                steps.extend((f'{arm}[0].arm_name = "";', f'{arm}[0].field_count = {len(layout)};',
++                              f'{arm}[0].field_offsets = {offsets};', f'{arm}[0].field_kinds = {kinds};'))
++                factory = f'source_enum_pool({arm}, 1, "{typ}")'
++            elif typ != 'Int':
+                 vectors = temporary('VectorStorage')
+                 steps.append(f'{vectors} = (VectorStorage){{0}};')
+                 factory = f'source_vector_pool({initializer[2]}, &{vectors})'
+@@ -2688,12 +2782,12 @@
+             value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+             bind_transferred_value(name, mode, (value, JOIN_PAYLOADS[mode], None), statement)
+             return True
+-        if sync_signature(owned_initializer) in owned_sync_types or owned_initializer[0] == 'new':
++        if sync_signature(owned_initializer) in owned_sync_types or owned_initializer[0] in ('new', 'new_enum'):
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+             value = (pool_new_value(owned_initializer, statement.line, following=body[position + 1:],
+                                     label=name if '\0' not in name else 'temporary')
+-                     if owned_initializer[0] == 'new' else
++                     if owned_initializer[0] in ('new', 'new_enum') else
+                      sync_owned_value(initializer, statement.line, following=body[position + 1:]))
+             bind_transferred_value(name, 'owned', value, statement)
+             return True
+@@ -4011,7 +4105,7 @@
+         place_local_result(expr)
+         if expr[0] == 'task_select':
+             return 'selection', create_selection(expr, line)
+-        if sync_signature(expr) in owned_sync_types or expr[0] == 'new':
++        if sync_signature(expr) in owned_sync_types or expr[0] in ('new', 'new_enum'):
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+             return 'execution', spawn_task(expr[1], line,
+@@ -5577,9 +5671,9 @@
+                 kind, replacement = export_async_value(source, (), line)
+             elif operator == 'scope' and ends_in_transfer(expr[2]):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
+-            elif (sync_signature(expr) in owned_sync_types or operator == 'new'
++            elif (sync_signature(expr) in owned_sync_types or operator in ('new', 'new_enum')
+                   or operator in ('new_transfer', 'array_transfer') and (
+-                      expr[1][0] == 'new' or sync_signature(expr[1]) in owned_sync_types)):
++                      expr[1][0] in ('new', 'new_enum') or sync_signature(expr[1]) in owned_sync_types)):
+                 kind, replacement = 'owned', sync_owned_value(expr, line, following=following)
+             elif operator in ('if_expr', 'value_match') and has_transfer_result(expr):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)

@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+use std::compression::CODEC;
+fn main()->i32{
+ let data:[u8;100]=[97;100];let empty:[u8;0]=[];
+ let mut stage:[u8;32]=[0;32];let mut pending:[u8;256]=[0;256];let mut work:[u64;36864]=[0;36864];
+ let params=CODEC::Params::new();let mut enc=CODEC::Encoder::new(ENCARGS&mut stage[..],&mut pending[..],&mut work[..]ENCDICT);
+ let mut encoded:[u8;1024]=[0;1024];let mut pos:u64=0;let mut got:u64=0;let mut calls:u64=0;
+ loop{let done=enc.finished();if done{break;}
+  let end=if pos+3<100{pos+3}else{100};let mut out:[u8;5]=[0;5];
+  let n=match enc.process(&data[pos..end],&mut out[..],end==100){Ok(v)=>{v as u64},Err(e)=>{drop(e);return 1;}};
+  let accepted=enc.consumed();pos=pos+accepted as u64;let mut i:u64=0;while i<n{encoded[got]=out[i];got=got+1;i=i+1;}calls=calls+1;if calls>10000{return 2;}
+ }
+ drop(enc);print(got);let mut i:u64=0;while i<got{print(encoded[i]);i=i+1;}
+ let mut cache:[u8;256]=[0;256];let mut decoded:[u8;128]=[0;128];let mut scratch:[u8;131072]=[0;131072];
+ let mut dec=CODEC::Decoder::new(&mut cache[..],&mut decoded[..]DECARGSDECDICT);
+ pos=0;let mut total:u64=0;calls=0;
+ loop{let done=dec.finished();if done{break;}let end=if pos+2<got{pos+2}else{copy(got)};let mut out:[u8;7]=[0;7];
+  let n=match dec.process(&encoded[pos..end],&mut out[..],end==got){Ok(v)=>{v as u64},Err(e)=>{drop(e);return 3;}};
+  let accepted=dec.consumed();pos=pos+accepted as u64;i=0;while i<n{if out[i]!=97{return 4;}i=i+1;}total=total+n;calls=calls+1;if calls>10000{return 5;}
+ }print(total);if total!=100{return 6;}
+ dec.reset();let mut no:[u8;0]=[];
+ match dec.process(&data[0..0],&mut no[..],true){Ok(v)=>{drop(v);return 7;},Err(e)=>{drop(e);}}
+ dec.reset();
+ let mut too_small:[u8;1]=[0;1];let mut decoded2:[u8;128]=[0;128];let mut scratch2:[u8;131072]=[0;131072];
+ let mut bounded=CODEC::Decoder::new(&mut too_small[..],&mut decoded2[..]DECARGS2DECDICT);
+ match bounded.process(&encoded[0..got],&mut no[..],false){Ok(v)=>{drop(v);return 8;},Err(e)=>{drop(e);}}
+ drop(bounded);drop(dec);
+ encoded[got-1]=encoded[got-1]^1;
+ let mut check=CODEC::Decoder::new(&mut cache[..],&mut decoded[..]DECARGSDECDICT);
+ let mut check_out:[u8;128]=[0;128];
+ match check.process(&encoded[0..got],&mut check_out[..],true){Ok(v)=>{drop(v);return 14;},Err(e)=>{drop(e);}}
+ match check.process(&encoded[0..0],&mut check_out[..],true){Ok(v)=>{drop(v);return 15;},Err(e)=>{drop(e);}}
+ check.reset();drop(check);
+ let mut enc2=CODEC::Encoder::new(ENCARGS&mut stage[..],&mut pending[..],&mut work[..]ENCDICT);
+ let mut empty_out:[u8;64]=[0;64];
+ let n=match enc2.process(&data[0..0],&mut empty_out[..],true){Ok(v)=>{v},Err(e)=>{drop(e);return 9;}};
+ if n==0{return 10;}
+ match enc2.process(&data[0..1],&mut empty_out[..],true){Ok(v)=>{drop(v);return 11;},Err(e)=>{drop(e);}}
+ enc2.reset();let n=match enc2.process(&data[0..1],&mut empty_out[..],true){Ok(v)=>{v},Err(e)=>{drop(e);return 12;}};if n==0{return 13;}print(1);0
+}

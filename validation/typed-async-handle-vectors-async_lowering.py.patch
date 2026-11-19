@@ -1,0 +1,251 @@
+--- async_lowering.py
++++ async_lowering.py
+@@ -18,7 +18,7 @@
+ 
+ from collections import ChainMap
+ from dataclasses import dataclass, replace
+-from array_syntax import HANDLE_VECTOR, consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
++from array_syntax import HANDLE_VECTOR, HANDLE_VECTORS, is_handle_vector, handle_vector_element, consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, ERROR_VALUE_MODES, ERROR_VALUE_TAGS, RESULT_ERROR_MODES
+ from utf8_syntax import (
+@@ -1064,9 +1064,23 @@
+     owned_aggregates = owned_structures.keys() | owned_enums.keys()
+     reference_aggregates = reference_structs.keys() | owned_enums.keys()
+     pool_structures = owned_structures | reference_structs
++
++    def check_handle_payload(typ, line):
++        element = handle_vector_element(typ)
++        if element is None:
++            return
++        from array_syntax import aggregate_reference_paths, aggregate_owned_paths
++        layouts = {name: {'': layout} for name, layout in struct_layouts.items()} | enum_layouts
++        if element not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') and element not in layouts:
++            fail(line, f'type de charge inconnu dans {typ}')
++        if any(aggregate_reference_paths(layouts, element)) or any(aggregate_owned_paths(layouts, element)):
++            fail(line, 'prototype : métadonnées des champs propriétaires/empruntés dans un vecteur de handles non raccordées')
++
++    for _, _, typ in parameters:
++        check_handle_payload(typ[5:-1] if typ.startswith('Pool<') else typ, node.line)
+     reference_sync_types.update({(mode, typ): capture_type(mode, typ) for typ in reference_aggregates for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_type(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+-    owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
++    owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS)}
+     owned_join_sync_types = {(mode, typ): OWNED_WRAPPER_TYPES[mode]
+                             for mode in ('join_owned', 'join_nested', *OWNED_JOIN_TYPES) for _, typ in owned_sync_types}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+@@ -1074,7 +1088,8 @@
+     owned_sync_types.update({('owned', typ): 'Cell *' for typ in owned_aggregates})
+     owned_join_sync_types.update({(mode, typ): OWNED_WRAPPER_TYPES[mode]
+                                  for mode in ('join_owned', 'join_nested', *OWNED_JOIN_TYPES) for typ in owned_aggregates})
+-    owned_join_sync_types[('handle_option', 'Int')] = 'VectorHandleResult'
++    owned_join_sync_types.update({('handle_option', typ): 'VectorHandleResult'
++                                 for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *owned_aggregates)})
+     owned_join_sync_types.update({('buffered_handle_exchange', typ): 'VectorHandleResult'
+         for typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')})
+     owned_join_sync_types.update({(mode, 'Int'): ctype for mode, ctype in OPTION_JOIN_CTYPES.items()})
+@@ -1084,7 +1099,7 @@
+     owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
+     output_join_types = owned_join_sync_types | {(mode, typ): OWNED_WRAPPER_TYPES[mode]
+                                                for mode in ('join_owned', 'join_nested', *OWNED_JOIN_TYPES) for typ in reference_structs}
+-    collection_sync_types = {(mode, HANDLE_VECTOR): 'Cell *' for mode in ('ref', 'mut')}
++    collection_sync_types = {(mode, typ): 'Cell *' for mode in ('ref', 'mut') for typ in HANDLE_VECTORS}
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
+     output_types = sync_types | owned_output_types | output_join_types
+     sync_types |= collection_sync_types
+@@ -1271,7 +1286,7 @@
+         return None
+ 
+     def sync_borrow_argument(argument, mode, typ, line):
+-        if typ == HANDLE_VECTOR:
++        if is_handle_vector(typ):
+             if argument[0] not in ('ref', 'mut', 'name', 'reborrow'):
+                 fail(line, 'argument Vector<A<Int>> : emprunt explicite requis')
+             name = argument[1]
+@@ -1422,6 +1437,8 @@
+             factory = f'cell_new({source}, {value}, "{label}")'
+         elif typ == 'String':
+             factory = f'string_new({source}, UINT64_C({region_limits[-1]}), "{label}")'
++        elif is_handle_vector(typ):
++            factory = f'vector_new_handles({source}, UINT64_C({region_limits[-1]}), "{label}")'
+         else:
+             element = 'int' if typ == 'Vector<Int>' else 'uint8_t'
+             factory = (f'vector_new({source}, UINT64_C({region_limits[-1]}), sizeof({element}), '
+@@ -2226,7 +2243,7 @@
+            if mode in ('array', *ARRAY_BORROWS) else
+            (mode, typ) not in (('mut', 'u8'), ('runtime_error', 'runtime::Error'), ('scalar', 'Bool'), ('byte', 'u8'), ('char', 'char'), ('text', 'str'), ('byte_ref', 'u8'))
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+-           and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR))
++           and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS))
+            and (mode, typ) not in pool_sync_types
+            and not (mode == 'buffered_handle_exchange' and typ in EXCHANGE_RESULT_TYPES)
+            and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_aggregates)
+@@ -2285,7 +2302,7 @@
+     result_ctype = array_result_ctype or (capture_type(*result) if returns_value else 'int')
+     parameter_modes = {name: mode for name, mode, _ in parameters}
+     collection_types = {name: typ for name, mode, typ in parameters
+-                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR)
++                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS)
+                          or mode == 'owned' and typ in owned_aggregates}
+     boolean_bindings = {name for name, mode, typ in parameters if (mode, typ) == ('scalar', 'Bool')}
+     byte_bindings = {name for name, mode, _ in parameters if mode == 'byte'}
+@@ -3125,9 +3142,9 @@
+     def bind_transferred_value(name, kind, value, statement):
+         if statement.annotation is not None and kind != 'array':
+             expected = (public_execution_type(value, statement.annotation, statement.line) if kind == 'execution' else
+-                        'Option<A<Int>>' if kind == 'handle_option' else
+-                        'Result<A<Int>,A<Int>>' if kind == 'buffered_handle_exchange' else
+-                        'Result<(),A<Int>>' if kind == 'buffered_handle_try_push' else
++                        f'Option<A<{owned_result_types.get(value[0], "Int")}>>' if kind == 'handle_option' else
++                        f'Result<A<{owned_result_types.get(value[0], "Int")}>,A<{owned_result_types.get(value[0], "Int")}>>' if kind == 'buffered_handle_exchange' else
++                        f'Result<(),A<{owned_result_types.get(value[0], "Int")}>>' if kind == 'buffered_handle_try_push' else
+                         (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
+                          f'A<{owned_result_types.get(value, "Int")}>') if kind == 'owned' else None)
+             if statement.annotation != expected:
+@@ -3406,7 +3423,7 @@
+                 consume_owned_join(source, statement.line)
+                 clear_stored_fields(record[0])
+                 steps.extend((f'{value} = {record[0]}.value;', f'{record[0]}.value = NULL;'))
+-                owned_result_types[value] = 'Int'
++                owned_result_types[value] = owned_result_types.get(record[0], 'Int')
+                 kind = 'owned'
+             else:
+                 value = handle_replace_value(initializer, statement.line, following=body[position + 1:])
+@@ -3425,7 +3442,7 @@
+                 keep_storage(value, storage_of(record[0]))
+                 consume_owned_join(source, statement.line)
+                 steps.extend((f'{value} = {record[0]}.value;', f'{record[0]}.value = NULL;'))
+-                owned_result_types[value] = 'Int'
++                owned_result_types[value] = owned_result_types.get(record[0], 'Int')
+                 kind = 'owned'
+             else:
+                 value = handle_pop_value(initializer, statement.line, following=body[position + 1:])
+@@ -3486,7 +3503,8 @@
+             steps.append(f'frame->{member} = frame->{fields[source_name]};')
+             return True
+         if operator == 'source':
+-            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *pool_structures, *owned_enums):
++            check_handle_payload(initializer[3], statement.line)
++            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS, *pool_structures, *owned_enums):
+                 fail(statement.line, 'prototype async : type de pool local non pris en charge')
+             if statement.annotation is not None or statement.compact_transfer:
+                 fail(statement.line, 'un pool local ne peut être transféré ni annoté comme allocation')
+@@ -3872,7 +3890,7 @@
+             fail(line, 'match async : résultat de handle requis')
+         subject = nodes[0].args[1]
+         if (subject[0] == 'method_call' and subject[1][0] == 'name' and subject[2] == 'pop'
+-                and collection_types.get(subject[1][1]) == HANDLE_VECTOR):
++                and is_handle_vector(collection_types.get(subject[1][1]))):
+             fail(line, 'pop de A<Int> exige un transfert <- explicite')
+         if wrapped_utf8_family(subject) is not None:
+             return match_wrapped_utf8(nodes, line, valued=valued, transfer_result=transfer_result,
+@@ -4448,12 +4466,12 @@
+ 
+     def handle_remove_receiver(expr):
+         if (expr[0] == 'method_call' and expr[2] == 'remove' and expr[1][0] == 'name'
+-                and collection_types.get(expr[1][1]) == HANDLE_VECTOR):
++                and is_handle_vector(collection_types.get(expr[1][1]))):
+             return expr[1][1]
+         return None
+ 
+     def handle_vector_mutation(receiver, line, *, following=None):
+-        if collection_types.get(receiver) != HANDLE_VECTOR:
++        if not is_handle_vector(collection_types.get(receiver)):
+             fail(line, 'pop transféré exige un Vector<A<Int>>')
+         if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable):
+             fail(line, 'pop exige un Vector mutable')
+@@ -4472,7 +4490,7 @@
+         else:
+             steps.append(f'if (vector_pop(frame->{fields[receiver]}, &{result}) != CRUST_CHAR_OK) fail("pop de handle vide");')
+         keep_storage(result, storage_bindings.get(receiver, ()))
+-        owned_result_types[result] = 'Int'
++        owned_result_types[result] = handle_vector_element(collection_types[receiver])
+         return result
+ 
+     def handle_exchange_record(name, line):
+@@ -4505,8 +4523,9 @@
+                 kind = 'owned'
+             else:
+                 fail(line, f'{method} de A<Int> exige un transfert explicite ->')
+-            if kind != 'owned' or owned_result_types.get(incoming, 'Int') != 'Int':
+-                fail(line, f'{method} de Vector<A<Int>> exige une allocation Int')
++            element = handle_vector_element(collection_types[receiver])
++            if kind != 'owned' or owned_result_types.get(incoming, 'Int') != element:
++                fail(line, f'{method} de {collection_types[receiver]} exige une allocation {element}')
+             if storage_of(incoming) & implicit_stacks:
+                 fail(line, 'une case A<Int> exige une allocation de pool')
+             depth = next((index for index in reversed(range(len(scopes))) if receiver in scopes[index][0]), 0)
+@@ -4534,7 +4553,7 @@
+         if appending:
+             steps.append(f'if ({result}.status == 0) {result}.value = NULL;')
+         clear_stored_fields(incoming)
+-        owned_result_types[result] = 'Int'
++        owned_result_types[result] = handle_vector_element(collection_types[receiver])
+         return result
+ 
+     def handle_option_record(name, line):
+@@ -4568,7 +4587,7 @@
+         result = temporary('Cell *' if owned else 'int' if vector_remove_type(expr) == 'Int' else 'uint8_t')
+         steps.append(f'vector_remove(frame->{fields[receiver]}, {index}, &{result});')
+         if owned:
+-            owned_result_types[result] = 'Int'
++            owned_result_types[result] = handle_vector_element(collection_types[receiver])
+             keep_storage(result, storage_bindings.get(receiver, ()))
+         return result
+ 
+@@ -4578,7 +4597,7 @@
+             fail(line, 'écriture de Vector : une liaison mutable est requise')
+         index = expression(expr[2], line)
+         check_access(receiver, line, write=write)
+-        ctype = {'Vector<Int>': 'int', HANDLE_VECTOR: 'Cell *'}.get(collection_types[receiver], 'uint8_t')
++        ctype = 'Cell *' if is_handle_vector(collection_types[receiver]) else {'Vector<Int>': 'int'}.get(collection_types[receiver], 'uint8_t')
+         pointer = temporary(ctype + ' *')
+         steps.append(f'{pointer} = ({ctype} *)vector_checked_item(frame->{fields[receiver]}, {index});')
+         return f'*{pointer}'
+@@ -7009,7 +7028,7 @@
+             return f'text_byte_len({static_text_value(receiver, line, following=following)})'
+         if op == 'method_call' and expr[2] == 'len' and expr[1][0] == 'name':
+             receiver = expr[1][1]
+-            if collection_types.get(receiver) not in ('Vector<Int>', 'Vector<u8>', HANDLE_VECTOR) or expr[3]:
++            if collection_types.get(receiver) not in ('Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS) or expr[3]:
+                 fail(line, 'len exige un Vector sans argument')
+             check_access(receiver, line)
+             return f'vector_len(frame->{fields[receiver]})'
+@@ -7036,7 +7055,7 @@
+             return store_array(('array_index', expr[1], expr[2]), expr[3], line,
+                                following=following, returns_old=True)
+         if op == 'array_len':
+-            if expr[1][0] == 'name' and collection_types.get(expr[1][1]) in ('Vector<Int>', 'Vector<u8>', HANDLE_VECTOR):
++            if expr[1][0] == 'name' and collection_types.get(expr[1][1]) in ('Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS):
+                 receiver = expr[1][1]
+                 check_access(receiver, line)
+                 return f'vector_len(frame->{fields[receiver]})'
+@@ -7674,7 +7693,7 @@
+             return False
+         _, (_, receiver), method, arguments = call
+         collection = collection_types.get(receiver)
+-        if collection in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR) and following is not None:
++        if collection in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS) and following is not None:
+             # A parent-scope view can end in the preceding nested statement.
+             # Keep uses in this call alive while expiring those earlier loans
+             # before reserving the receiver for its arguments.
+@@ -7715,7 +7734,7 @@
+             steps.extend((f'string_push_str(frame->{fields[receiver]}, string_view({value}));',
+                           f'cell_drop({value});', f'{value} = NULL;'))
+             return True
+-        if collection == HANDLE_VECTOR and method == 'push':
++        if is_handle_vector(collection) and method == 'push':
+             line = statement.line
+             if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable) or len(arguments) != 1:
+                 fail(line, 'push exige un Vector mutable et un argument')
+@@ -7732,8 +7751,8 @@
+                     kind = 'owned'
+                 else:
+                     fail(line, 'push de A<Int> exige un transfert explicite ->')
+-                if kind != 'owned' or owned_result_types.get(incoming, 'Int') != 'Int':
+-                    fail(line, 'push de Vector<A<Int>> exige une allocation Int')
++                if kind != 'owned' or owned_result_types.get(incoming, 'Int') != handle_vector_element(collection):
++                    fail(line, f'push de {collection} exige une allocation {handle_vector_element(collection)}')
+                 if storage_of(incoming) & implicit_stacks:
+                     fail(line, 'une case A<Int> exige une allocation de pool')
+                 depth = next((index for index in reversed(range(len(scopes))) if receiver in scopes[index][0]), 0)

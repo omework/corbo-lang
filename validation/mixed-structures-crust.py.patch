@@ -1,0 +1,11 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13835,7 +13835,7 @@
+             return allow_cycles
+         if typ not in self.enums:
+             return False
+-        return all(declared == 'Int' or declared.startswith('A<') and
++        return all(declared == 'Int' or not visited and declared in ('&Int', '&mut Int') or declared.startswith('A<') and
+                    self.supports_owned_signature(declared[2:-1], visited | {typ}, allow_cycles=allow_cycles)
+                    for fields in self.enums[typ].values() for _, declared in fields)
+ 

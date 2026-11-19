@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! The shared Keccak-f[1600] permutation for SHA-3 and SHAKE.
+
+// FIPS 202, KECCAK-p[1600, 24]. Lane (x, y) is stored at x + 5*y.
+/// Mask covering all bits of a Keccak lane.
+const KECCAK_WORD_MASK: u64 = 0xffffffffffffffff;
+
+/// Rotates a 64-bit Keccak lane to the left.
+fn rotate_left(word: u64, count: u64) -> u64 {
+    if count == 0 { return word; }
+    let complement = 64 - count;
+    ((word & (KECCAK_WORD_MASK >> count)) << count) | (word >> complement)
+}
+
+/// Applies the 24 Keccak-f[1600] rounds in place.
+fn permute(lanes: &mut [u64; 25]) {
+    let rotations: [u64; 25] = [
+        0, 1, 62, 28, 27,
+        36, 44, 6, 55, 20,
+        3, 10, 43, 25, 39,
+        41, 45, 15, 21, 8,
+        18, 2, 61, 56, 14,
+    ];
+    let constants: [u64; 24] = [
+        0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
+        0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+        0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
+        0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
+        0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
+        0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+    ];
+    let mut parity: [u64; 5] = [0; 5];
+    let mut mixed: [u64; 25] = [0; 25];
+    let mut round: u64 = 0;
+    while round < 24 {
+        // Theta: mix the parities of the neighboring columns.
+        let mut x: u64 = 0;
+        while x < 5 {
+            parity[x] = (*lanes)[x] ^ (*lanes)[x + 5] ^ (*lanes)[x + 10]
+                ^ (*lanes)[x + 15] ^ (*lanes)[x + 20];
+            x = x + 1;
+        }
+        x = 0;
+        while x < 5 {
+            let correction = parity[(x + 4) % 5] ^ rotate_left(parity[(x + 1) % 5], 1);
+            let mut y: u64 = 0;
+            while y < 5 {
+                let index = x + 5 * y;
+                // Rho and Pi: rotate and move the corrected lane.
+                mixed[y + 5 * ((2 * x + 3 * y) % 5)] =
+                    rotate_left((*lanes)[index] ^ correction, rotations[index]);
+                y = y + 1;
+            }
+            x = x + 1;
+        }
+
+        // Chi: combine lanes within each row of the permuted state.
+        let mut row: u64 = 0;
+        while row < 25 {
+            x = 0;
+            while x < 5 {
+                let lane = &mut (*lanes)[row + x];
+                *lane = mixed[row + x] ^ ((mixed[row + (x + 1) % 5] ^ KECCAK_WORD_MASK)
+                    & mixed[row + (x + 2) % 5]);
+                x = x + 1;
+            }
+            row = row + 5;
+        }
+
+        // Iota: inject the round constant.
+        let first = &mut (*lanes)[0];
+        *first = *first ^ constants[round];
+        round = round + 1;
+    }
+}

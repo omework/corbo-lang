@@ -1,0 +1,4 @@
+struct View{data:&Int}async fn leaf(n:&Int)-><-View{let v=View{data:n};yield;return <-v;}
+async fn envelope(n:&Int)-><-Result<View,runtime::Error>{let h=runtime::spawn(->leaf(n));return <-h.await;}
+fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let h=runtime::spawn(->envelope(&n));
+let r=h.join();match r{Ok(inner)=>{match inner{Ok(v)=>{print(*v.data);drop(->v);},Err(_)=>{return;}}},Err(_)=>{return;}}}

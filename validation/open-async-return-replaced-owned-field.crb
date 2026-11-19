@@ -1,0 +1,21 @@
+struct Holder { value: A<Int> }
+fn replace_field(mut h: ->Holder, p: &mut Pool<Int>) -> <-Holder {
+    h.value = <-p.new(11);
+    return <-h;
+}
+async fn work(h: ->Holder, p: &mut Pool<Int>) -> <-Holder {
+    yield;
+    return <-replace_field(->h, p);
+}
+fn main() {
+    let mut old_values = pool<Int>(1);
+    let mut new_values = pool<Int>(1);
+    let mut holders = pool<Holder>(1);
+    let value = old_values.new(7);
+    let holder = holders.new(value: <-value);
+    let execution = runtime::spawn(->work(->holder, &mut new_values));
+    match execution.join() {
+        Ok(h) => { print(*h.value); drop(->h); },
+        Err(_) => {}
+    }
+}

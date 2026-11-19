@@ -1,0 +1,36 @@
+test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives) ... ERROR
+
+======================================================================
+ERROR: test_task_choices_keep_capture_alternatives (test_async_structure_effects.AsyncStructureEffectsTests.test_task_choices_keep_capture_alternatives)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 136, in test_task_choices_keep_capture_alternatives
+    self.assertEqual(self.effects('''let h=if flag {
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+        let h=runtime::spawn(->child(view,a));<-h
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      }else{let h=runtime::spawn(->other(view,b));<-h};
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      let result=h.await;return 0;''',distinct),
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_structure_effects.py", line 39, in effects
+    summary = self.analyzer(declarations).infer(name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-choice-probe-7fbuif0w/async_structure_effects.py", line 70, in infer
+    result = context.infer()
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-choice-probe-7fbuif0w/results.py", line 695, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-choice-probe-7fbuif0w/results.py", line 2689, in nodes
+    part, value = self.expression(expr, environment, line, expected)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-choice-probe-7fbuif0w/async_structure_effects.py", line 155, in expression
+    mode, typ = self.effects.definitions[task.typ].args[2]
+                ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+KeyError: 'runtime::Handle<Int>'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.064s
+
+FAILED (errors=1)
+
+process exit: 1

@@ -1,0 +1,11 @@
+struct Point { x: Int }
+async fn leaf() -> <- Point {
+    let p = Point { x: 7 };
+    let q = copy(p);
+    yield;
+    return <- q;
+}
+fn main() {
+    let h = runtime::spawn(-> leaf());
+    match h.join() { Ok(q) => { print(q.x); drop(-> q); }, Err(_) => {} }
+}

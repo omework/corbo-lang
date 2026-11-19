@@ -1,0 +1,5 @@
+struct Point{x:Int}async fn first(v:->Point)-><-Point{yield;return <-v;}async fn second(v:->Point)-><-Point{yield;return <-v;}
+async fn work(flag:Bool)->Int{let p=Point{x:7};let h:runtime::Handle<Point>=if flag{
+p ->;let a=runtime::spawn(->first(->p));<-a}else{p ->;let b=runtime::spawn(->second(->p));<-b};
+let v=match h.await{Ok(found)=>{<-found},Err(_)=>{return 99;}};let n=v.x;drop(->v);return n;}
+fn main(){let h=runtime::spawn(->work(true));match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

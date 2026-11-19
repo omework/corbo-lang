@@ -1,0 +1,41 @@
+--- /tmp/crust-before-nested-exchange-joins/constraints.py
++++ constraints.py
+@@ -1,6 +1,8 @@
+ """Infer ordered source equality/disjointness obligations independently of calls."""
+ 
+-from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
++from exchange_join_types import (
++    EXCHANGE_JOIN_TYPES, exchange_join_mode, exchange_inner_signature, exchange_is_try_push,
++)
+ from capture_paths import result_capture_selector, capture_index, capture_slots
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+@@ -450,7 +452,7 @@
+                                           frozenset({reservation}),
+                                           handle_items=fields[0][1] if tracks_reference_items else None)
+                 if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+-                    payloads = (frozenset() if typ == 'Result<(),A<Int>>' or mode == 'join_try_push' else frozenset({asset}),
++                    payloads = (frozenset() if typ == 'Result<(),A<Int>>' or exchange_is_try_push(mode) else frozenset({asset}),
+                                 frozenset({asset}))
+                     environment[name] = replace(environment[name], exchange_payloads=payloads)
+                 if mode == 'mut' and typ.startswith('A<'):
+@@ -789,8 +791,8 @@
+                         paths['next'].pending_executions.pop(token, None)
+                 definition = self.analyzer.async_functions[execution.typ]
+                 mode = definition.args[2][0]
+-                if mode == 'buffered_handle_exchange':
+-                    inner = definition.args[2][1]
++                if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
++                    inner = definition.args[2][1] if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]
+                     fields = dict(execution.task_result_fields)
+                     return paths, Value(exchange_join_mode(inner), 'Int', execution.task_result_assets,
+                         exchange_payloads=tuple(fields.get(arm, execution.task_result_assets) for arm in ('ok', 'err')))
+@@ -1099,7 +1101,7 @@
+                 if values[0].mode == 'join_runtime_error':
+                     return paths, Value('runtime_error', 'runtime::Error')
+                 if values[0].mode in EXCHANGE_JOIN_TYPES:
+-                    return paths, replace(values[0], mode='buffered_handle_exchange', typ=EXCHANGE_JOIN_INNERS[values[0].mode])
++                    return paths, replace(values[0], mode=exchange_inner_signature(values[0].mode)[0], typ=exchange_inner_signature(values[0].mode)[1])
+                 if values[0].mode == 'join_option':
+                     return paths, replace(values[0], mode='handle_option')
+                 if values[0].mode == 'join_nested':

@@ -1,0 +1,246 @@
+--- /tmp/crust-before-async-exchange-join/async_lowering.py
++++ async_lowering.py
+@@ -1,5 +1,6 @@
+ """Lower async bodies to the task ABI with static checks of memory transitions."""
+ 
++from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
+ from capture_paths import capture_index
+ from structure_views import field_kind, field_size
+ 
+@@ -40,6 +41,27 @@
+                        'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult', 'buffered_handle_try_push': 'VectorHandleResult'}
+ OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation',
+                           'buffered_handle_exchange': 'exchange_allocation', 'buffered_handle_try_push': 'rejected_allocation'}
++JOIN_PAYLOADS.update({'join_exchange': 'exchange_nested', 'join_try_push': 'rejected_nested'})
++JOIN_CELLS.update(dict.fromkeys(EXCHANGE_JOIN_TYPES, 'value.value'))
++OWNED_WRAPPER_TYPES.update(dict.fromkeys(EXCHANGE_JOIN_TYPES, 'CrustExchangeJoinResult'))
++OWNED_WRAPPER_PAYLOADS.update({mode: JOIN_PAYLOADS[mode] for mode in EXCHANGE_JOIN_TYPES})
++
++
++def wrapper_cleanup(value, payload):
++    if payload in ('exchange_nested', 'rejected_nested'):
++        condition = f'{value}.status == 0'
++        if payload == 'rejected_nested':
++            condition += f' && {value}.value.status != 0'
++        return f'{value}.value.value', condition
++    cell = f'{value}.value' if payload in ('optional_allocation', 'exchange_allocation', 'rejected_allocation') else f'{value}.allocation'
++    condition = ('1' if payload == 'exchange_allocation' else
++                 f'{value}.status != 0' if payload == 'rejected_allocation' else f'{value}.status == 0')
++    if payload in ('nested', 'optional_nested'):
++        cell = f'{value}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
++        condition += f' && {value}.value.status == 0'
++    return cell, condition
++
++
+ EXCHANGE_RESULT_TYPES = ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')
+ 
+ 
+@@ -80,6 +102,10 @@
+         payload = typ if storage == 'local' else f'A<{typ}>'
+     elif mode in ('ref', 'mut'):
+         payload = ('&mut ' if mode == 'mut' else '&') + typ
++    elif mode == 'buffered_handle_exchange':
++        payload = typ
++    elif mode in EXCHANGE_JOIN_TYPES:
++        payload = EXCHANGE_JOIN_TYPES[mode]
+     elif mode == 'join_option':
+         payload = f'Result<Option<A<{typ}>>,runtime::Error>'
+     elif mode == 'handle_option':
+@@ -121,7 +147,8 @@
+             'ref': 'const int *', 'mut': 'int *', 'owned': 'Cell *',
+             'array': 'const void *', 'array_ref': 'const void *', 'array_mut': 'void *',
+             'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult', 'join_option': 'CrustOptionJoinResult',
+-            'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult'}[mode]
++            'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult',
++            **dict.fromkeys(EXCHANGE_JOIN_TYPES, 'CrustExchangeJoinResult')}[mode]
+ 
+ 
+ def utf8_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_contracts=None, sync_result_contract=None):
+@@ -1040,6 +1067,7 @@
+     owned_join_sync_types.update({('buffered_handle_exchange', typ): 'VectorHandleResult'
+         for typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')})
+     owned_join_sync_types[('join_option', 'Int')] = 'CrustOptionJoinResult'
++    owned_join_sync_types.update({(mode, 'Int'): 'CrustExchangeJoinResult' for mode in EXCHANGE_JOIN_TYPES})
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+                             for mode in ('ref', 'mut') for typ in (*pool_structures, *owned_enums)})
+     owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
+@@ -1876,7 +1904,7 @@
+                     content = 'Int' if mode == 'buffered_handle_exchange' else typ
+                     if payload != owned_wrapper_payload(mode, typ) or owned_result_types.get(value, 'Int') != content:
+                         fail(line, 'argument de résultat propriétaire : type incompatible')
+-                    if mode == 'buffered_handle_exchange':
++                    if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                         for arm in ('ok', 'err'):
+                             origins = active_loans.get(('owned_storage', value, (arm,)))
+                             argument_payload_storage[index, arm] = (frozenset(origin for origin, _ in origins)
+@@ -1939,6 +1967,8 @@
+                     success = f'{snapshot}.status == 0' + (f' && {snapshot}.value.status == 0' if mode in ('join_nested', 'join_option') else '')
+                     if mode == 'buffered_handle_exchange':
+                         success = f'{snapshot}.status != 0' if typ == 'Result<(),A<Int>>' else '1'
++                    elif mode in EXCHANGE_JOIN_TYPES:
++                        _, success = wrapper_cleanup(snapshot, JOIN_PAYLOADS[mode])
+                     pending = temporary('Cell *')
+                     steps.extend((f'{pending} = ({success}) ? {snapshot}.{field} : NULL;',
+                                   f'{value}.{field} = NULL;'))
+@@ -2083,7 +2113,7 @@
+                 contract.parameters, argument_loans, line)
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]
+-                if definition.args[2][0] == 'buffered_handle_exchange':
++                if definition.args[2][0] == 'buffered_handle_exchange' or definition.args[2][0] in EXCHANGE_JOIN_TYPES:
+                     for arm, symbols in contract.result.task_result_fields:
+                         origins = set()
+                         for source in symbols:
+@@ -2152,7 +2182,7 @@
+                 return argument_storage[index] if index is not None else frozenset().union(*argument_storage)
+             for candidate in storage_candidates(contract.result):
+                 keep_storage(value, candidate_storage(candidate))
+-            if signature[0] == 'buffered_handle_exchange':
++            if signature[0] == 'buffered_handle_exchange' or signature[0] in EXCHANGE_JOIN_TYPES:
+                 for arm, candidates in zip(('ok', 'err'), contract.result.exchange_payloads):
+                     origins = frozenset().union(*(candidate_storage(candidate) for candidate in candidates))
+                     active_loans[('owned_storage', value, (arm,))] = [(origin, 'storage') for origin in origins]
+@@ -2208,6 +2238,7 @@
+     awaited_reference_types = {}
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
++            and not (result[0] in EXCHANGE_JOIN_TYPES and result[1] == 'Int')
+             and not (result[0] == 'buffered_handle_exchange' and result[1] in EXCHANGE_RESULT_TYPES)
+             and not (result[0] in ('ref', 'mut') and result[1] in reference_structs)
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
+@@ -2488,7 +2519,7 @@
+                         argument if argument[0] == 'down' else argument[1], line)
+                     if payload != owned_wrapper_payload(mode, typ) or owned_result_types.get(value, 'Int') != wrapper_content_type(mode, typ):
+                         fail(line, 'capture de Result alloué : type de Result incompatible')
+-                    if mode == 'buffered_handle_exchange':
++                    if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                         for arm in ('ok', 'err'):
+                             held = active_loans.get(('owned_storage', value, (arm,)))
+                             capture_payload_storage[index, arm] = (frozenset(origin for origin, _ in held)
+@@ -2632,7 +2663,7 @@
+                     returned_loans.append((destination, 'storage'))
+                 captures.append('&' + local_pools[destination] if destination else 'NULL')
+             steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
+-            if effects and effects.complete and declaration.args[2][0] == 'buffered_handle_exchange':
++            if effects and effects.complete and (declaration.args[2][0] == 'buffered_handle_exchange' or declaration.args[2][0] in EXCHANGE_JOIN_TYPES):
+                 for arm, candidates in zip(('ok', 'err'), effects.completion_result.exchange_payloads):
+                     origins = set()
+                     for candidate in candidates:
+@@ -2942,7 +2973,7 @@
+         if name not in join_results:
+             return False
+         record = join_results[name]
+-        return record is None or record[1] in ('allocation', 'optional_allocation', 'exchange_allocation', 'rejected_allocation') or (nested and record[1] in ('nested', 'optional_nested'))
++        return record is None or record[1] in ('allocation', 'optional_allocation', 'exchange_allocation', 'rejected_allocation') or (nested and record[1] in ('nested', 'optional_nested', 'exchange_nested', 'rejected_nested'))
+ 
+     def consume_owned_join(name, line):
+         record = join_results[name]
+@@ -2955,12 +2986,7 @@
+     def discard_owned_join(name, line):
+         result, payload, _ = consume_owned_join(name, line)
+         clear_stored_fields(result)
+-        cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation', 'rejected_allocation') else f'{result}.allocation'
+-        success = ('1' if payload == 'exchange_allocation' else
+-                       f'{result}.status != 0' if payload == 'rejected_allocation' else f'{result}.status == 0')
+-        if payload in ('nested', 'optional_nested'):
+-            cell = f'{result}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
+-            success += f' && {result}.value.status == 0'
++        cell, success = wrapper_cleanup(result, payload)
+         steps.extend((f'if ({success}) cell_drop({cell});', f'{cell} = NULL;'))
+ 
+     def execution_await(expr, line, *, prepared=None):
+@@ -2970,10 +2996,12 @@
+         handle, returns_int, loans, nominal, returned_loans, field_changes = record
+         mode, typ = functions[nominal].args[2]
+         outer = PLAIN_RETURN_JOINS.get((mode, typ)) if mode in PLAIN_JOIN_TYPES else None
+-        result = temporary(PLAIN_JOIN_C_TYPES[outer] if outer else 'CrustOptionJoinResult' if mode == 'handle_option' else 'CrustNestedJoinResult' if mode == 'join_owned' else 'CrustJoinResult')
++        result = temporary(PLAIN_JOIN_C_TYPES[outer] if outer else 'CrustExchangeJoinResult' if mode == 'buffered_handle_exchange' else 'CrustOptionJoinResult' if mode == 'handle_option' else 'CrustNestedJoinResult' if mode == 'join_owned' else 'CrustJoinResult')
+         status_result = None
+         payload = {'ref': 'reference', 'mut': 'mutable_reference', 'owned': 'allocation',
+                    'join_owned': 'nested', 'handle_option': 'optional_nested'}.get(mode)
++        if mode == 'buffered_handle_exchange':
++            payload = JOIN_PAYLOADS[exchange_join_mode(typ)]
+         if typ in struct_layouts and mode in ('ref', 'mut'):
+             payload = 'mutable_structure_reference' if mode == 'mut' else 'structure_reference'
+             awaited_reference_types[result] = typ
+@@ -2998,9 +3026,9 @@
+             storage = temporary(element, array_dimensions(shape))
+             payload = storage, shape, element
+             take = f'task_async_take_into({handle}, &{result}, &{storage})'
+-        elif payload == 'optional_nested':
++        elif payload in ('optional_nested', 'exchange_nested', 'rejected_nested'):
+             status_result = temporary('CrustJoinResult')
+-            steps.append(f'{result} = (CrustOptionJoinResult){{0}};')
++            steps.append(f'{result} = ({"CrustOptionJoinResult" if payload == "optional_nested" else "CrustExchangeJoinResult"}){{0}};')
+             take = f'task_async_take_into({handle}, &{status_result}, &{result}.value)'
+         elif payload == 'nested':
+             take = f'task_async_take_nested({handle}, &{result})'
+@@ -3024,7 +3052,7 @@
+         apply_child_field_changes(field_changes, line, launched=True)
+         if mode in ('owned', *JOIN_PAYLOADS):
+             move_stored_fields(handle, result)
+-            owned_result_types[result] = typ
++            owned_result_types[result] = wrapper_content_type(mode, typ)
+             keep_storage(result, (target for target, access in returned_loans if access == 'storage'))
+         if mode in ('ref', 'mut') or mode in ASYNC_CAPTURE_VIEW_MODES and returned_loans:
+             active_loans[id(returned_loans)] = returned_loans
+@@ -3695,12 +3723,7 @@
+                     result, payload, _ = record
+                     if payload not in OWNED_WRAPPER_PAYLOADS.values():
+                         continue
+-                    cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation', 'rejected_allocation') else f'{result}.allocation'
+-                    success = ('1' if payload == 'exchange_allocation' else
+-                       f'{result}.status != 0' if payload == 'rejected_allocation' else f'{result}.status == 0')
+-                    if payload in ('nested', 'optional_nested'):
+-                        cell = f'{result}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
+-                        success += f' && {result}.value.status == 0'
++                    cell, success = wrapper_cleanup(result, payload)
+                     cleanup.extend((f'if ({success}) cell_drop({cell});', f'{cell} = NULL;'))
+                 elif references.get(name) == 'owned':
+                     if name not in consumed:
+@@ -3900,7 +3923,7 @@
+         else:
+             fail(line, 'match async : résultat de handle requis')
+         tag = nodes[1].args[1]
+-        patterns = (('int', 0), ('int', 2)) if payload in ('allocation', 'nested', 'optional_nested') else (('int', 2 if payload else 1),)
++        patterns = (('int', 0), ('int', 2)) if payload in ('allocation', 'nested', 'optional_nested', 'exchange_nested', 'rejected_nested') else (('int', 2 if payload else 1),)
+         if tag[0] != 'utf8_tag' or tag[2] not in (('int', 3), ('int', 7), ('int', 14)) or tag[3] not in patterns:
+             fail(line, 'match de handle : attend Ok et Err avec le type de résultat déclaré')
+         if valued:
+@@ -4984,9 +5007,7 @@
+                 fail(line, 'spawn exige une tâche inactive')
+         enable_threads()
+         task, returns_int, loans, nominal, returned_loans, field_changes = record
+-        if functions[nominal].args[2][0] == 'buffered_handle_exchange':
+-            fail(line, 'prototype : enveloppe spawn/join de replace ou try_push non raccordée')
+-        if functions[nominal].args[2][0] in ('join_nested', 'join_option'):
++        if functions[nominal].args[2][0] in ('join_nested', 'join_option', *EXCHANGE_JOIN_TYPES):
+             fail(line, 'spawn avec trois niveaux de Result non pris en charge')
+         handle = temporary('CrustAsyncExecution')
+         start = ('task_native_async_start' if native else
+@@ -5522,7 +5543,7 @@
+                     locals_in_arm.append(error_name)
+                     steps.append(f'frame->{member} = (CrustRuntimeError){result}.status;')
+                     body = body[1:]
+-                owned_payload = success and payload_field in ('allocation', 'nested', 'optional_nested')
++                owned_payload = success and payload_field in ('allocation', 'nested', 'optional_nested', 'exchange_nested', 'rejected_nested')
+                 if owned_payload:
+                     if not binds_payload or body[0].discarded_pattern or body[0].args[0] == '_':
+                         fail(line, 'un motif _ ne peut pas écarter une allocation possédée')
+@@ -5543,12 +5564,12 @@
+                         locals_in_arm.append(payload)
+                         if all(shape):
+                             steps.append(f'memcpy(frame->{member}, {source}, sizeof frame->{member});')
+-                    elif payload_field in ('nested', 'optional_nested'):
++                    elif payload_field in ('nested', 'optional_nested', 'exchange_nested', 'rejected_nested'):
+                         check_new_name(payload, line)
+-                        inner = temporary('VectorHandleResult' if payload_field == 'optional_nested' else 'CrustJoinResult')
+-                        cell = 'value' if payload_field == 'optional_nested' else 'allocation'
++                        inner = temporary('VectorHandleResult' if payload_field != 'nested' else 'CrustJoinResult')
++                        cell = 'value' if payload_field != 'nested' else 'allocation'
+                         steps.extend((f'{inner} = {result}.value;', f'{result}.value.{cell} = NULL;'))
+-                        join_results[payload] = inner, ('optional_allocation' if payload_field == 'optional_nested' else 'allocation'), None
++                        join_results[payload] = inner, {'optional_nested': 'optional_allocation', 'nested': 'allocation', 'exchange_nested': 'exchange_allocation', 'rejected_nested': 'rejected_allocation'}[payload_field], None
+                         owned_result_types[inner] = owned_result_types.get(result, 'Int')
+                         keep_storage(inner, storage_of(result))
+                         move_stored_fields(result, inner)

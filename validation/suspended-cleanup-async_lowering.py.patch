@@ -1,0 +1,147 @@
+--- /tmp/crust-before-suspended-cleanup/async_lowering.py	2026-11-08 04:23:10
++++ async_lowering.py	2026-11-08 04:25:49
+@@ -1458,6 +1458,7 @@
+     task_holder_count = 0
+     resume_point = 0
+     cleanup_paths = []
++    suspended_paths = {}
+ 
+     field_count = 0
+ 
+@@ -1794,6 +1795,7 @@
+         ctype = capture_ctype(result_mode, result_type) if borrow or owned or joined or result_mode in SCALAR_TYPES else 'int'
+         result = temporary(array_element_type or ctype, array_dimensions(array_shape)) if returns_value else None
+         output = f'&{result}' if result else 'NULL'
++        remember_suspended_cleanup(resume_point, child=task)
+         steps.extend((
+             f'frame->pc = {resume_point};', f'resume_{resume_point}: ;',
+             f'CrustTaskState child_{resume_point} = task_poll_child(&frame->task, {task});',
+@@ -1934,6 +1936,7 @@
+             steps.append(f'while (!{take}) sched_yield();')
+         else:
+             resume_point += 1
++            remember_suspended_cleanup(resume_point, waiting_handle=True)
+             steps.extend((
+                 f'frame->pc = {resume_point};', f'resume_{resume_point}: ;',
+                 f'CrustTaskStep wait_{resume_point} = task_async_subscribe({handle}, &frame->task);',
+@@ -2406,8 +2409,60 @@
+     def suspend():
+         nonlocal resume_point
+         resume_point += 1
++        remember_suspended_cleanup(resume_point)
+         steps.extend((f'frame->pc = {resume_point};', 'return TASK_STEP_YIELD;', f'resume_{resume_point}: ;'))
++
++    def remember_suspended_cleanup(point, *, child=None, waiting_handle=False):
++        """Describe live storage without consuming the verifier's live bindings.
+ 
++        A suspended branch has not completed its surrounding expressions: the
++        awaited child and earlier moved arguments therefore precede its scopes.
++        Borrow descriptors themselves have no runtime destructor. This snapshot
++        does not invent an implicit join for an outstanding launched handle.
++        """
++        cleanup, children, seen = [], [], set()
++        blocked = waiting_handle or any(value is not None for value in executions.values())
++
++        def owned_child(task):
++            children.append(task)
++            cleanup.extend((f'if (!task_drop_owned({task})) fail("unresolved suspended child cleanup");',
++                            f'{task} = NULL;'))
++
++        if child is not None:
++            owned_child(child)
++        for _, cells, _ in reversed(pending_capture_groups):
++            for cell in reversed(cells):
++                cleanup.extend((f'if ({cell}) cell_drop({cell});', f'{cell} = NULL;'))
++        for names, *_ in reversed(scopes):
++            for name in reversed(names):
++                if name in seen:
++                    continue
++                seen.add(name)
++                if name in local_pools:
++                    cleanup.append(f'source_close(&{local_pools[name]});')
++                elif name in arrays:
++                    continue
++                elif name in join_results:
++                    record = join_results[name]
++                    if record is None:
++                        continue
++                    result, payload, _ = record
++                    if payload not in ('allocation', 'nested'):
++                        continue
++                    cell = f'{result}.allocation'
++                    success = f'{result}.status == 0'
++                    if payload == 'nested':
++                        cell = f'{result}.value.allocation'
++                        success += f' && {result}.value.status == 0'
++                    cleanup.extend((f'if ({success}) cell_drop({cell});', f'{cell} = NULL;'))
++                elif references.get(name) == 'owned':
++                    if name not in consumed:
++                        cell = f'frame->{fields[name]}'
++                        cleanup.extend((f'if ({cell}) cell_drop({cell});', f'{cell} = NULL;'))
++                elif name in tasks and tasks[name] is not None:
++                    owned_child(tasks[name][0])
++        suspended_paths[point] = tuple(cleanup), tuple(children), blocked
++
+     def control_state(depth=None):
+         orders = tuple(tuple(name for name in names
+                              if tasks.get(name) is not None or executions.get(name) is not None
+@@ -4977,7 +5032,9 @@
+                 kind, replacement = export_async_value(source, (), line)
+             elif operator == 'scope' and ends_in_transfer(expr[2]):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
+-            elif sync_signature(expr) in owned_sync_types or expr[0] == 'new':
++            elif (sync_signature(expr) in owned_sync_types or operator == 'new'
++                  or operator in ('new_transfer', 'array_transfer') and (
++                      expr[1][0] == 'new' or sync_signature(expr[1]) in owned_sync_types)):
+                 kind, replacement = 'owned', sync_owned_value(expr, line, following=following)
+             elif operator in ('if_expr', 'value_match') and has_transfer_result(expr):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
+@@ -5966,6 +6023,17 @@
+         cases.append('        break;\n')
+     cleanup = ('    switch (frame->cleanup_path) {\n' + ''.join(cases)
+                + '    default: fail("invalid async cleanup path");\n    }\n')
++    suspended_checks, suspended_cleanup = [], []
++    for point, (path, children, blocked) in sorted(suspended_paths.items()):
++        condition = '0' if blocked else ' && '.join(
++            f'task_owned_discardable({child})' for child in children) or '1'
++        suspended_checks.append(f'    case {point}: return {condition};\n')
++        suspended_cleanup.append(f'    case {point}:\n')
++        if blocked:
++            suspended_cleanup.append('        fail("suspended cleanup has an outstanding execution handle");\n')
++        else:
++            suspended_cleanup.extend(f'        {step}\n' for step in path)
++        suspended_cleanup.append('        break;\n')
+     return f"""
+ typedef struct {{
+     CrustTask task;
+@@ -5993,6 +6061,21 @@
+ {cleanup}    if (!task_pool_release(frame->slot)) fail("invalid async slot");
+ }}
+ 
++static int {prefix}_can_discard_suspended(CrustTask *task) {{
++    {prefix}_state *frame = ({prefix}_state *)task;
++    switch (frame->pc) {{
++{''.join(suspended_checks)}    default: return 0;
++    }}
++}}
++
++static void {prefix}_discard_suspended(CrustTask *task) {{
++    {prefix}_state *frame = ({prefix}_state *)task;
++    switch (frame->pc) {{
++{''.join(suspended_cleanup)}    default: fail("invalid suspended cleanup point");
++    }}
++    if (!task_pool_release(frame->slot)) fail("invalid suspended async slot");
++}}
++
+ static const CrustTaskOps {prefix}_ops = {{
+     {prefix}_resume, {prefix}_take, {prefix}_release
+ }};
+@@ -6004,6 +6087,8 @@
+     frame->slot = slot;
+     frame->pc = 0;
+ {initialize}    task_init(&frame->task, &{prefix}_ops);
++    frame->task.can_discard_suspended = {prefix}_can_discard_suspended;
++    frame->task.discard_suspended = {prefix}_discard_suspended;
+     return &frame->task;
+ }}
+ """

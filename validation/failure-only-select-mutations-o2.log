@@ -1,0 +1,244 @@
+BASELINE PASS
+test_byte_and_shared_slice_results_keep_sources (test_select_results.SelectResultsTests.test_byte_and_shared_slice_results_keep_sources) ... ok
+test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) ... ok
+test_fallible_text_result_and_last_use (test_select_results.SelectResultsTests.test_fallible_text_result_and_last_use) ... ok
+test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) ... ok
+test_mutable_slice_keeps_its_vector_after_selection_drop (test_select_results.SelectResultsTests.test_mutable_slice_keeps_its_vector_after_selection_drop) ... ok
+test_owned_child_handle_keeps_failure_separate_from_payload (test_select_results.SelectResultsTests.test_owned_child_handle_keeps_failure_separate_from_payload) ... ok
+test_owned_collections_keep_type_and_cleanup_across_return (test_select_results.SelectResultsTests.test_owned_collections_keep_type_and_cleanup_across_return) ... ok
+test_owned_result_return_and_pool_provenance (test_select_results.SelectResultsTests.test_owned_result_return_and_pool_provenance) ... ok
+test_plain_error_and_array_payloads_preserve_field_updates (test_select_results.SelectResultsTests.test_plain_error_and_array_payloads_preserve_field_updates) ... ok
+test_recorded_owned_result_preserves_loser_field (test_select_results.SelectResultsTests.test_recorded_owned_result_preserves_loser_field) ... ok
+test_returned_view_contract_through_direct_relay (test_select_results.SelectResultsTests.test_returned_view_contract_through_direct_relay) ... ok
+test_text_result_after_drop_retains_source_and_field (test_select_results.SelectResultsTests.test_text_result_after_drop_retains_source_and_field) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 23.994s
+
+OK
+
+erase_owned_candidates DETECTED
+test_owned_result_return_and_pool_provenance (test_select_results.SelectResultsTests.test_owned_result_return_and_pool_provenance) ... FAIL
+
+======================================================================
+FAIL: test_owned_result_return_and_pool_provenance (test_select_results.SelectResultsTests.test_owned_result_return_and_pool_provenance)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/crust.py", line 15450, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/crust.py", line 13729, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 6202, in _lower_async_function
+    if receive_await_result(statement, body, index):
+       ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 6027, in receive_await_result
+    value = await_task(initializer, line, returns_value=True, owned=True, prepared=prepared)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 1916, in await_task
+    selection_field_effects(poll_paths, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 1875, in selection_field_effects
+    apply_child_field_changes((*record[5], *prefixes), line, launched=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 1202, in apply_child_field_changes
+    fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée'
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         + (': ' + reason if reason else ''))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-a9ip__qa/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 8: prototype : terminaison des dépendances de champs enfant non raccordée: ligne 8: retour sans provenance symbolique vérifiable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 58, in test_owned_result_return_and_pool_provenance
+    self.assertEqual(self.run_source(source).stdout,'9\n2\n17\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 8: prototype : terminaison des dépendances de champs enfant non raccordée: ligne 8: retour sans provenance symbolique vérifiable
+
+----------------------------------------------------------------------
+Ran 1 test in 0.071s
+
+FAILED (failures=1)
+
+keep_only_first_winner_origin DETECTED
+test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) ... 
+  test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) (pauses=(1, 0)) ... FAIL
+  test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) (pauses=(2, 0)) ... FAIL
+  test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) (pauses=(2, 1)) ... FAIL
+
+======================================================================
+FAIL: test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) (pauses=(1, 0))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 161, in test_independent_owned_winner_and_reuse_model
+    self.assertIn(winner,actual_source)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 not found in {0}
+
+======================================================================
+FAIL: test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) (pauses=(2, 0))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 161, in test_independent_owned_winner_and_reuse_model
+    self.assertIn(winner,actual_source)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 not found in {0}
+
+======================================================================
+FAIL: test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) (pauses=(2, 1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 161, in test_independent_owned_winner_and_reuse_model
+    self.assertIn(winner,actual_source)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 not found in {0}
+
+----------------------------------------------------------------------
+Ran 1 test in 7.217s
+
+FAILED (failures=3)
+
+erase_returned_view_targets DETECTED
+test_returned_view_contract_through_direct_relay (test_select_results.SelectResultsTests.test_returned_view_contract_through_direct_relay) ... FAIL
+
+======================================================================
+FAIL: test_returned_view_contract_through_direct_relay (test_select_results.SelectResultsTests.test_returned_view_contract_through_direct_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 95, in test_returned_view_contract_through_direct_relay
+    self.assertEqual({(t.kind,t.parameter) for t in summary.completion_result.reference_targets},
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     {('utf8_parameter',2),('utf8_parameter',3)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the second set but not the first:
+('utf8_parameter', 3)
+('utf8_parameter', 2)
+
+----------------------------------------------------------------------
+Ran 1 test in 0.066s
+
+FAILED (failures=1)
+
+forget_owned_completion_writes DETECTED
+test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) ... 
+  test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) (checker='verify_program') ... FAIL
+  test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) (checker='compile_source') ... FAIL
+test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) ... ERROR
+
+======================================================================
+ERROR: test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 50, in test_completed_owned_winner_publishes_field
+    fields=dict(dict(summary.completion_result.structure_fields)[0])
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+KeyError: 0
+
+======================================================================
+FAIL: test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_completed_owned_winner_publishes_field (test_select_results.SelectResultsTests.test_completed_owned_winner_publishes_field) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.566s
+
+FAILED (failures=2, errors=1)
+
+exclude_owned_returning_parent DETECTED
+test_owned_result_return_and_pool_provenance (test_select_results.SelectResultsTests.test_owned_result_return_and_pool_provenance) ... FAIL
+
+======================================================================
+FAIL: test_owned_result_return_and_pool_provenance (test_select_results.SelectResultsTests.test_owned_result_return_and_pool_provenance)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/crust.py", line 15450, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/crust.py", line 13729, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 6202, in _lower_async_function
+    if receive_await_result(statement, body, index):
+       ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 6027, in receive_await_result
+    value = await_task(initializer, line, returns_value=True, owned=True, prepared=prepared)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 1916, in await_task
+    selection_field_effects(poll_paths, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 1875, in selection_field_effects
+    apply_child_field_changes((*record[5], *prefixes), line, launched=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 1202, in apply_child_field_changes
+    fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée'
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         + (': ' + reason if reason else ''))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-select-results-70utfbb9/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 8: prototype : terminaison des dépendances de champs enfant non raccordée
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 58, in test_owned_result_return_and_pool_provenance
+    self.assertEqual(self.run_source(source).stdout,'9\n2\n17\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 8: prototype : terminaison des dépendances de champs enfant non raccordée
+
+----------------------------------------------------------------------
+Ran 1 test in 0.072s
+
+FAILED (failures=1)
+

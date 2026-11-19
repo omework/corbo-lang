@@ -1,0 +1,62 @@
+test_borrow_reservations_and_evaluated_index (test_inline_vector_remove.InlineVectorRemoveTests.test_borrow_reservations_and_evaluated_index) ... ok
+test_drop_result_and_reuse_in_loop (test_inline_vector_remove.InlineVectorRemoveTests.test_drop_result_and_reuse_in_loop) ... ok
+test_function_return_and_relay_survive_vector (test_inline_vector_remove.InlineVectorRemoveTests.test_function_return_and_relay_survive_vector) ... FAIL
+test_invalid_index_stops_before_read (test_inline_vector_remove.InlineVectorRemoveTests.test_invalid_index_stops_before_read) ... ok
+test_nested_empty_and_two_growth_fronts (test_inline_vector_remove.InlineVectorRemoveTests.test_nested_empty_and_two_growth_fronts) ... ok
+test_parent_conditional_and_loop_receivers (test_inline_vector_remove.InlineVectorRemoveTests.test_parent_conditional_and_loop_receivers) ... ok
+test_remove_preserves_sequence_and_independent_result (test_inline_vector_remove.InlineVectorRemoveTests.test_remove_preserves_sequence_and_independent_result) ... ok
+
+======================================================================
+FAIL: test_function_return_and_relay_survive_vector (test_inline_vector_remove.InlineVectorRemoveTests.test_function_return_and_relay_survive_vector)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17621, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15611, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3278, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10863, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12517, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14025, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14137, in statements
+    value = self.expression(operand, scope, 'return')
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9603, in expression
+    return self.vector_operation(expr, binding, method, rest, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9040, in vector_operation
+    return self.inline_vector_operation(expr, binding, method, args, scope, label)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8965, in inline_vector_operation
+    self.fail('remove de structure exige un transfert <- explicite')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2024, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: remove de structure exige un transfert <- explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_remove.py", line 29, in test_function_return_and_relay_survive_vector
+    self.assertEqual(self.run_source(source).stdout, '0\n7\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: remove de structure exige un transfert <- explicite
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.864s
+
+FAILED (failures=1)

@@ -1,0 +1,22 @@
+fn borrow(data: &i32) -> &i32 {
+    return data;
+}
+
+fn relay(data: &i32) -> &i32 {
+    let mut view = borrow(data);
+    return view;
+}
+
+fn main() {
+    let mut memory = pool<i32>(1);
+    let mut data = memory.new(42);
+    address(data);
+    let mut view = relay(data.vref());
+    address(view);
+    print(*view);
+
+    // Le dernier usage de view est passé : drop est maintenant autorisé.
+    drop(data);
+    let mut next = memory.new(7);
+    print(*next);
+}

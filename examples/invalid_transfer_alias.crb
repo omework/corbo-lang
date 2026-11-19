@@ -1,0 +1,14 @@
+fn main() {
+    let mut memory = pool<i32>(2);
+    let original = memory.new(42);
+
+    let received = {
+        move original;
+        original
+    };
+
+    // Refusé : received est le nouvel accès direct.
+    // L'accès original n'est pas réactivé lors de cette réception.
+    print(*original);
+    print(*received);
+}

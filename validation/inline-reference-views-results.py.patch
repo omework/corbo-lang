@@ -1,0 +1,101 @@
+--- before/results.py
++++ after/results.py
+@@ -471,6 +471,7 @@
+     # Storage provenance for an explicit copy of a borrowed interior value.
+     # These are not additional borrowed targets of the reference itself.
+     copy_candidates: frozenset[ResultCandidate] = frozenset()
++    inline_path: str = ''
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -2285,9 +2286,13 @@
+             from structure_views import contained_field
+             projection = contained_field(self.analyzer.enums, carrier.typ, path) if isinstance(carrier, Value) else None
+             if projection is not None:
++                from structure_views import project_fields
+                 return {'next'}, Value('mut' if op == 'mut_expr' else 'ref', projection.typ,
+                                        copy_candidates=carrier.copy_candidates or carrier.candidates,
+-                                       reference_targets=targets)
++                                       reference_targets=targets, fields=project_fields(carrier.fields, path),
++                                       storage_owner=carrier.storage_owner or name,
++                                       structure_origins=carrier.structure_origins,
++                                       inline_path=(carrier.inline_path + '.' if carrier.inline_path else '') + path)
+             return {'next'}, Value('mut' if op == 'mut_expr' else 'ref', 'Int',
+                                     reference_targets=targets, payload_reference=True)
+         if op in ('ref_expr', 'mut_expr') and expr[1][0] == 'field_deref':
+@@ -2914,8 +2919,8 @@
+                     return flow, replace(result, container_borrow=True, container_mode=summary.mode,
+                                          reference_targets=frozenset(targets), payload_reference=True)
+                 fields = ()
++                projected = []
+                 if summary.typ in self.analyzer.enums:
+-                    projected = []
+                     shared = {f'{arm}.{name}' for arm, declarations in self.analyzer.enums[summary.typ].items()
+                               for name, declared in declarations
+                               if (capability := reference_type(declared)) and capability[0] == 'ref'}
+@@ -2925,6 +2930,13 @@
+                             projected.append(replace(actual, fields=tuple(
+                                 (key, self.detached_field_targets(actual, key) if key in shared else origins)
+                                 for key, origins in actual.fields)))
++                        elif target.kind == 'inline_field_parameter' and not target.carrier_kind:
++                            from structure_views import project_fields
++                            name = actual.storage_owner or (args[target.parameter][1]
++                                if args[target.parameter][0] in ('ref', 'mut', 'name', 'reborrow') else None)
++                            projected.append(replace(actual, typ=summary.typ, mode=summary.mode,
++                                fields=project_fields(actual.fields, target.field), storage_owner=name,
++                                inline_path=(actual.inline_path + '.' if actual.inline_path else '') + target.field))
+                         elif target.kind in ('detached_field_parameter', 'shared_field_parameter',
+                                              'moved_field_parameter', 'field_parameter'):
+                             if target.kind == 'field_parameter' and target.field.startswith('.'):
+@@ -2943,6 +2955,9 @@
+                     if target.kind in ('parameter', 'inline_field_parameter') and not target.carrier_kind
+                     for candidate in (actuals[target.parameter].copy_candidates or actuals[target.parameter].candidates)) if summary.typ in self.analyzer.enums else frozenset()
+                 return flow, Value(summary.mode, summary.typ, copy_candidates=candidates, fields=fields, reference_targets=frozenset(targets),
++                                   storage_owner=projected[0].storage_owner if len(projected) == 1 else None,
++                                   inline_path=projected[0].inline_path if len(projected) == 1 else '',
++                                   structure_choices=merge_structure_choices(projected) if len(projected) > 1 else (),
+                                    structure_origins=structure_origins, handle_slot=handle_slot,
+                                    payload_reference=summary.payload_reference or any(
+                                        actuals[t.parameter].payload_reference for t in summary.reference_targets))
+@@ -3443,13 +3458,15 @@
+     def detached_field_targets(carrier, key):
+         if not isinstance(carrier, Value):
+             return frozenset({BorrowTarget('local')})
+-        parameters = {candidate.parameter for candidate in carrier.candidates if candidate.kind == 'parameter'}
++        parameters = {candidate.parameter for candidate in (*carrier.candidates, *carrier.copy_candidates)
++                      if candidate.kind == 'parameter'}
+         projected_key = '/'.join((*carrier.owned_path, key))
++        inline_key = '.' + carrier.inline_path + key if carrier.inline_path else key
+         targets = shared_vector_field_items(carrier, key)
+         return frozenset(
+             BorrowTarget('detached_field_parameter', target.parameter, target.field)
+             if target.parameter in parameters and (
+-                target.kind == 'field_parameter' and target.field in (key, projected_key)
++                target.kind == 'field_parameter' and target.field in (key, projected_key, inline_key)
+                 or carrier.typ in REFERENCE_VECTORS and carrier.handle_items is None
+                 and target.kind == 'detached_field_parameter' and target.field == '.items')
+             else target for target in targets
+@@ -3605,7 +3622,7 @@
+         for parameter, fields in summary.structure_fields:
+             name = borrowed_array_name(args[parameter])
+             projected = name is None and isinstance(actuals[parameter], Value) and (
+-                actuals[parameter].owned_path or actuals[parameter].structure_choices)
++                actuals[parameter].owned_path or actuals[parameter].structure_choices or actuals[parameter].inline_path)
+             if projected:
+                 name = '\0projected_structure_update'
+                 environment[name] = actuals[parameter]
+@@ -3636,6 +3653,14 @@
+         return updated
+ 
+     def update_structure(self, environment, name, carrier, changes, line):
++        if carrier.inline_path and not carrier.structure_choices:
++            owner = self.lookup(carrier.storage_owner, environment, line)
++            from structure_views import prefix_fields, project_fields
++            self.update_structure(environment, carrier.storage_owner, owner,
++                                  dict(prefix_fields(changes.items(), carrier.inline_path)), line)
++            environment[name] = replace(carrier, fields=project_fields(
++                environment[carrier.storage_owner].fields, carrier.inline_path))
++            return
+         if carrier.structure_choices:
+             branches = []
+             for choice in carrier.structure_choices:

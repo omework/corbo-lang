@@ -1,0 +1,159 @@
+--- before/async_runtime.py
++++ after/async_runtime.py
+@@ -222,17 +222,28 @@
+     return NULL;
+ }
+ 
+-static int task_thread_start_mode(CrustExecution *execution, CrustTask *task,
+-                                  const CrustThreadScheduler *scheduler, int blocking) {
++/* A native block is synchronous: invoke it exactly once. A yielded step here
++   is a compiler/runtime contract violation, not a request to schedule it. */
++static void *task_native_run(void *pointer) {
++    CrustTask *task = pointer;
++    CrustTaskState queued = TASK_QUEUED;
++    if (!atomic_compare_exchange_strong(&task->state, &queued, TASK_RUNNING)) abort();
++    if (task_resume_claimed(task) != TASK_COMPLETE) abort();
++    /* No access to the task slot is allowed after this publication. */
++    atomic_store_explicit(&task->worker_done, 1, memory_order_release);
++    return NULL;
++}
++
++static int task_start_joinable(CrustExecution *execution, CrustTask *task,
++        int (*launch)(pthread_t *, int, void *(*)(void *), void *),
++        int (*wait)(pthread_t), int (*detach)(pthread_t), void *(*run)(void *)) {
+     CrustTaskState inactive = TASK_INACTIVE;
+     if (!atomic_compare_exchange_strong(&task->state, &inactive, TASK_QUEUED)) return EINVAL;
+     execution->task = task;
+     atomic_init(&execution->joined, 0);
+-    execution->wait = scheduler->wait;
+-    execution->detach = scheduler->detach;
+-    int (*launch)(pthread_t *, int, void *(*)(void *), void *) =
+-        blocking ? scheduler->launch_blocking : scheduler->launch;
+-    int error = launch ? launch(&execution->thread, 0, task_thread_run, task) : ENOTSUP;
++    execution->wait = wait;
++    execution->detach = detach;
++    int error = launch ? launch(&execution->thread, 0, run, task) : ENOTSUP;
+     execution->error = error;
+     if (error) {
+         atomic_store(&task->state, TASK_INACTIVE);
+@@ -240,6 +251,18 @@
+         execution->task = NULL;
+     }
+     return error;
++}
++
++static int task_thread_start_mode(CrustExecution *execution, CrustTask *task,
++                                  const CrustThreadScheduler *scheduler, int blocking) {
++    return task_start_joinable(execution, task,
++        blocking ? scheduler->launch_blocking : scheduler->launch,
++        scheduler->wait, scheduler->detach, task_thread_run);
++}
++
++static int task_native_start(CrustExecution *execution, CrustTask *task) {
++    return task_start_joinable(execution, task, task_pthread_launch,
++                              task_pthread_wait, pthread_detach, task_native_run);
+ }
+ 
+ static int task_thread_start_with(CrustExecution *execution, CrustTask *task,
+@@ -370,21 +393,29 @@
+     int error;
+ } CrustAsyncExecution;
+ 
+-static void task_async_start_mode(CrustAsyncExecution *execution, CrustTask *task,
+-                                  const CrustThreadScheduler *scheduler, int blocking) {
++static void task_start_detached(CrustAsyncExecution *execution, CrustTask *task,
++        int (*launch)(pthread_t *, int, void *(*)(void *), void *), void *(*run)(void *)) {
+     CrustTaskState inactive = TASK_INACTIVE;
+     if (!atomic_compare_exchange_strong(&task->state, &inactive, TASK_QUEUED)) abort();
+     execution->task = task;
+     pthread_t thread;
+-    int (*launch)(pthread_t *, int, void *(*)(void *), void *) =
+-        blocking ? scheduler->launch_blocking : scheduler->launch;
+-    int error = launch ? launch(&thread, 1, task_thread_run, task) : ENOTSUP;
++    int error = launch ? launch(&thread, 1, run, task) : ENOTSUP;
+     execution->error = error;
+     if (error) {
+         atomic_store(&task->state, TASK_INACTIVE);
+         if (!task_drop_inactive(task)) abort();
+         execution->task = NULL;
+     }
++}
++
++static void task_async_start_mode(CrustAsyncExecution *execution, CrustTask *task,
++                                  const CrustThreadScheduler *scheduler, int blocking) {
++    task_start_detached(execution, task,
++        blocking ? scheduler->launch_blocking : scheduler->launch, task_thread_run);
++}
++
++static void task_native_async_start(CrustAsyncExecution *execution, CrustTask *task) {
++    task_start_detached(execution, task, task_pthread_launch, task_native_run);
+ }
+ 
+ static void task_async_start_with(CrustAsyncExecution *execution, CrustTask *task,
+--- before/crust.py
++++ after/crust.py
+@@ -308,9 +308,22 @@
+             raise Error('stack_region_max_size hors limites')
+         return int(digits) * factor
+ 
+-    def block(self, match_value=False, if_value=False, transfer_value=False):
++    def block(self, match_value=False, if_value=False, transfer_value=False, native_captures=None):
+         self.take('{')
+         nodes = []
++        if native_captures is not None and self.peek() == '->':
++            self.take('->')
++            self.take('(')
++            while self.peek() != ')':
++                name = self.name()
++                if name in native_captures:
++                    raise Error(f"capture de thread dupliquée : '{name}'")
++                native_captures.append(name)
++                if self.peek() != ',':
++                    break
++                self.take(',')
++            self.take(')')
++            self.take(';')
+         while self.peek() != '}':
+             if self.peek() == '<eof>':
+                 raise Error('bloc non fermé')
+@@ -1096,6 +1109,20 @@
+ 
+     def primary(self):
+         word = self.peek()
++        if (word == 'runtime' and tuple(self.peek(i) for i in range(1, 4))
++                == (':', ':', 'thread')):
++            line = self.tokens[self.i][1]
++            for token in ('runtime', ':', ':', 'thread', '('):
++                self.take(token)
++            captures = []
++            previous = self.async_body
++            self.async_body = False
++            try:
++                body = self.block(if_value=True, native_captures=captures)
++                self.take(')')
++            finally:
++                self.async_body = previous
++            return ('native_thread', tuple(captures), body, line)
+         if word in ERROR_VALUE_MODES and (self.peek(1), self.peek(2)) == (':', ':'):
+             self.take(word); self.take(':'); self.take(':')
+             variant = self.name()
+@@ -13048,6 +13075,19 @@
+         The per-body checker still builds disposable code fragments internally;
+         it never descends into a callee body at a call site. No backend runs.
+         """
++        # Native blocks have their own return/capture boundary. Until their
++        # contract lowering is installed, never let generic expression walkers
++        # treat a nested return as a return from the enclosing function.
++        def check_native_boundary(value):
++            if isinstance(value, Node):
++                check_native_boundary(value.args)
++            elif isinstance(value, (tuple, list)):
++                if value and value[0] == 'native_thread':
++                    self.line = value[3]
++                    self.fail('prototype : contrats des blocs runtime::thread non encore implémentés')
++                for child in value:
++                    check_native_boundary(child)
++        check_native_boundary(nodes)
+         from async_capacity import configure, capacities
+         entries = [entry for node in nodes if node.op == 'async_pool_sizes' for entry in node.args]
+         nodes = [node for node in nodes if node.op != 'async_pool_sizes']

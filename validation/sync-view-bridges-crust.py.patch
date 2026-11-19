@@ -1,0 +1,24 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13634,12 +13634,17 @@
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
+-            elif mode == 'byte_ref':
+-                storage = Binding(parameter + '_storage', 'array', '', static_type='uint8_t',
++            elif mode in ASYNC_CAPTURE_VIEW_MODES:
++                element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(mode, mode), 'uint8_t')
++                storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+                                   array_storage_scope=root.id)
+                 root.bindings[storage.name] = storage
+-                root.bindings[parameter] = Binding(parameter, mode, parameter,
+-                    utf8_capture_descriptor=('uint8_t', ((storage, None),)))
++                descriptor = (element, ((storage, None),))
++                if mode in ('text', 'byte_ref'):
++                    root.bindings[parameter] = Binding(parameter, mode, parameter, utf8_capture_descriptor=descriptor)
++                else:
++                    root.bindings[parameter] = check.array_borrow_binding(
++                        parameter, UTF8_BORROW_MODES[mode], parameter, descriptor)
+                 ctype = COPY_VALUE_TYPES[mode]
+             elif mode in ('ref', 'mut') and typ.startswith('Pool<'):
+                 source = MemorySource(check.uid(), external.id, 'symbolic', parameter,

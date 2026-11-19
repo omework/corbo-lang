@@ -1,0 +1,70 @@
+test_allocation_annotation_checks_type_without_changing_storage (test_foundation_rules.FoundationTests.test_allocation_annotation_checks_type_without_changing_storage) ... FAIL
+test_constraints_keep_possible_match_field_at_conditional_join (test_foundation_rules.FoundationTests.test_constraints_keep_possible_match_field_at_conditional_join) ... FAIL
+test_byte_slice_contracts_reject_local_returns_and_aliasing_reset (test_foundation_rules.FoundationTests.test_byte_slice_contracts_reject_local_returns_and_aliasing_reset) ... ok
+test_char_at_matches_all_tags_through_typed_calls (test_foundation_rules.FoundationTests.test_char_at_matches_all_tags_through_typed_calls) ... ok
+test_handle_replacement_builds_vector_slots_in_callee (test_foundation_rules.FoundationTests.test_handle_replacement_builds_vector_slots_in_callee) ... ERROR
+
+======================================================================
+ERROR: test_handle_replacement_builds_vector_slots_in_callee (test_foundation_rules.FoundationTests.test_handle_replacement_builds_vector_slots_in_callee)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 11086, in test_handle_replacement_builds_vector_slots_in_callee
+    run = self.native(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 722, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17982, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17975, in compile_program
+    code = compiler.compile(Parser(source, legacy_transfers=allow_legacy_reset).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16407, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15949, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3337, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11145, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12815, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14336, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14656, in statements
+    self.replace_borrowed_vector_handle(binding, rhs, scope, roots)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8168, in replace_borrowed_vector_handle
+    self.check_allocation_handle_type(f'A<{handle_vector_element(vector.typ)}>', kind, incoming)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3831, in check_allocation_handle_type
+    self.fail(f'annotation {annotation} : une allocation de Pool<{element}> est requise')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2081, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: annotation A<Int> : une allocation de Pool<Int> est requise
+
+======================================================================
+FAIL: test_allocation_annotation_checks_type_without_changing_storage (test_foundation_rules.FoundationTests.test_allocation_annotation_checks_type_without_changing_storage)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 6511, in test_allocation_annotation_checks_type_without_changing_storage
+    with self.assertRaisesRegex(Error, "annotation de let : une allocation est requise"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_constraints_keep_possible_match_field_at_conditional_join (test_foundation_rules.FoundationTests.test_constraints_keep_possible_match_field_at_conditional_join)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 6038, in test_constraints_keep_possible_match_field_at_conditional_join
+    with self.assertRaisesRegex(Error, "reset interdit"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.499s
+
+FAILED (failures=2, errors=1)

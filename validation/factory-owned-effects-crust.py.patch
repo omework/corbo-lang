@@ -1,0 +1,27 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10940,6 +10940,14 @@
+         result_sources, result_origins = self.resolve_async_sources(summary.task_result_sources, params, bindings,
+                                                                      fresh_origins)
+         kind = summary.mode
++        deferred = replace(summary, structure_fields=summary.task_field_updates,
++                           owned_field_writes=summary.task_owned_updates)
++        owned_updates = self.prepare_owned_field_writes(deferred, params, bindings)
++        field_updates = self.prepare_structure_updates(deferred, params, bindings, owned_updates=owned_updates)
++        for holder, fields in owned_updates:
++            proposed = field_updates.get(holder.id, (holder, holder))[1]
++            proposed = replace(proposed, owned_fields=tuple((dict(proposed.owned_fields) | fields).items()))
++            field_updates[holder.id] = holder, proposed
+         allocation = Allocation(self.uid(), caller.id, 'instance async retournée', (), c=c,
+                                 typ=f'{kind.capitalize()}<{summary.typ}>', dependencies=tuple(dependencies),
+                                 borrow_parents=tuple(parents.values()), item_sources=sources,
+@@ -10950,8 +10958,7 @@
+                                 task_result_variants=self.resolve_task_variants(summary, params, bindings),
+                                 async_field_updates=tuple(update for index in summary.task_forward_parameters
+                                     for update in bindings[params[index][0]].alloc.async_field_updates)
+-                                    + tuple(self.prepare_structure_updates(
+-                                        replace(summary, structure_fields=summary.task_field_updates), params, bindings).values()))
++                                    + tuple(field_updates.values()))
+         self.check_borrow_destination(allocation, caller)
+         caller.allocations.append(allocation)
+         self.allocations.append(allocation)

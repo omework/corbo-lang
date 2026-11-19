@@ -1,0 +1,83 @@
+--- before/results.py
++++ after/results.py
+@@ -2190,7 +2190,10 @@
+             mode = 'mut' if op == 'mut_expr' else 'ref'
+             if isinstance(carrier, Value):
+                 declared = dict(self.analyzer.enums.get(carrier.typ, {}).get('', ())).get(path, '')
+-                if declared.startswith('A<') and carrier.storage_owner is not None and mode == 'mut':
++                if declared.startswith('A<') and mode == 'mut' and (
++                        carrier.storage_owner is not None or carrier.mode == 'owned'):
++                    if carrier.storage_owner is None:
++                        carrier = replace(carrier, storage_owner=name)
+                     child = self.owned_field_at(environment, carrier, '.' + path)
+                     if child is not None:
+                         return {'next'}, replace(child, mode=mode, storage_owner=carrier.storage_owner,
+@@ -3381,6 +3384,10 @@
+         updated = {}
+         for parameter, fields in summary.structure_fields:
+             name = borrowed_array_name(args[parameter])
++            projected = name is None and isinstance(actuals[parameter], Value) and actuals[parameter].owned_path
++            if projected:
++                name = '\0projected_structure_update'
++                environment[name] = actuals[parameter]
+             if name not in environment:
+                 self.fail(line, 'prototype : mise à jour de champ exige un porteur nommé')
+             carrier = environment[name]
+@@ -3403,6 +3410,8 @@
+             else:
+                 self.update_structure(environment, name, carrier, changes, line)
+                 updated[parameter] = environment[name]
++            if projected:
++                environment.pop(name)
+         return updated
+ 
+     def update_structure(self, environment, name, carrier, changes, line):
+@@ -3425,6 +3434,22 @@
+         fields = dict(carrier.fields) | changes
+         environment[name] = replace(carrier, fields=tuple(fields.items()))
+         owner = environment.get(carrier.storage_owner)
++        if carrier.owned_path and isinstance(owner, Value):
++            def update_descendant(value, path):
++                if value.owned_alternatives:
++                    return merge_owned_values([update_descendant(item, path) for item in value.owned_alternatives])
++                if not path:
++                    return replace(value, fields=tuple((dict(value.fields) | changes).items()))
++                key, *tail = path
++                children = dict(value.owned_fields)
++                if key not in children:
++                    self.fail(line, 'mise à jour du descendant : provenance propriétaire manquante')
++                children[key] = update_descendant(children[key], tail)
++                prefix = '/'.join(path) + '/'
++                flattened = dict(value.fields) | {prefix + field: targets for field, targets in changes.items()}
++                return replace(value, fields=tuple(flattened.items()), owned_fields=tuple(children.items()))
++            environment[carrier.storage_owner] = update_descendant(owner, carrier.owned_path)
++            return
+         if isinstance(owner, Value):
+             environment[carrier.storage_owner] = replace(owner, fields=tuple(fields.items()))
+             original = environment.get(owner.storage_owner)
+@@ -3460,6 +3485,25 @@
+ 
+             self.structure_inputs[index] = expand(self.structure_inputs[index], path)
+             root = environment[carrier.storage_owner] = expand(root, path)
++        elif carrier.storage_owner and root.mode == 'owned':
++            def expand_owned(value, remaining):
++                if not remaining:
++                    return value
++                if value.owned_alternatives:
++                    return merge_owned_values([expand_owned(item, remaining) for item in value.owned_alternatives])
++                key, *tail = remaining
++                children = dict(value.owned_fields)
++                child = children.get(key)
++                if child is None:
++                    arm, _, member = key.partition('.')
++                    declared = dict(self.analyzer.enums.get(value.typ, {}).get(arm, ())).get(member, '')
++                    if not declared.startswith('A<'):
++                        return value
++                    child = replace(self.project_owned_value(value, key, declared[2:-1]),
++                                    fields=nested_reference_fields(value.fields, key))
++                children[key] = expand_owned(child, tail)
++                return replace(value, owned_fields=tuple(children.items()))
++            root = environment[carrier.storage_owner] = expand_owned(root, path)
+         for key in path:
+             root = dict(root.owned_fields).get(key)
+             if root is None:

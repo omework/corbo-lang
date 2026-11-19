@@ -1,0 +1,18 @@
+struct Inner { view: &Int }
+struct Outer { inner: A<Inner> }
+fn read(value: &Inner) -> &Int { return value.view; }
+async fn detach(value: -> Outer) -> &Int {
+    yield;
+    return read(&*value.inner);
+}
+fn main() {
+    let mut numbers = pool<Int>(1);
+    let number = numbers.new(9);
+    let mut inners = pool<Inner>(1);
+    let inner = inners.new(view: &number);
+    let outer = Outer { inner: <-inner };
+    let handle = runtime::spawn(->detach(->outer));
+    let view = match handle.join() { Ok(r) => { r }, Err(_) => { return; } };
+    print(*view);
+    drop(->number);
+}

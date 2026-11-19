@@ -1,0 +1,46 @@
+E..........
+======================================================================
+ERROR: test_async_caller_transfers_field_loans (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_async_caller_transfers_field_loans)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_borrowed_captures.py", line 84, in test_async_caller_transfers_field_loans
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16004, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14157, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 934, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6746, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3025, in bind_special
+    tasks[name] = create_task(initializer, statement.line)
+                  ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1885, in create_task
+    return sync_call(expr, line, task=True)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1665, in sync_call
+    capture_index = capture_index(field.partition('.')[2])
+                    ^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'capture_index' where it is not associated with a value
+
+----------------------------------------------------------------------
+Ran 11 tests in 8.109s
+
+FAILED (errors=1)

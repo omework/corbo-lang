@@ -1,0 +1,3 @@
+struct Point{x:Int}fn make()-><-Point{let p=Point{x:7};return <-p;}
+async fn work(q:->A<Point>)->Int{let mut p=make();print(p.x);print(q.x);p=<-q;return p.x;}
+fn main(){let mut points=pool<Point>(1);let q=points.new(x:9);let h=runtime::spawn(->work(->q));match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

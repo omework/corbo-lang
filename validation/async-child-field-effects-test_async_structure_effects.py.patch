@@ -1,0 +1,17 @@
+--- before/tests/test_async_structure_effects.py
++++ after/tests/test_async_structure_effects.py
+@@ -1,4 +1,4 @@
+-"""Contract inference only: field-changing async lowering remains gated."""
++"""Completion contracts and executable neighbors of async field changes."""
+ from itertools import product
+ from pathlib import Path
+ import unittest
+@@ -292,7 +292,7 @@
+             let h=runtime::spawn(->child(v,n));return finish(->h);
+           }'''
+         compiler = Compiler()
+-        with self.assertRaisesRegex(Error,'dépendances de champs'):
++        with self.assertRaisesRegex(Error,'join réservé au code synchrone'):
+             compiler.verify(Parser(source).parse())
+         summary = compiler.async_structure_effects['work']
+         self.assertFalse(summary.complete)

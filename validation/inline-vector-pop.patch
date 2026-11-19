@@ -1,0 +1,615 @@
+--- /tmp/crust-before-inline-vector-pop/array_syntax.py
++++ array_syntax.py
+@@ -76,8 +76,8 @@
+ def consumed_result_expression(expr, nominal):
+     """Resolve the explicit -> inside drop without adding moves to ordinary calls."""
+     if (expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in INLINE_VECTOR_ELEMENTS
+-            and expr[2] == 'remove'):
+-        return ('array_transfer', expr)
++            and expr[2] in ('remove', 'pop')):
++        return ('array_transfer', expr) if expr[2] == 'remove' else ('array_handle_option_pop', expr[1])
+     if expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+         if expr[2] == 'remove':
+             return ('array_transfer', expr)
+--- /tmp/crust-before-inline-vector-pop/async_local_placement.py
++++ async_local_placement.py
+@@ -43,6 +43,10 @@
+             if original is not None and isinstance(original[0], str):
+                 return original[0], {id(expr): expr}
+             return None
++        if op == 'array_handle_option_pop':
++            vector = evaluate(expr[1], env)
++            if vector and isinstance(vector[0], tuple) and vector[0][0] == 'inline_vector':
++                return INLINE_VECTOR_ELEMENTS[vector[0][1]], {id(expr): expr}
+         if op in ('name', 'ref', 'mut', 'move', 'down'):
+             return env.get(expr[1])
+         if op in ('array_transfer', 'new_transfer', 'transfer'):
+--- /tmp/crust-before-inline-vector-pop/async_lowering.py
++++ async_lowering.py
+@@ -121,7 +121,7 @@
+     elif mode in OPTION_JOIN_TYPES:
+         payload = OPTION_JOIN_TYPES[mode]
+     elif mode == 'handle_option':
+-        payload = f'Option<A<{typ}>>'
++        payload = f'Option<{typ}>' if storage == 'local' else f'Option<A<{typ}>>'
+     elif mode in OWNED_JOIN_TYPES:
+         payload = owned_result_type(mode, typ, storage)
+     else:
+@@ -2108,6 +2108,12 @@
+                     content = wrapper_content_type(mode, typ)
+                     if payload != owned_wrapper_payload(mode, typ) or owned_result_types.get(value, 'Int') != content:
+                         fail(line, 'argument de résultat propriétaire : type incompatible')
++                    if storage_of(value) & implicit_stacks:
++                        local_parameters.add(index)
++                    field_loans = owned_capture_field_loans(value, content)
++                    argument_fields.update(((index, path), group) for path, group in field_loans.items())
++                    held = [loan for group in field_loans.values() for loan in group]
++                    loans.extend(held)
+                     if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                         for arm in ('ok', 'err'):
+                             origins = active_loans.get(('owned_storage', value, (arm,)))
+@@ -3213,7 +3219,7 @@
+         mode, typ = functions[nominal].args[2]
+         outer = PLAIN_RETURN_JOINS.get((mode, typ)) if mode in PLAIN_JOIN_TYPES else None
+         exchange_outer = exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]) if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES else None
+-        option_outer = option_join_mode(f'Option<A<{typ}>>' if mode == 'handle_option' else OPTION_JOIN_TYPES[mode]) if mode == 'handle_option' or mode in OPTION_JOIN_TYPES else None
++        option_outer = option_join_mode((f'Option<{typ}>' if functions[nominal].join_storage_result == 'local' else f'Option<A<{typ}>>') if mode == 'handle_option' else OPTION_JOIN_TYPES[mode]) if mode == 'handle_option' or mode in OPTION_JOIN_TYPES else None
+         owned_outer = owned_join_mode(mode) if mode in OWNED_JOIN_TYPES else None
+         result = temporary(PLAIN_JOIN_C_TYPES[outer] if outer else EXCHANGE_JOIN_CTYPES[exchange_outer] if exchange_outer else OPTION_JOIN_CTYPES[option_outer] if option_outer else OWNED_JOIN_CTYPES[owned_outer] if owned_outer else 'CrustJoinResult')
+         status_result = None
+@@ -3330,7 +3336,8 @@
+     def bind_transferred_value(name, kind, value, statement):
+         if statement.annotation is not None and kind != 'array':
+             expected = (public_execution_type(value, statement.annotation, statement.line) if kind == 'execution' else
+-                        f'Option<A<{owned_result_types.get(value[0], "Int")}>>' if kind == 'handle_option' else
++                        (f'Option<{owned_result_types.get(value[0], "Int")}>' if storage_of(value[0]) & implicit_stacks else
++                         f'Option<A<{owned_result_types.get(value[0], "Int")}>>') if kind == 'handle_option' else
+                         f'Result<A<{owned_result_types.get(value[0], "Int")}>,A<{owned_result_types.get(value[0], "Int")}>>' if kind == 'buffered_handle_exchange' else
+                         f'Result<(),A<{owned_result_types.get(value[0], "Int")}>>' if kind == 'buffered_handle_try_push' else
+                         (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
+@@ -4697,7 +4704,7 @@
+         return None
+ 
+     def handle_vector_mutation(receiver, line, *, following=None):
+-        if not is_handle_vector(collection_types.get(receiver)):
++        if not (is_handle_vector(collection_types.get(receiver)) or collection_types.get(receiver) in INLINE_VECTOR_ELEMENTS):
+             fail(line, 'pop transféré exige un Vector<A<Int>>')
+         if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable):
+             fail(line, 'pop exige un Vector mutable')
+@@ -4709,6 +4716,37 @@
+         receiver = expr[1][1]
+         handle_vector_mutation(receiver, line, following=following)
+         buffered = expr[0] == 'array_handle_option_pop'
++        if collection_types[receiver] in INLINE_VECTOR_ELEMENTS:
++            element, layout = inline_vector_layout(collection_types[receiver], line)
++            destination = local_destinations.get(id(expr)) or implicit_stack()
++            metadata = local_layouts.setdefault(element, f'{prefix}_local_layout_{len(local_layouts)}')
++            result = temporary('VectorHandleResult')
++            steps.append(f'{result} = vector_pop_local(frame->{fields[receiver]}, &{local_pools[destination]}, &{metadata}, {structure_offset(layout, len(layout))}, "async pop", NULL);')
++            keep_storage(result, (destination,))
++            owned_result_types[result] = element
++            extract_vector_payload(receiver, result)
++            slots = inline_vector_items.get(receiver)
++            if slots:
++                for category, path, held in slots[-1]:
++                    active_loans[(category, result, path)] = list(held)
++                    if category == 'owned_storage':
++                        keep_storage(result, (origin for origin, _ in held))
++                remaining = inline_vector_items[receiver] = slots[:-1]
++                for field in owned_capture_field_loans(receiver, collection_types[receiver]):
++                    path = stored_field_path(field)
++                    if path and path[0] == '[]':
++                        held = [loan for slot in remaining for category, key, loans in slot
++                                if category == 'stored_field' and key == path[1:] for loan in loans]
++                        install_field_change(('stored_field', receiver, path), list(dict.fromkeys(held)))
++            if buffered:
++                return result
++            value = temporary('Cell *')
++            steps.extend((f'if ({result}.status != CRUST_CHAR_OK) fail("pop de valeur vide");',
++                          f'{value} = {result}.value;'))
++            move_stored_fields(result, value)
++            keep_storage(value, storage_of(result))
++            owned_result_types[value] = element
++            return value
+         result = temporary('VectorHandleResult' if buffered else 'Cell *')
+         if buffered:
+             steps.extend((f'{result} = (VectorHandleResult){{0}};',
+--- /tmp/crust-before-inline-vector-pop/async_structure_effects.py
++++ async_structure_effects.py
+@@ -322,7 +322,7 @@
+         self.has_completion = True
+         super().collect(VOID if self.declared[0] == 'void' else value, line, environment)
+ 
+-    def completed_value(self, mode, typ, values, *, joined=False):
++    def completed_value(self, mode, typ, values, *, joined=False, storage=None):
+         if mode in ('ref', 'mut'):
+             if (mode, typ) not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
+                 raise IncompleteStructureEffects('résultat emprunté agrégé non raccordé aux effets de champs')
+@@ -352,7 +352,7 @@
+         if mode in OWNED_JOIN_TYPES:
+             return replace(value, mode=owned_join_mode(mode))
+         if mode == 'handle_option':
+-            return replace(value, mode=option_join_mode(f'Option<A<{typ}>>'))
++            return replace(value, mode=option_join_mode(f'Option<{typ}>' if storage == 'local' else f'Option<A<{typ}>>'))
+         if mode in ('owned', 'join_owned'):
+             return replace(value, mode={'owned': 'join_owned', 'join_owned': 'join_nested'}[mode])
+         if mode in ('ref', 'mut', *UTF8_BORROW_MODES):
+@@ -602,12 +602,13 @@
+             self.join_environments(environment, branches)
+             if not branches:
+                 return flow - {'next'}, VOID
+-            signatures = {self.effects.definitions[self.pending[token][0]].args[2]
++            signatures = {(*self.effects.definitions[self.pending[token][0]].args[2],
++                           self.effects.definitions[self.pending[token][0]].join_storage_result)
+                           for token in task.pending_structure_calls}
+             if len(signatures) != 1:
+                 raise IncompleteStructureEffects('résultats différents dans un choix de tâches')
+-            mode, typ = signatures.pop()
++            mode, typ, storage = signatures.pop()
+             # LaunchFailed contributes an unchanged environment, not a result
+             # target. Only successful completions supply these payload values.
+-            return flow, self.completed_value(mode, typ, completed_values, joined=task.mode == 'execution')
++            return flow, self.completed_value(mode, typ, completed_values, joined=task.mode == 'execution', storage=storage)
+         return super().expression(expr, environment, line, expected_array)
+--- /tmp/crust-before-inline-vector-pop/constraints.py
++++ constraints.py
+@@ -906,7 +906,7 @@
+                     if mode in ('owned', *OWNED_JOIN_TYPES):
+                         kind = owned_join_mode(mode)
+                     else:
+-                        inner = OPTION_JOIN_TYPES[mode] if mode in OPTION_JOIN_TYPES else f'Option<A<{definition.args[2][1]}>>'
++                        inner = OPTION_JOIN_TYPES[mode] if mode in OPTION_JOIN_TYPES else (f'Option<{definition.args[2][1]}>' if definition.join_storage_result == 'local' else f'Option<A<{definition.args[2][1]}>>')
+                         kind = option_join_mode(inner)
+                     effects = getattr(definition, 'field_effect_summary', None)
+                     if effects is not None and effects.complete and (
+@@ -1173,6 +1173,10 @@
+                 items = vector.handle_items if isinstance(vector, Value) else None
+                 index = len(items) - 1 if isinstance(items, tuple) and items else None
+                 value = self.extract_vector_item(current, expr[1], index, line)
++                if isinstance(vector, Value) and vector.typ in INLINE_VECTOR_ELEMENTS:
++                    origin = id(expr[1])
++                    source = Source('local', origin, 'data stack implicite', value.typ)
++                    value = replace(value, assets=frozenset({self.born(('pop', origin), source, current)}))
+                 return paths, replace(value, mode='handle_option', absent_owned_payload=not value.assets) if op == 'array_handle_option_pop' else value
+             if op == 'array_handle_vequals':
+                 self.touch(values[0], paths['next'], line)
+--- /tmp/crust-before-inline-vector-pop/crust.py
++++ crust.py
+@@ -22,7 +22,7 @@
+ import copy
+ from contextlib import ExitStack, contextmanager
+ import json
+-from handle_option_types import option_type, option_element
++from handle_option_types import option_type, option_element, local_option_element, option_storage
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import INLINE_VECTOR_ELEMENTS, register_vector_type, is_payload_vector, vector_payload_element
+@@ -84,7 +84,7 @@
+     if (mode := exchange_type_mode(typ)) is not None:
+         return mode, exchange_payload_type(mode), 'pool'
+     if (mode := option_type_mode(typ)) is not None:
+-        return mode, option_payload_type(mode), 'pool'
++        return mode, option_payload_type(mode), option_storage(typ)
+     return owned_join_signature(typ)
+ COPY_VALUE_TYPES = ChainMap(PLAIN_JOIN_C_TYPES, {
+     **dict.fromkeys(ERROR_VALUE_TYPES, 'int'),
+@@ -538,6 +538,10 @@
+                 typ = typ[2:-1]
+             if mode == 'owned' and option_element(typ) is not None:
+                 mode, typ = 'handle_option', option_element(typ)
++                join_storage_parameters.append((pname, 'pool'))
++            elif mode == 'owned' and local_option_element(typ) is not None:
++                mode, typ = 'handle_option', local_option_element(typ)
++                join_storage_parameters.append((pname, 'local'))
+             elif mode == 'owned' and exchange_element(typ) is not None:
+                 mode = 'buffered_handle_exchange'
+             if mode == 'owned' and (joined := join_allocation_signature(typ)) is not None:
+@@ -574,6 +578,10 @@
+             handle_result = mode == 'owned' and typ.startswith('A<')
+             if mode == 'owned' and option_element(typ) is not None:
+                 mode, typ = 'handle_option', option_element(typ)
++                join_storage_result = 'pool'
++            elif mode == 'owned' and local_option_element(typ) is not None:
++                mode, typ = 'handle_option', local_option_element(typ)
++                join_storage_result = 'local'
+             result = mode, typ[2:-1] if handle_result else typ
+             if mode == 'owned' and exchange_element(typ) is not None:
+                 result = 'buffered_handle_exchange', typ
+@@ -597,7 +605,7 @@
+         if asynchronous and (result[0] == 'buffered_handle_exchange' or result[0] in EXCHANGE_JOIN_TYPES):
+             exchange_join_mode(result[1] if result[0] == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[result[0]])
+         if asynchronous and (result[0] == 'handle_option' or result[0] in OPTION_JOIN_TYPES):
+-            option_join_mode(option_type(result[1]) if result[0] == 'handle_option' else OPTION_JOIN_TYPES[result[0]])
++            option_join_mode(option_type(result[1], join_storage_result) if result[0] == 'handle_option' else OPTION_JOIN_TYPES[result[0]])
+         if asynchronous and result[0] in ('owned', *OWNED_JOIN_TYPES):
+             owned_join_mode(result[0])
+         return Node('async_fn' if asynchronous else 'fn', (name, params, result, body), line,
+@@ -4791,6 +4799,17 @@
+         frame['paths'].append(state)
+         frame['results'].append(result)
+ 
++    def task_result_storage_kinds(self, allocation):
++        kinds = {source.kind == 'local_stack' for source in allocation.task_result_sources}
++        if not kinds:
++            nominal = allocation.typ.partition('<')[2][:-1]
++            declaration = self.async_definitions[nominal][0]
++            # An empty option has no payload source, but retains its checked type.
++            storage = getattr(declaration, 'join_storage_result', None)
++            if declaration.args[2][0] in ('handle_option', *OPTION_JOIN_TYPES) and storage:
++                kinds.add(storage == 'local')
++        return kinds
++
+     def canonicalize_handle(self, allocation, expected, *, annotation=False):
+         from handle_types import contextual_public_type, public_storage
+         if not allocation.typ.startswith('Execution<'):
+@@ -4801,14 +4820,14 @@
+             self.fail(f'{"annotation de " if annotation else ""}handle {expected} attendu, reçu {actual}')
+         required = public_storage(expected, self.enums)
+         if required is not None:
+-            kinds = {source.kind == 'local_stack' for source in allocation.task_result_sources}
++            kinds = self.task_result_storage_kinds(allocation)
+             if kinds != {required == 'local'}:
+                 self.fail(f'handle {expected} : exigence de stockage {required} non satisfaite')
+         if nominal == expected:
+             return
+         result_dependencies = ()
+         mode = self.async_definitions[nominal][0].args[2][0]
+-        if mode in ('owned', 'join_owned'):
++        if mode in ('owned', 'handle_option', *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES):
+             projected, parents = self.project_task_result_fields(nominal, allocation.dependencies,
+                                                                  allocation.borrow_parents)
+             def field_mode(path):
+@@ -4881,7 +4900,7 @@
+         elif mode == 'owned' and typ in self.enums:
+             if any(source.kind != 'local_stack' for source in allocation.sources):
+                 self.fail(f'retour {typ} : stockage local requis (T local / allocation A<T>)')
+-        required = frame.get('join_storage_result')
++        required = frame.get('join_storage_result') or ('pool' if mode == 'handle_option' else None)
+         if required and allocation.absent_owned_payload and allocation.payload_storage != required:
+             self.fail(f'retour Result : stockage {required} requis (T local / allocation A<T>)')
+         if required and any((source.kind == 'local_stack') != (required == 'local') for source in allocation.sources):
+@@ -7594,10 +7613,15 @@
+                     inner_mode, _ = option_inner_signature(kind)
+                     if inner_mode == 'handle_option':
+                         return self.buffered_handle_result(f'({value}).value', descriptor.sources, scope,
+-                                                           label, descriptor.origins, typ=descriptor.typ)
++                                                           label, descriptor.origins, typ=descriptor.typ,
++                                                           prototype=descriptor, storage=descriptor.payload_storage)
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                         label, descriptor.origins, optional=inner_mode,
+-                        absent=descriptor.absent_owned_payload)
++                        absent=descriptor.absent_owned_payload, storage=descriptor.payload_storage,
++                        owned_fields=self.task_owned_result_fields((descriptor,)),
++                        borrowed_fields=tuple((path, targets) for path, _, targets
++                            in self.owned_dependency_fields(descriptor)),
++                        borrow_parents=descriptor.borrow_parents)
+                 if kind in OWNED_JOIN_TYPES and owned_inner_mode(kind) != 'owned':
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                                                        label, descriptor.origins, typ=descriptor.typ, nested=owned_inner_mode(kind),
+@@ -8336,12 +8360,12 @@
+         return self.receive_extracted_handle(name, sources, scope, label,
+                                              origins=origins, typ=handle_vector_element(vector.typ), prototype=prototype)
+ 
+-    def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int', prototype=None):
++    def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int', prototype=None, storage=None):
+         if not sources:
+             prototype = None
+         _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ, prototype=prototype)
+         allocation.absent_owned_payload = not sources
+-        allocation.payload_storage = 'pool'
++        allocation.payload_storage = storage or ('local' if sources and all(source.kind == 'local_stack' for source in sources) else 'pool')
+         if not sources:
+             allocation.origins = frozenset()
+         self.guard_buffered_handle(name, allocation, '==')
+@@ -8497,7 +8521,8 @@
+         owned_mode = nested if isinstance(nested, str) else 'join_nested' if nested else 'join_owned'
+         option_mode = optional if isinstance(optional, str) else 'join_option' if optional else None
+         absent = absent or (optional and not sources)
+-        storage = 'pool' if optional else storage
++        if option_mode and storage is None:
++            storage = option_storage(OPTION_JOIN_TYPES[option_mode])
+         if option_mode:
+             typ = option_payload_type(option_mode)
+         elif exchange:
+@@ -9065,6 +9090,33 @@
+         self.origin_sources[allocation.id] = destination
+         return 'owned', allocation.c, allocation
+ 
++    def pop_inline_vector_item(self, expr, binding, scope, label, *, buffered):
++        element, size = self.inline_vector_layout(binding.alloc.typ)
++        self.access(binding, write=True)
++        self.expression_clock(expr)
++        reservation = self.local_reservations.get(id(expr))
++        if reservation:
++            destination, layout, reserved = reservation
++        else:
++            destination, layout = self.local_structure_storage(scope, element)
++            reserved = 'NULL'
++        vector = binding.alloc
++        positions = vector.item_position_origins
++        index = len(positions) - 1 if positions else None
++        origins = positions[-1] if positions else vector.item_origins
++        prototype = self.extracted_payload(vector, origins)
++        self.remove_handle_position(vector, index)
++        name = f'element_value{self.uid()}'
++        source_c = f'{reserved}->source' if reservation else destination.c
++        layout_c = f'{reserved}->layout' if reservation else f'&{layout}'
++        self.lines.append(f'VectorHandleResult {name} = vector_pop_local({binding.c}, {source_c}, {layout_c}, {size}, "{label}", {reserved});')
++        if buffered:
++            return self.buffered_handle_result(name, (destination,), scope, label, None,
++                                               typ=element, prototype=prototype, storage='local')
++        self.lines.append(f'if ({name}.status != CRUST_CHAR_OK) fail("pop de valeur vide");')
++        return self.receive_extracted_handle(f'{name}.value', (destination,), scope, label,
++                                             typ=element, prototype=prototype)
++
+     def vector_operation(self, expr, binding, method, args, scope, label):
+         typ = binding.alloc.typ
+         write = method != 'index' and method != 'len'
+@@ -9315,6 +9367,8 @@
+                 value = node.args[0]
+                 if value is not None and value[0] in ('array_transfer', 'new_transfer'):
+                     producer = value[1]
++                elif value is not None and value[0] == 'array_handle_option_pop':
++                    producer = value
+                 elif value is not None and value[0] == 'move' and value[1] in producers:
+                     producer = producers[value[1]]
+                 else:
+@@ -9341,6 +9395,8 @@
+         if id(expr) in visited:
+             return None
+         visited = visited | {id(expr)}
++        if expr[0] == 'array_handle_option_pop':
++            return self.local_copy_type(('array_index', expr[1], ('int', 0)), producers, visited)
+         if expr[0] == 'method_call' and expr[2] == 'remove':
+             return self.local_copy_type(('array_index', expr[1], ('int', 0)), producers, visited)
+         if expr[0] == 'array_index' and expr[1][0] == 'name':
+@@ -9416,7 +9472,7 @@
+                             source.kind == 'local_stack' for source in binding.alloc.sources):
+                         known[name] = binding.alloc.typ
+             return result_constructors(expr, self.function_contracts, known)
+-        if expr[0] == 'array_copy' or (expr[0] == 'method_call' and expr[2] == 'remove'):
++        if expr[0] in ('array_copy', 'array_handle_option_pop') or (expr[0] == 'method_call' and expr[2] == 'remove'):
+             typ = self.local_copy_type(expr, producers)
+             if typ is not None:
+                 self.local_copy_types[id(expr)] = typ
+@@ -9426,7 +9482,7 @@
+             return (expr,)
+         if expr[0] == 'call':
+             summary = self.function_results.get(expr[1])
+-            if summary and summary.mode == 'owned' and self.local_copy_type(expr, producers) is not None:
++            if summary and summary.mode in ('owned', 'handle_option') and self.local_copy_type(expr, producers) is not None:
+                 return (expr,)
+             return ()
+         if expr[0] == 'if_expr':
+@@ -9888,8 +9944,13 @@
+                                                  origins=allocation.origins, typ=allocation.typ, prototype=allocation)
+         if op in ('array_handle_len', 'array_pop_handle', 'array_handle_option_pop'):
+             binding = self.lookup(expr[1][1])
+-            if binding.alloc is None or binding.alloc.typ not in (*HANDLE_VECTORS, MUT_REF_VECTOR):
++            if binding.alloc is None or binding.alloc.typ not in (*HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS, MUT_REF_VECTOR):
+                 self.fail('match de pop transféré exige un vecteur à éléments transférables')
++            if binding.alloc.typ in INLINE_VECTOR_ELEMENTS:
++                if op == 'array_handle_len':
++                    return self.vector_operation(expr, binding, 'len', (), scope, source_name)
++                return self.pop_inline_vector_item(expr, binding, scope, source_name,
++                                                  buffered=op == 'array_handle_option_pop')
+             if binding.alloc.typ == MUT_REF_VECTOR:
+                 if op != 'array_handle_len':
+                     return self.pop_mutable_vector_reference(
+@@ -11655,12 +11716,15 @@
+                 allocation.task_result_origins, exchange=outer_mode,
+                 owned_fields=allocation.task_result_fields, absent=absent_payload)
+         if mode == 'handle_option' or mode in OPTION_JOIN_TYPES:
+-            outer_mode = option_join_mode(option_type(typ) if mode == 'handle_option' else OPTION_JOIN_TYPES[mode])
++            outer_mode = option_join_mode(option_type(typ, node.join_storage_result) if mode == 'handle_option' else OPTION_JOIN_TYPES[mode])
+             self.flag_declarations.append(f'{OPTION_JOIN_CTYPES[outer_mode]} {c} = {{0}};')
+             self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.value).status;')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+                                                allocation.task_result_origins, optional=outer_mode,
+-                                               absent=absent_payload)
++                                               absent=absent_payload, storage=payload_storage,
++                                               owned_fields=allocation.task_result_fields,
++                                               borrowed_fields=result_borrows, borrow_parents=result_parents,
++                                               variants=allocation.task_result_variants)
+         if mode in OWNED_JOIN_TYPES:
+             outer_mode = owned_join_mode(mode)
+             self.flag_declarations.append(f'{OWNED_JOIN_CTYPES[outer_mode]} {c} = {{0}};')
+@@ -12328,8 +12392,9 @@
+         for index, required in signature.storage_requirements:
+             binding = bindings[params[index][0]]
+             targets = binding.referents or ((binding.alloc,) if binding.alloc else ())
+-            kinds = {source.kind == 'local_stack' for target in targets for source in (
+-                target.task_result_sources if binding.kind in ('task', 'execution') else target.sources)}
++            kinds = set().union(*(self.task_result_storage_kinds(target) if binding.kind in ('task', 'execution')
++                                  else {source.kind == 'local_stack' for source in target.sources}
++                                  for target in targets))
+             kinds.update(target.payload_storage == 'local' for target in targets
+                          if target.absent_owned_payload and target.payload_storage is not None)
+             if kinds != {required == 'local'}:
+@@ -14775,7 +14840,8 @@
+                 if kind in ('handle_option', 'buffered_handle_exchange'):
+                     if op != 'var':
+                         self.fail('un résultat non Copy exige une nouvelle liaison locale')
+-                    actual_type = option_type(allocation.typ if allocation is not None else 'Int') if kind == 'handle_option' else self.exchange_result_type(allocation)
++                    actual_type = (f'Option<{allocation.typ}>' if allocation is not None and allocation.payload_storage == 'local'
++                                   else option_type(allocation.typ if allocation is not None else 'Int')) if kind == 'handle_option' else self.exchange_result_type(allocation)
+                     if annotation is not None and annotation != actual_type:
+                         self.fail(f'annotation de let : attendu {annotation}, reçu {actual_type}')
+                     last = self.last_use(name, nodes[i + 1:], kind)
+@@ -15984,13 +16050,14 @@
+                 ctype = 'VectorHandleResult'
+             elif mode == 'handle_option':
+                 pointer = f'{parameter}.value'
+-                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'({pointer} ? {pointer}->source : NULL)', element_type=typ)
+                 external.sources.append(source)
+                 origin = check.uid()
+                 check.origin_sources[origin] = source
+                 kind, _, allocation = check.buffered_handle_result(parameter, (source,), root, parameter,
+                                                                   frozenset({origin}), typ=typ)
++                owned_bridge_fields(allocation, pointer)
+                 check.lines.append(f'(void)*({allocation.guard});')
+                 root.bindings[parameter] = Binding(parameter, kind, parameter, allocation)
+                 ctype = 'VectorHandleResult'
+@@ -17465,6 +17532,17 @@
+ }
+ 
+ typedef struct { int status; Cell *value; } VectorHandleResult;
++
++static VectorHandleResult vector_pop_local(Cell *vector, Source *source,
++                                            const Source *layout, size_t size, const char *label, Cell *reserved) {
++    VectorHandleResult result = {CRUST_CHAR_NONE, NULL};
++    if (vector_len(vector)) {
++        result.value = reserved ? cell_construct_reserved(reserved, reserved->source, 0, label)
++                                : local_cell_new(source, layout, size, label);
++        result.status = vector_pop(vector, size ? (void *)result.value->fields : (void *)&(int){0});
++    }
++    return result;
++}
+ typedef struct { int status; VectorHandleResult value; } CrustOptionJoinResult;
+ typedef CrustOptionJoinResult CrustExchangeJoinResult;
+ 
+--- /tmp/crust-before-inline-vector-pop/handle_option_types.py
++++ handle_option_types.py
+@@ -1,11 +1,29 @@
+ """Static type of the optional handle returned by Vector<A<T>>.pop."""
++import re
+ 
+ 
+-def option_type(element):
+-    return f'Option<A<{element}>>'
++def local_option_element(typ):
++    match = re.fullmatch(r'Option<([A-Za-z_][A-Za-z_0-9:]*)>', typ or '')
++    if match and match[1] not in ('Int', 'u8', 'Bool', 'bool', 'char', 'Void', 'String'):
++        return match[1]
++    return None
++
++
++def option_type(element, storage="pool"):
++    return f'Option<{element}>' if storage == "local" else f'Option<A<{element}>>'
+ 
+ 
+ def option_element(typ):
+     if isinstance(typ, str) and typ.startswith('Option<A<') and typ.endswith('>>'):
+         return typ[len('Option<A<'):-2]
+     return None
++
++
++def option_storage(typ):
++    while typ.startswith('Result<') and typ.endswith(',runtime::Error>'):
++        typ = typ[len('Result<'):-len(',runtime::Error>')]
++    if local_option_element(typ) is not None:
++        return 'local'
++    if option_element(typ) is not None:
++        return 'pool'
++    return None
+--- /tmp/crust-before-inline-vector-pop/handle_types.py
++++ handle_types.py
+@@ -51,8 +51,8 @@
+         return mode, exchange_payload_type(mode)
+     if (mode := option_type_mode(payload)) is not None:
+         return mode, option_payload_type(mode)
+-    from handle_option_types import option_element
+-    if (element := option_element(payload)) is not None:
++    from handle_option_types import option_element, local_option_element
++    if (element := option_element(payload) or local_option_element(payload)) is not None:
+         return ('handle_option', element)
+     if payload in structures:
+         return ('owned', payload)
+@@ -72,8 +72,11 @@
+     payload = typ[len('runtime::Handle<'):-1]
+     if payload.startswith('Result<') and payload.endswith(',runtime::Error>'):
+         return public_storage('runtime::Handle<' + payload[len('Result<'):-len(',runtime::Error>')] + '>', structures)
+-    if payload in structures:
++    from handle_option_types import option_element, local_option_element
++    if payload in structures or local_option_element(payload) in structures:
+         return 'local'
++    if option_element(payload) is not None:
++        return 'pool'
+     if payload.startswith('A<') and payload[2:-1] in structures:
+         return 'pool'
+     return None
+@@ -146,6 +149,7 @@
+             ('opaque_exclusive', 'mut', 'Int'),
+             ('opaque_shared_capability', 'ref', 'Int'),
+         ]
++        declaration_storage = public_storage(key, self.structures)
+         result_storage = None
+         result_borrows = ()
+         result_views = ()
+@@ -165,10 +169,10 @@
+             result_storage = len(parameters)
+             parameters.append(('opaque_result_storage', 'owned', exchange_element(signature[1]) if signature[0] == 'buffered_handle_exchange' else signature[1]))
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),
+-                                      public_result_storage=result_storage,
++                                      join_storage_result=declaration_storage, public_result_storage=result_storage,
+                                       public_result_borrows=result_borrows, public_result_views=result_views, native_block=False, line=0)
+         from array_syntax import is_handle_vector
+-        if signature[0] in ('owned', *OWNED_JOIN_TYPES) and (signature[1] in self.structures or is_handle_vector(signature[1])):
++        if signature[0] in ('owned', 'handle_option', *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES) and (signature[1] in self.structures or is_handle_vector(signature[1])):
+             from array_syntax import owned_reference_paths
+             from results import FunctionResult, ResultCandidate, BorrowTarget
+             enums = {name: layout if isinstance(layout, dict) else {'': layout}
+--- /tmp/crust-before-inline-vector-pop/option_join_types.py
++++ option_join_types.py
+@@ -1,6 +1,6 @@
+ """Runtime envelopes whose leaf is an optional allocation handle."""
+ from result_envelopes import ResultLeaf, RuntimeResultEnvelopes
+-from handle_option_types import option_element
++from handle_option_types import option_element, local_option_element
+ 
+ _registry = RuntimeResultEnvelopes({
+     'Option<A<Int>>': ResultLeaf('join_option', 'CrustOptionJoinResult',
+@@ -18,10 +18,11 @@
+     """Keep distinct static payloads while sharing the Cell-pointer C ABI."""
+     while typ.startswith('Result<') and typ.endswith(',runtime::Error>'):
+         typ = typ[len('Result<'):-len(',runtime::Error>')]
+-    element = option_element(typ)
++    local = local_option_element(typ)
++    element = option_element(typ) or local
+     if element is not None and typ not in _registry.leaves:
+         # An injective spelling avoids collisions across qualified/nested types.
+-        suffix = element.encode('utf-8').hex()
++        suffix = ('local_' if local else '') + element.encode('utf-8').hex()
+         _registry.leaves[typ] = ResultLeaf('join_option_t' + suffix,
+             'CrustOptionJoinResult', 'optional_t' + suffix + '_nested',
+             'handle_option', element, '==')
+--- /tmp/crust-before-inline-vector-pop/results.py
++++ results.py
+@@ -2077,7 +2077,7 @@
+                     if mode in ('owned', *OWNED_JOIN_TYPES):
+                         kind = owned_join_mode(mode)
+                     else:
+-                        inner = OPTION_JOIN_TYPES[mode] if mode in OPTION_JOIN_TYPES else f'Option<A<{typ}>>'
++                        inner = OPTION_JOIN_TYPES[mode] if mode in OPTION_JOIN_TYPES else (f'Option<{typ}>' if declaration.join_storage_result == 'local' else f'Option<A<{typ}>>')
+                         kind = option_join_mode(inner)
+                     effects = getattr(declaration, 'field_effect_summary', None)
+                     if effects is not None and effects.complete and (
+@@ -2294,6 +2294,12 @@
+                     return flow, Value('mutable_ref_option' if buffered else 'mut',
+                                         'Option<&mut Int>' if buffered else 'Int', reference_targets=targets or frozenset())
+                 value = self.extract_vector_item(environment, expr[1], last=True, optional=op == 'array_handle_option_pop')
++                if isinstance(vector, Value) and vector.typ in INLINE_VECTOR_ELEMENTS:
++                    element = INLINE_VECTOR_ELEMENTS[vector.typ]
++                    origin = id(expr[1])
++                    candidate = ResultCandidate('fresh', source=SourceOrigin('local_value', origin, 'data stack implicite', element))
++                    value = replace(value, typ=element, candidates=frozenset({candidate}),
++                                    fresh_variants=frozenset({''}), structure_origins=frozenset({origin}))
+                 return flow, replace(value, mode='handle_option') if op == 'array_handle_option_pop' else value
+             if op == 'array_handle_vequals':
+                 return flow, Value('bool', 'bool')
+--- /tmp/crust-before-inline-vector-pop/storage_requirements.py
++++ storage_requirements.py
+@@ -87,8 +87,9 @@
+         for asset in value.assets:
+             source = asset.source
+             if source.kind == 'allocation_parameter' and context.params[source.index][1] == 'handle_option':
+-                if required != 'pool':
+-                    context.fail(line, 'exigence de stockage local incompatible avec Option<A<T>>')
++                declared = dict(context.node.join_storage_parameters).get(context.params[source.index][0], 'pool')
++                if required != declared:
++                    context.fail(line, 'exigence de stockage incompatible avec le type Option déclaré')
+             elif source.kind == 'allocation_parameter' and context.params[source.index][2] in structures:
+                 demand(source.index)
+             elif (source.kind == 'allocation_parameter'

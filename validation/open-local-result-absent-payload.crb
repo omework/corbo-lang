@@ -1,0 +1,4 @@
+struct View{data:&Int}async fn leaf(n:&Int)-><-View{loop{yield;}}
+fn finish(h:->Execution<leaf>)-><-Result<View,runtime::Error>{return <-h.join();}
+fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let h=runtime::spawn(->leaf(&n));let r=finish(->h);
+match r{Ok(v)=>{drop(->v);},Err(_)=>{print(99);}}drop(->n);}

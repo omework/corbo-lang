@@ -1,0 +1,131 @@
+test_completed_child_keeps_target_reserved_in_parent (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_completed_child_keeps_target_reserved_in_parent) ... ok
+test_conditional_child_store_and_snapshot_before_wait (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_conditional_child_store_and_snapshot_before_wait) ... ok
+test_direct_named_nested_waits_and_caller_protection (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_direct_named_nested_waits_and_caller_protection) ... ok
+test_inactive_child_does_not_publish_effects (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_inactive_child_does_not_publish_effects) ... ok
+test_independent_nested_retention_model (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_independent_nested_retention_model) ... ok
+test_nested_completion_does_not_promote_short_lived_target (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_nested_completion_does_not_promote_short_lived_target) ... ok
+test_source_field_and_simultaneous_swap (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_source_field_and_simultaneous_swap) ... ok
+test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure) ... ok
+test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) ... ok
+test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) ... 
+  test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='work') ... ERROR
+  test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='native') ... ERROR
+
+======================================================================
+ERROR: test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='work')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 112, in test_void_completion_and_native_child
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15387, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15380, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13881, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13689, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5820, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4365, in emit_return
+    steps.append(f'frame->result = {expression(value, line, following=())};')
+                                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5130, in expression
+    return match_async_result(expr[1], line, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2515, in match_async_result
+    scalar_result = infer_scalar_value(subject, line, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5214, in infer_scalar_value
+    return plain_join_value(expr, mode, line, following=following), PLAIN_JOIN_TYPES[mode]
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3165, in plain_join_value
+    return execution_await(expr, line)[0]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1913, in execution_await
+    apply_child_field_changes(field_changes, line, launched=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1160, in apply_child_field_changes
+    fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 9: prototype : terminaison des dépendances de champs enfant non raccordée
+
+======================================================================
+ERROR: test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='native')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 112, in test_void_completion_and_native_child
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15387, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15380, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13881, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13689, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5820, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4365, in emit_return
+    steps.append(f'frame->result = {expression(value, line, following=())};')
+                                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5130, in expression
+    return match_async_result(expr[1], line, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2515, in match_async_result
+    scalar_result = infer_scalar_value(subject, line, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5214, in infer_scalar_value
+    return plain_join_value(expr, mode, line, following=following), PLAIN_JOIN_TYPES[mode]
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3165, in plain_join_value
+    return execution_await(expr, line)[0]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1913, in execution_await
+    apply_child_field_changes(field_changes, line, launched=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1160, in apply_child_field_changes
+    fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 9: prototype : terminaison des dépendances de champs enfant non raccordée
+
+----------------------------------------------------------------------
+Ran 10 tests in 23.406s
+
+FAILED (errors=2)

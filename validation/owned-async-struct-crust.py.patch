@@ -1,0 +1,50 @@
+--- before/crust.py
++++ after/crust.py
+@@ -9296,8 +9296,7 @@
+                 self.merge_handle_positions(candidates, origins=True),
+                 self.merge_handle_positions(candidates, key='fresh_positions'))
+ 
+-    @staticmethod
+-    def parameter_storage(symbol, params, bindings):
++    def parameter_storage(self, symbol, params, bindings):
+         if symbol.kind == 'local_value':
+             return (bindings['\0local-result'].source,)
+         binding = bindings[params[symbol.index][0]]
+@@ -9307,6 +9306,9 @@
+             return binding.alloc.item_sources
+         if symbol.kind == 'task_result_parameter':
+             return binding.alloc.task_result_sources
++        if symbol.kind == 'allocation_field_parameter':
++            return source_union(*(child.sources for carrier in binding.referents or (binding.alloc,)
++                                  for child in self.aggregate_field_targets(carrier, symbol.name)))
+         sources = source_union(*(item.sources for item in binding.referents or (binding.alloc,) if item is not None))
+         if (symbol.kind == 'allocation_parameter' and '\0local-result' in bindings
+                 and sources and all(source.kind == 'local_stack' for source in sources)):
+@@ -10128,8 +10130,9 @@
+             target.alive = target.definite = False
+         allocation = Allocation(uid, scope.id, label, (), c=c, typ=f'Task<{name}>',
+                                 dependencies=tuple(dependencies),
+-                                item_sources=source_union(tuple(pool_sources), *(target.sources for target in transferred)),
+-                                item_origins=frozenset(origin for target in transferred for origin in target.origins),
++                                item_sources=source_union(tuple(pool_sources), *(source_union(target.sources, self.owned_sources(target)) for target in transferred)),
++                                item_origins=frozenset(origin for target in transferred
++                                    for child in self.dependency_carriers(target, ownership_only=True) for origin in child.origins),
+                                 task_result_sources=source_union(tuple(pool_result_sources), *(target.sources for target in result_targets)),
+                                 task_result_origins=frozenset(pool_origins) | frozenset(origin for target in result_targets for origin in target.origins),
+                                 borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents))
+@@ -12360,6 +12363,15 @@
+                 expr = args[0]
+                 if expr is None:
+                     value = ('void', '', None)
++                elif (expr[0] in ('array_transfer', 'new_transfer')
++                      and self.exit_frames[-1]['declared'][0] in
++                      ('owned', 'task', 'execution', *JOIN_RESULT_TYPES)):
++                    if expr[1][0] in ('field', 'array_index', 'array_transfer'):
++                        self.fail('déplacement d’un champ ou d’une case interdit')
++                    value = self.expression(expr[1], scope, 'return')
++                    self.expression_clock(expr)
++                    if value[0] not in ('owned', 'task', 'execution', *JOIN_RESULT_TYPES):
++                        self.fail('<- exige ici un résultat propriétaire')
+                 elif expr[0] == 'move':
+                     self.expression_clock(expr)
+                     binding = self.lookup(expr[1])

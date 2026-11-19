@@ -1,0 +1,23 @@
+fn locate(a: ->Int) -> <-Int {
+    address(a);
+    return <-a;
+}
+
+async fn work(p: &mut Pool<Int>) -> <-Int {
+    let a = p.new(7);
+    let b = locate(->a);
+    yield;
+    return <-b;
+}
+
+fn main() {
+    let mut p = pool<Int>(1);
+    let h = runtime::spawn(->work(&mut p));
+    match h.join() {
+        Ok(v) => { address(v); print(v); drop(->v); },
+        Err(_) => { print(99); }
+    }
+    let next = p.new(9);
+    address(next);
+    print(next);
+}

@@ -1,0 +1,13 @@
+// F2 / VE4: binding and explicitly consuming a nonowning error is valid.
+async fn read(v:&mut Vector<u8>)->Int {
+    yield;
+    match v.read_fd(-1) {
+        Ok(n)=>{return n;},
+        Err(error)=>{drop(->error);return -1;}
+    }
+}
+fn main(){
+    let mut p=pool<Vector<u8>>(1);let mut v=p.new();
+    let h=runtime::spawn(->read(&mut v));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+}

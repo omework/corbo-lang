@@ -1,0 +1,143 @@
+test_bounds_checked_in_native_code (test_inline_struct_vectors.InlineStructVectorTests.test_bounds_checked_in_native_code) ... FAIL
+test_copy_and_handle_types_are_explicit (test_inline_struct_vectors.InlineStructVectorTests.test_copy_and_handle_types_are_explicit) ... 
+  test_copy_and_handle_types_are_explicit (test_inline_struct_vectors.InlineStructVectorTests.test_copy_and_handle_types_are_explicit) (checker='verify_program') ... FAIL
+  test_copy_and_handle_types_are_explicit (test_inline_struct_vectors.InlineStructVectorTests.test_copy_and_handle_types_are_explicit) (checker='compile_source') ... FAIL
+test_nested_structs_and_independent_explicit_copy (test_inline_struct_vectors.InlineStructVectorTests.test_nested_structs_and_independent_explicit_copy) ... ok
+test_payload_copy_survives_vector_and_pool (test_inline_struct_vectors.InlineStructVectorTests.test_payload_copy_survives_vector_and_pool) ... FAIL
+test_shared_borrow_blocks_push_until_last_use (test_inline_struct_vectors.InlineStructVectorTests.test_shared_borrow_blocks_push_until_last_use) ... ok
+test_two_fronts_regions_growth_and_slot_reuse (test_inline_struct_vectors.InlineStructVectorTests.test_two_fronts_regions_growth_and_slot_reuse) ... FAIL
+
+======================================================================
+FAIL: test_bounds_checked_in_native_code (test_inline_struct_vectors.InlineStructVectorTests.test_bounds_checked_in_native_code)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_struct_vectors.py", line 67, in test_bounds_checked_in_native_code
+    self.run_c_oracle(compile_source(source), expected_error='index')
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12429, in run_c_oracle
+    self.assertIn(expected_error, run.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'index' not found in 'destroy appel=Point\nreclaim appel\nindice de Vector hors limites\n'
+
+======================================================================
+FAIL: test_copy_and_handle_types_are_explicit (test_inline_struct_vectors.InlineStructVectorTests.test_copy_and_handle_types_are_explicit) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 3: un tableau de taille fixe est attendu
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "copie.*explicite" does not match "ligne 3: un tableau de taille fixe est attendu"
+
+======================================================================
+FAIL: test_copy_and_handle_types_are_explicit (test_inline_struct_vectors.InlineStructVectorTests.test_copy_and_handle_types_are_explicit) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 3: un tableau de taille fixe est attendu
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "copie.*explicite" does not match "ligne 3: un tableau de taille fixe est attendu"
+
+======================================================================
+FAIL: test_payload_copy_survives_vector_and_pool (test_inline_struct_vectors.InlineStructVectorTests.test_payload_copy_survives_vector_and_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17572, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15562, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3278, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10821, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12471, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13979, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14523, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6789, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10033, in expression
+    return self.block_expression(expr)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9510, in block_expression
+    result = self.block(expr[1], expr[2], returns, region_limit=expr[3] if len(expr) > 3 else None,
+                        expected_array=expected_array)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13979, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14986, in statements
+    self.fail(f"transfert refusé : la source '{source.name}' ne survit pas à ce bloc")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2024, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 3: transfert refusé : la source 'data stack implicite' ne survit pas à ce bloc
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_struct_vectors.py", line 23, in test_payload_copy_survives_vector_and_pool
+    self.assertEqual(self.run_source(source).stdout, '7\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: transfert refusé : la source 'data stack implicite' ne survit pas à ce bloc
+
+======================================================================
+FAIL: test_two_fronts_regions_growth_and_slot_reuse (test_inline_struct_vectors.InlineStructVectorTests.test_two_fronts_regions_growth_and_slot_reuse)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17572, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1643, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1631, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1421, in statement
+    limit = self.region_annotation()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 337, in region_annotation
+    self.take('directive')
+    ~~~~~~~~~^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 215, in take
+    raise Error(f"ligne {line}: attendu {expected!r}, reçu {word!r}")
+crust.Error: ligne 1: attendu 'directive', reçu 'stack_region_max_size'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_struct_vectors.py", line 44, in test_two_fronts_regions_growth_and_slot_reuse
+    self.assertEqual(self.run_source(source).stdout, '0\n0\n1\n1\n2\n2\n3\n3\n99\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: attendu 'directive', reçu 'stack_region_max_size'
+
+----------------------------------------------------------------------
+Ran 6 tests in 2.098s
+
+FAILED (failures=5)

@@ -1,0 +1,51 @@
+test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorBorrowTests.test_functions_and_returned_element) ... FAIL
+test_mutable_field_transfer_and_release (test_inline_vector_borrows.InlineVectorBorrowTests.test_mutable_field_transfer_and_release) ... ok
+test_recorded_shared_remove_and_drop (test_inline_vector_borrows.InlineVectorBorrowTests.test_recorded_shared_remove_and_drop) ... ok
+test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) ... ok
+test_shared_copy_preserves_target_not_vector (test_inline_vector_borrows.InlineVectorBorrowTests.test_shared_copy_preserves_target_not_vector) ... ok
+test_two_positions_release_only_extracted_loan (test_inline_vector_borrows.InlineVectorBorrowTests.test_two_positions_release_only_extracted_loan) ... ok
+
+======================================================================
+FAIL: test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorBorrowTests.test_functions_and_returned_element)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17697, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15687, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3270, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10923, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12687, in invoke_arguments
+    self.check_result_contract(result_contract, allocation, state)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10870, in check_result_contract
+    self.fail('invariant interne : cible empruntée absente du contrat de résultat')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2016, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 3: invariant interne : cible empruntée absente du contrat de résultat
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 61, in test_functions_and_returned_element
+    self.assertEqual(self.run_source(s).stdout,'7\n19\n')
+                     ~~~~~~~~~~~~~~~^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: invariant interne : cible empruntée absente du contrat de résultat
+
+----------------------------------------------------------------------
+Ran 6 tests in 2.161s
+
+FAILED (failures=1)

@@ -1,0 +1,12 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -5136,6 +5136,9 @@
+             else:
+                 fail(line, 'retour de Result alloué : <- explicite requis')
+             require_durable_storage(joined, 0, line)
++            if node.join_storage_result and any((source in implicit_stacks) != (node.join_storage_result == 'local')
++                                               for source in storage_of(joined)):
++                fail(line, f'retour Result : stockage {node.join_storage_result} requis (T local / allocation A<T>)')
+             if (payload != JOIN_PAYLOADS[join_return_mode]
+                     or owned_result_types.get(joined, 'Int') != result[1]):
+                 fail(line, 'retour de Result alloué : type de Result incompatible')

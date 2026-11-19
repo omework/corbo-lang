@@ -1,0 +1,114 @@
+--- before/crust.py
++++ after/crust.py
+@@ -8952,8 +8952,8 @@
+         if element not in self.struct_fields:
+             self.fail(f'Vector<{element}> : type de structure inconnu')
+         fields = self.enums[element]['']
+-        if any(kind not in ('Int', '&Int', '&mut Int') for _, kind in fields):
+-            self.fail('prototype : champs propriétaires et références nominales des structures en Vector à raccorder')
++        if any(kind != 'Int' and not kind.startswith('&') for _, kind in fields):
++            self.fail('prototype : champs propriétaires des structures en Vector à raccorder')
+         return element, self.field_offset(fields, len(fields)) or '0'
+ 
+     def inline_vector_operation(self, expr, binding, method, args, scope, label):
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1067,8 +1067,9 @@
+     def inline_vector_layout(typ, line):
+         element = INLINE_VECTOR_ELEMENTS[typ]
+         layout = struct_layouts.get(element)
+-        if layout is None or any(kind not in ('Int', '&Int', '&mut Int') for _, kind in layout):
+-            fail(line, 'prototype async : Vector de structure exige des champs Int, &Int ou &mut Int raccordés')
++        if layout is None or element not in owned_structures or any(
++                kind != 'Int' and not kind.startswith('&') for _, kind in layout):
++            fail(line, 'prototype async : Vector de structure exige des champs Int ou emprunts représentés')
+         return element, layout
+ 
+     def check_handle_payload(typ, line):
+--- before/tests/test_inline_vector_nominal.py
++++ after/tests/test_inline_vector_nominal.py
+@@ -0,0 +1,84 @@
++"""VE1/ST7/ST17: inline cases preserve nominal reference descriptors and loans."""
++from pathlib import Path
++import unittest
++import test_select_source as harness
++import test_inline_vector_borrows as borrowed_vectors
++
++TYPES='struct Point{x:Int}struct Pair{a:Point,b:Point}struct View{target:&Point}'
++SETUP='let mut pair=Pair{a:Point{x:3},b:Point{x:7}};let mut p=pool<Vector<View>>(1);let mut v=p.new();'
++
++class InlineVectorNominalTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_whole_target_extracted_reference(self):
++        source=Path('validation/inline-vector-nominal.crust').read_text()
++        self.assertEqual(self.run_source(source).stdout,'7\n9\n')
++        for action in ('drop(->point);','point.x=20;'):
++            self.refused(source.replace('print(target.x);',action+'print(target.x);'),'emprunt|réserv|référenc')
++
++    def test_interior_target_copy_and_remove(self):
++        source=TYPES+'fn main(){'+SETUP+'''v.push(->View{target:&pair.b});
++            let a=copy(v[0]);let b=<-v.remove(0);drop(->v);
++            let first=a.target;let second=b.target;drop(->a);drop(->b);
++            pair.a.x=11;print(first.x);print(second.x);pair.b.x=13;print(pair.b.x);}'''
++        self.assertEqual(self.run_source(source).stdout,'7\n7\n13\n')
++        for action in ('pair.b.x=20;','drop(->pair);'):
++            self.refused(source.replace('print(second.x);',action+'print(second.x);'),'emprunt|réserv|référenc')
++
++    def test_mutable_reborrow_and_copy_rejection(self):
++        source=TYPES.replace('target:&Point','target:&mut Point')+'fn main(){'+SETUP+'''
++            v.push(->View{target:&mut pair.b});let mut out=<-v.remove(0);drop(->v);
++            let mut target=&mut *out.target;pair.a.x=11;target.x=19;print(target.x);
++            drop(->out);print(pair.b.x);}'''
++        self.assertEqual(self.run_source(source).stdout,'19\n19\n')
++        self.refused(source.replace('let mut out=<-v.remove(0);','let mut out=copy(v[0]);'),'non copiable|copie')
++        for action in ('pair.b.x=20;','drop(->out);'):
++            self.refused(source.replace('target.x=19;',action+'target.x=19;'),'emprunt|réserv|référenc')
++
++    def test_injected_insert_copy_and_remove_contracts(self):
++        helpers='''fn fill(v:&mut Vector<View>,p:&Point){v.push(->View{target:p});}
++            fn read(v:&Vector<View>)-><-View{return <-copy(v[0]);}
++            fn take(v:&mut Vector<View>)-><-View{return <-v.remove(0);}
++            fn relay(v:&mut Vector<View>)-><-View{return <-take(&mut *v);}'''
++        source=TYPES+helpers+'fn main(){'+SETUP+'''fill(&mut v,&pair.b);
++            let a=read(&v);let b=relay(&mut v);drop(->v);let first=a.target;let second=b.target;
++            drop(->a);drop(->b);print(first.x);print(second.x);}'''
++        self.assertEqual(self.run_source(source).stdout,'7\n7\n')
++        self.refused(source.replace('print(second.x);','drop(->pair);print(second.x);'),'emprunt|réserv|référenc')
++
++    def test_nested_carrier_and_child_target(self):
++        types=TYPES+'struct Outer{tag:Int,view:View}'
++        source=types+'fn main(){'+SETUP.replace('Vector<View>','Vector<Outer>')+'''
++            {let item=Outer{tag:5,view:View{target:&pair.b}};v.push(->item);}
++            let out=<-v.remove(0);drop(->v);let target=out.view.target;print(out.tag);
++            drop(->out);print(target.x);}'''
++        self.assertEqual(self.run_source(source).stdout,'5\n7\n')
++        self.refused(source.replace('{let item=', '{print(pair.b.x);let local=Point{x:9};let item=').replace(
++            'target:&pair.b','target:&local'),'durable|survit|scope|emprunt actif')
++
++class InlineVectorAsyncNominalTests(InlineVectorNominalTests):
++    def run_source(self, source):
++        return harness.SelectSourceTests.run_source(self,borrowed_vectors.InlineVectorAsyncBorrowTests.async_source(source))
++    def refused(self, source, diagnostic):
++        return harness.SelectSourceTests.refused(self,borrowed_vectors.InlineVectorAsyncBorrowTests.async_source(source),diagnostic)
++
++class InlineVectorNominalCaptureTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_capture_and_join_preserve_interior_target(self):
++        helpers='''async fn take(mut v:->A<Vector<View>>)-><-View{
++            yield;let r=<-v.remove(0);return <-r;}'''
++        source=TYPES+helpers+'fn main(){'+SETUP+'''v.push(->View{target:&pair.b});
++            let task=take(->v);let h=runtime::spawn(->task);match h.join(){
++                Ok(r)=>{let target=r.target;drop(->r);print(target.x);},Err(_)=>{print(99);}}
++            pair.b.x=19;print(pair.b.x);let again=p.new();print(again.len());}'''
++        self.assertEqual(self.run_source(source).stdout,'7\n19\n0\n')
++        for marker in ('let h=', 'print(target.x);'):
++            self.refused(source.replace('pair.b.x=19;print(pair.b.x);','').replace(
++                marker,'drop(->pair);'+marker),'emprunt|réserv|référenc|captur|utilisable')
++
++if __name__=='__main__':unittest.main()

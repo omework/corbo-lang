@@ -1,0 +1,32 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1468,6 +1468,18 @@
+         return selected
+ 
+     def prepare_field_changes(summary, callee_parameters, argument_loans, line):
++        def projected_type(typ, path):
++            remaining = iter(path)
++            for component in remaining:
++                if typ in enum_layouts:
++                    layout = enum_layouts[typ].get(component, ())
++                    component = next(remaining, None)
++                else:
++                    layout = struct_layouts.get(typ, ())
++                child = dict(layout).get(component, '')
++                typ = child[2:-1] if child.startswith('A<') else None
++            return typ
++
+         field_changes = []
+         for index, changes in summary.structure_fields:
+             typ = callee_parameters[index][2]
+@@ -1477,9 +1489,7 @@
+                 if root in received_refs:
+                     continue
+                 holder_type = reference_types.get(root, collection_types.get(root))
+-                for component in path:
+-                    child = dict(struct_layouts.get(holder_type, ())).get(component, '')
+-                    holder_type = child[2:-1] if child.startswith('A<') else None
++                holder_type = projected_type(holder_type, path)
+                 if not (parameter_modes.get(root) == 'mut' or references.get(root) == 'owned' and root in mutable) or holder_type != typ:
+                     fail(line,'prototype : dépendances de champs async exigent un porteur injecté')
+                 holders.append((root, path))

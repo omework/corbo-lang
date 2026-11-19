@@ -1,0 +1,92 @@
+--- before/constraints.py
++++ constraints.py
+@@ -1,4 +1,6 @@
+ """Infer ordered source equality/disjointness obligations independently of calls."""
++
++from capture_paths import result_capture_selector, capture_index, capture_slots
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+ from utf8_syntax import ASYNC_VALUE_RESULT_FAMILIES
+@@ -239,7 +241,7 @@
+         from async_lowering import utf8_result_parameters
+         definition = self.analyzer.async_functions[value.typ]
+         parameters = definition.args[1]
+-        captures = tuple((f'{"mut" if parameters[int(key)][1] in ("mut", "array_mut", *SHARED_VECTOR_SLICE_MODES) else "ref"}.{key}', targets)
++        captures = tuple((f'{"mut" if parameters[capture_index(key)][1] in ("mut", "array_mut", *SHARED_VECTOR_SLICE_MODES) else "ref"}.{key}', targets)
+                          for key, targets in value.fields)
+         fields = tuple((key.partition('.')[2], frozenset(targets))
+                        for key, targets in canonical_captures(captures, parameters))
+@@ -248,7 +250,7 @@
+         if definition.args[2][0] in ASYNC_CAPTURE_VIEW_MODES:
+             indexes = utf8_result_parameters(definition, self.analyzer.async_functions,
+                                             sync_result_contract=self.analyzer.sync_result_contract)
+-            returned = frozenset(asset for key, assets in value.fields if int(key) in indexes for asset in assets)
++            returned = frozenset(asset for key, assets in value.fields if capture_index(key) in indexes for asset in assets)
+             fields += (('4', returned),)
+         return replace(value, typ=public, fields=fields)
+ 
+@@ -364,17 +366,18 @@
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
+                 borrowed = getattr(self.analyzer.async_functions[typ], 'public_result_borrows', ())
+                 for position, (_, capture, capture_type) in enumerate(self.analyzer.async_functions[typ].args[1]):
+-                    owned_borrows = capture in ('owned', 'join_owned', 'join_nested') and any(
+-                        reference_type(declared) for members in self.analyzer.enums.get(capture_type, {}).values()
+-                        for _, declared in members)
++                    owned_borrows = [f'{arm}.{field}'
++                        for arm, members in self.analyzer.enums.get(capture_type, {}).items()
++                        for field, declared in members if reference_type(declared)] if capture in ('owned', 'join_owned', 'join_nested') else []
+                     if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES) or position in returned or owned_borrows:
+                         kind = 'task_borrow_parameter' if capture in ('ref', 'mut', 'array_ref', 'array_mut') or owned_borrows else 'task_utf8_parameter'
+-                        asset = Asset((kind, index, position), Source(kind, index, str(position)))
+-                        history[asset] = frozenset()
+-                        captures.append((str(position), frozenset({asset})))
++                        for selector in ([f'{position}/{path}' for path in owned_borrows] or [str(position)]):
++                            asset = Asset((kind, index, selector), Source(kind, index, selector))
++                            history[asset] = frozenset()
++                            captures.append((selector, frozenset({asset})))
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+                 reference_assets = frozenset(asset for position, targets in captures
+-                                             if int(position) in borrowed for asset in targets)
++                                             if capture_index(position) in borrowed for asset in targets)
+                 definition = self.analyzer.async_functions[typ]
+                 if definition.args[2][0] in ('ref', 'mut') and not borrowed:
+                     asset = Asset(('task_reference_result_parameter', index),
+@@ -771,7 +774,8 @@
+                     fields = dict(execution.task_result_fields)
+                     for field, targets in borrowed_result_fields(definition):
+                         fields[field] = frozenset(asset for target in targets
+-                            for asset in dict(execution.fields).get(str(target.parameter), ()))
++                            for _, assets in capture_slots(execution.fields, result_capture_selector(target))
++                            for asset in assets)
+                     return paths, Value(kind, definition.args[2][1], execution.task_result_assets, tuple(fields.items()))
+                 if (plain := PLAIN_RETURN_JOINS.get(definition.args[2])) is not None:
+                     return paths, Value(plain, PLAIN_JOIN_TYPES[plain])
+@@ -1496,6 +1500,10 @@
+                                  for position, ((_, mode, _), value) in enumerate(zip(params, actuals))
+                                  if (mode in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES)
+                                      or position in returned) and isinstance(value, Value))
++                captures += tuple((f'{position}/{path}', targets)
++                    for position, ((_, mode, _), value) in enumerate(zip(params, actuals))
++                    if mode in ('owned', 'join_owned', 'join_nested') and isinstance(value, Value)
++                    for path, targets in value.fields)
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+                 self.touch_assets(reservations, paths['next'], line)
+                 indexes = owned_result_parameters(catalog[name], catalog, sync_result=self.analyzer.results.get)
+@@ -1851,7 +1859,7 @@
+                 definition = self.analyzer.async_functions[result.typ]
+                 returned = getattr(definition, 'public_result_borrows', ())
+                 reference_assets = frozenset(asset for position, targets in captures
+-                                             if int(position) in returned for asset in targets)
++                                             if capture_index(position) in returned for asset in targets)
+                 if definition.args[2][0] in ('ref', 'mut') and not returned:
+                     from async_lowering import borrowed_result_paths
+                     paths_to_result = borrowed_result_paths(
+@@ -1860,7 +1868,7 @@
+                     retained = set()
+                     for index, path in paths_to_result:
+                         for key, targets in result.borrowed_fields:
+-                            if int(key.partition('.')[2]) != index:
++                            if capture_index(key.partition('.')[2]) != index:
+                                 continue
+                             for target in targets:
+                                 actual = actuals[target.parameter]

@@ -1,0 +1,19 @@
+async fn operation() -> i64 {
+    42
+}
+
+async fn calculate() -> i64 {
+    let execution = runtime::spawn_blocking(operation());
+    match execution.await {
+        Ok(value) => { value },
+        Err(error) => { drop(error); 0 },
+    }
+}
+
+fn main() {
+    let execution = runtime::spawn(calculate());
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(error) => { drop(error); print(0); },
+    }
+}

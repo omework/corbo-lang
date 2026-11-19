@@ -1,0 +1,26 @@
+--- before/crust.py
++++ crust.py
+@@ -8161,6 +8161,9 @@
+         return frozenset().union(*groups) if groups and all(groups) else frozenset()
+ 
+     def resolve_task_variants(self, summary, params, bindings):
++        known = dict(summary.task_result_shapes).get('')
++        if known:
++            return known
+         definition = self.async_definitions[summary.typ][0]
+         output = definition.args[2][1]
+         all_variants = frozenset(self.enums.get(output, {}))
+@@ -11411,8 +11414,12 @@
+             inherited = self.inherited_async_storage(symbols, params, bindings)
+             root = next((record for record in inherited if not record.path), None)
+             sources, origins = self.resolve_async_sources(symbols, params, bindings, fresh_origins)
++            inherited_only = all(symbol.kind in ('allocation_parameter', 'allocation_field_parameter',
++                                                 'task_result_parameter', 'task_result_field_parameter')
++                                 for symbol in symbols)
+             fields[path] = AsyncFieldStorage(path, sources, origins,
+-                                             root.variants if root else frozenset(),
++                                             dict(summary.task_result_shapes).get(path) or
++                                             (root.variants if root and inherited_only else frozenset()),
+                                              root.recursive_sources if root else ())
+             for record in inherited:
+                 if record.path:

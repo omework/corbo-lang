@@ -1,0 +1,52 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13,7 +13,7 @@
+ from exchange_join_types import (
+     EXCHANGE_JOIN_TYPES, exchange_join_mode, EXCHANGE_JOIN_CTYPES, EXCHANGE_JOIN_CELLS,
+     EXCHANGE_JOIN_DEPTHS, exchange_type_mode, exchange_inner_signature, exchange_is_try_push,
+-    exchange_cleanup, exchange_join_layouts,
++    exchange_cleanup, exchange_join_layouts, exchange_payload_type,
+ )
+ from capture_paths import result_capture_selector, capture_index
+ from structure_views import field_kind, field_size
+@@ -81,7 +81,7 @@
+ 
+ def join_allocation_signature(typ):
+     if (mode := exchange_type_mode(typ)) is not None:
+-        return mode, 'Int', 'pool'
++        return mode, exchange_payload_type(mode), 'pool'
+     if (mode := option_type_mode(typ)) is not None:
+         return mode, option_payload_type(mode), 'pool'
+     return owned_join_signature(typ)
+@@ -593,9 +593,6 @@
+                 body = self.block()
+         finally:
+             self.async_body = previous
+-        if asynchronous and any(mode == 'buffered_handle_exchange' and exchange_element(typ) != 'Int'
+-                                for mode, typ in (result, *((mode, typ) for _, mode, typ in params))):
+-            raise Error('prototype : résultats typés de replace/try_push dans une signature async non raccordés')
+         if asynchronous and (result[0] == 'buffered_handle_exchange' or result[0] in EXCHANGE_JOIN_TYPES):
+             exchange_join_mode(result[1] if result[0] == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[result[0]])
+         if asynchronous and (result[0] == 'handle_option' or result[0] in OPTION_JOIN_TYPES):
+@@ -2759,9 +2756,9 @@
+         variants = summary.fresh_variants | frozenset(
+             arm for candidate in summary.candidates if candidate.kind == 'parameter'
+             for arm in bindings[params[candidate.parameter][0]].alloc.variants)
+-        # A homogeneous vector records element provenance, not an arm-specific
+-        # layout. Its extracted value can have any arm of the declared type.
+-        if any(candidate.kind == 'vector_element' for candidate in summary.candidates):
++        # Vector elements and exchange payloads record provenance without an
++        # arm-specific layout. Their value can have any arm of the type.
++        if any(candidate.kind in ('vector_element', 'exchange_parameter') for candidate in summary.candidates):
+             variants |= frozenset(self.enums.get(summary.typ, {}))
+         inherited_fields = {}
+         for candidate in summary.candidates:
+@@ -8341,6 +8338,8 @@
+         storage = 'pool' if optional else storage
+         if option_mode:
+             typ = option_payload_type(option_mode)
++        elif exchange:
++            typ = exchange_payload_type(exchange)
+         cell = f'{name}.{EXCHANGE_JOIN_CELLS[exchange]}' if exchange else f'{name}.{OPTION_JOIN_CELLS[option_mode]}' if optional else f'{name}.{OWNED_JOIN_CELLS[owned_mode]}'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources

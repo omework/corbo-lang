@@ -1,0 +1,15 @@
+struct View{data:&Int}
+async fn left(v:&mut View,n:&Int,p:&mut Pool<Int>)-><-Int{
+ v.data=&*n;let x=p.new(7);yield;return <-x;
+}
+async fn right(p:&mut Pool<Int>)-><-Int{let x=p.new(9);return <-x;}
+async fn work(v:&mut View,n:&Int,p:&mut Pool<Int>,q:&mut Pool<Int>)->Int{
+ let mut s=runtime::select(->left(v,n,p),->right(q));
+ let x=s.await;drop(->s);return *x;
+}
+fn main(){let mut data=pool<Int>(2);let a=data.new(1);let b=data.new(2);
+ let mut p=pool<Int>(1);let mut q=pool<Int>(1);let mut v=View{data:&a};
+ let h=runtime::spawn(->work(&mut v,&b,&mut p,&mut q));
+ match h.join(){Ok(r)=>{print(r);},Err(_)=>{}}print(*v.data);
+ let reused=p.new(17);print(reused);
+}

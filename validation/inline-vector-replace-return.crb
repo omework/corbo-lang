@@ -1,0 +1,15 @@
+fn replace(v:&mut Vector<Point>)-><-Result<Point,Point>{return <-v.replace(0,->Point{x:9});}
+struct Point { x: Int }
+fn main() {
+    let mut points = pool<Vector<Point>>(1);
+    let mut values = points.new();
+    values.push(->Point { x: 7 });
+    let result = replace(&mut values);
+    match (->result) {
+        Ok(previous) => { print(previous.x); drop(->previous); },
+        Err(incoming) => { print(incoming.x); drop(->incoming); }
+    }
+    let current = <-values.remove(0);
+    drop(->values);
+    print(current.x);
+}

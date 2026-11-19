@@ -1,0 +1,74 @@
+test_mutate_content_without_replacing_handle (test_async_handle_vector_access.AsyncHandleVectorAccessTests.test_mutate_content_without_replacing_handle) ... FAIL
+test_out_of_bounds_precedes_rhs_effect (test_async_handle_vector_access.AsyncHandleVectorAccessTests.test_out_of_bounds_precedes_rhs_effect) ... FAIL
+test_read_content_after_suspension (test_async_handle_vector_access.AsyncHandleVectorAccessTests.test_read_content_after_suspension) ... ok
+test_suspended_index_and_rhs (test_async_handle_vector_access.AsyncHandleVectorAccessTests.test_suspended_index_and_rhs) ... ok
+
+======================================================================
+FAIL: test_mutate_content_without_replacing_handle (test_async_handle_vector_access.AsyncHandleVectorAccessTests.test_mutate_content_without_replacing_handle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16898, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14979, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3201, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10419, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12009, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13448, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13701, in statements
+    kind, value, _ = self.expression(args[0], scope, 'print')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9517, in expression
+    result = self.array_expression(expr, scope, source_name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 7128, in array_expression
+    value, typ, loan = self.array_place(expr, scope, label)
+                       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6148, in array_place
+    loan = self.stored_array_projection(expr[1], scope, label)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6336, in stored_array_projection
+    owner, value, typ, _, positions = place or self.stored_array_place(expr, scope, label)
+                                               ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6282, in stored_array_place
+    self.fail('un tableau de références est attendu')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1991, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 12: un tableau de références est attendu
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_handle_vector_access.py", line 23, in test_mutate_content_without_replacing_handle
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 12: un tableau de références est attendu
+
+======================================================================
+FAIL: test_out_of_bounds_precedes_rhs_effect (test_async_handle_vector_access.AsyncHandleVectorAccessTests.test_out_of_bounds_precedes_rhs_effect)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_handle_vector_access.py", line 44, in test_out_of_bounds_precedes_rhs_effect
+    run=self.run_c_oracle(compile_source(source),expected_error='index')
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12422, in run_c_oracle
+    self.assertIn(expected_error, run.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'index' not found in 'indice de Vector hors limites\n'
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.353s
+
+FAILED (failures=2)

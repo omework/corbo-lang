@@ -1,0 +1,15 @@
+#(datastack: size=4M, region_stack_size=4M, region_size=64K)
+use std::Vector;
+
+fn main() {
+    let mut vectors = pool<Vector<i64>>(1);
+    #(stack_region: max_size=64K, count=1) #(free_pages) {
+        let mut values = vectors.new();
+        let mut number: i64 = 0;
+        while number < 3 {
+            values.push(copy(number));
+            number += 1;
+        }
+        print(values.len());
+    }
+}

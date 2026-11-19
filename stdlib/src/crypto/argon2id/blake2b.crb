@@ -1,0 +1,196 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! BLAKE2b hashing and word operations used by Argon2id.
+
+// Unkeyed BLAKE2b for RFC 9106. Input lengths are limited by Argon2 to a
+// sum of 32-bit field lengths, so the high 64 bits of the counter are zero.
+/// Mask for the low 32 bits used in BlaMka arithmetic.
+const ARGON_LOW_WORD: u64 = 0xffffffff;
+/// Largest 64-bit word used to express modular addition.
+const ARGON_WORD_MASK: u64 = 0xffffffffffffffff;
+
+/// Holds BLAKE2b chaining words, the pending block and byte counters.
+struct Blake2b {
+    /// Streaming handshake transcript hash; record headers are not appended.
+    hash: [u64; 8],
+    /// Pending BLAKE2b message words for the next compression.
+    message: [u64; 16],
+    /// Total input bytes incorporated by this hash instance.
+    bytes: u64,
+    /// Number of buffered message bytes.
+    used: u64,
+}
+
+/// Returns the BLAKE2b initialization vector.
+fn blake_iv(parameter: u64) -> [u64; 8] {
+    let first = 0x6a09e667f3bcc908 ^ parameter;
+    let iv: [u64; 8] = [first, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
+     0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179];
+    iv
+}
+
+/// Adds two words modulo 2^64.
+fn argon_add(a: u64, b: u64) -> u64 {
+    let low = (a & ARGON_LOW_WORD) + (b & ARGON_LOW_WORD);
+    let high = (a >> 32) + (b >> 32) + (low >> 32);
+    ((high & ARGON_LOW_WORD) << 32) | (low & ARGON_LOW_WORD)
+}
+
+/// Rotates a 64-bit word for the Argon2 or BLAKE2b mixing function.
+fn argon_rot(word: u64, count: u64) -> u64 {
+    let shift = 64 - count;
+    (word >> count) | ((word & (ARGON_WORD_MASK >> shift)) << shift)
+}
+
+/// Extracts a little-endian octet from a 64-bit word.
+fn argon_octet(word: u64, offset: u64) -> u8 {
+    let mut value = word >> offset;
+    let mut byte: u8 = 0;
+    let mut bit: u64 = 0;
+    while bit < 8 {
+        let low: u8 = if (value & 1) == 0 { 0 } else { 1 };
+        byte = byte | (low << bit);
+        value = value >> 1;
+        bit = bit + 1;
+    }
+    byte
+}
+
+/// Applies the output length parameter to the initial BLAKE2b chaining value.
+fn blake_seed(state: &mut Blake2b, size: u64) {
+    let hash = blake_iv(0x01010000 | size);
+    let mut i: u64 = 0;
+    while i < 8 {
+        let word = &mut (*state).hash[i];
+        *word = hash[i];
+        i = i + 1;
+    }
+}
+
+/// Creates BLAKE2b state for the requested digest length.
+fn blake_new(size: u64) -> Blake2b {
+    let mut state = Blake2b { hash: [0; 8], message: [0; 16], bytes: 0, used: 0 };
+    blake_seed(&mut state, size);
+    state
+}
+
+/// Applies one BLAKE2b G mixing operation to four state words.
+fn blake_mix(v: &mut [u64; 16], a: u64, b: u64, c: u64, d: u64, x: u64, y: u64) {
+    let va = argon_add(argon_add((*v)[a], (*v)[b]), x);
+    let vd = argon_rot((*v)[d] ^ va, 32);
+    let vc = argon_add((*v)[c], copy(vd));
+    let vb = argon_rot((*v)[b] ^ vc, 24);
+    let wa = argon_add(argon_add(va, copy(vb)), y);
+    let wd = argon_rot(vd ^ wa, 16);
+    let wc = argon_add(vc, copy(wd));
+    let wb = argon_rot(vb ^ wc, 63);
+    let aa = &mut (*v)[a];
+    *aa = wa;
+    let bb = &mut (*v)[b];
+    *bb = wb;
+    let cc = &mut (*v)[c];
+    *cc = wc;
+    let dd = &mut (*v)[d];
+    *dd = wd;
+}
+
+/// Compresses a BLAKE2b block with its byte counter and final-block flag.
+fn blake_compress(state: &mut Blake2b, last: bool) {
+    let schedule: [u64; 160] = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
+        11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4,
+        7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8,
+        9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13,
+        2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9,
+        12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11,
+        13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10,
+        6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5,
+        10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0,
+    ];
+    let iv = blake_iv(0);
+    let mut words: [u64; 16] = [0; 16];
+    let mut i: u64 = 0;
+    while i < 8 {
+        words[i] = (*state).hash[i];
+        words[i + 8] = iv[i];
+        i = i + 1;
+    }
+    words[12] = words[12] ^ (*state).bytes;
+    if last { words[14] = words[14] ^ ARGON_WORD_MASK; }
+    let mut round: u64 = 0;
+    while round < 12 {
+        let base = (round % 10) * 16;
+        let mut column: u64 = 0;
+        while column < 4 {
+            let j = base + column * 2;
+            blake_mix(&mut words, copy(column), column + 4, column + 8, column + 12,
+                (*state).message[schedule[j]], (*state).message[schedule[j + 1]]);
+            column = column + 1;
+        }
+        column = 0;
+        while column < 4 {
+            let j = base + 8 + column * 2;
+            blake_mix(&mut words, copy(column), (column + 1) % 4 + 4, (column + 2) % 4 + 8,
+                (column + 3) % 4 + 12, (*state).message[schedule[j]], (*state).message[schedule[j + 1]]);
+            column = column + 1;
+        }
+        round = round + 1;
+    }
+    i = 0;
+    while i < 8 {
+        let word = &mut (*state).hash[i];
+        *word = *word ^ words[i] ^ words[i + 8];
+        i = i + 1;
+    }
+}
+
+/// Appends one byte to the pending BLAKE2b input.
+fn blake_feed(state: &mut Blake2b, octet: u64) {
+    let mut position = (*state).used;
+    if position == 128 {
+        blake_compress(&mut *state, false);
+        let mut i: u64 = 0;
+        while i < 16 {
+            let word = &mut (*state).message[i];
+            *word = 0;
+            i = i + 1;
+        }
+        position = 0;
+    }
+    let word = &mut (*state).message[position / 8];
+    *word = *word | (octet << ((position % 8) * 8));
+    let used = &mut (*state).used;
+    *used = position + 1;
+    let bytes = &mut (*state).bytes;
+    *bytes = *bytes + 1;
+}
+
+/// Appends a 32-bit value in little-endian order.
+fn blake_le32(state: &mut Blake2b, value: u64) {
+    let mut i: u64 = 0;
+    while i < 32 {
+        blake_feed(&mut *state, (value >> i) & 255);
+        i = i + 8;
+    }
+}
+
+/// Appends a byte slice to the BLAKE2b input.
+fn blake_update(state: &mut Blake2b, input: &[u8]) {
+    let size = input.len() as u64;
+    let mut i: u64 = 0;
+    while i < size {
+        blake_feed(&mut *state, input[i] as u64);
+        i = i + 1;
+    }
+}
+
+/// Finalizes BLAKE2b and writes the requested prefix of the digest.
+fn blake_finish(state: &mut Blake2b, output: &mut [u8]) {
+    blake_compress(&mut *state, true);
+    let size = output.len() as u64;
+    let mut i: u64 = 0;
+    while i < size {
+        output[i] = argon_octet((*state).hash[i / 8], (i % 8) * 8);
+        i = i + 1;
+    }
+}

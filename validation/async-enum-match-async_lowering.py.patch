@@ -1,0 +1,300 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -411,7 +411,7 @@
+     completion = getattr(node, 'field_effect_summary', None)
+     completed_targets = completion.completion_result.reference_targets if completion and completion.complete else ()
+     if completion and completion.complete and (completion.structure_fields or completed_targets and all(
+-            target.kind in ('parameter', 'exclusive_join_parameter', 'detached_field_parameter',
++            target.kind in ('parameter', 'exclusive_join_parameter', 'field_parameter', 'detached_field_parameter',
+                             'inline_field_parameter', 'indirect_field_parameter')
+             for target in completed_targets)):
+         # The completed contract follows stored references through local
+@@ -421,7 +421,7 @@
+         for target in completion.completion_result.reference_targets:
+             if target.kind in ('parameter', 'exclusive_join_parameter'):
+                 path = ()
+-            elif target.kind in ('detached_field_parameter', 'inline_field_parameter', 'indirect_field_parameter'):
++            elif target.kind in ('field_parameter', 'detached_field_parameter', 'inline_field_parameter', 'indirect_field_parameter'):
+                 path = tuple(target.field.lstrip('.').split('.'))
+             else:
+                 fail(node.line, 'prototype : provenance du résultat de terminaison non raccordée')
+@@ -2802,6 +2802,8 @@
+         return isinstance(body, list) and body and body[-1].op == '<-' and not body[-1].terminated
+ 
+     def has_transfer_result(expr):
++        if expr[0] == 'match_expr':
++            return any(ends_in_transfer(arm[3]) for arm in expr[1].args[1])
+         if expr[0] == 'value_match' and expr[1] and expr[1][-1].op == 'if_yield':
+             expr = expr[1][-1].args[0]
+         return expr[0] == 'if_expr' and any(ends_in_transfer(arm) for arm in expr[2:])
+@@ -2860,12 +2862,34 @@
+         if expr[0] in ('ref', 'mut') and expr[1] in fields and references.get(expr[1]) in (None, 'owned'):
+             typ = collection_types.get(expr[1], 'Bool' if expr[1] in boolean_bindings else
+                                        SCALAR_TYPES.get(inline_scalar_mode(expr[1])))
+-            if typ in ('Int', 'u8', *reference_structs) and expr[1] not in arrays:
++            if typ in ('Int', 'u8', *reference_aggregates) and expr[1] not in arrays:
+                 return expr[0], typ
+         if bindings is None:
+             bindings = {name: (mode, reference_types.get(name, 'Int'))
+                         for name, mode in references.items()
+                         if mode in ('ref', 'mut') and name not in collection_types}
++        if expr[0] == 'match_expr':
++            match = expr[1]
++            holder, arms = match.args
++            typ = reference_types.get(holder, collection_types.get(holder))
++            for _, variant, pattern, body in arms:
++                local = bindings.copy()
++                for field, alias in pattern:
++                    declared = dict(enum_layouts.get(typ, {}).get(variant, ())).get(field)
++                    if declared in ('&Int', '&mut Int'):
++                        local[alias] = ('mut' if match.mutable and declared == '&mut Int' else 'ref', 'Int')
++                    elif declared and declared.startswith('A<'):
++                        local[alias] = ('mut' if match.mutable else 'ref', declared[2:-1])
++                    else:
++                        local[alias] = None
++                for statement in body:
++                    if statement.op == 'var':
++                        local[statement.args[0]] = reference_shape(statement.args[1], local)
++                    elif statement.op in ('if_yield', 'match_yield'):
++                        value = ('name', statement.args[0]) if statement.op == 'match_yield' else statement.args[0]
++                        if shape := reference_shape(value, local):
++                            return shape
++            return None
+         if expr[0] == 'loop_expr':
+             for value, _, definitions in reference_loop_exits(expr[1].args[0]):
+                 local = bindings.copy()
+@@ -2929,6 +2953,8 @@
+         return retained
+ 
+     def reference_value(expr, line, *, following=None):
++        if expr[0] == 'match_expr':
++            return match_enum(expr[1], valued=True, following=following, boolean=None, reference_result=True)
+         if sync_signature(expr) in reference_sync_types:
+             return sync_call(expr, line, following=following, borrow=True)
+         if expr[0] in ('ref', 'mut') and (shape := reference_shape(expr)) is not None:
+@@ -3950,6 +3976,8 @@
+                 or expr[0] == 'await' and await_signature(expr) == ('scalar', 'Bool'))
+ 
+     def boolean_value(expr, line, *, following=None):
++        if expr[0] == 'match_expr':
++            return match_enum(expr[1], valued=True, following=following, boolean=True)
+         if sync_signature(expr) is not None:
+             return sync_call(expr, line, ('bool', 'bool'), following=following)[0]
+         if expr[0] == 'bool':
+@@ -4394,6 +4422,8 @@
+ 
+     def emit_transferred_control(expr, line, *, following=None):
+         place_local_result(expr)
++        if expr[0] == 'match_expr':
++            return match_enum(expr[1], valued=True, transfer_result=True, following=following)
+         if expr[0] == 'value_match':
+             return match_async_result(expr[1], line, transfer_result=True, following=following)
+         _, condition, yes, no = expr
+@@ -4415,7 +4445,7 @@
+             return 'execution', spawn_task(expr[1], line,
+                 blocking=len(expr) > 2 and expr[2] == 'blocking',
+                 native=len(expr) > 2 and expr[2] == 'native')
+-        if expr[0] in ('if_expr', 'value_match'):
++        if expr[0] in ('if_expr', 'value_match', 'match_expr'):
+             return emit_transferred_control(expr, line, following=following)
+         if expr[0] == 'loop_expr':
+             return emit_loop(expr[1].args[0], line, valued=True, following=following)
+@@ -4800,8 +4830,40 @@
+         finally:
+             region_limits.pop()
+ 
++    def match_enum(statement, *, valued, following=None, boolean=False,
++                   transfer_result=False, reference_result=False):
++        holder, arms = statement.args
++        line = statement.line
++        typ = reference_types.get(holder, collection_types.get(holder))
++        layouts = enum_layouts.get(typ)
++        if layouts is None or holder not in fields:
++            fail(line, 'match async : enum requis')
++        if statement.consuming:
++            fail(line, 'prototype async : match consommant d’enum non raccordé')
++        if statement.mutable and not (references.get(holder) == 'mut'
++                or references.get(holder) == 'owned' and holder in mutable):
++            fail(line, 'match mutable : accès mutable au porteur requis')
++        seen = set()
++        for declared, variant, pattern, _ in arms:
++            if declared != typ or variant not in layouts or variant in seen:
++                fail(line, 'match : variante inconnue, incompatible ou dupliquée')
++            seen.add(variant)
++            names = [field for field, _ in pattern]
++            if len(set(names)) != len(names) or set(names) != dict(layouts[variant]).keys():
++                fail(line, 'match : fournir tous les champs sans doublon')
++        if seen != layouts.keys():
++            fail(line, 'match non exhaustif')
++        check_access(holder, line, write=statement.mutable)
++        cell = f'frame->{fields[holder]}'
++        tag = temporary('int')
++        steps.append(f'{tag} = {cell}->source->arm_tag;')
++        return emit_branches(tag, None, None, line, valued=valued, construct='match',
++            following=following, boolean=boolean, transfer_result=transfer_result,
++            reference_result=reference_result, enum_match=(statement, typ, cell))
++
+     def emit_branches(test, yes, no, line, *, valued, construct, join_payload=None,
+-                      export_name=None, transfer_result=False, following=None, boolean=False, reference_result=False):
++                      export_name=None, transfer_result=False, following=None, boolean=False, reference_result=False,
++                      enum_match=None):
+         for branch in (yes, no):
+             if isinstance(branch, list):
+                 place_local_assignments(branch)
+@@ -4817,8 +4879,15 @@
+         before = control_state()
+         had_result_loan = join_payload is not None and id(join_payload[3]) in active_loans
+         continuing = []
+-        steps.append('{' if no is None else f'if ({test}) {{')
+-        arms = (yes,) if no is None else (yes, no)
++        if enum_match:
++            match, enum_type, enum_cell = enum_match
++            arms = tuple([replace(n, op='if_yield', args=(('name', n.args[0]),))
++                          if n.op == 'match_yield' else n for n in arm[3]] for arm in match.args[1])
++            tags = tuple(list(enum_layouts[enum_type]).index(arm[1]) for arm in match.args[1])
++            steps.append(f'if ({test} == {tags[0]}) {{')
++        else:
++            steps.append('{' if no is None else f'if ({test}) {{')
++            arms = (yes,) if no is None else (yes, no)
+         exported = None
+         if following is not None:
+             lexical_tails.append((len(scopes) - 1, following))
+@@ -4831,6 +4900,43 @@
+             imports, returned_imports = set(), set()
+             local_refs = {}
+             scopes.append(({}, imports, returned_imports, arm_entry, local_refs))
++            if enum_match:
++                holder = match.args[0]
++                _, variant, pattern, _ = match.args[1][index]
++                layout = enum_layouts[enum_type][variant]
++                reservation = 'mut' if match.mutable or references.get(holder) == 'mut' else 'ref'
++                held = [(holder, reservation), *received_refs.get(holder, ())]
++                active_loans[id(held)] = held
++                local_refs['\0match:' + holder] = held, float('inf')
++                for field, alias in pattern:
++                    if alias == '_':
++                        continue
++                    field_index = next(i for i, (name, _) in enumerate(layout) if name == field)
++                    declared = layout[field_index][1]
++                    member = declare(alias, line)
++                    locals_in_arm.append(alias)
++                    offset = structure_offset(layout, field_index)
++                    if declared == 'Int':
++                        steps.append(f'frame->{member} = cell_load_int({enum_cell}, {offset});')
++                        continue
++                    owned = declared.startswith('A<')
++                    if declared not in ('&Int', '&mut Int') and not owned:
++                        fail(line, 'match async : type de champ non représentable')
++                    mode = 'mut' if match.mutable and (declared == '&mut Int' or owned) else 'ref'
++                    target_type = declared[2:-1] if owned else 'Int'
++                    references[alias] = mode
++                    reference_types[alias] = target_type
++                    if mode == 'mut':
++                        mutable.add(alias)
++                    path = (variant, field)
++                    loans = (project_field_loans(held, path) if owned else
++                             project_result_field_loans(held, enum_type, path))
++                    received_refs[alias] = loans
++                    active_loans[id(loans)] = loans
++                    track_result(alias, loans, body, -1)
++                    pointer = f'cell_load_ref({enum_cell}, {offset})'
++                    steps.append(f'frame->{member} = ' +
++                                 (f'&{pointer}->value' if target_type == 'Int' else pointer) + ';')
+             prefix_count = 0
+             for statement in body:
+                 if statement.op != '->':
+@@ -4958,7 +5064,6 @@
+             # If every path exits, emit it as control flow: it provides no
+             # value to this arm's receiver, but still exits the same loop.
+             if body and body[-1].op == 'if_yield' and branch_control_exit(body):
+-                from dataclasses import replace
+                 value = body[-1].args[0]
+                 if value[0] == 'if_expr':
+                     body = [*body[:-1], replace(body[-1], op='if', args=value[1:])]
+@@ -5005,6 +5110,8 @@
+                     elif statement.op == 'if':
+                         returned_in_branch = conditional(*statement.args, statement.line, valued=False,
+                                                          following=body[position + 1:])
++                    elif statement.op == 'match':
++                        returned_in_branch = match_enum(statement, valued=False, following=body[position + 1:])
+                     elif statement.op == 'assign':
+                         assign(*statement.args, statement.line, following=body[position + 1:])
+                     elif statement.op == 'field_store':
+@@ -5040,7 +5147,7 @@
+                         bind_scalar(statement, body[position + 1:], body, position)
+                         locals_in_arm.append(statement.args[0])
+                     else:
+-                        fail(statement.line, f'branche de {construct} async : instruction non prise en charge')
++                        fail(statement.line, f'branche de {construct} async : instruction {statement.op} non prise en charge')
+                 release_results(local_refs, before=len(body) - 1)
+                 if returned_in_branch:
+                     if terminal is not None:
+@@ -5186,17 +5293,20 @@
+                 utf8_view_loans.pop(name, None)
+                 mutable_utf8_bindings.discard(name)
+             if index + 1 < len(arms):
+-                steps.append('} else {')
++                steps.append(f'}} else if ({test} == {tags[index + 1]}) {{' if enum_match else '} else {')
+                 restore_control_state(before)
+             else:
+                 steps.append('}')
+         if following is not None:
+             lexical_tails.pop()
+-        if len(continuing) == 2 and continuing[0] != continuing[1]:
++        while len(continuing) > 1:
++            other = continuing.pop()
++            if continuing[0] == other:
++                continue
+             if construct == 'boucle':
+                 verify_utf8_backedge(loops[-1], continuing[0], line)
+             continuing[0] = merge_utf8_control_states(
+-                *continuing, line,
++                continuing[0], other, line,
+                 f'les branches de {construct} async doivent conserver les mêmes obligations de nettoyage')
+         if continuing:
+             restore_control_state(continuing[0])
+@@ -5397,7 +5507,7 @@
+         elif returns_ref:
+             if value[0] in ('name', 'ref', 'mut', 'reborrow') and value[1] in collection_types:
+                 fail(line, 'retour emprunté Int incompatible avec une collection')
+-            if value[0] in ('if_expr', 'scope', 'value_match', 'loop_expr') or sync_signature(value) in reference_sync_types:
++            if value[0] in ('if_expr', 'scope', 'value_match', 'match_expr', 'loop_expr') or sync_signature(value) in reference_sync_types:
+                 pointer, _, signature = reference_value(value, line, following=())
+                 if signature != result:
+                     fail(line, 'retour emprunté async : type ou mode incompatible')
+@@ -6112,6 +6222,8 @@
+         steps.append(f'{value_place(receiver)} = {value};')
+ 
+     def expression(expr, line, *, following=None):
++        if expr[0] == 'match_expr':
++            return match_enum(expr[1], valued=True, following=following)
+         if sync_signature(expr) is not None:
+             return sync_call(expr, line, ('scalar', 'Int'), following=following)[0]
+         op = expr[0]
+@@ -6263,6 +6375,8 @@
+         return f'(({ctype})({value}))', expr[2]
+ 
+     def infer_scalar_value(expr, line, *, following=None):
++        if expr[0] == 'match_expr':
++            return match_enum(expr[1], valued=True, following=following, boolean=None)
+         if sync_signature(expr) is not None:
+             value, typ = sync_call(expr, line, following=following)
+             if typ == 'Void':
+@@ -6657,6 +6771,8 @@
+             tails.append(tail)
+             local_refs = scopes[depth][4]
+             for name, (loans, _) in local_refs.items():
++                if name.startswith('\0match:'):
++                    continue  # The whole arm reserves its subject, even after the last field use.
+                 if utf8_only or name in mutable_utf8_bindings:
+                     continue
+                 if not any(mentions(tail, name) for tail in tails):
+@@ -6973,6 +7089,8 @@
+                 returned = emit_block(statement, body[index + 1:])
+             elif op == 'if':
+                 returned = conditional(*args, line, valued=False, following=body[index + 1:])
++            elif op == 'match':
++                returned = match_enum(statement, valued=False, following=body[index + 1:])
+             elif op in ('loop', 'while'):
+                 returned = emit_loop(args[0], line, following=body[index + 1:])
+             elif op in ('break', 'continue'):

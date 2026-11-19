@@ -1,0 +1,24 @@
+--- before/tests/run_sync_byte_mutations.py
++++ after/tests/run_sync_byte_mutations.py
+@@ -8,8 +8,8 @@
+ ROOT=Path(__file__).resolve().parents[1]
+ MUTATIONS=[
+  ('byte_argument_unprotected',
+-  'held = list(local_utf8_loans(argument, value))\n                    loans.extend(held)',
+-  'held = list(local_utf8_loans(argument, value))\n                    pass',
++  'held = list(local_utf8_loans(operand, value))\n                    loans.extend(held)',
++  'held = list(local_utf8_loans(operand, value))\n                    pass',
+   'test_prepared_source_through_suspended_argument_and_early_return'),
+  ('byte_return_alternative_lost', 'retained_views.extend(argument_loans[target.parameter])',
+   'if target.parameter == 0: retained_views.extend(argument_loans[target.parameter])',
+@@ -19,8 +19,8 @@
+   "steps.append(f'{value} = {prepared[0] if signature in view_sync_types and prepared else call};')\n        if signature in owned_sync_types:",
+   'test_conditional_result_and_unreturned_argument'),
+  ('byte_source_contract_ignored',
+-  "if (sync_contracts and isinstance(value, tuple) and value and value[0] == 'call'",
+-  "if (False and isinstance(value, tuple) and value and value[0] == 'call'",
++  "if (contract is not None and contract.result_type[0] in ASYNC_CAPTURE_VIEW_MODES",
++  "if (False and contract is not None and contract.result_type[0] in ASYNC_CAPTURE_VIEW_MODES",
+   'test_async_contract_drops_unreturned_source_after_join'),
+  ('local_byte_loan_lost',
+   "if expr[0] == 'ref' and expr[1] in byte_bindings:\n            return ((expr[1], 'ref'),)",

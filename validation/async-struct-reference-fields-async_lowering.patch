@@ -1,0 +1,107 @@
+--- async_lowering.py.before
++++ async_lowering.py
+@@ -861,9 +861,9 @@
+     scalar_sync_types = {('scalar', 'Int'): 'int', ('bool', 'bool'): 'int', ('byte', 'u8'): 'uint8_t',
+                          ('char', 'char'): 'CrustChar'}
+     reference_sync_types = {('ref', 'Int'): 'int *', ('mut', 'Int'): 'int *', ('mut', 'u8'): 'uint8_t *'}
+-    plain_structs = {typ: fields for typ, fields in struct_layouts.items()
+-                     if all(field_type == 'Int' for _, field_type in fields)}
+-    reference_sync_types.update({(mode, typ): 'Cell *' for typ in plain_structs for mode in ('ref', 'mut')})
++    reference_structs = {typ: fields for typ, fields in struct_layouts.items()
++                     if all(field_type in ('Int', '&Int', '&mut Int') for _, field_type in fields)}
++    reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
+     view_sync_types = {('byte_ref', 'u8'): 'const unsigned char *'}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+@@ -902,7 +902,7 @@
+         if expr[0] == 'method_call' and expr[1][0] == 'name':
+             receiver = expr[1][1]
+             typ = reference_types.get(receiver)
+-            if typ in plain_structs:
++            if typ in reference_structs:
+                 symbol = typ + '.' + expr[2]
+                 if symbol in sync_contracts:
+                     return ('call', symbol, [expr[1], *expr[3]])
+@@ -996,6 +996,8 @@
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
++        if contract.result.structure_fields:
++            fail(line, 'prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé')
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+         signature = contract.result_type
+@@ -1104,7 +1106,7 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>'))
+            and (mode, typ) not in pool_sync_types
+-           and not (mode in ('ref', 'mut') and typ in plain_structs)
++           and not (mode in ('ref', 'mut') and typ in reference_structs)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+            for _, mode, typ in parameters):
+         fail(node.line, 'prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis')
+@@ -3917,7 +3919,7 @@
+                 moving.update(returning)
+         departing = (mutable_slices | pool_alias_origins.keys()).intersection(local_names)
+         departing.update(name for name in local_names if name in received_refs
+-                         and reference_types.get(name) in plain_structs)
++                         and reference_types.get(name) in reference_structs)
+         task, returns_int, loans, nominal, returned_loans = value
+         if any(loan_root(target) in local_names and loan_root(target) not in departing for target, _ in loans):
+             fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')
+@@ -4144,7 +4146,7 @@
+     def value_place(name):
+         if name in pool_types:
+             fail(node.line, 'un pool ne fournit pas de valeur scalaire ou de pointeur vers un élément')
+-        if reference_types.get(name) in plain_structs:
++        if reference_types.get(name) in reference_structs:
+             fail(node.line, 'une structure ne fournit pas une valeur Int ; sélectionner un champ')
+         member = f'frame->{fields[name]}'
+         mode = references.get(name)
+@@ -4157,18 +4159,22 @@
+     def struct_field(place, line, *, write=False):
+         _, name, path = place
+         typ = reference_types.get(name)
+-        layout = plain_structs.get(typ)
++        layout = reference_structs.get(typ)
+         if layout is None:
+-            fail(line, 'projection async : référence de structure à champs Int requise')
++            fail(line, 'projection async : référence de structure à champs Int ou références Int requise')
+         if write and (references.get(name) != 'mut' or name in received_refs and name not in mutable):
+             fail(line, 'écriture de champ : une référence mutable est requise (let mut pour une liaison locale)')
+-        for index, (field, _) in enumerate(layout):
++        for index, (field, field_type) in enumerate(layout):
+             if field == path:
+-                return name, f'frame->{fields[name]}', f'{index} * sizeof(int)', tuple(path.split('.'))
++                offset = ' + '.join('sizeof(int)' if kind == 'Int' else 'sizeof(Cell *)'
++                                    for _, kind in layout[:index]) or '0'
++                return name, f'frame->{fields[name]}', offset, tuple(path.split('.')), field_type
+         fail(line, f"champ inconnu '{path}' dans {typ}")
+ 
+     def store_struct_field(place, rhs, line, *, following):
+-        name, cell, offset, path = struct_field(place, line, write=True)
++        name, cell, offset, path, typ = struct_field(place, line, write=True)
++        if typ != 'Int':
++            fail(line, 'prototype : remplacement de champ référence dans un état non raccordé')
+         value = expression(rhs, line, following=following)
+         saved = temporary('int')
+         steps.append(f'{saved} = {value};')
+@@ -4612,11 +4618,15 @@
+         if sync_signature(expr) is not None:
+             return sync_call(expr, line, ('scalar', 'Int'), following=following)[0]
+         op = expr[0]
+-        if op == 'field':
+-            name, cell, offset, path = struct_field(expr, line)
++        if op in ('field', 'field_deref'):
++            name, cell, offset, path, typ = struct_field(expr[1] if op == 'field_deref' else expr, line)
++            if (op == 'field') != (typ == 'Int'):
++                fail(line, 'lecture Int : déréférencer explicitement un champ référence')
+             check_access(name, line, path=path)
+             value = temporary('int')
+-            steps.append(f'{value} = cell_load_int({cell}, {offset});')
++            load = (f'cell_load_int({cell}, {offset})' if typ == 'Int'
++                    else f'cell_load_ref({cell}, {offset})->value')
++            steps.append(f'{value} = {load};')
+             return value
+         if (typ := vector_remove_type(expr)) is not None:
+             if typ != 'Int':

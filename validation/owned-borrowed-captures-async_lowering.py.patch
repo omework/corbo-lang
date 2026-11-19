@@ -1,0 +1,85 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -975,9 +975,8 @@
+     reference_structs = {typ: fields for typ, fields in struct_layouts.items()
+                      if all(field_type in ('Int', '&Int', '&mut Int') for _, field_type in fields)}
+     # Whole owned captures use the existing Cell graph and its destructor.
+-    # Admit finite structures without borrowed leaves; their nested allocation
+-    # sources are retained by the caller's task contract. Borrowed graphs need
+-    # a separate capture-loan summary and must not pass this capability check.
++    # Owned graphs retain their source pools. Direct borrowed fields additionally
++    # retain caller-side loans when the whole carrier moves into the task.
+     owned_structure_types = set()
+     owned_leaves = {'Int', 'String', 'Vector<Int>', 'Vector<u8>'}
+     while True:
+@@ -988,7 +987,7 @@
+         if additions <= owned_structure_types:
+             break
+         owned_structure_types.update(additions)
+-    owned_structures = {typ: struct_layouts[typ] for typ in owned_structure_types}
++    owned_structures = {typ: struct_layouts[typ] for typ in owned_structure_types} | reference_structs
+     pool_structures = owned_structures | reference_structs
+     reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+@@ -1056,6 +1055,17 @@
+         for key in list(active_loans):
+             if isinstance(key, tuple) and key[:2] == ('stored_field', holder):
+                 del active_loans[key]
++
++    def owned_capture_field_loans(value, typ):
++        holder = next((name for name, member in fields.items() if value == f'frame->{member}'), value)
++        result = {}
++        for field, declared in reference_structs.get(typ, ()):
++            if declared not in ('&Int', '&mut Int'):
++                continue
++            path = tuple(field.split('.'))
++            result['.' + field] = list(active_loans.get(('stored_field', value, path),
++                active_loans.get(('stored_field', holder, path), initial_stored_field_loans(holder, path))))
++        return result
+ 
+     def require_durable_storage(value, depth, line):
+         leaving = {name for scope in scopes[depth:] for name in scope[0] if name in local_pools}
+@@ -1526,6 +1536,8 @@
+                         fail(line, 'une valeur locale T ne peut pas devenir une allocation A<T>')
+                     if storage_of(value) & implicit_stacks:
+                         local_parameters.add(index)
++                    held = [loan for group in owned_capture_field_loans(value, typ).values() for loan in group]
++                    loans.extend(held)
+                 elif (mode, typ) in owned_join_sync_types:
+                     if argument[0] not in ('down', 'transfer'):
+                         fail(line, 'argument Result propriétaire : transfert -> explicite requis')
+@@ -1577,6 +1589,7 @@
+                 if mode == 'owned':
+                     prepared_owners.append(snapshot)
+                     steps.append(f'{value} = NULL;')
++                    clear_stored_fields(value)
+                 elif (mode, typ) in owned_join_sync_types:
+                     field = 'value.allocation' if mode == 'join_nested' else 'allocation'
+                     success = f'{snapshot}.status == 0' + (f' && {snapshot}.value.status == 0' if mode == 'join_nested' else '')
+@@ -1642,7 +1655,7 @@
+                             fail(line, 'projection du handle : structure prise en charge requise')
+                         held.extend(project_result_field_loans(argument_loans[target.parameter], typ,
+                                                               tuple(target.field.lstrip('.').split('.'))))
+-                    elif target.kind in ('parameter', 'utf8_parameter', 'string_parameter', 'vector_parameter'):
++                    elif target.kind in ('parameter', 'utf8_parameter', 'string_parameter', 'vector_parameter', 'owned_capture_field'):
+                         held.extend(argument_loans[target.parameter])
+                     else:
+                         fail(line, 'prototype : capture du handle synchrone sans paramètre direct')
+@@ -2108,6 +2121,8 @@
+                         for target, _ in loans[argument_loan_start:]):
+                     local_captures.add(index)
+                 if mode in ('owned', *JOIN_PAYLOADS):
++                    if mode == 'owned':
++                        loans.extend(loan for group in owned_capture_field_loans(value, typ).values() for loan in group)
+                     if storage_of(value) & implicit_stacks:
+                         if declaration.args[1][index][0] in declaration.handle_parameters:
+                             fail(line, 'capture A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
+@@ -2126,6 +2141,8 @@
+                 if mode == 'owned':
+                     if argument[0] == 'down':
+                         consumed.add(name)
++                        clear_stored_fields(name)
++                    clear_stored_fields(value)
+                     steps.append(f'{value} = NULL;')
+                     prepared_owners.append(captured)
+                 elif mode in JOIN_PAYLOADS:

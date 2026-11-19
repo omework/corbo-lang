@@ -1,0 +1,16 @@
+--- before/crust.py
++++ after/crust.py
+@@ -14336,8 +14336,11 @@
+             return allow_cycles
+         if typ not in self.enums:
+             return False
+-        return all(declared in ('Int', '&Int', '&mut Int') or declared.startswith('A<') and
+-                   self.supports_owned_signature(declared[2:-1], visited | {typ}, allow_cycles=allow_cycles)
++        return all(declared in ('Int', '&Int', '&mut Int')
++                   or declared.startswith('&') and self.supports_acyclic_reference_parameter(
++                       declared.removeprefix('&').removeprefix('mut '), visited | {typ})
++                   or declared.startswith('A<') and self.supports_owned_signature(
++                       declared[2:-1], visited | {typ}, allow_cycles=allow_cycles)
+                    for fields in self.enums[typ].values() for _, declared in fields)
+ 
+     def supports_fresh_owned_result(self, value, params):

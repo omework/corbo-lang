@@ -1,0 +1,24 @@
+fn create(memory: &mut Pool<Int>, value: Int) -> <- Int {
+    let mut data = new(memory) Int(value);
+    return <- data;
+}
+
+// Trois slots d'Int, dans une plage virtuelle à adresses stables.
+let mut memory = pool<Int>(3);
+let mut a = create(&mut memory, 10);
+let mut b = create(&mut memory, 20);
+let mut c = create(&mut memory, 30);
+
+address(b);
+memory.drop(-> b); // Slot intérieur : disponible sans déplacer a ou c.
+
+let mut d = create(&mut memory, 40); // Réutilise le slot de b, même si le pool était plein.
+address(d); // Même adresse que b ; b reste définitivement inutilisable.
+print(a);
+print(c);
+print(d);
+
+memory.drop(-> d);
+memory.drop(-> c); // Le curseur récupère c, puis l'ancien slot de d.
+memory.drop(-> a);
+memory.reset();

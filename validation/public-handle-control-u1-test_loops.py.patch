@@ -1,0 +1,101 @@
+--- before/test_loops.py
++++ after/test_loops.py
+@@ -31,8 +31,9 @@
+ 
+     def test_nested_blocks_and_private_sources_are_cleaned_before_break(self):
+         self.check_sources('let mut parent = new(memory) Int(1); loop { '
+-                           'let mut outer = new(memory) Int(2); { let mut private = stack(65536); '
+-                           'let mut middle = new(private) Int(3); { let mut inner = new(memory) Int(4); break; } } } '
++                           'let mut outer = new(memory) Int(2); let seen_outer = *outer; { let mut private = stack(65536); '
++                           'let mut middle = new(private) Int(3); let seen_middle = *middle; '
++                           '{ let mut inner = new(memory) Int(4); let seen_inner = *inner; break; } } } '
+                            'print(parent);',
+                            ['destroy inner=4', 'destroy middle=3', 'destroy outer=2', 'destroy parent=1'], '1\n')
+ 
+@@ -49,9 +50,9 @@
+ 
+     def test_three_iterations_with_branch_local_values(self):
+         self.check_sources('let mut controls = allocator(); let mut state = new(controls) Int(0); '
+-                           'loop { let mut temp = new(memory) Int(42); '
++                           'loop { let mut temp = new(memory) Int(42); let seen_temp = *temp; '
+                            'if *state == 2 { break; } '
+-                           'if *state == 1 { let mut local = new(memory) Int(99); state.set(2); } '
++                           'if *state == 1 { let mut local = new(memory) Int(99); let seen_local = *local; state.set(2); } '
+                            'else { state.set(1); } } print(state);',
+                            ['destroy temp=42', 'destroy local=99', 'destroy temp=42',
+                             'destroy temp=42', 'destroy state=2'], '2\n')
+@@ -59,20 +60,20 @@
+     def test_break_targets_nearest_loop(self):
+         self.check_sources('let mut controls = allocator(); let mut state = new(controls) Int(0); '
+                            'loop { let mut outer = new(memory) Int(1); '
+-                           'loop { let mut inner = new(memory) Int(2); break; } '
++                           'loop { let mut inner = new(memory) Int(2); let seen_inner = *inner; break; } '
+                            'print(outer); if *state == 1 { break; } state.set(1); }',
+                            ['destroy inner=2', 'destroy outer=1', 'destroy inner=2',
+                             'destroy outer=1', 'destroy state=1'], '1\n1\n')
+ 
+     def test_direct_return_in_loop_cleans_function_scopes(self):
+-        self.check_sources('fn work(mem: &mut Allocator) { let mut parent = new(mem) Int(1); '
+-                           'loop { let mut temp = new(mem) Int(2); return; } } '
++        self.check_sources('fn work(mem: &mut Allocator) { let mut parent = new(mem) Int(1); let seen_parent = *parent; '
++                           'loop { let mut temp = new(mem) Int(2); let seen_temp = *temp; return; } } '
+                            'work(&mut memory); memory.reset();',
+                            ['destroy temp=2', 'destroy parent=1'])
+ 
+     def test_scalar_return_after_multiple_iterations(self):
+         self.check_sources('fn work(mem: &mut Allocator, state: &mut Int) -> Int { '
+-                           'loop { let mut temp = new(mem) Int(42); '
++                           'loop { let mut temp = new(mem) Int(42); let seen_temp = *temp; '
+                            'if *state == 1 { return 7; } state.set(1); } } '
+                            'let mut controls = allocator(); let mut state = new(controls) Int(0); '
+                            'let mut result = work(&mut memory, &mut state); print(result);',
+@@ -80,7 +81,7 @@
+ 
+     def test_owned_return_after_multiple_iterations_preserves_source(self):
+         self.check_sources('fn work(mem: &mut Allocator, state: &mut Int) -> <- Int { '
+-                           'loop { let mut temp = new(mem) Int(42); if *state == 1 { '
++                           'loop { let mut temp = new(mem) Int(42); let seen_temp = *temp; if *state == 1 { '
+                            'let mut selected = new(mem) Int(7); return <- selected; } state.set(1); } } '
+                            'let mut controls = allocator(); let mut state = new(controls) Int(0); '
+                            'let mut result = work(&mut memory, &mut state); print(result); drop(-> result); memory.reset();',
+@@ -102,10 +103,10 @@
+         self.rejected('let mut data = new(memory) Int(42); loop { -> data; drop(-> data); }',
+                       'plus utilisable')
+ 
+-    def test_reset_of_unused_parent_allocation_can_repeat_safely(self):
+-        self.check_sources('let mut controls = allocator(); let mut state = new(controls) Int(0); '
+-                           'let mut old = new(memory) Int(10); loop { memory.reset(); '
+-                           'let mut temp = new(memory) Int(42); if *state == 1 { break; } state.set(1); }',
++    def test_reset_after_last_use_of_parent_allocation_can_repeat_safely(self):
++        self.check_sources('let mut controls = allocator(); let mut state = new(controls) Int(0); '
++                           'let mut old = new(memory) Int(10); let seen_old = *old; loop { memory.reset(); '
++                           'let mut temp = new(memory) Int(42); let seen_temp = *temp; if *state == 1 { break; } state.set(1); }',
+                            ['destroy old=10', 'destroy temp=42', 'destroy temp=42', 'destroy state=1'])
+ 
+     def test_reads_in_next_iteration_protect_parent_from_reset(self):
+@@ -145,14 +146,14 @@
+ 
+     def test_unreachable_allocations_after_break_are_not_emitted(self):
+         code = compile_source('let mut memory = pool<Int>(1); loop { '
+-                              'let mut temp = new(memory) Int(42); break; let mut unreachable = new(memory) Int(99); }')
++                              'let mut temp = new(memory) Int(42); let seen_temp = *temp; break; let mut unreachable = new(memory) Int(99); }')
+         self.assertNotIn('"unreachable"', code)
+ 
+     def test_diverging_functions_are_compiled_without_fabricated_result(self):
+         for result_type in ('Int', '<- Int'):
+             with self.subTest(result_type=result_type):
+                 result = self.execute('fn never(mem: &mut Allocator) -> ' + result_type + ' { '
+-                                      'loop { let mut temp = new(mem) Int(42); } } '
++                                      'loop { let mut temp = new(mem) Int(42); let seen_temp = *temp; } } '
+                                       'fn work(mem: &mut Allocator, n: Int) -> Int { if n == 1 { '
+                                       'let mut unreachable = never(mem); print(unreachable); } return 7; } '
+                                       'let mut result = work(&mut memory, 0); print(result);')
+@@ -233,7 +234,7 @@
+         self.check_sources(
+             'fn work(mem: &mut Allocator, state: &mut Int) -> <- Int { '
+             'loop { mem.reset(); if *state == 1 { let mut result = new(mem) Int(7); return <- result; } '
+-            'state.set(1); } } let mut old = new(memory) Int(99); '
++            'state.set(1); } } let mut old = new(memory) Int(99); let seen_old = *old; '
+             'let mut controls = allocator(); let mut state = new(controls) Int(0); '
+             'let mut result = work(&mut memory, &mut state); print(result); drop(-> result); memory.reset();',
+             ['destroy old=99', 'destroy result=7', 'destroy state=1'], '7\n')

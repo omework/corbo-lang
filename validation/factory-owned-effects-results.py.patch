@@ -1,0 +1,234 @@
+--- before/results.py
++++ after/results.py
+@@ -169,6 +169,8 @@
+     task_forward_only: bool = False
+     task_suspension_fields: tuple | None = None
+     task_may_suspend: bool | None = None
++    task_owned_updates: tuple = ()
++    task_suspension_owned: tuple | None = None
+ 
+     @property
+     def same_parameter(self):
+@@ -192,6 +194,14 @@
+                 {'parameter': params[index][0], 'fields': [
+                     {'field': field, 'targets': [t.describe(params) for t in sorted(targets)]}
+                     for field, targets in fields]} for index, fields in self.task_field_updates]
++        for attribute in ('task_owned_updates', 'task_suspension_owned'):
++            updates = getattr(self, attribute)
++            if updates is not None and self.mode in ('task', 'execution'):
++                description[attribute] = [
++                    {'parameter': params[index][0], 'field': path, 'alternatives': [
++                        {'kind': 'unchanged'} if item.kind == 'owned_field_input' else item.describe(params)
++                        for item in sorted(child.candidates)]}
++                    for index, path, child in updates]
+         if self.mode == 'task':
+             description['task_suspension_complete'] = self.task_suspension_fields is not None
+             description['task_may_suspend'] = self.task_may_suspend
+@@ -347,6 +357,17 @@
+         value.task_may_suspend for value in values)
+ 
+ 
++def merge_task_owned_updates(values, attribute):
++    if any(getattr(value, attribute) is None for value in values):
++        return None
++    updates = {}
++    for value in values:
++        for carrier, path, child in getattr(value, attribute):
++            key = carrier, path
++            updates[key] = merge_owned_values((updates[key], child)) if key in updates else child
++    return frozenset((carrier, path, child) for (carrier, path), child in updates.items())
++
++
+ def borrowed_targets(value):
+     return value.reference_targets | frozenset(
+         BorrowTarget('parameter', c.parameter) if c.kind == 'parameter'
+@@ -444,6 +465,8 @@
+     task_forward_only: bool = False
+     deferred_suspension_updates: frozenset | None = None
+     task_may_suspend: bool | None = None
++    deferred_owned_updates: frozenset = frozenset()
++    deferred_suspension_owned: frozenset | None = None
+     structure_choices: tuple = ()
+ 
+ 
+@@ -626,6 +649,8 @@
+         self.task_forward_only = True
+         self.returned_task_field_updates = {}
+         self.returned_task_suspension_updates = {}
++        self.returned_task_owned_updates = {}
++        self.returned_task_suspension_owned = {}
+         self.returned_task_suspension_complete = True
+         self.returned_task_may_suspend = False
+         self.returned_references = set()
+@@ -954,6 +979,11 @@
+                                   if self.returned_task_suspension_complete else None,
+                               task_may_suspend=self.returned_task_may_suspend
+                                   if self.returned_task_suspension_complete else None,
++                              task_owned_updates=tuple((i, path, child) for (i, path), child
++                                  in sorted(self.returned_task_owned_updates.items())),
++                              task_suspension_owned=tuple((i, path, child) for (i, path), child
++                                  in sorted(self.returned_task_suspension_owned.items()))
++                                  if self.returned_task_suspension_complete else None,
+                               task_field_updates=tuple((i, tuple(sorted(fields.items()))) for i, fields
+                                   in sorted(self.returned_task_field_updates.items())),
+                               owned_field_writes=tuple((index, name, child) for (index, name), child
+@@ -1134,9 +1164,13 @@
+                 self.returned_task_result_fields[path] = self.returned_task_result_fields.get(path, frozenset()) | sources
+             self.task_forward_parameters.update(value.task_parameters)
+             self.task_forward_only &= value.task_forward_only
+-            if value.deferred_suspension_updates is None or value.task_may_suspend is None:
++            self.collect_deferred_owned(value.deferred_owned_updates, self.returned_task_owned_updates, line)
++            if (value.deferred_suspension_updates is None or value.task_may_suspend is None
++                    or value.deferred_suspension_owned is None):
+                 self.returned_task_suspension_complete = False
+             else:
++                self.collect_deferred_owned(value.deferred_suspension_owned,
++                                            self.returned_task_suspension_owned, line)
+                 self.returned_task_may_suspend |= value.task_may_suspend
+                 for carrier, fields in value.deferred_suspension_updates:
+                     for target in borrowed_targets(carrier):
+@@ -1487,6 +1521,8 @@
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
+                     deferred_suspension_updates=merge_task_suspensions(values),
++                    deferred_owned_updates=merge_task_owned_updates(values, 'deferred_owned_updates'),
++                    deferred_suspension_owned=merge_task_owned_updates(values, 'deferred_suspension_owned'),
+                     task_may_suspend=merge_task_may_suspend(values),
+                     absent_owned_payload=all(value.absent_owned_payload for value in values))
+ 
+@@ -2364,6 +2400,8 @@
+                     task_parameters=frozenset(index for value in returning for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in returning for update in value.deferred_field_updates),
+                     deferred_suspension_updates=merge_task_suspensions(returning),
++                    deferred_owned_updates=merge_task_owned_updates(returning, 'deferred_owned_updates'),
++                    deferred_suspension_owned=merge_task_owned_updates(returning, 'deferred_suspension_owned'),
+                     task_may_suspend=merge_task_may_suspend(returning),
+                     absent_owned_payload=bool(returning) and all(value.absent_owned_payload for value in returning)))
+         if op == 'struct_copy':
+@@ -2520,9 +2558,14 @@
+                 pending = self.instantiate_deferred_fields(field_summary.structure_fields, captured_actuals) if (
+                     field_summary and field_summary.complete) else frozenset()
+                 suspended = getattr(field_summary, 'suspension_result', None)
+-                suspension_known = suspended is not None and not suspended.owned_field_writes
++                suspension_known = suspended is not None
+                 prefixes = self.instantiate_deferred_fields(suspended.structure_fields, captured_actuals) if suspension_known else None
+                 return flow, Value('task', name, fields=tuple(captures), reference_targets=frozenset(targets),
++                                   deferred_owned_updates=self.instantiate_deferred_owned(
++                                       field_summary.completion_result.owned_field_writes, captured_actuals, environment)
++                                       if field_summary and field_summary.complete else frozenset(),
++                                   deferred_suspension_owned=self.instantiate_deferred_owned(
++                                       suspended.owned_field_writes, captured_actuals, environment) if suspension_known else None,
+                                    deferred_suspension_updates=prefixes,
+                                    task_may_suspend=field_summary.may_suspend if suspension_known else None,
+                                    deferred_field_updates=pending,
+@@ -2680,7 +2723,9 @@
+                     origins = set()
+                     for target in targets:
+                         actual = actuals[target.parameter]
+-                        if not isinstance(actual, Value):
++                        if isinstance(actual, SourceOrigin) and actual.kind == 'source_parameter':
++                            origins.add(BorrowTarget('parameter', actual.index))
++                        elif not isinstance(actual, Value):
+                             origins.add(BorrowTarget('local'))
+                         elif target.kind == 'task_capture_parameter':
+                             for actual_key, actual_origins in capture_fields(actual.fields, target.field):
+@@ -2769,8 +2814,15 @@
+                     self.instantiate_deferred_fields(summary.task_suspension_fields, actuals)
+                     if summary.task_suspension_fields is not None else None)
+                 prefix_parts = [Value('task', summary.typ, deferred_suspension_updates=prefix_base,
++                    deferred_suspension_owned=frozenset() if summary.task_forward_only else (
++                        self.instantiate_deferred_owned(summary.task_suspension_owned, actuals, environment)
++                        if summary.task_suspension_owned is not None else None),
+                     task_may_suspend=False if summary.task_forward_only else summary.task_may_suspend), *forwarded]
+                 return flow, Value(summary.mode, summary.typ, fields=captures, reference_targets=reference_targets,
++                                   deferred_owned_updates=merge_task_owned_updates([
++                                       Value('task', summary.typ, deferred_owned_updates=self.instantiate_deferred_owned(
++                                           summary.task_owned_updates, actuals, environment)), *forwarded], 'deferred_owned_updates'),
++                                   deferred_suspension_owned=merge_task_owned_updates(prefix_parts, 'deferred_suspension_owned'),
+                                    deferred_suspension_updates=merge_task_suspensions(prefix_parts),
+                                    task_may_suspend=merge_task_may_suspend(prefix_parts),
+                                    pending_structure_calls=frozenset(call for index in summary.task_forward_parameters
+@@ -3093,6 +3145,8 @@
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
+                     deferred_suspension_updates=merge_task_suspensions(values),
++                    deferred_owned_updates=merge_task_owned_updates(values, 'deferred_owned_updates'),
++                    deferred_suspension_owned=merge_task_owned_updates(values, 'deferred_suspension_owned'),
+                     task_may_suspend=merge_task_may_suspend(values),
+                     absent_owned_payload=all(value.absent_owned_payload for value in values))
+ 
+@@ -3469,9 +3523,49 @@
+             updates.add((actuals[index], mapped))
+         return frozenset(updates)
+ 
++    def instantiate_deferred_owned(self, writes, actuals, environment):
++        updates = set()
++        for index, path, child in writes:
++            carrier = actuals[index]
++            previous = self.owned_field_at(environment, carrier, path)
++            updates.add((carrier, path, self.resolve_owned_child(child, actuals, previous, map_fields=True)))
++        return frozenset(updates)
++
++    def collect_deferred_owned(self, updates, output, line):
++        for carrier, path, child in updates:
++            pending = [child]
++            while pending:
++                current = pending.pop()
++                if not current.candidates or any(not (
++                        candidate.kind in ('parameter', 'owned_projection', 'owned_field_input')
++                        or candidate.kind == 'fresh' and candidate.source.kind == 'source_parameter')
++                        for candidate in current.candidates):
++                    self.fail(line, 'retour de tâche : remplacement de champ depuis une source non durable')
++                pending.extend(value for _, value in current.owned_fields)
++            for target in borrowed_targets(carrier):
++                if target.kind != 'parameter' or self.params[target.parameter][1] != 'mut':
++                    self.fail(line, 'retour de tâche : porteur propriétaire de modification non durable')
++                key = target.parameter, path
++                output[key] = merge_owned_values((output[key], child)) if key in output else child
++
++    def apply_deferred_owned(self, updates, environment, *, include_initial=False):
++        for carrier, path, child in sorted(updates, key=lambda item: item[1], reverse=True):
++            previous = self.owned_field_at(environment, carrier, path)
++            if include_initial and previous is not None:
++                child = merge_owned_values((previous, child))
++            name = '\0completed_owned_carrier'
++            current = environment.get(carrier.storage_owner, carrier)
++            # Preserve a projection into a descendant, if the carrier is one.
++            if carrier.owned_path:
++                current = carrier
++            environment[name] = current
++            self.update_owned_field(environment, name, current, path, child)
++            environment.pop(name)
++
+     def apply_deferred_field_updates(self, task, environment, line):
+         # A launched task can fail before its first poll. The old state must
+         # remain a possible state. Resolve all captured targets before stores.
++        self.apply_deferred_owned(task.deferred_owned_updates, environment, include_initial=True)
+         for carrier, fields in task.deferred_field_updates:
+             name = '\0completed_task_carrier'
+             current = environment.get(carrier.storage_owner, carrier)
+@@ -3652,7 +3746,7 @@
+         if len(path) == 1 or dict(carrier.owned_fields).get(path[0]) is not None:
+             environment[name] = update(carrier, path)
+ 
+-    def resolve_owned_child(self, child, actuals, previous=None):
++    def resolve_owned_child(self, child, actuals, previous=None, *, map_fields=False):
+         alternatives = [actuals[item.parameter] for item in sorted(child.candidates) if item.kind == 'parameter']
+         alternatives.extend(self.project_owned_value(actuals[item.parameter], item.field_path, child.typ)
+                             for item in sorted(child.candidates) if item.kind == 'owned_projection')
+@@ -3672,8 +3766,13 @@
+                 fresh.update(ResultCandidate('fresh', source=source)
+                              for source in dict(actual.task_result_fields).get(item.source.name, ()))
+         if fresh:
+-            alternatives.append(replace(child, candidates=frozenset(fresh), owned_fields=tuple(
+-                (field, self.resolve_owned_child(nested, actuals)) for field, nested in child.owned_fields)))
++            fields = child.fields
++            if map_fields:
++                fields = tuple((field, frozenset(origin for target in targets
++                    for origin in self.array_update_targets(target, actuals[target.parameter])))
++                    for field, targets in fields)
++            alternatives.append(replace(child, candidates=frozenset(fresh), fields=fields, owned_fields=tuple(
++                (field, self.resolve_owned_child(nested, actuals, map_fields=map_fields)) for field, nested in child.owned_fields)))
+         return merge_owned_values(alternatives) if alternatives else UNKNOWN
+ 
+     @staticmethod

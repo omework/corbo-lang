@@ -1,0 +1,45 @@
+--- before/results.py
++++ results.py
+@@ -32,5 +32,5 @@
+         if self.kind == 'source_parameter':
+             return {'kind': 'parameter', 'parameter': params[self.index][0]}
+-        if self.kind in ('allocation_parameter', 'task_parameter', 'task_result_parameter'):
++        if self.kind in ('allocation_parameter', 'vector_element_parameter', 'task_parameter', 'task_result_parameter'):
+             return {'kind': self.kind, 'parameter': params[self.index][0]}
+         if self.kind in ('allocation_field_parameter', 'task_result_field_parameter'):
+@@ -113,4 +113,6 @@
+         elif source.kind == 'allocation_parameter':
+             candidates.add(ResultCandidate('parameter', source.index))
++        elif source.kind == 'vector_element_parameter':
++            candidates.add(ResultCandidate('vector_element', source.index))
+         elif source.kind == 'task_result_parameter':
+             candidates.add(ResultCandidate('task_capture', source.index))
+@@ -1316,5 +1318,5 @@
+             if not isinstance(value, Value) or (value.mode, value.typ) != (mode, typ):
+                 self.fail(line, f"retour de '{self.name}' : {mode} de {typ} attendu")
+-            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter', 'task_result_field_parameter', 'task_output', 'task_output_parameter')
++            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'vector_element_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter', 'task_result_field_parameter', 'task_output', 'task_output_parameter')
+                    for source in value.task_sources | value.task_result_sources):
+                 self.fail(line, 'retour de tâche refusé : le pool de capture ne survit pas au retour')
+@@ -2734,4 +2736,10 @@
+                             elif symbol.kind == 'allocation_parameter' and isinstance(actual, Value):
+                                 sources.update(candidate.storage() for candidate in actual.candidates)
++                            elif symbol.kind == 'vector_element_parameter' and isinstance(actual, Value):
++                                items = possible_handle_items(actual.handle_items)
++                                if items is None:
++                                    sources.add(SourceOrigin('local', -1, 'capture'))
++                                else:
++                                    sources.update(candidate.storage() for candidate in items)
+                             elif symbol.kind == 'allocation_field_parameter' and isinstance(actual, Value):
+                                 sources.update(self.owned_capture_storage(actual, symbol.name))
+@@ -3000,4 +3008,10 @@
+                         elif source.kind == 'allocation_parameter' and isinstance(actual, Value) and actual.candidates:
+                             sources.update(candidate.storage() for candidate in actual.candidates)
++                        elif source.kind == 'vector_element_parameter' and isinstance(actual, Value):
++                            items = possible_handle_items(actual.handle_items)
++                            if items is None:
++                                sources.add(SourceOrigin('local', -1, 'capture'))
++                            else:
++                                sources.update(candidate.storage() for candidate in items)
+                         elif source.kind == 'allocation_field_parameter' and isinstance(actual, Value):
+                             sources.update(self.owned_capture_storage(actual, source.name))

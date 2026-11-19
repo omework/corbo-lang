@@ -1,0 +1,239 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Corbo",
+  "scopeName": "source.corbo",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#assembly"
+    },
+    {
+      "include": "#c"
+    },
+    {
+      "match": "(#\\s*\\()\\s*(if|endif|branch|datastack|directive|free_pages|lock|stack_region|type)\\b",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.annotation.corbo"
+        },
+        "2": {
+          "name": "storage.type.annotation.corbo"
+        }
+      }
+    },
+    {
+      "name": "keyword.other.corbo",
+      "match": "@unchecked\\b"
+    },
+    {
+      "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z_0-9]*)",
+      "captures": {
+        "1": {
+          "name": "storage.type.function.corbo"
+        },
+        "2": {
+          "name": "entity.name.function.corbo"
+        }
+      }
+    },
+    {
+      "match": "\\b(struct|enum)\\s+([A-Za-z_][A-Za-z_0-9]*)",
+      "captures": {
+        "1": {
+          "name": "storage.type.corbo"
+        },
+        "2": {
+          "name": "entity.name.type.corbo"
+        }
+      }
+    },
+    {
+      "name": "storage.type.corbo",
+      "match": "\\b(?:fn|impl|const|let|struct|enum|extern)\\b"
+    },
+    {
+      "name": "storage.modifier.corbo",
+      "match": "\\b(?:pub|mut|move|async|unsafe)\\b"
+    },
+    {
+      "name": "keyword.control.corbo",
+      "match": "\\b(?:use|as|if|else|match|loop|while|for|in|break|continue|return|yield|await)\\b"
+    },
+    {
+      "name": "constant.language.boolean.corbo",
+      "match": "\\b(?:true|false)\\b"
+    },
+    {
+      "name": "variable.language.corbo",
+      "match": "\\bself\\b"
+    },
+    {
+      "name": "support.type.corbo",
+      "match": "\\b(?:bool|Void|i32|i64|u8|u16|u32|u64|usize|f32|f64|str|char|String|A|Pool|Vector|Option|Result|Mutex|AsyncMutex|HashMap)\\b"
+    },
+    {
+      "name": "support.module.corbo",
+      "match": "\\b(?:std|runtime)(?=::)"
+    },
+    {
+      "name": "support.function.corbo",
+      "match": "\\b(?:addr|copy|drop|print)\\b(?=\\s*\\()|\\bpool\\b(?=\\s*<)"
+    },
+    {
+      "name": "constant.numeric.float.corbo",
+      "match": "\\b[0-9]+\\.(?!\\.)[0-9]*|(?<![\\w.])\\.[0-9]+"
+    },
+    {
+      "name": "constant.numeric.integer.corbo",
+      "match": "\\b(?:0[xX][0-9A-Fa-f]+|[0-9]+[KMG]?)\\b"
+    },
+    {
+      "name": "keyword.operator.corbo",
+      "match": "<<=|>>=|::|->|=>|\\.\\.|==|!=|<=|>=|&&|\\|\\||<<|>>|[-+*/%&|^]=|[-+*/%&|^!~?=<>]"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.documentation.corbo",
+          "match": "//[!/].*$"
+        },
+        {
+          "name": "comment.line.double-slash.corbo",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.corbo",
+      "begin": "\"",
+      "end": "\"|$",
+      "patterns": [
+        {
+          "name": "constant.character.escape.corbo",
+          "match": "\\\\(?:[\"\\\\/bfnrt]|u[0-9A-Fa-f]{4})"
+        }
+      ]
+    },
+    "c": {
+      "begin": "(@c)\\b(?=[ \\t]*(?:\\(|\\{|$))",
+      "end": "(?<=\\})|(?=[^\\s{])",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.corbo"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#c-body"
+        }
+      ]
+    },
+    "c-body": {
+      "contentName": "meta.embedded.block.c.corbo",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.block.begin.c"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.c"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#c-body"
+        },
+        {
+          "include": "source.c"
+        }
+      ]
+    },
+    "assembly": {
+      "begin": "(@asm)\\b(?=[ \\t]*(?:\\(|\\{|$))",
+      "end": "(?<=\\})|(?=[^\\s{])",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.corbo"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#assembly-body"
+        }
+      ]
+    },
+    "assembly-body": {
+      "name": "meta.embedded.block.assembly.corbo",
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "name": "variable.other.interpolation.corbo",
+          "match": "\\$\\{[A-Za-z_][A-Za-z_0-9]*\\}"
+        },
+        {
+          "match": "(?:^|(?<=\\{))[ \\t]*([A-Za-z_.$][\\w.$]*|[0-9]+)(:)",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.assembly"
+            },
+            "2": {
+              "name": "punctuation.separator.label.assembly"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[{:]))[ \\t]*(\\.[A-Za-z_][\\w.]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.assembly"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[{:]))[ \\t]*([A-Za-z][\\w.]*)(?=[ \\t}]|$)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.mnemonic.assembly"
+            }
+          }
+        },
+        {
+          "name": "constant.other.label.assembly",
+          "match": "\\b[0-9]+[bf]\\b|(?<![\\w.$])\\.L[\\w.$]+"
+        },
+        {
+          "name": "variable.language.register.assembly",
+          "match": "\\b(?i:(?:[xw](?:[12]?[0-9]|30)|[xw]zr|w?sp|fp|lr|pc|[bhsdqv](?:[12]?[0-9]|3[01])(?:\\.[0-9]*[bhsdq])?|r(?:[89]|1[0-5])(?:b|w|d)?|[re]?(?:ax|bx|cx|dx|si|di|bp|sp|ip)|[abcd][lh]|[sd]il|[bs]pl|[xyz]mm(?:[12]?[0-9]|3[01])|mm[0-7]|k[0-7]|[cdefgs]s))\\b"
+        },
+        {
+          "name": "constant.numeric.assembly",
+          "match": "\\b(?:0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+)\\b"
+        }
+      ],
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.block.begin.corbo"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.corbo"
+        }
+      }
+    }
+  }
+}

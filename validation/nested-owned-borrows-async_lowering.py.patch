@@ -1,0 +1,132 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1028,6 +1028,18 @@
+     def keep_storage(value, origins):
+         storage_values[value] = storage_values.get(value, frozenset()) | frozenset(origins)
+ 
++    def stored_field_path(field):
++        return tuple(field.replace('/.', '.').lstrip('.').split('.'))
++
++    def owned_borrow_fields(typ):
++        from array_syntax import owned_reference_paths
++        return tuple(owned_reference_paths({name: {'': layout} for name, layout in struct_layouts.items()}, typ))
++
++    def borrowed_field_type(typ, path):
++        return next(('&mut ' + target if access == 'mut' else '&' + target
++                     for field, access, target in owned_borrow_fields(typ)
++                     if stored_field_path(field) == path), None)
++
+     def move_stored_fields(source, destination):
+         for key in list(active_loans):
+             if isinstance(key, tuple) and key[:2] == ('stored_field', source):
+@@ -1048,7 +1060,7 @@
+                     held.extend(argument_loans[target.parameter])
+                 else:
+                     fail(line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+-            active_loans[('stored_field', holder, tuple(field.lstrip('.').split('.')))] = list(dict.fromkeys(held))
++            active_loans[('stored_field', holder, stored_field_path(field))] = list(dict.fromkeys(held))
+ 
+     def clear_stored_fields(holder):
+         for key in list(active_loans):
+@@ -1058,11 +1070,9 @@
+     def owned_capture_field_loans(value, typ):
+         holder = next((name for name, member in fields.items() if value == f'frame->{member}'), value)
+         result = {}
+-        for field, declared in reference_structs.get(typ, ()):
+-            if declared not in ('&Int', '&mut Int'):
+-                continue
+-            path = tuple(field.split('.'))
+-            result['.' + field] = list(active_loans.get(('stored_field', value, path),
++        for field, _, _ in owned_borrow_fields(typ):
++            path = stored_field_path(field)
++            result[field] = list(active_loans.get(('stored_field', value, path),
+                 active_loans.get(('stored_field', holder, path), initial_stored_field_loans(holder, path))))
+         return result
+ 
+@@ -1337,6 +1347,10 @@
+                     steps.extend((f'{snapshot} = {value};', f'{value} = NULL;'))
+                     owners.append(snapshot)
+                     storage.update(storage_of(value))
++                    for path, held in owned_capture_field_loans(value, field_type[2:-1]).items():
++                        stored_fields[(*field.split('.'), *stored_field_path(path))] = held
++                        loans.extend(held)
++                    clear_stored_fields(value)
+                 values[field] = snapshot
+                 argument_tails.pop()
+         finally:
+@@ -1789,8 +1803,7 @@
+             ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('owned', 'Int'),
+             ('scalar', 'Void'), ('void', 'Void'), ('join_owned', 'Int'), ('join_nested', 'Int'))):
+         fail(node.line, 'prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis')
+-    if result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in reference_structs and any(
+-            typ.startswith('&') for _, typ in reference_structs[result[1]]):
++    if result[0] in ('owned', *JOIN_PAYLOADS) and owned_borrow_fields(result[1]):
+         completion = node.field_effect_summary
+         if completion is None or not completion.complete:
+             fail(node.line, 'résultat struct async : contrat des cibles empruntées incomplet')
+@@ -1798,7 +1811,7 @@
+             if not targets or any(not (
+                     target.kind in ('parameter', 'exclusive_join_parameter') and parameters[target.parameter][1] in ('ref', 'mut')
+                     or target.kind == 'field_parameter' and parameters[target.parameter][1] in ('owned', *JOIN_PAYLOADS)
+-                    and dict(reference_structs.get(parameters[target.parameter][2], ())).get(target.field.lstrip('.')) in ('&Int', '&mut Int')
++                    and borrowed_field_type(parameters[target.parameter][2], stored_field_path(target.field)) in ('&Int', '&mut Int')
+                     ) for target in targets):
+                 fail(node.line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+     returns_int = result == ('scalar', 'Int')
+@@ -5369,8 +5382,7 @@
+             fail(line, 'écriture de champ : une référence mutable est requise')
+         for index, (field, field_type) in enumerate(layout):
+             if field == path:
+-                offset = ' + '.join('sizeof(int)' if kind == 'Int' else 'sizeof(Cell *)'
+-                                    for _, kind in layout[:index]) or '0'
++                offset = structure_offset(layout, index)
+                 return name, f'frame->{fields[name]}', offset, tuple(path.split('.')), field_type
+         fail(line, f"champ inconnu '{path}' dans {typ}")
+ 
+@@ -5390,6 +5402,9 @@
+             return None
+         if expr[0] == 'field' and dict(layout).get(place[2]) != '&Int':
+             return None
++        declared = dict(layout).get(place[2], '')
++        if expr[0] != 'field' and expr[1][0] == 'field_deref' and declared.startswith('A<') and declared[2:-1] in pool_structures:
++            return ('mut' if expr[0] == 'mut_expr' else 'ref', declared[2:-1])
+         # The actual field type/mode is checked by borrow_struct_field. In
+         # particular &view.reference is not shorthand for &*view.reference.
+         return ('mut' if expr[0] == 'mut_expr' else 'ref', 'Int')
+@@ -5405,12 +5420,12 @@
+         return projected
+ 
+     def initial_stored_field_loans(holder, path):
+-        typ = dict(reference_structs.get(reference_types.get(holder), ())).get('.'.join(path))
++        typ = borrowed_field_type(reference_types.get(holder, collection_types.get(holder)), path)
+         return [((holder, path), 'stored_mut_target' if typ == '&mut Int' else 'shared_target')]
+ 
+     def project_result_field_loans(loans, typ, path):
+         projected = project_field_loans(loans, path)
+-        if dict(reference_structs[typ]).get('.'.join(path)) == '&Int':
++        if borrowed_field_type(typ, path) == '&Int':
+             # These origins identify the external target. They do not reserve
+             # the carrier slot or its mutable capability (ST13).
+             retained = []
+@@ -5419,7 +5434,7 @@
+                 retained.extend(active_loans.get(('stored_field',root,full_path),
+                     [(target,'shared_target' if mode != 'storage' else mode)]))
+             return retained
+-        if dict(reference_structs[typ]).get('.'.join(path)) == '&mut Int':
++        if borrowed_field_type(typ, path) == '&mut Int':
+             # Keep the field capability as well as its current target. A
+             # reborrow suspends access to that field until its final use.
+             retained = list(projected)
+@@ -5434,9 +5449,10 @@
+         place = expr if expr[0] == 'field' else expr[1][1] if indirect else expr[1]
+         name, cell, offset, path, typ = struct_field(place, line, write=mode == 'mut')
+         if indirect:
+-            if typ not in ('&Int', '&mut Int', 'A<Int>') or mode == 'mut' and typ not in ('&mut Int', 'A<Int>'):
++            owned_structure = typ.startswith('A<') and typ[2:-1] in pool_structures
++            if not owned_structure and (typ not in ('&Int', '&mut Int', 'A<Int>') or mode == 'mut' and typ not in ('&mut Int', 'A<Int>')):
+                 fail(line, 'réemprunt de champ : type ou mode incompatible')
+-            pointer = f'&cell_load_ref({cell}, {offset})->value'
++            pointer = f'cell_load_ref({cell}, {offset})' if owned_structure else f'&cell_load_ref({cell}, {offset})->value'
+         else:
+             if typ != 'Int':
+                 fail(line, 'emprunt imbriqué non pris en charge ; utiliser &* ou &mut * pour la cible')

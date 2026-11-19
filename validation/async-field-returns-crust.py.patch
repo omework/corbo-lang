@@ -1,0 +1,55 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2306,7 +2306,7 @@
+                     continue
+                 nominal = params[target.parameter][2]
+                 dependencies = self.project_task_result_captures(
+-                    nominal, capture_fields(binding.alloc.dependencies, target.field))
++                    nominal, capture_fields(binding.alloc.dependencies, target.field), binding.alloc.borrow_parents)
+                 paths.update(self.join_reference_array_paths(dependencies, binding.alloc.borrow_parents))
+                 continue
+             if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter'):
+@@ -9581,7 +9581,7 @@
+                     paths[id(root), id(parent)] = root, parent
+         return paths
+ 
+-    def project_task_result_captures(self, nominal, captures):
++    def project_task_result_captures(self, nominal, captures, ancestry=()):
+         result_paths = {}
+         for index, path in self.async_reference_paths[nominal]:
+             result_paths.setdefault(index, []).append(path)
+@@ -9593,7 +9593,24 @@
+             projected = []
+             for target in candidates:
+                 loan = target.array_capture
+-                if target.async_reference_slot is not None:
++                if target.typ in self.struct_fields and any(path for path in paths):
++                    mode = key.split('.')[0]
++                    binding = Binding(target.label, mode, '', target,
++                                      borrow_parents=(*ancestry, *target.borrow_parents))
++                    for path in paths:
++                        field = '.'.join(path)
++                        typ = dict(self.enums[target.typ]['']).get(field)
++                        if typ == '&mut Int':
++                            field_paths = self.struct_mutable_field_paths(binding, field, binding)
++                        elif typ == 'Int':
++                            field_paths = tuple((root, binding) for root in self.struct_int_roots(binding, field))
++                        else:
++                            self.fail('projection du retour async : champ Int ou &mut Int requis')
++                        for root, parent in field_paths:
++                            view = self.array_borrow_binding(target.label, 'array_' + mode, '',
++                                                             ('int', ((root, parent),)))
++                            projected.append(self.async_array_capture(view, root))
++                elif target.async_reference_slot is not None:
+                     if any(all(index is None or index == slot
+                                for index, slot in zip(path, target.async_reference_slot)) for path in paths):
+                         projected.append(target)
+@@ -9997,7 +10014,7 @@
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins, typ=typ)
+         if mode in ('ref', 'mut'):
+-            dependencies = self.project_task_result_captures(task_name, allocation.dependencies)
++            dependencies = self.project_task_result_captures(task_name, allocation.dependencies, allocation.borrow_parents)
+             targets = {target.id for _, candidates in dependencies for target in candidates}
+             parents = tuple(parent for parent in allocation.borrow_parents
+                             if any(target.id in targets for target in (

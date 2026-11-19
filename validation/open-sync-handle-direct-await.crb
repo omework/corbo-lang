@@ -1,0 +1,4 @@
+async fn leaf()->Int{yield;return 7;}
+fn launch()-><-runtime::Handle<Int>{let h=runtime::spawn(->leaf());return <-h;}
+async fn parent()->Int{match launch().await{Ok(n)=>{return n;},Err(_)=>{return 99;}}}
+fn main(){let h=runtime::spawn(->parent());match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

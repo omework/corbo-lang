@@ -1,0 +1,15 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -350,8 +350,10 @@
+             return replace(value, mode=option_join_mode(OPTION_JOIN_TYPES[mode]))
+         if mode in OWNED_JOIN_TYPES:
+             return replace(value, mode=owned_join_mode(mode))
+-        if mode in ('owned', 'join_owned', 'handle_option'):
+-            return replace(value, mode={'owned': 'join_owned', 'join_owned': 'join_nested', 'handle_option': 'join_option'}[mode])
++        if mode == 'handle_option':
++            return replace(value, mode=option_join_mode(f'Option<A<{typ}>>'))
++        if mode in ('owned', 'join_owned'):
++            return replace(value, mode={'owned': 'join_owned', 'join_owned': 'join_nested'}[mode])
+         if mode in ('ref', 'mut', *UTF8_BORROW_MODES):
+             return replace(value, mode='join_' + mode)
+         if mode == 'array':

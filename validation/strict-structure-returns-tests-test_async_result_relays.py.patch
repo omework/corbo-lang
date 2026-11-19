@@ -1,0 +1,11 @@
+--- tests/test_async_result_relays.py
++++ tests/test_async_result_relays.py
+@@ -59,7 +59,7 @@
+ 
+     def test_pool_source_and_result_borrow_are_not_promoted(self):
+         helpers=DUPLICATE+'async fn leaf(p:&Point)-><-Point{let q=duplicate(p);yield;return <-q;}'
+-        self.refused(self.program('let r={let mut points=pool<Point>(2);let p=points.new(x:7);let q=leaf(&p).await;<-q};return r.x;',helpers),
++        self.refused(self.program('let r={let mut points=pool<Point>(2);let p=points.new(x:7);let q=leaf(&p).await;<-q};return r.x;',helpers.replace('-><-Point','-><-A<Point>')),
+                      'pool|source|survi')
+         source=self.program('let r={let q=leaf(7).await;<-q};let view=&r.x;drop(->r);return *view;',LEAF)
+         self.refused(source,'emprunt|réserv|référenc')

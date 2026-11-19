@@ -1,0 +1,84 @@
+test_local_payload_survives_vector_drop (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_local_payload_survives_vector_drop) ... ok
+test_mutable_capture_and_local_payload (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_mutable_capture_and_local_payload) ... ok
+test_nested_owned_payload (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_nested_owned_payload) ... FAIL
+test_owned_capture_and_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_owned_capture_and_factory) ... 
+  test_owned_capture_and_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_owned_capture_and_factory) (checker='verify_program') ... FAIL
+  test_owned_capture_and_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_owned_capture_and_factory) (checker='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_nested_owned_payload (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_nested_owned_payload)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17376, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15383, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1006, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7897, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7301, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7231, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6989, in expression
+    name, cell, offset, path, typ = struct_field(expr[1] if op == 'field_deref' else expr, line)
+                                    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6315, in struct_field
+    fail(line, f"champ inconnu '{path}' dans {typ}")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1042, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: champ inconnu 'inner.value' dans Item
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_payload_graphs.py", line 43, in test_nested_owned_payload
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: champ inconnu 'inner.value' dans Item
+
+======================================================================
+FAIL: test_owned_capture_and_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_owned_capture_and_factory) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_owned_capture_and_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_owned_capture_and_factory) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.505s
+
+FAILED (failures=3)

@@ -1,0 +1,313 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2676,6 +2676,133 @@
+             layout.append((targets, parents))
+         return tuple(layout)
+ 
++    def symbolic_task_input(self, pname, mode, typ, actual, index, root,
++                            sources, parents, find, add_field_dependencies, *,
++                            storage_scope=None, local_storage=None):
++        """Describe an opaque task input and its captures without executing it."""
++        check = self
++        storage_scope = storage_scope or root
++        capture_sources, capture_origins, dependencies = [], set(), []
++        result_sources, result_origins = [], set()
++        from async_lowering import owned_result_parameters
++        definition = check.async_definitions[typ][0]
++        result_indexes = owned_result_parameters(definition,
++            {name: node for name, (node, _) in check.async_definitions.items()},
++            sync_result=self.function_results.get)
++        captures = definition.args[1]
++        for position, (_, capture, capture_type) in enumerate(captures):
++            if capture in ASYNC_CAPTURE_VIEW_MODES or (capture, capture_type) == ('mut', 'u8'):
++                label = f'{pname}.{position}'
++                storage = Binding(label, 'array', '', array_storage_scope=storage_scope.id)
++                storage_scope.bindings[label] = storage
++                access = 'mut' if (capture in SHARED_VECTOR_SLICE_MODES or capture == 'mut'
++                                   or is_public_handle(typ) and position == 5) else 'ref'
++                element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(capture, capture), 'uint8_t')
++                loan = Binding(label, 'array_' + access, '', static_type=element, array_root=storage,
++                               async_array_reservation=True)
++                target = Allocation(check.uid(), storage_scope.id, label, (), typ='async_array_capture',
++                                    array_capture=loan, optional_utf8_parameter=index if access == 'ref' else None)
++                dependencies.append((f'{access}.{position}', (target,)))
++                continue
++            if capture in ('array_ref', 'array_mut'):
++                label = f'{pname}.{position}'
++                storage = Binding(label, 'array', '', array_storage_scope=storage_scope.id)
++                storage_scope.bindings[label] = storage
++                loan = Binding(label, capture, '', static_type=check.declared_array_type(capture_type),
++                               array_root=storage, async_array_path=())
++                target = Allocation(check.uid(), storage_scope.id, label, (), typ='async_array_capture',
++                                    array_capture=loan)
++                dependencies.append((f'{capture.removeprefix("array_")}.{position}', (target,)))
++                continue
++            if capture not in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES):
++                continue
++            is_pool_capture = capture in ('ref', 'mut') and capture_type.startswith('Pool<')
++            storage_type = capture_type[5:-1] if is_pool_capture else capture_type
++            symbol = ('task_parameter', index, '')
++            result_symbol = ('task_result_parameter', index, '')
++            if position in result_indexes and (is_public_handle(typ) or result_symbol in parents):
++                symbol = result_symbol
++            grouped = (capture in ('owned', *JOIN_RESULT_TYPES) or is_pool_capture) and symbol in parents
++            group = find(symbol) if grouped else None
++            if group is not None and group in sources:
++                source = sources[group]
++                if source.element_type not in (None, storage_type):
++                    check.fail('contraintes de sources incompatibles avec la capture')
++                source.element_type = storage_type
++            else:
++                sid = check.uid()
++                source = MemorySource(sid, storage_scope.id, 'symbolic', pname, f'symbolic_source_{sid}', storage_type)
++                storage_scope.sources.append(source)
++                if group is not None:
++                    sources[group] = source
++            if capture in ('owned', *JOIN_RESULT_TYPES) or is_pool_capture:
++                capture_sources.append(source)
++                origin = check.uid()
++                check.origin_sources[origin] = source
++                capture_origins.add(origin)
++                if position in result_indexes:
++                    result_sources.append(source)
++                    result_origins.add(origin)
++                if is_pool_capture:
++                    dependencies.append((f'{capture}.{position}', (check.pool_capture_target(source),)))
++                if capture in ('owned', *JOIN_RESULT_TYPES):
++                    from array_syntax import owned_reference_paths
++                    for field, access, _ in owned_reference_paths(check.enums, capture_type):
++                        borrowed_source = MemorySource(check.uid(), storage_scope.id, 'symbolic', pname + field,
++                                                      f'symbolic_borrow_{check.uid()}', element_type='Int')
++                        storage_scope.sources.append(borrowed_source)
++                        borrowed_target = Allocation(check.uid(), storage_scope.id, pname + field, (borrowed_source,))
++                        check.origin_sources[borrowed_target.id] = borrowed_source
++                        storage_scope.allocations.append(borrowed_target)
++                        check.allocations.append(borrowed_target)
++                        dependencies.append((f'{access}.{position}/{field}', (borrowed_target,)))
++                continue
++            target = Allocation(check.uid(), storage_scope.id, pname, (source,), typ=capture_type)
++            storage_scope.allocations.append(target)
++            check.allocations.append(target)
++            check.origin_sources[target.id] = source
++            add_field_dependencies(target, index, prefix=f'capture.{position}/')
++            capability = 'mut' if is_public_handle(typ) and position in (3, 5) else capture
++            dependencies.append((f'{capability}.{position}', (target,)))
++        effect = getattr(definition, 'field_effect_summary', None)
++        completed = effect.completion_result if effect and effect.complete else None
++        if completed and completed.candidates and all(
++                candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
++                for candidate in completed.candidates):
++            # This task constructs its root in caller storage. Its
++            # captured loans and descendant pools remain separate.
++            source = local_storage() if local_storage else check.local_stack_storage(root)
++            origin = check.uid()
++            check.origin_sources[origin] = source
++            result_sources.append(source)
++            result_origins.add(origin)
++            capture_sources.append(source)
++            capture_origins.add(origin)
++        result_fields = []
++        for path, child_type in aggregate_owned_paths(check.enums, definition.args[2][1]):
++            group = find(('task_result_field_parameter', index, path))
++            source = sources.get(group)
++            if source is None:
++                sid = check.uid()
++                source = MemorySource(sid, storage_scope.id, 'symbolic', pname + path,
++                                      f'symbolic_source_{sid}', child_type)
++                sources[group] = source
++                storage_scope.sources.append(source)
++            origin = check.uid()
++            check.origin_sources[origin] = source
++            result_fields.append((path, (source,), frozenset({origin})))
++            capture_sources.append(source)
++            capture_origins.add(origin)
++        allocation = Allocation(check.uid(), root.id, pname, (), c=actual,
++                                typ=f'{mode.capitalize()}<{typ}>', dependencies=tuple(dependencies),
++                                item_sources=tuple(capture_sources), item_origins=frozenset(capture_origins),
++                                task_result_sources=tuple(result_sources),
++                                task_result_origins=frozenset(result_origins),
++                                task_result_fields=tuple(result_fields))
++        root.allocations.append(allocation)
++        check.allocations.append(allocation)
++        return allocation
++
+     def verify_function_bodies(self):
+         """Run the existing memory checker on symbolic inputs, with discarded C.
+ 
+@@ -2795,125 +2922,8 @@
+             for index, (pname, mode, typ) in enumerate(params):
+                 actual = f'input_{index}'
+                 if mode in ('task', 'execution'):
+-                    capture_sources, capture_origins, dependencies = [], set(), []
+-                    result_sources, result_origins = [], set()
+-                    from async_lowering import owned_result_parameters
+-                    definition = check.async_definitions[typ][0]
+-                    result_indexes = owned_result_parameters(definition,
+-                        {name: node for name, (node, _) in check.async_definitions.items()},
+-                        sync_result=self.function_results.get)
+-                    captures = definition.args[1]
+-                    for position, (_, capture, capture_type) in enumerate(captures):
+-                        if capture in ASYNC_CAPTURE_VIEW_MODES or (capture, capture_type) == ('mut', 'u8'):
+-                            label = f'{pname}.{position}'
+-                            storage = Binding(label, 'array', '', array_storage_scope=root.id)
+-                            root.bindings[label] = storage
+-                            access = 'mut' if (capture in SHARED_VECTOR_SLICE_MODES or capture == 'mut'
+-                                               or is_public_handle(typ) and position == 5) else 'ref'
+-                            element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(capture, capture), 'uint8_t')
+-                            loan = Binding(label, 'array_' + access, '', static_type=element, array_root=storage,
+-                                           async_array_reservation=True)
+-                            target = Allocation(check.uid(), root.id, label, (), typ='async_array_capture',
+-                                                array_capture=loan, optional_utf8_parameter=index if access == 'ref' else None)
+-                            dependencies.append((f'{access}.{position}', (target,)))
+-                            continue
+-                        if capture in ('array_ref', 'array_mut'):
+-                            label = f'{pname}.{position}'
+-                            storage = Binding(label, 'array', '', array_storage_scope=root.id)
+-                            root.bindings[label] = storage
+-                            loan = Binding(label, capture, '', static_type=check.declared_array_type(capture_type),
+-                                           array_root=storage, async_array_path=())
+-                            target = Allocation(check.uid(), root.id, label, (), typ='async_array_capture',
+-                                                array_capture=loan)
+-                            dependencies.append((f'{capture.removeprefix("array_")}.{position}', (target,)))
+-                            continue
+-                        if capture not in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES):
+-                            continue
+-                        is_pool_capture = capture in ('ref', 'mut') and capture_type.startswith('Pool<')
+-                        storage_type = capture_type[5:-1] if is_pool_capture else capture_type
+-                        symbol = ('task_parameter', index, '')
+-                        result_symbol = ('task_result_parameter', index, '')
+-                        if position in result_indexes and (is_public_handle(typ) or result_symbol in parents):
+-                            symbol = result_symbol
+-                        grouped = (capture in ('owned', *JOIN_RESULT_TYPES) or is_pool_capture) and symbol in parents
+-                        group = find(symbol) if grouped else None
+-                        if group is not None and group in sources:
+-                            source = sources[group]
+-                            if source.element_type not in (None, storage_type):
+-                                check.fail('contraintes de sources incompatibles avec la capture')
+-                            source.element_type = storage_type
+-                        else:
+-                            sid = check.uid()
+-                            source = MemorySource(sid, root.id, 'symbolic', pname, f'symbolic_source_{sid}', storage_type)
+-                            root.sources.append(source)
+-                            if group is not None:
+-                                sources[group] = source
+-                        if capture in ('owned', *JOIN_RESULT_TYPES) or is_pool_capture:
+-                            capture_sources.append(source)
+-                            origin = check.uid()
+-                            check.origin_sources[origin] = source
+-                            capture_origins.add(origin)
+-                            if position in result_indexes:
+-                                result_sources.append(source)
+-                                result_origins.add(origin)
+-                            if is_pool_capture:
+-                                dependencies.append((f'{capture}.{position}', (check.pool_capture_target(source),)))
+-                            if capture in ('owned', *JOIN_RESULT_TYPES):
+-                                from array_syntax import owned_reference_paths
+-                                for field, access, _ in owned_reference_paths(check.enums, capture_type):
+-                                    borrowed_source = MemorySource(check.uid(), root.id, 'symbolic', pname + field,
+-                                                                  f'symbolic_borrow_{check.uid()}', element_type='Int')
+-                                    root.sources.append(borrowed_source)
+-                                    borrowed_target = Allocation(check.uid(), root.id, pname + field, (borrowed_source,))
+-                                    check.origin_sources[borrowed_target.id] = borrowed_source
+-                                    root.allocations.append(borrowed_target)
+-                                    check.allocations.append(borrowed_target)
+-                                    dependencies.append((f'{access}.{position}/{field}', (borrowed_target,)))
+-                            continue
+-                        target = Allocation(check.uid(), root.id, pname, (source,), typ=capture_type)
+-                        root.allocations.append(target)
+-                        check.allocations.append(target)
+-                        check.origin_sources[target.id] = source
+-                        add_field_dependencies(target, index, prefix=f'capture.{position}/')
+-                        capability = 'mut' if is_public_handle(typ) and position in (3, 5) else capture
+-                        dependencies.append((f'{capability}.{position}', (target,)))
+-                    effect = getattr(definition, 'field_effect_summary', None)
+-                    completed = effect.completion_result if effect and effect.complete else None
+-                    if completed and completed.candidates and all(
+-                            candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
+-                            for candidate in completed.candidates):
+-                        # This task constructs its root in caller storage. Its
+-                        # captured loans and descendant pools remain separate.
+-                        source = check.local_stack_storage(root)
+-                        origin = check.uid()
+-                        check.origin_sources[origin] = source
+-                        result_sources.append(source)
+-                        result_origins.add(origin)
+-                        capture_sources.append(source)
+-                        capture_origins.add(origin)
+-                    result_fields = []
+-                    for path, child_type in aggregate_owned_paths(self.enums, definition.args[2][1]):
+-                        group = find(('task_result_field_parameter', index, path))
+-                        source = sources.get(group)
+-                        if source is None:
+-                            sid = check.uid()
+-                            source = MemorySource(sid, root.id, 'symbolic', pname + path,
+-                                                  f'symbolic_source_{sid}', child_type)
+-                            sources[group] = source
+-                            root.sources.append(source)
+-                        origin = check.uid()
+-                        check.origin_sources[origin] = source
+-                        result_fields.append((path, (source,), frozenset({origin})))
+-                        capture_sources.append(source)
+-                        capture_origins.add(origin)
+-                    allocation = Allocation(check.uid(), root.id, pname, (), c=actual,
+-                                            typ=f'{mode.capitalize()}<{typ}>', dependencies=tuple(dependencies),
+-                                            item_sources=tuple(capture_sources), item_origins=frozenset(capture_origins),
+-                                            task_result_sources=tuple(result_sources),
+-                                            task_result_origins=frozenset(result_origins),
+-                                            task_result_fields=tuple(result_fields))
+-                    root.allocations.append(allocation)
+-                    check.allocations.append(allocation)
++                    allocation = check.symbolic_task_input(pname, mode, typ, actual, index, root,
++                        sources, parents, find, add_field_dependencies)
+                     root.bindings[actual] = Binding(actual, mode, actual, allocation)
+                     arguments.append(('down', actual))
+                     continue
+@@ -14331,9 +14341,38 @@
+             allocation.item_sources = check.owned_field_sources(fields)
+             allocation.variants = frozenset(check.enums.get(allocation.typ, {}))
+ 
++        def task_bridge_fields(allocation, index, prefix=''):
++            # Captures of an opaque task are tracked symbolically, never read
++            # by this bridge. The task's own generated code accesses its frame.
++            holders = {'': (allocation, [])}
++            for path, typ in aggregate_reference_paths(check.enums, allocation.typ):
++                source = MemorySource(check.uid(), external.id, 'symbolic', path, 'NULL', element_type=typ)
++                external.sources.append(source)
++                target = Allocation(check.uid(), external.id, path, (source,), c='NULL', typ=typ,
++                                    variants=frozenset(check.enums.get(typ, {})))
++                check.origin_sources[target.id] = source
++                check.allocations.append(target)
++                external.allocations.append(target)
++                parent, _, field = path.rpartition('/')
++                holders[parent][1].append((field, (target,)))
++                holders[path] = (target, [])
++            for holder, links in holders.values():
++                holder.dependencies = tuple(links)
++
++        def task_bridge_local_storage():
++            source = MemorySource(check.uid(), external.id, 'local_stack', 'task output', 'NULL')
++            external.sources.append(source)
++            return source
++
+         for index, (_, mode, typ) in enumerate(contract.parameters):
+             parameter = f'bridge_input_{index}'
+-            if mode == 'owned':
++            if mode == 'task':
++                allocation = check.symbolic_task_input(parameter, mode, typ, parameter, index, root,
++                    {}, {}, lambda group: group, task_bridge_fields, storage_scope=external,
++                    local_storage=task_bridge_local_storage)
++                root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
++                ctype = 'CrustTask *'
++            elif mode == 'owned':
+                 source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)
+@@ -14413,7 +14452,7 @@
+                 root.bindings[parameter] = Binding(parameter, mode, parameter)
+                 ctype = COPY_VALUE_TYPES[mode]
+             parameters.append(f'{ctype} {parameter}')
+-            arguments.append(('down' if mode == 'owned' or mode in JOIN_RESULT_TYPES else 'name', parameter))
++            arguments.append(('down' if mode in ('owned', 'task') or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
+         from async_result_storage import needs_task_output
+         if needs_task_output(contract.result.task_result_sources, lambda index: index in local_parameters):

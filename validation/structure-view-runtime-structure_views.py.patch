@@ -1,0 +1,106 @@
+--- /tmp/crust-before-inline-structure-views/structure_views.py
++++ structure_views.py
+@@ -0,0 +1,103 @@
++"""Contained nominal layouts and a by-value ABI for borrowed substructures.
++
++The descriptor has no ownership or cleanup operation. Compiler loan checking
++must keep its root alive; copying this C value does not authorize a language
++level copy of a mutable borrow.
++"""
++from dataclasses import dataclass
++
++
++@dataclass(frozen=True)
++class ContainedLayout:
++    path: str
++    typ: str
++    first: int
++    count: int
++
++
++def contained_layouts(structures):
++    """Preserve nominal interior types alongside the existing leaf layouts.
++
++    Offsets are expressed as leaf indexes. C sizes/alignment are supplied by
++    the backend, never guessed from the machine running the Python compiler.
++    """
++    result = {}
++
++    def build(typ, active):
++        if typ in result:
++            return result[typ]
++        if typ in active:
++            raise ValueError('cycle de structures contenues directement')
++        count, views = 0, []
++        for field, field_type in structures[typ]:
++            if field_type in structures:
++                children, width = build(field_type, (*active, typ))
++                views.append(ContainedLayout(field, field_type, count, width))
++                views.extend(ContainedLayout(field + '.' + child.path, child.typ,
++                                             count + child.first, child.count) for child in children)
++                count += width
++            else:
++                count += 1
++        result[typ] = tuple(views), count
++        return result[typ]
++
++    for typ in structures:
++        build(typ, ())
++    return {typ: views for typ, (views, _) in result.items()}
++
++
++STRUCTURE_VIEW_RUNTIME = r'''
++/* A view carries its root and offset by value. It never points at another
++   view descriptor, so returning it cannot retain a callee's stack variable. */
++typedef struct {
++    Cell *root;
++    size_t offset, size;
++    const Source *layout;
++} CrustStructureView;
++
++static CrustStructureView structure_view(Cell *root, size_t offset, size_t size,
++                                         const Source *layout) {
++    if (!root || !root->alive || !layout || root->storage_size < sizeof(Cell))
++        fail("invalid structure view root");
++    size_t available = root->storage_size - sizeof(Cell);
++    if (offset > available || size > available - offset)
++        fail("structure view outside allocation");
++    return (CrustStructureView){root, offset, size, layout};
++}
++
++static CrustStructureView structure_subview(CrustStructureView parent, size_t offset,
++                                            size_t size, const Source *layout) {
++    if (offset > parent.size || size > parent.size - offset || offset > SIZE_MAX - parent.offset)
++        fail("structure subview outside parent");
++    return structure_view(parent.root, parent.offset + offset, size, layout);
++}
++
++static unsigned char *structure_view_address(CrustStructureView view, size_t offset,
++                                             size_t width) {
++    if (!view.root || !view.root->alive)
++        fail("inactive structure view root");
++    if (offset > view.size || width > view.size - offset)
++        fail("structure field outside view");
++    return (unsigned char *)view.root->fields + view.offset + offset;
++}
++
++static int structure_view_load_int(CrustStructureView view, size_t offset) {
++    int value;
++    memcpy(&value, structure_view_address(view, offset, sizeof value), sizeof value);
++    return value;
++}
++
++static void structure_view_store_int(CrustStructureView view, size_t offset, int value) {
++    memcpy(structure_view_address(view, offset, sizeof value), &value, sizeof value);
++}
++
++static Cell *structure_view_load_ref(CrustStructureView view, size_t offset) {
++    Cell *value;
++    memcpy(&value, structure_view_address(view, offset, sizeof value), sizeof value);
++    return value;
++}
++
++static void structure_view_store_ref(CrustStructureView view, size_t offset, Cell *value) {
++    memcpy(structure_view_address(view, offset, sizeof value), &value, sizeof value);
++}
++'''

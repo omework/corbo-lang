@@ -1,0 +1,83 @@
+enum Inner { Bad }
+enum OtherError { Bad }
+enum Outer { Failed, Other }
+impl Outer {
+    fn from(error: Inner) -> Outer { drop(error); print(90); Outer.Failed }
+    fn from(error: OtherError) -> Outer { drop(error); print(91); Outer.Other }
+}
+struct Code { value: i64 }
+impl Code {
+    fn from(value: i64) -> Code { Code { value: value } }
+    fn from(value: u8) -> Code { Code { value: (value as i64) + 100 } }
+}
+struct ByteCode { value: u8 }
+impl ByteCode {
+    fn from(value: u8) -> ByteCode { ByteCode { value: value } }
+}
+struct Marker { tag: i64 }
+impl Marker { fn drop(&mut self) { print((*self).tag); } }
+fn source(pass: bool) -> Result<i64, Inner> {
+    print(3);
+    if pass { return Ok(12); }
+    Err(Inner.Bad)
+}
+fn converted(pass: bool) -> Result<bool, Outer> {
+    let marker = Marker { tag: 6 };
+    let value = source(pass)?;
+    drop(marker);
+    Ok(value > 0)
+}
+fn maybe(pass: bool) -> Option<i64> {
+    if pass { return Some(14); }
+    None
+}
+fn optional(pass: bool) -> Option<bool> {
+    let value = maybe(pass)?;
+    Some(value > 0)
+}
+fn unit(pass: bool) -> Result<Void, Inner> {
+    if pass { return Ok(()); }
+    Err(Inner.Bad)
+}
+fn unit_relay(pass: bool) -> Result<Void, Inner> {
+    unit(pass)?;
+    Ok(())
+}
+async fn async_source(pass: bool) -> Result<i64, OtherError> {
+    yield;
+    if pass { return Ok(21); }
+    Err(OtherError.Bad)
+}
+async fn async_convert(pass: bool) -> Result<i64, Outer> {
+    let marker = Marker { tag: 8 };
+    let value = async_source(pass).await?;
+    drop(marker);
+    Ok(value + 1)
+}
+fn main() {
+    let direct = Outer::from(OtherError.Bad);
+    match direct { Outer.Failed => {print(99);}, Outer.Other => {print(92);}, }
+    let default_code = Code::from(5);
+    let byte: u8 = 5;
+    let typed_code = Code::from(byte);
+    let byte_code = ByteCode::from(7);
+    print(default_code.value);
+    print(typed_code.value);
+    print(byte_code.value);
+    match converted(true) { Ok(value) => {print(value);}, Err(_) => {print(99);}, }
+    match converted(false) { Ok(_) => {print(99);}, Err(_) => {print(7);}, }
+    match optional(true) { Some(value) => {print(value);}, None => {print(99);}, }
+    match optional(false) { Some(_) => {print(99);}, None => {print(9);}, }
+    match unit_relay(false) { Ok(()) => {print(99);}, Err(_) => {print(10);}, }
+    match unit_relay(true) { Ok(()) => {print(11);}, Err(_) => {print(99);}, }
+    let first = runtime::spawn(async_convert(true));
+    match first.join() {
+        Ok(result) => { match result { Ok(value) => {print(value);}, Err(_) => {print(99);}, } },
+        Err(_) => {print(99);},
+    }
+    let second = runtime::spawn(async_convert(false));
+    match second.join() {
+        Ok(result) => { match result { Ok(_) => {print(99);}, Err(_) => {print(13);}, } },
+        Err(_) => {print(99);},
+    }
+}

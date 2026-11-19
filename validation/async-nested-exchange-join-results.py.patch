@@ -1,0 +1,42 @@
+--- /tmp/crust-before-nested-exchange-joins/results.py
++++ results.py
+@@ -1,6 +1,8 @@
+ """Symbolic owned-result origins, inferred without call-site allocations."""
+ from __future__ import annotations
+-from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
++from exchange_join_types import (
++    EXCHANGE_JOIN_TYPES, exchange_join_mode, exchange_inner_signature, exchange_is_try_push,
++)
+ from capture_paths import result_capture_selector, capture_fields, capture_index
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+@@ -1009,7 +1011,7 @@
+                 environment[name] = SourceOrigin('source_parameter', index,
+                                                  element=typ[5:-1] if typ.startswith('Pool<') else None)
+             elif mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+-                payloads = (frozenset() if typ == 'Result<(),A<Int>>' or mode == 'join_try_push' else
++                payloads = (frozenset() if typ == 'Result<(),A<Int>>' or exchange_is_try_push(mode) else
+                             frozenset({ResultCandidate('exchange_parameter', index, item_index=0)}),
+                             frozenset({ResultCandidate('exchange_parameter', index, item_index=1)}))
+                 environment[name] = Value(mode, typ, frozenset().union(*payloads), exchange_payloads=payloads)
+@@ -1885,9 +1887,9 @@
+                                       for index, (_, capture_mode, capture_type) in enumerate(declaration.args[1]))
+                     return flow, Value('join_' + mode, typ, reference_targets=execution.reference_targets,
+                                        payload_reference=row_payload)
+-                if mode == 'buffered_handle_exchange':
++                if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                     value = self.async_owned_result_value(mode, typ, execution.task_result_sources, execution.task_result_fields)
+-                    return flow, replace(value, mode=exchange_join_mode(typ), typ='Int')
++                    return flow, replace(value, mode=exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]), typ='Int')
+                 if mode in ('owned', 'join_owned', 'handle_option'):
+                     kind = {'owned': 'join_owned', 'join_owned': 'join_nested', 'handle_option': 'join_option'}[mode]
+                     effects = getattr(declaration, 'field_effect_summary', None)
+@@ -2150,7 +2152,7 @@
+                 if values[0].mode == 'join_array':
+                     return flow, Value('array', values[0].typ)
+                 if values[0].mode in EXCHANGE_JOIN_TYPES:
+-                    return flow, replace(values[0], mode='buffered_handle_exchange', typ=EXCHANGE_JOIN_INNERS[values[0].mode])
++                    return flow, replace(values[0], mode=exchange_inner_signature(values[0].mode)[0], typ=exchange_inner_signature(values[0].mode)[1])
+                 if values[0].mode == 'join_option':
+                     return flow, replace(values[0], mode='handle_option')
+                 if values[0].mode == 'join_nested':

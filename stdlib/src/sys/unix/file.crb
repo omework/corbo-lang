@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Unix file ownership and translation of native file errors.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    use std::sys::unix::linux::x86_64 as syscalls;
+#(endif)
+#(if: target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    use std::sys::unix::native as syscalls;
+#(endif)
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    /// Owns a Unix file descriptor and closes it on destruction.
+    pub struct File {
+        /// Owned Unix file descriptor; drop closes it once after a move.
+        fd: i64,
+    }
+
+    /// Reports an invalid path or native Unix error code.
+    pub enum FileError {
+        /// The supplied path violates the platform path-input contract.
+        InvalidPath,
+        /// Preserves the native operating-system error code in code.
+        Os {
+            /// Native operating-system status code preserved by this error.
+            code: i64
+        },
+    }
+
+    impl File {
+        /// Opens or creates a file through the target Unix backend.
+        fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> Result<File, FileError> {
+            let (valid, fd) = syscalls::open(path, mode, create, copy(perm));
+            if !valid {
+                return Err(FileError.InvalidPath);
+            }
+            if fd < 0 {
+                return Err(FileError.Os { code: fd });
+            }
+            if copy(perm) != 0xffffffff {
+                let (status, size, permissions) = syscalls::stats(copy(fd));
+                drop(size);
+                if copy(status) < 0 {
+                    syscalls::close(fd);
+                    return Err(FileError.Os { code: status });
+                }
+                if (permissions & (perm ^ 0x1ff)) != 0 {
+                    syscalls::close(fd);
+                    return Err(FileError.Os { code: syscalls::unsupported_permissions() });
+                }
+            }
+            Ok(File { fd: fd })
+        }
+
+        /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
+            let fd = (*self).fd;
+            let (raw, count) = syscalls::read(fd, buffer);
+            if raw < 0 {
+                return Err(FileError.Os { code: raw });
+            }
+            Ok(count)
+        }
+
+        /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+        fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError> {
+            let (raw, count) = syscalls::write((*self).fd, buffer);
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(count)
+        }
+
+        /// Seeks relative to the native origin and returns the resulting offset.
+        fn seek(&mut self, offset: i64, origin: i64) -> Result<u64, FileError> {
+            let (raw, position) = syscalls::seek((*self).fd, offset, origin);
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(position)
+        }
+
+        /// Queries the file size from the open descriptor.
+        fn size(&self) -> Result<u64, FileError> {
+            let (raw, count, permissions) = syscalls::stats((*self).fd);
+            drop(permissions);
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(count)
+        }
+
+        /// Renames a filesystem entry using the Unix backend.
+        fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
+            let (valid, raw) = syscalls::rename(source, destination);
+            if !valid { return Err(FileError.InvalidPath); }
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(())
+        }
+
+        /// Removes the named file using the Unix backend.
+        fn delete(path: &[u8]) -> Result<(), FileError> {
+            let (valid, raw) = syscalls::delete(path);
+            if !valid { return Err(FileError.InvalidPath); }
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(())
+        }
+
+        /// Releases the native resource owned by the value.
+        fn drop(&mut self) {
+            syscalls::close((*self).fd);
+        }
+    }
+#(endif)

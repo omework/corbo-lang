@@ -1,0 +1,57 @@
+test_async_state_calls_same_helper (test_recursive_borrow_projections.RecursiveBorrowProjectionTests.test_async_state_calls_same_helper) ... ok
+test_mutable_borrowed_leaf_through_helper (test_recursive_borrow_projections.RecursiveBorrowProjectionTests.test_mutable_borrowed_leaf_through_helper) ... ok
+test_nominal_borrowed_leaf_keeps_interior_descriptor (test_recursive_borrow_projections.RecursiveBorrowProjectionTests.test_nominal_borrowed_leaf_keeps_interior_descriptor) ... FAIL
+test_read_deep_borrow_in_sync_helper (test_recursive_borrow_projections.RecursiveBorrowProjectionTests.test_read_deep_borrow_in_sync_helper) ... ok
+
+======================================================================
+FAIL: test_nominal_borrowed_leaf_keeps_interior_descriptor (test_recursive_borrow_projections.RecursiveBorrowProjectionTests.test_nominal_borrowed_leaf_keeps_interior_descriptor)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16858, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14939, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3196, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10404, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11990, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13408, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13500, in statements
+    self.match_enum(node)
+    ~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12963, in match_enum
+    validate_body(body, projections)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12930, in validate_body
+    self.fail('prototype : match de lecture uniquement (copies Int, print et address)')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1991, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: prototype : match de lecture uniquement (copies Int, print et address)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_recursive_borrow_projections.py", line 48, in test_nominal_borrowed_leaf_keeps_interior_descriptor
+    self.assertEqual(self.run_source(source.replace('CHECK','')).stdout,'7\n8\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: prototype : match de lecture uniquement (copies Int, print et address)
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.808s
+
+FAILED (failures=1)

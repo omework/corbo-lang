@@ -1,0 +1,80 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1496,8 +1496,24 @@
+                 fail(line,'prototype : dépendances de champs async sans porteur suivi')
+             return holders
+ 
++        # Owned replacements carry their own borrowed descendants. Publish
++        # those targets through the same field-effect path as a direct write.
++        structure_changes = {index: dict(changes) for index, changes in summary.structure_fields}
++        preserved_replacements = set()
++        def replacement_fields(child, prefix):
++            for field, targets in child.fields:
++                yield prefix + '/' + field, targets
++            for field, nested in child.owned_fields:
++                yield from replacement_fields(nested, prefix + '/' + field)
++        for index, field, child in summary.owned_field_writes:
++            changes = structure_changes.setdefault(index, {})
++            if any(candidate.kind == 'owned_field_input' for candidate in child.candidates):
++                preserved_replacements.add((index, stored_field_path(field)))
++            for path, targets in replacement_fields(child, field):
++                changes[path] = changes.get(path, frozenset()) | targets
+         field_changes = []
+-        for index, changes in summary.structure_fields:
++        for index, changes in structure_changes.items():
++            changes = changes.items()
+             typ = callee_parameters[index][2]
+             holders = holders_for(index)
+             for field, targets in changes:
+@@ -1538,7 +1554,10 @@
+                 for holder, prefix in holders:
+                     full_path = (*prefix, *path)
+                     key = ('stored_field',holder,full_path)
+-                    old = active_loans.get(key, initial_stored_field_loans(holder,full_path)) if len(holders)>1 else []
++                    preserves_input = len(holders) > 1 or any(
++                        source == index and path[:len(replaced)] == replaced
++                        for source, replaced in preserved_replacements)
++                    old = active_loans.get(key, initial_stored_field_loans(holder,full_path)) if preserves_input else []
+                     # An unchanged field alternative owns its input capability;
+                     # it is not an outstanding reborrow of that same field.
+                     current = [(origin, 'stored_mut_target' if field_type == '&mut Int'
+@@ -1553,8 +1572,6 @@
+ 
+         def replacement_storage(child, previous):
+             origins = set()
+-            if owned_borrow_fields(child.typ):
+-                fail(line, 'remplacement async de champ propriétaire empruntant non raccordé')
+             for candidate in child.candidates:
+                 if candidate.kind == 'owned_field_input':
+                     origins.update(previous)
+@@ -5853,8 +5870,19 @@
+             target_type = typ[2:-1]
+             if owned_result_types.get(incoming, 'Int') != target_type:
+                 fail(line, 'remplacement de champ propriétaire : même type requis')
+-            if owned_borrow_fields(target_type):
+-                fail(line, 'remplacement async de champ propriétaire empruntant non raccordé')
++            incoming_fields = owned_capture_field_loans(incoming, target_type)
++            from results import FunctionResult, BorrowTarget
++            field_updates, field_arguments = [], [[(name, 'mut'), *received_refs.get(name, ())]]
++            field_parameters = [('carrier', 'mut', reference_types.get(name, collection_types.get(name)))]
++            for field, held in incoming_fields.items():
++                target = len(field_arguments)
++                field_arguments.append(held)
++                field_parameters.append(('target', 'ref', 'Int'))
++                full_path = '.' + '.'.join((*path, *stored_field_path(field)))
++                field_updates.append((full_path, frozenset({BorrowTarget('parameter', target)})))
++            changes = prepare_field_changes(FunctionResult('void', 'Void',
++                structure_fields=((0, tuple(field_updates)),) if field_updates else ()),
++                field_parameters, field_arguments, line)
+             if storage_of(incoming) & implicit_stacks:
+                 fail(line, 'un champ A<T> exige une allocation de pool, pas une valeur locale')
+             depth = next((index for index in reversed(range(len(scopes))) if name in scopes[index][0]), 0)
+@@ -5873,6 +5901,8 @@
+                 active_loans[('owned_storage', name, path + suffix)] = origins
+             install_field_change(('owned_storage', name, path),
+                                  [(origin, 'storage') for origin in storage_of(incoming)])
++            for key, held in changes:
++                install_field_change(key, held)
+             clear_stored_fields(incoming)
+             return
+         if typ in ('&Int', '&mut Int'):

@@ -1,0 +1,283 @@
+// SPDX-License-Identifier: (MIT OR Apache-2.0) AND BSD-3-Clause
+//! Native RFC 8878 Zstandard frames with caller-owned output and workspace.
+// Copyright 2023 The Go Authors. All rights reserved.
+// Entropy decoding adapted to Corbo from Go internal/zstd; RFC-defined tables cross-checked there.
+// Additional BSD-3-Clause terms: stdlib/THIRD_PARTY_NOTICES.txt.
+
+/// Reports invalid options, bounded storage exhaustion, malformed frames, checksum failure or dictionary requirements.
+pub enum Error {
+    /// A parameter is outside this algorithm's supported bounds.
+    InvalidParams,
+    /// The caller-provided scratch buffer cannot hold the required working state.
+    WorkspaceTooSmall,
+    /// The caller-provided output buffer cannot hold the result.
+    BufferTooSmall,
+    /// The encoded input violates the format or a supported codec constraint.
+    InvalidData,
+    /// The encoded input ends before a required field or frame is complete.
+    TruncatedInput,
+    /// The computed checksum differs from the encoded checksum.
+    ChecksumMismatch,
+    /// The frame requires a dictionary that was not supplied.
+    DictionaryRequired,
+    /// The supplied dictionary encoding is invalid or unsupported.
+    InvalidDictionary,
+    /// The supplied dictionary identity does not match the frame.
+    DictionaryMismatch,
+    /// The operation is incompatible with the current streaming state.
+    InvalidState,
+    /// The frame exceeds the caller's explicit storage budget.
+    FrameTooLarge
+}
+
+/// Controls native match-search effort and whether a content checksum is emitted.
+pub struct Params {
+    /// Requested compression effort level; constructors validate the supported range.
+    level: u32,
+    /// Whether the encoded frame includes its content checksum.
+    checksum: bool
+}
+
+impl Params {
+    /// Uses search level three and includes a content checksum.
+    fn new() -> Params { Params { level: 3, checksum: true } }
+}
+
+/// Retains frame-local entropy logs, repeated offsets, window bound and output origin.
+struct State {
+    /// Workspace offset/state for the current Huffman table.
+    huffman: u64,
+    /// Literal-length entropy-table state.
+    literal: u64,
+    /// Offset-code entropy-table state.
+    offset: u64,
+    /// Match-length entropy-table state.
+    matched: u64,
+    /// Most recent repeat offset.
+    rep1: u64,
+    /// Second most recent repeat offset.
+    rep2: u64,
+    /// Third most recent repeat offset.
+    rep3: u64,
+    /// Maximum history distance allowed by the frame.
+    window: u64,
+    /// Origin offset used to interpret the current history window.
+    origin: u64
+}
+
+/// Reads a checked little-endian integer of up to eight bytes.
+fn little(input: &[u8], at: u64, count: u64) -> u64 {
+    let mut value: u64 = 0; let mut i: u64 = 0;
+    while i < count { value = value | ((input[at + i] as u64) << (i * 8)); i = i + 1; } value
+}
+
+/// Returns a literal/match/offset baseline and its number of extra bits.
+fn baseline(kind: u64, symbol: u64) -> u64 {
+    if kind == 1 { return pack_pair(if symbol < 2 { 1 << symbol } else { (1 << symbol) - 3 }, symbol); }
+    if kind == 0 {
+        if symbol < 16 { return pack_pair(symbol, ZERO); }
+        let bases: [u64; 20] = [16,18,20,22,24,28,32,40,48,64,128,256,512,1024,2048,4096,8192,16384,32768,65536];
+        let bits: [u64; 20] = [1,1,1,1,2,2,3,3,4,6,7,8,9,10,11,12,13,14,15,16];
+        return pack_pair(bases[symbol - 16], bits[symbol - 16]);
+    }
+    if symbol < 32 { return pack_pair(symbol + 3, ZERO); }
+    let bases: [u64; 21] = [35,37,39,41,43,47,51,59,67,83,99,131,259,515,1027,2051,4099,8195,16387,32771,65539];
+    let bits: [u64; 21] = [1,1,1,1,2,2,3,3,4,4,5,7,8,9,10,11,12,13,14,15,16];
+    pack_pair(bases[symbol - 32], bits[symbol - 32])
+}
+
+/// Selects or reads a sequence table; accuracy log 99 marks a missing table.
+fn sequence_table(input: &[u8], at: u64, kind: u64, mode: u64, table: &mut [u64], previous: u64) -> u64 {
+    let maximum: u64 = if kind == 0 { 35 } else if kind == 1 { 31 } else { 52 };
+    if mode == 0 { predefined(copy(kind), &mut table[0..table.len()]); return pack_pair(if kind == 1 { 5 } else { 6 }, at); }
+    if mode == 1 {
+        if at >= input.len() as u64 || input[at] as u64 > maximum { return pack_pair(MISSING, ZERO); }
+        table[0] = input[at] as u64; return pack_pair(ZERO, at + 1);
+    }
+    if mode == 2 {
+        let decoded_fields_0 = read_fse(&input[0..input.len()], at, maximum, if kind == 1 { 8 } else { 9 }, &mut table[0..table.len()]); let bits = decoded_fields_0 >> 32; let end = decoded_fields_0 & 0xffffffff;
+        if bits == 0 { return pack_pair(MISSING, ZERO); } return pack_pair(bits, end);
+    }
+    if previous == 99 { return pack_pair(MISSING, ZERO); } pack_pair(previous, at)
+}
+
+/// Executes the literals and LZ77 sequences of one compressed block.
+fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut [u64],
+              ll: &mut [u64], off: &mut [u64], ml: &mut [u64], state: &mut State, start: u64, dictionary: &[u8]) -> Result<u64, Error> {
+    let decoded_fields_1 = literals(&input[0..input.len()], &mut scratch[0..scratch.len()], &mut huffman[0..huffman.len()], (*state).huffman); let mut at = decoded_fields_1 >> 32; let literal_count = (decoded_fields_1 >> 8) & 0xffffff; let huff_bits = decoded_fields_1 & 255;
+    if at == 0 { return Err(Error.InvalidData); }
+    let field = &mut (*state).huffman; *field = huff_bits;
+    if at >= input.len() as u64 { return Err(Error.TruncatedInput); }
+    let first = input[at] as u64; at = at + 1; let mut count = copy(first);
+    if first > 127 {
+        if at >= input.len() as u64 { return Err(Error.TruncatedInput); }
+        if first < 255 { count = ((first - 128) << 8) + input[at] as u64; at = at + 1; }
+        else {
+            if input.len() as u64 - at < 2 { return Err(Error.TruncatedInput); }
+            count = little(&input[0..input.len()], copy(at), 2) + 32512; at = at + 2;
+        }
+    }
+    let mut written = copy(start); let mut used: u64 = 0;
+    if count != 0 {
+        if at == input.len() as u64 { return Err(Error.TruncatedInput); }
+        let mode = input[at] as u64; at = at + 1;
+        if (mode & 3) != 0 { return Err(Error.InvalidData); }
+        let decoded_fields_2 = sequence_table(&input[0..input.len()], at, 0, mode >> 6, &mut ll[0..ll.len()], (*state).literal); let ll_bits = decoded_fields_2 >> 32; let ll_end = decoded_fields_2 & 0xffffffff;
+        let decoded_fields_3 = sequence_table(&input[0..input.len()], ll_end, 1, (mode >> 4) & 3, &mut off[0..off.len()], (*state).offset); let off_bits = decoded_fields_3 >> 32; let off_end = decoded_fields_3 & 0xffffffff;
+        let decoded_fields_4 = sequence_table(&input[0..input.len()], off_end, 2, (mode >> 2) & 3, &mut ml[0..ml.len()], (*state).matched); let ml_bits = decoded_fields_4 >> 32; let end = decoded_fields_4 & 0xffffffff;
+        if ll_bits == 99 || off_bits == 99 || ml_bits == 99 { return Err(Error.InvalidData); }
+        let field = &mut (*state).literal; *field = copy(ll_bits);
+        let field = &mut (*state).offset; *field = copy(off_bits);
+        let field = &mut (*state).matched; *field = copy(ml_bits);
+        let mut reader = reverse_reader(&input[0..input.len()], end, input.len() as u64);
+        let mut ll_state = backward(&input[0..input.len()], &mut reader, ll_bits);
+        let mut off_state = backward(&input[0..input.len()], &mut reader, off_bits);
+        let mut ml_state = backward(&input[0..input.len()], &mut reader, ml_bits);
+        let mut sequence: u64 = 0;
+        while sequence < count {
+            if reader.bad || ll_state >= ll.len() as u64 || off_state >= off.len() as u64 || ml_state >= ml.len() as u64 { return Err(Error.InvalidData); }
+            let a = ll[ll_state]; let b = off[off_state]; let c = ml[ml_state];
+            if (a & 255) > 35 || (b & 255) > 31 || (c & 255) > 52 { return Err(Error.InvalidData); }
+            let decoded_fields_5 = baseline(1, b & 255); let base = decoded_fields_5 >> 32; let bits = decoded_fields_5 & 0xffffffff;
+            let mut distance = base + backward(&input[0..input.len()], &mut reader, copy(bits));
+            let decoded_fields_6 = baseline(2, c & 255); let base = decoded_fields_6 >> 32; let extra = decoded_fields_6 & 0xffffffff;
+            let matched = base + backward(&input[0..input.len()], &mut reader, extra);
+            let decoded_fields_7 = baseline(0, a & 255); let base = decoded_fields_7 >> 32; let extra = decoded_fields_7 & 0xffffffff;
+            let literal = base + backward(&input[0..input.len()], &mut reader, extra);
+            let r1 = (*state).rep1; let r2 = (*state).rep2; let r3 = (*state).rep3;
+            if bits > 1 {
+                let field = &mut (*state).rep3; *field = r2;
+                let field = &mut (*state).rep2; *field = r1;
+                let field = &mut (*state).rep1; *field = copy(distance);
+            } else {
+                if literal == 0 { distance = distance + 1; }
+                if distance == 1 { distance = r1; }
+                else {
+                    if distance == 2 { distance = r2; }
+                    else if distance == 3 { distance = r3; let field = &mut (*state).rep3; *field = copy(r2); }
+                    else if distance == 4 {
+                        if r1 == 0 { return Err(Error.InvalidData); } distance = r1 - 1;
+                        let field = &mut (*state).rep3; *field = copy(r2);
+                    } else { return Err(Error.InvalidData); }
+                    let field = &mut (*state).rep2; *field = r1;
+                    let field = &mut (*state).rep1; *field = copy(distance);
+                }
+            }
+            sequence = sequence + 1;
+            if sequence < count {
+                ll_state = (a >> 16) + backward(&input[0..input.len()], &mut reader, (a >> 8) & 255);
+                ml_state = (c >> 16) + backward(&input[0..input.len()], &mut reader, (c >> 8) & 255);
+                off_state = (b >> 16) + backward(&input[0..input.len()], &mut reader, (b >> 8) & 255);
+            }
+            if reader.bad || literal > literal_count - used { return Err(Error.InvalidData); }
+            if literal > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+            let mut i: u64 = 0;
+            while i < literal { output[written] = scratch[used]; written = written + 1; used = used + 1; i = i + 1; }
+            let available = written - (*state).origin;
+            if distance == 0 { return Err(Error.InvalidData); }
+            if distance > available {
+                if available > (*state).window || distance - available > dictionary.len() as u64 { return Err(Error.InvalidData); }
+            } else if distance > (*state).window { return Err(Error.InvalidData); }
+            if matched > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+            if written - start + matched > 131072 { return Err(Error.InvalidData); }
+            i = 0;
+            while i < matched {
+                let produced = written - (*state).origin;
+                if distance > produced { output[written] = dictionary[dictionary.len() as u64 - (distance - produced)]; }
+                else { output[written] = output[written - distance]; }
+                written = written + 1; i = i + 1;
+            }
+        }
+        if reader.bad || reader.bit != reader.low { return Err(Error.InvalidData); }
+    } else if at != input.len() as u64 { return Err(Error.InvalidData); }
+    if literal_count - used > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+    if written - start + literal_count - used > 131072 { return Err(Error.InvalidData); }
+    while used < literal_count { output[written] = scratch[used]; written = written + 1; used = used + 1; }
+    Ok(written)
+}
+
+/// Decompresses concatenated/skippable frames with a caller-owned literal workspace of at least 128 KiB.
+/// Dictionary-dependent frames report DictionaryRequired. Errors may leave a partial output prefix.
+pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) -> Result<usize, Error> {
+    let empty: [u8;0] = [];
+    decompress_with_dictionary(input, output, workspace, &empty[..])
+}
+
+/// Decodes frames with a borrowed raw or formatted dictionary. No dictionary bytes are retained.
+pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) -> Result<usize, Error> {
+    if workspace.len() < 131072 { return Err(Error.WorkspaceTooSmall); }
+    if input.len() == 0 { return Err(Error.TruncatedInput); }
+    let mut at: u64 = 0; let size = input.len() as u64; let mut written: u64 = 0;
+    let mut huffman: [u64; 2048] = [0; 2048]; let mut ll: [u64; 512] = [0; 512];
+    let mut off: [u64; 256] = [0; 256]; let mut ml: [u64; 512] = [0; 512];
+    while at < size {
+        if size - at < 4 { return Err(Error.TruncatedInput); }
+        let magic = little(&input[0..input.len()], copy(at), 4); at = at + 4;
+        if (magic & 0xfffffff0) == 0x184d2a50 {
+            if size - at < 4 { return Err(Error.TruncatedInput); }
+            let length = little(&input[0..input.len()], copy(at), 4); at = at + 4;
+            if length > size - at { return Err(Error.TruncatedInput); } at = at + length; continue;
+        }
+        if magic != 0xfd2fb528 { return Err(Error.InvalidData); }
+        if at == size { return Err(Error.TruncatedInput); }
+        let flags = input[at] as u64; at = at + 1;
+        if (flags & 8) != 0 { return Err(Error.InvalidData); }
+        let single = (flags & 32) != 0; let has_checksum = (flags & 4) != 0;
+        let mut window: u64 = 0;
+        if !single {
+            if at == size { return Err(Error.TruncatedInput); }
+            let descriptor = input[at] as u64; at = at + 1;
+            let base: u64 = 1 << ((descriptor >> 3) + 10);
+            window = base + (base / 8) * (descriptor & 7);
+        }
+        let dict_flag = flags & 3; let dictionary: u64 = if dict_flag == 0 { 0 } else { 1 << (dict_flag - 1) };
+        if dictionary > size - at { return Err(Error.TruncatedInput); }
+        let expected_dictionary = little(&input[0..input.len()], copy(at), copy(dictionary));
+        if expected_dictionary != 0 && dictionary_bytes.len() == 0 { return Err(Error.DictionaryRequired); }
+        if expected_dictionary != 0 && expected_dictionary != dictionary_number(&dictionary_bytes[0..dictionary_bytes.len()]) { return Err(Error.DictionaryMismatch); }
+        at = at + dictionary;
+        let flag = flags >> 6;
+        let width: u64 = if flag == 0 { if single { 1 } else { 0 } } else { 1 << flag };
+        if width > size - at { return Err(Error.TruncatedInput); }
+        let mut content = little(&input[0..input.len()], copy(at), copy(width)); at = at + width;
+        if flag == 1 { content = content + 256; }
+        let known = width != 0;
+        if single { window = copy(content); }
+        if known && content > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+        let origin = copy(written);
+        let mut state = State { huffman: 0, literal: 99, offset: 99, matched: 99, rep1: 1, rep2: 4, rep3: 8, window: window, origin: copy(origin) };
+        let dict_start = match load_dictionary(&dictionary_bytes[0..dictionary_bytes.len()], &mut huffman[..], &mut ll[..], &mut off[..], &mut ml[..], &mut state) {
+            Ok(value) => { value }, Err(error) => { return Err(error); },
+        };
+        loop {
+            if size - at < 3 { return Err(Error.TruncatedInput); }
+            let header = little(&input[0..input.len()], copy(at), 3); at = at + 3;
+            let last = (header & 1) != 0; let kind = (header >> 1) & 3; let count = header >> 3;
+            if count > 131072 || (!single && count > state.window && kind < 2) { return Err(Error.InvalidData); }
+            if kind == 0 {
+                if count > size - at { return Err(Error.TruncatedInput); }
+                if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+                let mut i: u64 = 0; while i < count { output[written] = input[at + i]; written = written + 1; i = i + 1; } at = at + count;
+            } else if kind == 1 {
+                if at == size { return Err(Error.TruncatedInput); }
+                if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+                let mut i: u64 = 0; while i < count { output[written] = input[at]; written = written + 1; i = i + 1; } at = at + 1;
+            } else if kind == 2 {
+                if count > size - at { return Err(Error.TruncatedInput); }
+                let decoded = match compressed(&input[at..at + count], &mut output[0..output.len()], &mut workspace[0..workspace.len()],
+                    &mut huffman[..], &mut ll[..], &mut off[..], &mut ml[..], &mut state, copy(written), &dictionary_bytes[dict_start..dictionary_bytes.len()]) {
+                    Ok(value) => { value }, Err(error) => { return Err(error); },
+                };
+                written = decoded; at = at + count;
+            } else { return Err(Error.InvalidData); }
+            if last { break; }
+        }
+        if known && written - origin != content { return Err(Error.InvalidData); }
+        if has_checksum {
+            if size - at < 4 { return Err(Error.TruncatedInput); }
+            if little(&input[0..input.len()], copy(at), 4) != (checksum(&output[origin..written]) & 0xffffffff) { return Err(Error.ChecksumMismatch); }
+            at = at + 4;
+        }
+    }
+    Ok(written as usize)
+}

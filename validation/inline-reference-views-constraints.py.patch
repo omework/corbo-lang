@@ -1,0 +1,117 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -85,6 +85,7 @@
+     absent_owned_payload: bool = False
+     owned_path: tuple = ()
+     structure_choices: tuple = ()
++    inline_path: str = ''
+ 
+     @property
+     def all_assets(self):
+@@ -136,6 +137,7 @@
+                      frozenset(arm for value in values for arm in value.variants)
+                      if all(value.variants for value in values) else frozenset(),
+                      first.storage_owner if all(value.storage_owner == first.storage_owner for value in values) else None,
++                     inline_path=first.inline_path if all(value.inline_path == first.inline_path for value in values) else '',
+                      handle_items=merge_handle_items(values),
+                      exchange_payloads=merge_exchange_payloads(values),
+                      handle_exchange=first.handle_exchange if all(value.handle_exchange == first.handle_exchange for value in values) else None,
+@@ -1190,7 +1192,8 @@
+                     self.copy_write(source, line)
+                 assets = frozenset(self.born(('copy', id(expr), source), source, current)
+                                    for source in sources)
+-                return paths, replace(original, mode='owned', assets=assets, storage_owner=None)
++                return paths, replace(original, mode='owned', assets=assets, storage_owner=None,
++                                      inline_path='', structure_choices=())
+             if op in ('array_copy', 'array_transfer'):
+                 return paths, values[0]
+             if op in ('array_literal', 'array_repeat') and values and all(
+@@ -1368,7 +1371,11 @@
+             from structure_views import contained_field
+             projection = contained_field(self.analyzer.enums, carrier.typ, expr[1][2])
+             if projection is not None:
+-                return {'next': state}, Value('mut' if op == 'mut_expr' else 'ref', projection.typ, carrier.assets)
++                from structure_views import project_fields
++                path = expr[1][2]
++                return {'next': state}, Value('mut' if op == 'mut_expr' else 'ref', projection.typ, carrier.assets,
++                    fields=project_fields(carrier.fields, path), storage_owner=carrier.storage_owner or expr[1][1],
++                    inline_path=(carrier.inline_path + '.' if carrier.inline_path else '') + path)
+             return {'next': state}, Value('array_mut' if op == 'mut_expr' else 'array_ref', 'Int', carrier.assets)
+         if op == 'field_deref' or (op in ('ref_expr', 'mut_expr') and expr[1][0] == 'field_deref'):
+             place = expr[1] if op == 'field_deref' else expr[1][1]
+@@ -1444,7 +1451,8 @@
+             self.touch(original, state, line)
+             self.use_source(source, True, line)
+             asset = self.born(('new', id(expr)), source, state)
+-            return {'next': state}, replace(original, mode='owned', assets=frozenset({asset}), storage_owner=None)
++            return {'next': state}, replace(original, mode='owned', assets=frozenset({asset}), storage_owner=None,
++                                           inline_path='', structure_choices=())
+         if op in ('new', 'new_enum'):
+             values = [expr[2]] if op == 'new' else [v for _, v in expr[4]]
+             paths = {'next': state}
+@@ -1731,7 +1739,7 @@
+             for parameter, fields in result.structure_fields:
+                 name = borrowed_array_name(args[parameter])
+                 projected = name is None and isinstance(actuals[parameter], Value) and (
+-                    actuals[parameter].owned_path or actuals[parameter].structure_choices)
++                    actuals[parameter].owned_path or actuals[parameter].structure_choices or actuals[parameter].inline_path)
+                 if projected:
+                     name = '\0projected_structure_update'
+                     current.environment[name] = actuals[parameter]
+@@ -1817,7 +1825,7 @@
+                                                    else actuals[target.parameter].assets | actuals[target.parameter].reservations
+                                                    if target.kind in ('indirect_field_parameter', 'mutable_vector_parameter')
+                                                    else actuals[target.parameter].reservations))
+-                array_result = bool(result.reference_targets) and all(
++                array_result = result.typ not in self.analyzer.enums and bool(result.reference_targets) and all(
+                     target.kind in ('array_parameter', 'stored_array_parameter', 'reserved_stored_array_parameter',
+                                     'inline_field_parameter', 'indirect_field_parameter')
+                     or actuals[target.parameter].mode in ('array_ref', 'array_mut')
+@@ -1829,12 +1837,19 @@
+                     row = rebuild_reference_tree(prototype, result.typ, mapped, result.borrowed_fields, actuals)
+                     return paths, replace(row, container_borrow=True, container_mode=result.mode)
+                 fields = ()
++                projected = []
+                 if result.typ in self.analyzer.enums:
+-                    projected = []
+                     for target in targets:
+                         actual = result_actual(target)
+                         if target.kind == 'parameter':
+                             projected.append(actual)
++                        elif target.kind == 'inline_field_parameter' and not target.carrier_kind:
++                            from structure_views import project_fields
++                            name = actual.storage_owner or (args[target.parameter][1]
++                                if args[target.parameter][0] in ('ref', 'mut', 'name', 'reborrow') else None)
++                            projected.append(replace(actual, typ=result.typ, mode=result.mode,
++                                fields=project_fields(actual.fields, target.field), storage_owner=name,
++                                inline_path=(actual.inline_path + '.' if actual.inline_path else '') + target.field))
+                         elif target.kind in ('detached_field_parameter', 'shared_field_parameter',
+                                              'moved_field_parameter', 'field_parameter'):
+                             projected.append(replace(actual, fields=nested_reference_fields(actual.fields, target.field)))
+@@ -1846,7 +1861,10 @@
+                     if vector.assets:
+                         handle_slot = (vector.assets, index)
+                 return paths, Value('array_' + result.mode if array_result else result.mode,
+-                                    result.typ, assets, fields, reservations=reservations, handle_slot=handle_slot)
++                                    result.typ, assets, fields, reservations=reservations, handle_slot=handle_slot,
++                                    storage_owner=projected[0].storage_owner if len(projected) == 1 else None,
++                                    inline_path=projected[0].inline_path if len(projected) == 1 else '',
++                                    structure_choices=tuple(projected) if len(projected) > 1 and any(v.inline_path for v in projected) else ())
+             if result.mode == 'array_refs':
+                 fields = []
+                 reservations = set()
+@@ -2370,6 +2388,14 @@
+         return paths, tail
+ 
+     def update_structure(self, state, name, carrier, changes, line):
++        if carrier.inline_path and not carrier.structure_choices:
++            owner = self.lookup(carrier.storage_owner, state, line)
++            from structure_views import prefix_fields, project_fields
++            self.update_structure(state, carrier.storage_owner, owner,
++                                  dict(prefix_fields(changes.items(), carrier.inline_path)), line)
++            fields = project_fields(state.environment[carrier.storage_owner].fields, carrier.inline_path)
++            state.environment[name] = replace(carrier, fields=fields)
++            return dict(fields)
+         if carrier.structure_choices:
+             branches = []
+             for choice in carrier.structure_choices:

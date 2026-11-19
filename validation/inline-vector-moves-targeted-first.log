@@ -1,0 +1,108 @@
+test_async_owned_capture_and_injected_vector (test_inline_vector_moves.InlineVectorMoveTests.test_async_owned_capture_and_injected_vector) ... FAIL
+test_borrow_ends_before_move (test_inline_vector_moves.InlineVectorMoveTests.test_borrow_ends_before_move) ... ok
+test_child_scope_and_explicit_import (test_inline_vector_moves.InlineVectorMoveTests.test_child_scope_and_explicit_import) ... ok
+test_extract_move_between_vectors_and_loop_cleanup (test_inline_vector_moves.InlineVectorMoveTests.test_extract_move_between_vectors_and_loop_cleanup) ... ok
+test_function_parameter_and_relay (test_inline_vector_moves.InlineVectorMoveTests.test_function_parameter_and_relay) ... FAIL
+test_named_move_and_invalidation_sync_async (test_inline_vector_moves.InlineVectorMoveTests.test_named_move_and_invalidation_sync_async) ... ok
+test_nested_and_empty_named_values (test_inline_vector_moves.InlineVectorMoveTests.test_nested_and_empty_named_values) ... ok
+
+======================================================================
+FAIL: test_async_owned_capture_and_injected_vector (test_inline_vector_moves.InlineVectorMoveTests.test_async_owned_capture_and_injected_vector)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17671, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15640, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1006, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 8071, in _lower_async_function
+    elif set_reference(statement, body[index + 1:]):
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7917, in set_reference
+    fail(line, f'push exige une valeur locale {element}, pas une allocation A<T>')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1042, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: push exige une valeur locale Point, pas une allocation A<T>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_moves.py", line 59, in test_async_owned_capture_and_injected_vector
+    self.assertEqual(self.run_source(source).stdout,'7\n0\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: push exige une valeur locale Point, pas une allocation A<T>
+
+======================================================================
+FAIL: test_function_parameter_and_relay (test_inline_vector_moves.InlineVectorMoveTests.test_function_parameter_and_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17671, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15661, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3270, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10897, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12562, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14070, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14526, in statements
+    value = self.expression(args[0], scope, 'appel')
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9612, in expression
+    return self.vector_operation(expr, binding, method, rest, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9046, in vector_operation
+    return self.inline_vector_operation(expr, binding, method, args, scope, label)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8985, in inline_vector_operation
+    self.fail(f'push exige une valeur {element}, pas A<{element}>')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2016, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: push exige une valeur Point, pas A<Point>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_moves.py", line 51, in test_function_parameter_and_relay
+    self.assertEqual(self.run_source(source).stdout,'7\n'+('0\n' if asynchronous else ''))
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: push exige une valeur Point, pas A<Point>
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.148s
+
+FAILED (failures=2)

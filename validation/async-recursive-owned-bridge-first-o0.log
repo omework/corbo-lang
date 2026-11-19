@@ -1,0 +1,58 @@
+...F
+======================================================================
+FAIL: test_synchronous_helpers_inspect_relay_and_destroy (test_async_recursive_owned.AsyncRecursiveOwnedTests.test_synchronous_helpers_inspect_relay_and_destroy)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16618, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15123, in compile
+    self.emit_async_sync_bridge(key)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14995, in emit_async_sync_bridge
+    owned_bridge_fields(allocation, parameter)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14875, in owned_bridge_fields
+    owned_bridge_fields(child, child_pointer)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14875, in owned_bridge_fields
+    owned_bridge_fields(child, child_pointer)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14875, in owned_bridge_fields
+    owned_bridge_fields(child, child_pointer)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  [Previous line repeated 974 more times]
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14821, in owned_bridge_fields
+    present = '1' if check.is_structure_view(allocation) else f'{pointer} && {pointer}->layout->arm_tag == {tag}'
+                     ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5436, in is_structure_view
+    return any(target.inline_root is not None for target in targets)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RecursionError: maximum recursion depth exceeded
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16625, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16621, in compile_program
+    raise Error('programme trop imbriqué pour les limites du prototype') from error
+crust.Error: programme trop imbriqué pour les limites du prototype
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_recursive_owned.py", line 58, in test_synchronous_helpers_inspect_relay_and_destroy
+    self.assertEqual(self.run_source(source).stdout,'7\n9\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : programme trop imbriqué pour les limites du prototype
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.169s
+
+FAILED (failures=1)

@@ -1,0 +1,159 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1082,7 +1082,14 @@
+                 for field, typ in layout:
+                     if field == selected and typ in ('&Int', '&mut Int'):
+                         position = ' + '.join(offset) or '0'
+-                        candidates.append(f'cell_load_ref(frame->{fields[root]}, {position})')
++                        key = root, tuple(path)
++                        if root in parameter_modes:
++                            if key not in initial_field_cells:
++                                member = f'initial_field_cell_{len(initial_field_cells)}'
++                                initial_field_cells[key] = member, position
++                            candidates.append('frame->' + initial_field_cells[key][0])
++                        else:
++                            candidates.append(f'cell_load_ref(frame->{fields[root]}, {position})')
+                         break
+                     offset.append('sizeof(int)' if typ == 'Int' else 'sizeof(Cell *)')
+                 else:
+@@ -1100,7 +1107,8 @@
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False):
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+-        if contract.result.structure_fields:
++        if contract.result.structure_fields and (node.field_effect_summary is None
++                or not node.field_effect_summary.complete or result[0] not in ('scalar','bool','byte','char','void')):
+             fail(line, 'prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé')
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+@@ -1184,6 +1192,43 @@
+             pending_capture_groups.pop()
+             active_loans.pop(id(loans), None)
+         symbol, diverges = sync_bridge(expr[1], node.args[0])
++        if contract.result.structure_fields:
++            field_changes = []
++            for index, changes in contract.result.structure_fields:
++                typ = contract.parameters[index][2]
++                holders = []
++                for target, _ in argument_loans[index]:
++                    root, path = target if isinstance(target,tuple) else (target,())
++                    if root in received_refs:
++                        continue
++                    if path or parameter_modes.get(root) != 'mut' or reference_types.get(root) != typ:
++                        fail(line,'prototype : dépendances de champs async exigent un porteur injecté')
++                    holders.append(root)
++                if not holders:
++                    fail(line,'prototype : dépendances de champs async sans porteur suivi')
++                for field, targets in changes:
++                    path = tuple(field.lstrip('.').split('.'))
++                    if dict(reference_structs.get(typ,())).get('.'.join(path)) != '&Int':
++                        fail(line,'prototype : dépendances de champs mutables async non raccordées')
++                    retained = []
++                    for target in targets:
++                        if target.kind != 'parameter':
++                            fail(line,'prototype : dépendances de champs async projetées non raccordées')
++                        for origin, mode in argument_loans[target.parameter]:
++                            root, source_path = origin if isinstance(origin,tuple) else (origin,())
++                            if root in received_refs:
++                                continue
++                            if source_path or parameter_modes.get(root) not in ('ref','mut') or reference_types.get(root) != 'Int':
++                                fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
++                            retained.append((origin,mode))
++                    if not retained:
++                        fail(line,'remplacement de champ async : cible sans provenance durable')
++                    for holder in holders:
++                        key = ('stored_field',holder,path)
++                        old = active_loans.get(key,[((holder,path),'shared_target')]) if len(holders)>1 else []
++                        field_changes.append((key,list(dict.fromkeys((*old,*retained)))))
++            for key, held in field_changes:
++                active_loans[key] = held
+         call = symbol + '(' + ', '.join(prepared) + ')'
+         if signature == ('void', 'Void') or diverges:
+             steps.append(call + ';')
+@@ -1323,6 +1368,7 @@
+     wrapped_utf8_bindings = {name: UTF8_VALUE_RESULT_FAMILIES[mode] for name, mode, _ in parameters
+                              if mode in UTF8_VALUE_RESULT_FAMILIES}
+     received_refs = {}
++    initial_field_cells = {}
+     owned_result_types = {}
+     utf8_view_loans = {}
+     mutable_utf8_bindings = (text_bindings | byte_ref_bindings | slice_bindings.keys()
+@@ -1380,6 +1426,9 @@
+         declaration = functions.get(callee)
+         if declaration is None:
+             fail(line, f"fonction async inconnue '{callee}'")
++        effects = declaration.field_effect_summary
++        if effects is not None and effects.complete and effects.structure_fields:
++            fail(line,'prototype : propagation des dépendances de champs depuis une tâche enfant non raccordée')
+         if len(arguments) != len(declaration.args[1]):
+             fail(line, f"'{callee}' attend {len(declaration.args[1])} argument(s), reçu {len(arguments)}")
+         captures, loans, returned_loans = [], [], []
+@@ -2309,21 +2358,33 @@
+                    if name in set().union(*(scope[0].keys() for scope in scopes[:depth])) and name not in consumed}
+         return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs, storage
+ 
+-    def non_utf8_control_state(state):
++    def non_utf8_control_state(state, *, ignore_stored_fields=False):
+         task_state, handles, active, dead, joins, orders, views, refs, storage = state
+         mutable_ids = {id(loans) for local in refs for name, (loans, _) in local.items()
+                        if name in mutable_utf8_bindings}
+-        return (task_state, handles, {key: value for key, value in active.items() if key not in mutable_ids},
++        return (task_state, handles, {key: value for key, value in active.items()
++                                    if key not in mutable_ids and not (
++                                        ignore_stored_fields and isinstance(key, tuple)
++                                        and key[0] == 'stored_field')},
+                 dead, joins, orders,
+                 {name: value for name, value in views.items() if name not in mutable_utf8_bindings},
+                 tuple({name: value for name, value in local.items() if name not in mutable_utf8_bindings}
+                       for local in refs))
+ 
+     def merge_utf8_control_states(left, right, line, message):
+-        if non_utf8_control_state(left) != non_utf8_control_state(right):
++        if non_utf8_control_state(left, ignore_stored_fields=True) != non_utf8_control_state(right, ignore_stored_fields=True):
+             fail(line, message)
+-        tasks_state, handles, active, dead, joins, orders, views, refs = non_utf8_control_state(left)
++        tasks_state, handles, active, dead, joins, orders, views, refs = non_utf8_control_state(left, ignore_stored_fields=True)
+         active, views = active.copy(), views.copy()
++        # A conditional field store keeps every possible target. An untouched
++        # branch still contains the capture-time field, not an empty loan.
++        # Backedges keep their stricter check until their fixed point is handled.
++        for key in left[2].keys() | right[2].keys():
++            if isinstance(key, tuple) and key[0] == 'stored_field':
++                _, holder, path = key
++                initial = [((holder, path), 'shared_target')]
++                active[key] = list(dict.fromkeys((*left[2].get(key, initial),
++                                                 *right[2].get(key, initial))))
+         refs = [local.copy() for local in refs]
+         for depth, (left_refs, right_refs) in enumerate(zip(left[7], right[7], strict=True)):
+             for name in (left_refs.keys() | right_refs.keys()) & mutable_utf8_bindings:
+@@ -4431,7 +4492,12 @@
+         if dict(reference_structs[typ]).get('.'.join(path)) == '&Int':
+             # These origins identify the external target. They do not reserve
+             # the carrier slot or its mutable capability (ST13).
+-            return [(target, 'shared_target' if mode != 'storage' else mode) for target, mode in projected]
++            retained = []
++            for target, mode in projected:
++                root, full_path = target if isinstance(target,tuple) else (target,())
++                retained.extend(active_loans.get(('stored_field',root,full_path),
++                    [(target,'shared_target' if mode != 'storage' else mode)]))
++            return retained
+         return projected
+ 
+     def borrow_struct_field(expr, mode, line):
+@@ -5744,6 +5810,7 @@
+     members += ''.join(internal_members)
+     members += ''.join(f'    Cell *capture_cell_{index};\n'
+                        for index in sorted(node.cell_reference_parameters))
++    members += ''.join(f'    Cell *{member};\n' for member,_ in initial_field_cells.values())
+     if returns_value:
+         members += f'    {result_ctype} result{array_dimensions(returns_array)};\n'
+     dispatch = ''.join(f'    case {point}: goto resume_{point};\n'
+@@ -5767,6 +5834,8 @@
+             initialize += f'    frame->{member} = capture_{i};\n'
+         if i in node.cell_reference_parameters:
+             initialize += f'    frame->capture_cell_{i} = capture_cell_{i};\n'
++    for (root,_), (member,offset) in initial_field_cells.items():
++        initialize += f'    frame->{member} = cell_load_ref(frame->{fields[root]}, {offset});\n'
+     inactive_cleanup = []
+     for name, mode, _ in reversed(parameters):
+         cell = f'frame->{fields[name]}'

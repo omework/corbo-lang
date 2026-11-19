@@ -1,0 +1,76 @@
+--- crust.py.before
++++ crust.py
+@@ -12277,6 +12277,14 @@
+                 if returns is True and result[0] in ('array', 'array_refs') and expr[0] == 'array_transfer':
+                     if result[0] == 'array_refs':
+                         self.check_stored_array_destination(result[2][1], parent)
++                    continue
++                if returns is True and result[0] in ('scalar', 'bool', 'byte', 'char'):
++                    # A primitive is copied, not exported. Evaluate its C
++                    # expression while the block's allocations still live.
++                    kind, value, _ = result
++                    snapshot = f'block_value{self.uid()}'
++                    self.lines.append(f'{COPY_VALUE_TYPES[kind]} {snapshot} = {value};')
++                    result = kind, snapshot, None
+                     continue
+                 if returns is True:
+                     self.fail('une expression bloc exige une valeur transférée par <-')
+--- async_lowering.py.before
++++ async_lowering.py
+@@ -844,7 +844,7 @@
+     def fail(line, message):
+         raise error(f'ligne {line}: {message}')
+ 
+-    scalar_sync_types = {('scalar', 'Int'): 'int', ('byte', 'u8'): 'uint8_t',
++    scalar_sync_types = {('scalar', 'Int'): 'int', ('bool', 'bool'): 'int', ('byte', 'u8'): 'uint8_t',
+                          ('char', 'char'): 'CrustChar'}
+     reference_sync_types = {('ref', 'Int'): 'int *', ('mut', 'Int'): 'int *', ('mut', 'u8'): 'uint8_t *'}
+     view_sync_types = {('byte_ref', 'u8'): 'const unsigned char *'}
+@@ -950,7 +950,8 @@
+                         value, actual = str(argument[1]), 'u8'
+                     else:
+                         value, actual = infer_scalar_value(argument, line)
+-                    if actual != typ:
++                    expected_type = 'Bool' if mode == 'bool' else typ
++                    if actual != expected_type:
+                         fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
+                 snapshot = temporary(sync_types[(mode, typ)])
+                 steps.append(f'{snapshot} = {value};')
+@@ -995,7 +996,7 @@
+             return value, retained, signature
+         if signature in reference_sync_types:
+             fail(line, 'un résultat emprunté exige une liaison ou un argument de référence')
+-        return value, signature[1]
++        return value, 'Bool' if signature == ('bool', 'bool') else signature[1]
+ 
+     if any(not (scalar_array_layout(typ)[0] or int_reference_row(typ, mode))
+            if mode in ('array', *ARRAY_BORROWS) else
+@@ -2522,10 +2523,13 @@
+             del utf8_match_tags[tag_name]
+ 
+     def is_boolean(expr):
+-        return (expr[0] == 'bool' or expr[0] == 'name' and expr[1] in boolean_bindings
++        return (sync_signature(expr) == ('bool', 'bool')
++                or expr[0] == 'bool' or expr[0] == 'name' and expr[1] in boolean_bindings
+                 or expr[0] == 'await' and await_signature(expr) == ('scalar', 'Bool'))
+ 
+     def boolean_value(expr, line, *, following=None):
++        if sync_signature(expr) is not None:
++            return sync_call(expr, line, ('bool', 'bool'), following=following)[0]
+         if expr[0] == 'bool':
+             return str(int(expr[1]))
+         if expr[0] == 'name' and expr[1] in boolean_bindings:
+--- native_threads.py.before
++++ native_threads.py
+@@ -155,7 +155,10 @@
+                 return transformed, ('array', f'[{prefix}{common[1]};{count}]')
+         if op == 'call' and expr[1] in self.functions:
+             fn = self.functions[expr[1]]
+-            return transformed, ('task', expr[1]) if fn.op == 'async_fn' else fn.args[2]
++            # Ordinary bool signatures and state Bool signatures have distinct
++            # historical modes. Preserve the boolean type at this boundary.
++            result = ('scalar', 'Bool') if fn.args[2] == ('bool', 'bool') else fn.args[2]
++            return transformed, ('task', expr[1]) if fn.op == 'async_fn' else result
+         if op == 'task_spawn':
+             signature = self.expression(expr[1], env, [])[1]
+             return transformed, ('execution', signature[1]) if signature else None

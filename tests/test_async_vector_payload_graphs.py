@@ -1,0 +1,107 @@
+"""Owned vector payloads retain their loans through async frames and extraction."""
+from pathlib import Path
+import unittest
+import test_select_source as harness
+
+BASE = Path(__file__).resolve().parents[1].joinpath('validation/open-async-vector-payload-graph.crb').read_text()
+LOCAL = '''struct Item{value:&Int}
+async fn work()->Int{
+ let mut ns=pool<Int>(1);let n=ns.new(7);let mut p=pool<Item>(1);
+ let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();v.push(->p.new(value:&n));
+ yield;let item=<-v.remove(0);drop(->v);yield;let result=*item.value;
+ drop(->item);drop(->n);let again=ns.new(9);print(*again);return result;}
+fn main(){let execution=runtime::spawn(->work());match execution.join(){Ok(n)=>{print(n);},Err(_)=>{print(0);}}}'''
+
+class AsyncVectorPayloadGraphTests(unittest.TestCase):
+    run_source = harness.SelectSourceTests.run_source
+    refused = harness.SelectSourceTests.refused
+    run_c_oracle = harness.SelectSourceTests.run_c_oracle
+
+    def test_owned_capture_and_factory(self):
+        factory='fn prepare(v:->Vector<A<Item>>)-><-read{let t=read(->v);return <-t;}'
+        for source in (BASE, factory+BASE.replace('runtime::spawn(->read(->v))','runtime::spawn(->prepare(->v))')):
+            self.assertEqual(self.run_source(source).stdout,'7\n')
+            self.refused(source.replace('drop(->n);','').replace('match execution.join()', 'drop(->n);match execution.join()'),'emprunt|réserv|référenc|captur')
+
+    def test_local_payload_survives_vector_drop(self):
+        self.assertEqual(self.run_source(LOCAL).stdout,'9\n7\n')
+        for where in ('yield;let item=', 'yield;let result='):
+            self.refused(LOCAL.replace('drop(->n);','').replace(where,'drop(->n);'+where),'emprunt|réserv|référenc|captur')
+
+    def test_mutable_capture_and_local_payload(self):
+        for source,expected in ((BASE,'7\n'),(LOCAL,'9\n7\n')):
+            source=source.replace('value:&Int','value:&mut Int').replace('let n=ns.new','let mut n=ns.new').replace('value:&n','value:&mut n')
+            self.assertEqual(self.run_source(source).stdout,expected)
+            where='match execution.join()' if source.count('async fn read') else 'yield;let item='
+            for op in ('print(*n);','n=20;'):
+                self.refused(source.replace(where,op+where),'emprunt|réserv|référenc|captur|accès')
+
+    def test_nested_owned_payload(self):
+        source=BASE.replace('struct Item{value:&Int}', 'struct Inner{value:&Int} struct Item{inner:A<Inner>}').replace(
+            'let mut p=pool<Item>(1);','let mut inners=pool<Inner>(1);let mut p=pool<Item>(1);').replace(
+            'v.push(->p.new(value:&n));','let inner=inners.new(value:&n);v.push(->p.new(inner:<-inner));').replace('*item.value','inspect(&*item.inner)')
+        source='fn inspect(i:&Inner)->Int{return *i.value;}'+source
+        self.assertEqual(self.run_source(source).stdout,'7\n')
+        self.refused(source.replace('drop(->n);','').replace('match execution.join()', 'drop(->n);match execution.join()'),'emprunt|réserv|référenc|captur')
+
+    def test_inactive_task_relay_cleanup(self):
+        helper='fn relay(t:->read)-><-read{return <-t;}'
+        source=helper+BASE.replace('let execution=runtime::spawn(->read(->v));','let task=relay(->read(->v));').replace(
+            'match execution.join(){Ok(result)=>{print(result);},Err(_)=>{print(0);}}','drop(->task);let again=p.new(value:&n);print(*again.value);drop(->again);')
+        run=self.run_source(source)
+        self.assertEqual(run.stdout,'7\n')
+        self.assertEqual(run.stderr.count('=Item\n'),2)
+        self.refused(source.replace('drop(->n);','').replace('drop(->task);','drop(->n);drop(->task);'),'emprunt|réserv|référenc|captur')
+
+    def test_borrowed_vector_capture(self):
+        source=BASE.replace('v:->Vector<A<Item>>','v:&mut Vector<A<Item>>').replace('let mut items=<-v;','').replace(
+            'items.remove','v.remove').replace('drop(->items);','').replace('read(->v)','read(&mut v)').replace('drop(->n);','drop(->v);drop(->n);')
+        self.assertEqual(self.run_source(source).stdout,'7\n')
+        self.refused(source.replace('drop(->n);','').replace('match execution.join()','drop(->n);match execution.join()'),'emprunt|réserv|référenc|captur')
+
+    def test_element_pool_must_survive_task_factory(self):
+        helper='fn prepare(v:->Vector<A<Item>>)-><-read{let t=read(->v);return <-t;}'
+        for create in ('read(->v)','prepare(->v)'):
+            source=helper+BASE.replace('let mut p=pool<Item>(1);','').replace(
+                'let mut v=vp.new();','let task={let mut p=pool<Item>(1);let mut v=vp.new();').replace(
+                'let execution=runtime::spawn(->read(->v));','let t='+create+';<-t};let execution=runtime::spawn(->task);')
+            self.refused(source,'pool|source|survi|durée')
+
+    def test_pop_keeps_payload_loan(self):
+        source=LOCAL.replace('let item=<-v.remove(0);drop(->v);yield;let result=*item.value;\n drop(->item);',
+            'let popped=<-v.pop();drop(->v);yield;let result=match (->popped){Some(item)=>{yield;let x=*item.value;drop(->item);x},None=>{0}};')
+        self.assertEqual(self.run_source(source).stdout,'9\n7\n')
+        self.refused(source.replace('drop(->n);','').replace('let result=match','drop(->n);let result=match'),'emprunt|réserv|référenc|captur')
+
+    def test_replace_retains_both_result_graphs(self):
+        source=LOCAL.replace('pool<Int>(1)','pool<Int>(2)').replace('let n=ns.new(7);','let n=ns.new(7);let other=ns.new(8);').replace(
+            'let item=<-v.remove(0);drop(->v);yield;let result=*item.value;\n drop(->item);',
+            'let changed=<-v.replace(INDEX,->p.new(value:&other));drop(->v);yield;let result=match (->changed){Ok(item)=>{yield;let x=*item.value;drop(->item);x},Err(item)=>{yield;let x=*item.value;drop(->item);x}};').replace(
+            'pool<Item>(1)','pool<Item>(2)').replace('drop(->n);','drop(->n);drop(->other);')
+        for index,expected in ((0,'9\n7\n'),(9,'9\n8\n')):
+            program=source.replace('INDEX',str(index))
+            self.assertEqual(self.run_source(program).stdout,expected)
+            target='n' if index==0 else 'other'
+            self.refused(program.replace(f'drop(->{target});','').replace('let result=match',f'drop(->{target});let result=match'),'emprunt|réserv|référenc|captur')
+
+    def test_async_parent_passes_vector_to_child(self):
+        child=BASE[BASE.index('async fn read'):BASE.index('fn main')]
+        source=child+LOCAL.replace('yield;let item=<-v.remove(0);drop(->v);yield;let result=*item.value;\n drop(->item);',
+            'let child=read(->v);yield;let result=child.await;')
+        self.assertEqual(self.run_source(source).stdout,'9\n7\n')
+        self.refused(source.replace('drop(->n);','').replace('let result=child.await','drop(->n);let result=child.await'),'emprunt|réserv|référenc|captur')
+
+    def test_empty_capture_has_no_payload_borrow(self):
+        source=BASE.replace('v.push(->p.new(value:&n));','').replace(
+            'let item=<-items.remove(0);let result=*item.value;drop(->item);','let result=items.len();')
+        helper='fn prepare(v:->Vector<A<Item>>)-><-read{let t=read(->v);return <-t;}'
+        for create in ('read(->v)','prepare(->v)'):
+            program=helper+source.replace('runtime::spawn(->read(->v))','runtime::spawn(->'+create+')')
+            self.assertEqual(self.run_source(program).stdout,'0\n')
+
+    def test_try_push_success_releases_empty_result(self):
+        source=LOCAL.replace('v.push(->p.new(value:&n));','let inserted=<-v.try_push(->p.new(value:&n));yield;match (->inserted){Ok(())=>{print(1);},Err(item)=>{print(*item.value);drop(->item);}}')
+        self.assertEqual(self.run_source(source).stdout,'1\n9\n7\n')
+        self.refused(source.replace('drop(->n);','').replace('match (->inserted)','drop(->n);match (->inserted)'),'emprunt|réserv|référenc|captur')
+
+if __name__=='__main__':unittest.main()

@@ -1,0 +1,10 @@
+fn pick(v:&str,scratch:&str)->&str{print(scratch);return v;}
+async fn work(v:&str,scratch:&str)->&str{yield;return pick(v,scratch);}
+fn launch(v:&str,scratch:&str)-><-runtime::Handle<&str>{
+    let h=runtime::spawn(->work(v,scratch));return <-h;
+}
+fn main(){let mut p=pool<String>(2);let mut text=p.new();text.push_str("été");
+    let mut scratch=p.new();scratch.push_str("temporary");
+    let h=launch(&text[..],&scratch[..]);
+    match h.join(){Ok(view)=>{scratch ->;drop(->scratch);print(view);},Err(_)=>{}}
+}

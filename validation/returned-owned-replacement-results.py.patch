@@ -1,0 +1,32 @@
+--- before/results.py
++++ after/results.py
+@@ -3011,7 +3011,7 @@
+                             self.fail(line, f"'{params[candidate.source.index][0]}' n'est pas une source de stockage")
+                         candidates.add(ResultCandidate('fresh', source=source))
+                 return frozenset(candidates)
+-            if summary.same_parameter is not None and any(
++            if summary.same_parameter is not None and not summary.owned_fields and any(
+                     field.startswith('A<') for fields in self.analyzer.enums.get(summary.typ, {}).values()
+                     for _, field in fields):
+                 return flow, actuals[summary.same_parameter]
+@@ -3063,13 +3063,16 @@
+                     shared_items = tuple(frozenset(origin for target in slot
+                         for origin in self.array_update_targets(target, actuals[target.parameter]))
+                         for slot in summary.shared_vector_layout)
+-            return flow, Value(summary.mode, summary.typ, frozenset(candidates), tuple(fields), fresh_variants,
+-                               owned_fields=merge_reference_rows([
++            owned_fields = merge_reference_rows([
+                                    self.project_owned_value(actuals[item.parameter], item.field_path, summary.typ)
+                                    for item in summary.candidates if item.kind == 'owned_projection'
+                                ] + [Value('owned', summary.typ, owned_fields=tuple(
+-                                   (field, self.resolve_owned_child(child, actuals))
+-                                   for field, child in summary.owned_fields))], 'owned_fields'),
++                                   (field, self.resolve_owned_child(child, actuals, map_fields=True))
++                                   for field, child in summary.owned_fields))], 'owned_fields')
++            if summary.same_parameter is not None:
++                owned_fields = tuple((dict(actuals[summary.same_parameter].owned_fields) | dict(owned_fields)).items())
++            return flow, Value(summary.mode, summary.typ, frozenset(candidates), tuple(fields), fresh_variants,
++                               owned_fields=owned_fields,
+                                exchange_payloads=tuple(resolve_candidates(arm) for arm in summary.exchange_payloads),
+                                structure_origins=frozenset({id(expr)})
+                                if summary.typ in REFERENCE_VECTORS or '' in self.analyzer.enums.get(summary.typ, {})

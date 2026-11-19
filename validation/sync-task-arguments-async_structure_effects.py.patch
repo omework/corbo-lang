@@ -1,0 +1,19 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -261,8 +261,14 @@
+ 
+     def check_call_actuals(self, name, actuals, line):
+         if any(isinstance(value, Value) and value.pending_structure_calls for value in actuals):
+-            raise IncompleteStructureEffects(
+-                'effets différés transmis à un auxiliaire synchrone non raccordés')
++            summary = self.analyzer.infer(name)
++            if summary.task_wait_parameters or summary.mode == 'execution':
++                raise IncompleteStructureEffects(
++                    'effets différés attendus ou lancés par un auxiliaire synchrone non raccordés')
++            # A synchronous relay may transfer or discard an inactive input.
++            # Neither operation runs its body. Pure forwarding preserves the
++            # pending capture snapshots in ResultContext; a fresh alternative
++            # stays unknown until its suspension contract is available.
+ 
+     def select_task_names(self, task):
+         if not isinstance(task, Value) or task.mode != 'task' or not task.pending_structure_calls:

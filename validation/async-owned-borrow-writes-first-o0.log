@@ -1,0 +1,73 @@
+test_await_preserves_target_and_reuses_slot (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_await_preserves_target_and_reuses_slot) ... ok
+test_join_keeps_new_borrow (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_join_keeps_new_borrow) ... FAIL
+test_local_direct_replacement (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_local_direct_replacement) ... ok
+test_select_preserves_intermediate_borrow (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_select_preserves_intermediate_borrow) ... ok
+
+======================================================================
+FAIL: test_join_keeps_new_borrow (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_join_keeps_new_borrow)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16225, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16218, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14714, in compile
+    result = self.invoke(entry_call, root)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10065, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11503, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12873, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13124, in statements
+    kind, value, _ = self.expression(args[0], scope, 'print')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9358, in expression
+    return self.invoke(expr, scope)
+           ~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10065, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11503, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12873, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13027, in statements
+    value = self.contextual_array(expr, scope, 'return', expected)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6382, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8973, in expression
+    _, pointer, _ = self.expression(expr[1], scope, source_name)
+                    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8994, in expression
+    targets, parents = self.struct_shared_reference(binding, '.' + expr[2])
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5418, in struct_shared_reference
+    self.fail('champ emprunté : cible non disponible')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1963, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 3: champ emprunté : cible non disponible
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_borrow_writes.py", line 35, in test_join_keeps_new_borrow
+    self.assertEqual(self.run_source(source).stdout,'1\n9\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: champ emprunté : cible non disponible
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.827s
+
+FAILED (failures=1)

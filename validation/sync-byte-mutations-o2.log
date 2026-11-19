@@ -1,0 +1,203 @@
+BASELINE PASS
+test_async_contract_drops_unreturned_source_after_join (test_sync_byte_borrows.SyncByteBorrowTests.test_async_contract_drops_unreturned_source_after_join) ... ok
+test_child_capture_return_and_local_escape (test_sync_byte_borrows.SyncByteBorrowTests.test_child_capture_return_and_local_escape) ... ok
+test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) ... ok
+test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) ... ok
+test_last_use_before_mutable_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_last_use_before_mutable_argument) ... ok
+test_legacy_reset_after_join_keeps_returned_source (test_sync_byte_borrows.SyncByteBorrowTests.test_legacy_reset_after_join_keeps_returned_source) ... ok
+test_literal_array_and_nested_calls (test_sync_byte_borrows.SyncByteBorrowTests.test_literal_array_and_nested_calls) ... ok
+test_pool_target_join_last_use_and_reuse (test_sync_byte_borrows.SyncByteBorrowTests.test_pool_target_join_last_use_and_reuse) ... ok
+test_prepared_source_through_suspended_argument_and_early_return (test_sync_byte_borrows.SyncByteBorrowTests.test_prepared_source_through_suspended_argument_and_early_return) ... ok
+test_static_result_has_no_source_and_mutable_parent_stays_protected (test_sync_byte_borrows.SyncByteBorrowTests.test_static_result_has_no_source_and_mutable_parent_stays_protected) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 14.538s
+
+OK
+
+byte_argument_unprotected DETECTED
+test_prepared_source_through_suspended_argument_and_early_return (test_sync_byte_borrows.SyncByteBorrowTests.test_prepared_source_through_suspended_argument_and_early_return) ... 
+  test_prepared_source_through_suspended_argument_and_early_return (test_sync_byte_borrows.SyncByteBorrowTests.test_prepared_source_through_suspended_argument_and_early_return) (argument='{a[0]=1;9}') ... FAIL
+  test_prepared_source_through_suspended_argument_and_early_return (test_sync_byte_borrows.SyncByteBorrowTests.test_prepared_source_through_suspended_argument_and_early_return) (argument='{yield;a[0]=1;9}') ... FAIL
+
+======================================================================
+FAIL: test_prepared_source_through_suspended_argument_and_early_return (test_sync_byte_borrows.SyncByteBorrowTests.test_prepared_source_through_suspended_argument_and_early_return) (argument='{a[0]=1;9}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 64, in test_prepared_source_through_suspended_argument_and_early_return
+    with self.subTest(argument=argument),self.assertRaisesRegex(Error,'emprunt actif'):
+                                         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_prepared_source_through_suspended_argument_and_early_return (test_sync_byte_borrows.SyncByteBorrowTests.test_prepared_source_through_suspended_argument_and_early_return) (argument='{yield;a[0]=1;9}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 64, in test_prepared_source_through_suspended_argument_and_early_return
+    with self.subTest(argument=argument),self.assertRaisesRegex(Error,'emprunt actif'):
+                                         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 2.286s
+
+FAILED (failures=2)
+
+byte_return_alternative_lost DETECTED
+test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) ... 
+  test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=0, conflict='b[0]=1;') ... FAIL
+  test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=0, conflict='drop(->b);') ... FAIL
+  test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=1, conflict='b[0]=1;') ... FAIL
+  test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=1, conflict='drop(->b);') ... FAIL
+
+======================================================================
+FAIL: test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=0, conflict='b[0]=1;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 36, in test_conditional_result_and_unreturned_argument
+    with self.subTest(flag=flag,conflict=conflict),self.assertRaisesRegex(Error,'emprunt actif'):
+                                                   ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=0, conflict='drop(->b);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 36, in test_conditional_result_and_unreturned_argument
+    with self.subTest(flag=flag,conflict=conflict),self.assertRaisesRegex(Error,'emprunt actif'):
+                                                   ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=1, conflict='b[0]=1;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 36, in test_conditional_result_and_unreturned_argument
+    with self.subTest(flag=flag,conflict=conflict),self.assertRaisesRegex(Error,'emprunt actif'):
+                                                   ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) (flag=1, conflict='drop(->b);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 36, in test_conditional_result_and_unreturned_argument
+    with self.subTest(flag=flag,conflict=conflict),self.assertRaisesRegex(Error,'emprunt actif'):
+                                                   ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 3.457s
+
+FAILED (failures=4)
+
+byte_result_wrong_address DETECTED
+test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument) ... FAIL
+
+======================================================================
+FAIL: test_conditional_result_and_unreturned_argument (test_sync_byte_borrows.SyncByteBorrowTests.test_conditional_result_and_unreturned_argument)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 34, in test_conditional_result_and_unreturned_argument
+    self.assertEqual(self.run_native(self.wrap(body.replace('BEFORE',''),self.declarations)).stdout,expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '7\n' != '8\n'
+- 7
++ 8
+
+
+----------------------------------------------------------------------
+Ran 1 test in 2.003s
+
+FAILED (failures=1)
+
+byte_source_contract_ignored DETECTED
+test_async_contract_drops_unreturned_source_after_join (test_sync_byte_borrows.SyncByteBorrowTests.test_async_contract_drops_unreturned_source_after_join) ... ERROR
+
+======================================================================
+ERROR: test_async_contract_drops_unreturned_source_after_join (test_sync_byte_borrows.SyncByteBorrowTests.test_async_contract_drops_unreturned_source_after_join)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 113, in test_async_contract_drops_unreturned_source_after_join
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'65\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 14910, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 14903, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 13404, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 13298, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 2934, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 9516, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 10625, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 11921, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 12891, in statements
+    self.movable(binding)
+    ~~~~~~~~~~~~^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 3359, in movable
+    self.fail(f"déplacement de '{binding.name}' interdit : emprunt encore utilisé")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-byte-mut-7bt2rgpi/crust.py", line 1915, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 9: déplacement de 'b' interdit : emprunt encore utilisé
+
+----------------------------------------------------------------------
+Ran 1 test in 0.059s
+
+FAILED (errors=1)
+
+local_byte_loan_lost DETECTED
+test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) ... 
+  test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) (conflict='a=8;') ... FAIL
+  test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) (conflict='drop(->a);') ... FAIL
+test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) ... FAIL
+
+======================================================================
+FAIL: test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) (conflict='a=8;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 47, in test_direct_byte_place_drop_and_future_loop_use
+    with self.subTest(conflict=conflict),self.assertRaisesRegex(Error,'emprunt actif'):
+                                         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use) (conflict='drop(->a);')
+----------------------------------------------------------------------
+crust.Error: ligne 6: 'a' n’est plus utilisable après drop ou transfert
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 47, in test_direct_byte_place_drop_and_future_loop_use
+    with self.subTest(conflict=conflict),self.assertRaisesRegex(Error,'emprunt actif'):
+                                         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "emprunt actif" does not match "ligne 6: 'a' n’est plus utilisable après drop ou transfert"
+
+======================================================================
+FAIL: test_direct_byte_place_drop_and_future_loop_use (test_sync_byte_borrows.SyncByteBorrowTests.test_direct_byte_place_drop_and_future_loop_use)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_byte_borrows.py", line 51, in test_direct_byte_place_drop_and_future_loop_use
+    with self.assertRaisesRegex(Error,'non durable'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.748s
+
+FAILED (failures=3)
+

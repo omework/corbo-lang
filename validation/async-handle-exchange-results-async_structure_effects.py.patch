@@ -1,0 +1,43 @@
+--- /tmp/crust-before-async-handle-exchange-results/async_structure_effects.py
++++ async_structure_effects.py
+@@ -16,7 +16,7 @@
+ 
+ 
+ FIELD_RESULT_MODES = ChainMap(dict.fromkeys(('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut',
+-                                           'owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'array')), VALUE_MODES)
++                                           'owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange', 'array')), VALUE_MODES)
+ 
+ 
+ class IncompleteStructureEffects(Exception):
+@@ -140,7 +140,7 @@
+         # Result checking belongs to the existing checker. This pass collects
+         # the states of injected structures at each continuing/returning exit.
+         declared = node.args[2] if node.args[2][0] in (
+-            'ref', 'mut', 'owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', *UTF8_BORROW_MODES) else ('void', 'Void')
++            'ref', 'mut', 'owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange', *UTF8_BORROW_MODES) else ('void', 'Void')
+         super().__init__(effects.results, replace(node, args=(
+             node.args[0], node.args[1], declared, node.args[3])))
+         self.effects = effects
+@@ -293,7 +293,12 @@
+         temporary = '\0factory_task'
+         environment[temporary] = replace(task, mode='execution')
+         try:
+-            part, completed = super().expression(('task_join', temporary), environment, line)
++            mode, typ = self.effects.definitions[task.typ].args[2]
++            if mode == 'buffered_handle_exchange':
++                part = {'next'}
++                completed = self.async_owned_result_value(mode, typ, task.task_result_sources, task.task_result_fields)
++            else:
++                part, completed = super().expression(('task_join', temporary), environment, line)
+         finally:
+             environment.pop(temporary)
+         if not isinstance(completed, Value) or completed.mode == 'unknown':
+@@ -315,7 +320,7 @@
+             value = Value(mode, typ,
+                 reference_targets=frozenset(target for value in values for target in value.reference_targets),
+                 payload_reference=any(value.payload_reference for value in values))
+-        elif mode in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', *UTF8_BORROW_MODES):
++        elif mode in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange', *UTF8_BORROW_MODES):
+             if (not values and not joined) or any((value.mode, value.typ) != (mode, typ) for value in values):
+                 raise IncompleteStructureEffects('résultat async sans contrat de provenance compatible')
+             # All complete child summaries can prove that no successful poll

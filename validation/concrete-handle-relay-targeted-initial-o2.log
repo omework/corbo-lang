@@ -1,0 +1,162 @@
+test_concrete_sources_survive_public_conversion (test_concrete_handle_relays.ConcreteHandleRelayTests.test_concrete_sources_survive_public_conversion) ... FAIL
+test_independent_capture_lifetime_model (test_concrete_handle_relays.ConcreteHandleRelayTests.test_independent_capture_lifetime_model) ... ok
+test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) ... 
+  test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='inline', shared=False) ... ERROR
+  test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='inline', shared=True) ... ERROR
+  test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='mutable', shared=True) ... ERROR
+  test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='shared', shared=True) ... ERROR
+test_recorded_return_and_last_use (test_concrete_handle_relays.ConcreteHandleRelayTests.test_recorded_return_and_last_use) ... ok
+
+======================================================================
+ERROR: test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='inline', shared=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_concrete_handle_relays.py", line 49, in test_inline_indirect_and_detached_fields
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('CHECK',operation))).stdout,
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15299, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15292, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13793, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13633, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2984, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9684, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10885, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12185, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13058, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 7: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='inline', shared=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_concrete_handle_relays.py", line 49, in test_inline_indirect_and_detached_fields
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('CHECK',operation))).stdout,
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15299, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15292, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13793, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13591, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 440, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 480, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 688, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2766, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 953, in collect
+    self.fail(line, 'retour refusé : cible empruntée non durable dans le scope parent')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 520, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 6: retour refusé : cible empruntée non durable dans le scope parent
+
+======================================================================
+ERROR: test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='mutable', shared=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_concrete_handle_relays.py", line 49, in test_inline_indirect_and_detached_fields
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('CHECK',operation))).stdout,
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15299, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15292, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13793, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13591, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 440, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 480, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 688, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2766, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 953, in collect
+    self.fail(line, 'retour refusé : cible empruntée non durable dans le scope parent')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 520, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 6: retour refusé : cible empruntée non durable dans le scope parent
+
+======================================================================
+ERROR: test_inline_indirect_and_detached_fields (test_concrete_handle_relays.ConcreteHandleRelayTests.test_inline_indirect_and_detached_fields) (field='shared', shared=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_concrete_handle_relays.py", line 49, in test_inline_indirect_and_detached_fields
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('CHECK',operation))).stdout,
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15299, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15292, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13793, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13591, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 440, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 480, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 688, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2766, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 953, in collect
+    self.fail(line, 'retour refusé : cible empruntée non durable dans le scope parent')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 520, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 6: retour refusé : cible empruntée non durable dans le scope parent
+
+======================================================================
+FAIL: test_concrete_sources_survive_public_conversion (test_concrete_handle_relays.ConcreteHandleRelayTests.test_concrete_sources_survive_public_conversion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_concrete_handle_relays.py", line 85, in test_concrete_sources_survive_public_conversion
+    self.assertIn(frozenset((('source_parameter',1),('task_reference_result_parameter',0))),pairs('read'))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: frozenset({('task_reference_result_parameter', 0), ('source_parameter', 1)}) not found in set()
+
+----------------------------------------------------------------------
+Ran 4 tests in 5.206s
+
+FAILED (failures=1, errors=4)

@@ -1,0 +1,159 @@
+--- before/crust.py
++++ after/crust.py
+@@ -147,6 +147,7 @@
+     # Backend representation requirements, inferred to a fixed point across
+     # async callers. A captured Int pointer alone cannot be stored as a Cell.
+     cell_reference_parameters: set[int] = field(default_factory=set)
++    field_effect_summary: object = None
+ 
+ 
+ class Parser:
+@@ -1605,6 +1606,7 @@
+     item_sources: tuple = ()
+     task_result_sources: tuple = ()
+     task_result_origins: frozenset = frozenset()
++    async_field_updates: tuple = ()
+     item_positions: tuple | None = ()
+     item_origins: frozenset = frozenset()
+     item_position_origins: tuple | None = ()
+@@ -3987,6 +3989,7 @@
+             item_sources=source_union(*(a.item_sources for a in values)),
+             task_result_sources=source_union(*(a.task_result_sources for a in values)),
+             task_result_origins=frozenset(o for a in values for o in a.task_result_origins),
++            async_field_updates=tuple(update for a in values for update in a.async_field_updates),
+             item_positions=self.merge_handle_positions([vars(a) for a in values]),
+             item_position_origins=self.merge_handle_positions([vars(a) for a in values], origins=True),
+             item_origins=frozenset(o for a in values for o in a.item_origins),
+@@ -4228,6 +4231,7 @@
+             allocation.item_sources = source_union(*(s['item_sources'] for s in live))
+             allocation.task_result_sources = source_union(*(s['task_result_sources'] for s in live))
+             allocation.task_result_origins = frozenset(o for state in live for o in state['task_result_origins'])
++            allocation.async_field_updates = tuple(update for state in live for update in state['async_field_updates'])
+             allocation.owned_fields = self.merge_dependencies(*(s['owned_fields'] for s in live))
+             allocation.item_positions = self.merge_handle_positions(live)
+             allocation.item_position_origins = self.merge_handle_positions(live, origins=True)
+@@ -4859,6 +4863,8 @@
+                                     task_result_sources=source_union(*(state['task_result_sources'] for state in selected_item_states)),
+                                     task_result_origins=frozenset(o for state in selected_item_states
+                                                                   for o in state['task_result_origins']),
++                                    async_field_updates=tuple(update for state in selected_item_states
++                                                              for update in state['async_field_updates']),
+                                     item_positions=self.merge_handle_positions(selected_item_states),
+                                     item_position_origins=self.merge_handle_positions(selected_item_states, origins=True),
+                                     item_origins=frozenset(o for state in selected_item_states for o in state['item_origins']),
+@@ -9871,6 +9877,10 @@
+         _, name, args = expr
+         node, _ = self.async_definitions[name]
+         parameters = node.args[1]
++        field_summary = node.field_effect_summary
++        field_updates = bool(field_summary and field_summary.complete and field_summary.structure_fields)
++        if field_updates and any(name != 'main' for name in self.call_stack):
++            self.fail('prototype : effets de champs async dans un contrat synchrone non raccordés')
+         if len(args) != len(parameters):
+             self.fail(f"'{name}' attend {len(parameters)} argument(s), reçu {len(args)}")
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+@@ -9879,6 +9889,7 @@
+         definitions = {name: declaration for name, (declaration, _) in self.async_definitions.items()}
+         result_indexes = owned_result_parameters(node, definitions, sync_result=self.function_results.get)
+         result_targets = []
++        field_bindings = {}
+         self.argument_frames.append(loans)
+         try:
+             for index, (argument, (_, mode, typ)) in enumerate(zip(args, parameters)):
+@@ -10012,6 +10023,8 @@
+                             or self.dependency_targets(target) and typ not in self.struct_fields):
+                         self.fail('une capture async exige un emprunt du type et du mode déclarés')
+                     roots = target.reference_targets or (target,)
++                    field_bindings[parameters[index][0]] = Binding(
++                        parameters[index][0], mode, value, target)
+                     if typ in VECTOR_SLICE_MODES:
+                         parent = (self.lookup(argument[1]) if named_reference else
+                                   Binding(label, mode, value, roots[0], referents=roots,
+@@ -10108,6 +10121,9 @@
+                                 task_result_sources=source_union(tuple(pool_result_sources), *(target.sources for target in result_targets)),
+                                 task_result_origins=frozenset(pool_origins) | frozenset(origin for target in result_targets for origin in target.origins),
+                                 borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents))
++        if field_updates:
++            allocation.async_field_updates = tuple(self.prepare_structure_updates(
++                field_summary.completion_result, parameters, field_bindings).values())
+         self.check_borrow_destination(allocation, scope)
+         scope.allocations.append(allocation)
+         self.allocations.append(allocation)
+@@ -10160,11 +10176,13 @@
+                                 dependencies=allocation.dependencies, borrow_parents=allocation.borrow_parents,
+                                 item_sources=allocation.item_sources, item_origins=allocation.item_origins,
+                                 task_result_sources=allocation.task_result_sources,
+-                                task_result_origins=allocation.task_result_origins)
++                                task_result_origins=allocation.task_result_origins,
++                                async_field_updates=allocation.async_field_updates)
+             scope.allocations.append(handle)
+             self.allocations.append(handle)
+             return 'execution', c, handle
+         c = f'joined{uid}'
++        self.apply_async_field_updates(allocation)
+         node, _ = self.async_definitions[task_name]
+         mode, typ = node.args[2]
+         if mode == 'array':
+@@ -10222,6 +10240,21 @@
+             return 'join_' + mode, c, None
+         self.lines.append(f'CrustJoinResult {c} = task_join_result(&{value});')
+         return {'Int': 'join_int', 'Bool': 'join_bool'}.get(typ, 'join_void'), c, None
++
++    def apply_async_field_updates(self, task):
++        """Join observes completion or LaunchFailed; retain both field states."""
++        updates = {}
++        for holder, incoming in task.async_field_updates:
++            previous = updates.get(holder.id, (holder, holder))[1]
++            proposed = self.propose_field_update(previous, incoming.dependencies,
++                                                 incoming.borrow_parents, True)
++            updates[holder.id] = holder, proposed
++        for holder, proposed in updates.values():
++            destination = next(active for active in self.scopes if active.id == holder.scope)
++            self.check_borrow_destination(proposed, destination)
++        for holder, proposed in updates.values():
++            holder.dependencies = proposed.dependencies
++            holder.borrow_parents = proposed.borrow_parents
+ 
+     def utf8_task_capture_paths(self, allocation, position=None):
+         groups = allocation.dependencies if position is None else capture_fields(allocation.dependencies, position)
+@@ -10461,6 +10494,8 @@
+                     kind, c, allocation = self.expression(arg[1], caller, pname)
+                 else:
+                     self.fail(f"argument '{pname}' : transfert -> requis")
++                if allocation.async_field_updates:
++                    self.fail('prototype : effets de champs async transmis au contrat synchrone non raccordés')
+                 if kind == 'execution' and mode == 'execution' and is_public_handle(typ):
+                     self.canonicalize_handle(allocation, typ)
+                 if (kind != mode or allocation.typ != f'{mode.capitalize()}<{typ}>'
+@@ -12152,6 +12187,7 @@
+             item_sources=source_union(*(item.item_sources for item in items)),
+             task_result_sources=source_union(*(item.task_result_sources for item in items)),
+             task_result_origins=frozenset(o for item in items for o in item.task_result_origins),
++            async_field_updates=tuple(update for item in items for update in item.async_field_updates),
+             item_positions=self.merge_handle_positions(states),
+             item_position_origins=self.merge_handle_positions(states, origins=True),
+             item_origins=frozenset(o for item in items for o in item.item_origins),
+@@ -13037,10 +13073,10 @@
+                 cname = f'v{self.uid()}'
+                 ctype = COPY_VALUE_TYPES.get(kind, 'Cell *')
+                 self.lines.append(f'{ctype} {cname} = {c};')
+-                if kind in COPY_VALUE_TYPES:
+-                    # A source-level value may be intentionally unused. Keep
+-                    # strict C warnings without inventing a Crust-level use.
+-                    self.lines.append(f'(void){cname};')
++                # A legal source use may be in a statically excluded enum arm.
++                # Silence only C's unused alias warning; the explicit-use
++                # check below still applies to Crust allocations and results.
++                self.lines.append(f'(void){cname};')
+                 if op == 'var' and kind == 'owned' and expr[0] == 'utf8_value':
+                     allocation.c = cname
+                 if op == 'assign' and target.kind == 'owned' and target.alloc is not allocation:
+@@ -13631,6 +13667,8 @@
+         from async_structure_effects import AsyncStructureEffectAnalyzer
+         self.async_structure_effects = AsyncStructureEffectAnalyzer(
+             async_functions, self.function_contracts, self.enums, Error).infer_all()
++        for name, node in async_functions.items():
++            node.field_effect_summary = self.async_structure_effects[name]
+         # Synchronous callers can join a borrowed result before frame C is
+         # emitted. Its provenance contract must already be available then.
+         from async_lowering import borrowed_result_paths

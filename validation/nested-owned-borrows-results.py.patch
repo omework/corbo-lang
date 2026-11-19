@@ -1,0 +1,55 @@
+--- before/results.py
++++ after/results.py
+@@ -737,12 +737,12 @@
+                                 frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
+                                for position, (_, capture, _) in enumerate(definition.args[1])
+                                if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES))
+-                fields += tuple((f'{reference_type(declared)[0]}.{position}/{arm}.{field}',
+-                                  frozenset({BorrowTarget('task_capture_parameter', index, f'{position}/{arm}.{field}')}))
++                from array_syntax import owned_reference_paths
++                fields += tuple((f'{access}.{position}/{path}',
++                                  frozenset({BorrowTarget('task_capture_parameter', index, f'{position}/{path}')}))
+                     for position, (_, capture, capture_type) in enumerate(definition.args[1])
+                     if capture in ('owned', 'join_owned', 'join_nested')
+-                    for arm, members in self.analyzer.enums.get(capture_type, {}).items()
+-                    for field, declared in members if reference_type(declared))
++                    for path, access, _ in owned_reference_paths(self.analyzer.enums, capture_type))
+                 from handle_types import is_public_handle
+                 if is_public_handle(typ):
+                     fields = tuple(('mut.' + key[4:] if key in ('ref.3', 'ref.5') else key, targets)
+@@ -783,9 +783,14 @@
+             elif mode in ('array_refs', 'array_refs_owned'):
+                 environment[name] = self.parameter_array(index, typ)
+             else:
++                from array_syntax import owned_reference_paths
+                 fields = tuple((key, frozenset({BorrowTarget(
+                     'detached_field_parameter' if '/' in key else 'field_parameter', index, key)}))
+                                for key, _ in aggregate_reference_paths(self.analyzer.enums, typ))
++                existing_fields = dict(fields)
++                existing_fields.update((path, frozenset({BorrowTarget('field_parameter', index, path)}))
++                    for path, _, _ in owned_reference_paths(self.analyzer.enums, typ) if '/' in path)
++                fields = tuple(existing_fields.items())
+                 tracks_reference_items = typ in REFERENCE_VECTORS and mode in ('owned', 'mut')
+                 if typ in REFERENCE_VECTORS:
+                     fields = (('.items', frozenset({BorrowTarget('detached_field_parameter', index, '.items')})),)
+@@ -2286,6 +2291,7 @@
+                     capability = reference_type(declared)
+                     if declared.startswith('A<') and isinstance(value, Value):
+                         owned_fields.append((f'{expr[3]}.{name}', value))
++                        fields.extend((f'{expr[3]}.{name}/{path}', targets) for path, targets in value.fields)
+                     if capability and isinstance(value, Value):
+                         if capability[0] == 'mut' and value.mode != 'mut':
+                             self.fail(line, 'champ mutable : emprunt mutable requis')
+@@ -2349,10 +2355,8 @@
+                                 access = 'mut' if capture_mode in SHARED_VECTOR_SLICE_MODES else 'ref'
+                                 captures.append((f'{access}.{index}', origins))
+                         elif capture_mode in ('owned', 'join_owned', 'join_nested'):
+-                            borrowed_fields = ((f'{arm}.{field}', reference_type(declared)[0])
+-                                for arm, fields in self.analyzer.enums.get(value.typ, {}).items()
+-                                for field, declared in fields if reference_type(declared))
+-                            for field, access in borrowed_fields:
++                            from array_syntax import owned_reference_paths
++                            for field, access, _ in owned_reference_paths(self.analyzer.enums, value.typ):
+                                 origins = self.owned_capture_field_targets(value, field)
+                                 captures.append((f'{access}.{index}/{field}', origins))
+                             sources = {candidate.storage() for candidate in value.candidates}

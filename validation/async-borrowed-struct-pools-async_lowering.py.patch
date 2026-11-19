@@ -1,0 +1,298 @@
+--- /tmp/crust-before-async-borrowed-struct-pools/async_lowering.py
++++ async_lowering.py
+@@ -407,9 +407,14 @@
+     if result not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
+         return frozenset()
+     completion = getattr(node, 'field_effect_summary', None)
+-    if completion and completion.complete and completion.structure_fields:
+-        # The syntax-only projection sees the input field even when the body
+-        # replaced it. The completed contract distinguishes old and new targets.
++    completed_targets = completion.completion_result.reference_targets if completion and completion.complete else ()
++    if completion and completion.complete and (completion.structure_fields or completed_targets and all(
++            target.kind in ('parameter', 'exclusive_join_parameter', 'detached_field_parameter',
++                            'inline_field_parameter', 'indirect_field_parameter')
++            for target in completed_targets)):
++        # The completed contract follows stored references through local
++        # carriers and helpers, and distinguishes old and new field targets.
++        # Keep the syntax adapter for target representations not covered here.
+         paths = set()
+         for target in completion.completion_result.reference_targets:
+             if target.kind in ('parameter', 'exclusive_join_parameter'):
+@@ -984,6 +989,7 @@
+             break
+         owned_structure_types.update(additions)
+     owned_structures = {typ: struct_layouts[typ] for typ in owned_structure_types}
++    pool_structures = owned_structures | reference_structs
+     reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+@@ -995,7 +1001,7 @@
+     owned_join_sync_types.update({(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                                  for mode in ('join_owned', 'join_nested') for typ in owned_structures})
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+-                            for mode in ('ref', 'mut') for typ in owned_structures})
++                            for mode in ('ref', 'mut') for typ in pool_structures})
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+@@ -1025,6 +1031,18 @@
+ 
+     def keep_storage(value, origins):
+         storage_values[value] = storage_values.get(value, frozenset()) | frozenset(origins)
++
++    def move_stored_fields(source, destination):
++        for key in list(active_loans):
++            if isinstance(key, tuple) and key[:2] == ('stored_field', source):
++                target = ('stored_field', destination, key[2])
++                held = active_loans.pop(key)
++                active_loans[target] = list(dict.fromkeys((*active_loans.get(target, ()), *held)))
++
++    def clear_stored_fields(holder):
++        for key in list(active_loans):
++            if isinstance(key, tuple) and key[:2] == ('stored_field', holder):
++                del active_loans[key]
+ 
+     def require_durable_storage(value, depth, line):
+         leaving = {name for scope in scopes[depth:] for name in scope[0] if name in local_pools}
+@@ -1197,7 +1215,7 @@
+         pool_type = pool_types.get(expr[1])
+         if pool_type is None:
+             fail(line, 'prototype : création directe dans un état exige un pool injecté')
+-        if pool_type[5:-1] in owned_structures:
++        if pool_type[5:-1] in pool_structures:
+             return pool_structure_value(expr, line, following=following, label=label)
+         typ = pool_type[5:-1] if expr[4:] == ('pool_default',) else expr[3]
+         if pool_type != f'Pool<{typ}>' or (typ != 'Int' and expr[4:] != ('pool_default',)):
+@@ -1231,7 +1249,7 @@
+     def pool_structure_value(expr, line, *, following=None, label='async allocation'):
+         pool_type = pool_types[expr[1]]
+         typ = pool_type[5:-1]
+-        layout = owned_structures[typ]
++        layout = pool_structures[typ]
+         if expr[0] == 'new_enum':
+             if expr[2] not in (None, typ) or expr[3] != '':
+                 fail(line, 'construction : type incompatible avec le pool de structures')
+@@ -1255,7 +1273,7 @@
+         source, loans = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]), 'mut', pool_type, line)
+         # Already evaluated owners must be cleaned if a later field suspends
+         # or exits. Publish the complete object only after every field exists.
+-        owners = []
++        owners, stored_fields = [], {}
+         storage = set(pool_storage(expr[1]))
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, owners, loans))
+@@ -1270,6 +1288,14 @@
+                         fail(line, f"champ '{field}' : valeur Int requise")
+                     snapshot = temporary('int')
+                     steps.append(f'{snapshot} = {value};')
++                elif field_type in ('&Int', '&mut Int'):
++                    mode = 'mut' if field_type == '&mut Int' else 'ref'
++                    pointer, held = sync_borrow_argument(operand, mode, 'Int', line)
++                    descriptor = stored_reference_cell(pointer, held, line)
++                    snapshot = temporary('Cell *')
++                    steps.append(f'{snapshot} = {descriptor};')
++                    loans.extend(held)
++                    stored_fields[tuple(field.split('.'))] = list(held)
+                 else:
+                     if operand[0] not in ('move', 'new_transfer', 'array_transfer'):
+                         fail(line, f"champ '{field}' : transfert explicite <- requis")
+@@ -1296,6 +1322,8 @@
+         for owner in owners:
+             steps.append(f'{owner} = NULL;')
+         owned_result_types[cell] = typ
++        for path, held in stored_fields.items():
++            active_loans[('stored_field', cell, path)] = held
+         keep_storage(cell, storage)
+         return cell
+ 
+@@ -1321,7 +1349,7 @@
+             if not path and references.get(root) == 'owned' and root not in collection_types:
+                 candidates.append(f'frame->{fields[root]}')
+                 continue
+-            layout = reference_structs.get(reference_types.get(root))
++            layout = reference_structs.get(reference_types.get(root, collection_types.get(root)))
+             if path and layout is not None:
+                 selected = '.'.join(path)
+                 offset = []
+@@ -1359,7 +1387,7 @@
+                 root, path = target if isinstance(target,tuple) else (target,())
+                 if root in received_refs:
+                     continue
+-                if path or parameter_modes.get(root) != 'mut' or reference_types.get(root) != typ:
++                if path or not (parameter_modes.get(root) == 'mut' or references.get(root) == 'owned' and root in mutable) or reference_types.get(root, collection_types.get(root)) != typ:
+                     fail(line,'prototype : dépendances de champs async exigent un porteur injecté')
+                 holders.append(root)
+             if not holders:
+@@ -1388,7 +1416,9 @@
+                         source_type = reference_types.get(root)
+                         durable_type = (source_type == 'Int' if not source_path else
+                                         dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) in ('&Int', '&mut Int'))
+-                        if parameter_modes.get(root) not in ('ref','mut') or not durable_type:
++                        local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == 'Int'
++                        local_holder = all(references.get(holder) == 'owned' for holder in holders)
++                        if not (parameter_modes.get(root) in ('ref','mut') and durable_type or local_holder and local_target):
+                             fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
+                         retained.append((origin,mode))
+                 if not retained:
+@@ -2488,8 +2518,11 @@
+         elif kind == 'owned':
+             member = declare(name, statement.line)
+             storage_bindings[name] = storage_of(value)
++            move_stored_fields(value, name)
+             references[name] = 'owned'
+             received_type = owned_result_types.get(value, 'Int')
++            if received_type in reference_structs:
++                reference_types[name] = received_type
+             if received_type != 'Int':
+                 collection_types[name] = received_type
+             if statement.mutable:
+@@ -2570,7 +2603,7 @@
+         if expr[0] in ('ref', 'mut') and expr[1] in fields and references.get(expr[1]) in (None, 'owned'):
+             typ = collection_types.get(expr[1], 'Bool' if expr[1] in boolean_bindings else
+                                        SCALAR_TYPES.get(inline_scalar_mode(expr[1])))
+-            if typ in ('Int', 'u8') and expr[1] not in arrays:
++            if typ in ('Int', 'u8', *reference_structs) and expr[1] not in arrays:
+                 return expr[0], typ
+         if bindings is None:
+             bindings = {name: (mode, reference_types.get(name, 'Int'))
+@@ -2744,7 +2777,7 @@
+             steps.append(f'frame->{member} = frame->{fields[source_name]};')
+             return True
+         if operator == 'source':
+-            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *owned_structures):
++            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *pool_structures):
+                 fail(statement.line, 'prototype async : type de pool local non pris en charge')
+             if statement.annotation is not None or statement.compact_transfer:
+                 fail(statement.line, 'un pool local ne peut être transféré ni annoté comme allocation')
+@@ -2752,15 +2785,15 @@
+             source = temporary('Source')
+             typ = initializer[3]
+             factory = f'source_pool({initializer[2]})'
+-            if typ in owned_structures:
+-                layout = owned_structures[typ]
++            if typ in pool_structures:
++                layout = pool_structures[typ]
+                 arm = temporary('Source', '[1]')
+                 offsets = temporary('size_t', f'[{max(1, len(layout))}]')
+                 kinds = temporary('unsigned char', f'[{max(1, len(layout))}]')
+                 steps.append(f'{arm}[0] = source_pool_layout({initializer[2]}, {structure_offset(layout, len(layout))});')
+                 for index, (_, field_type) in enumerate(layout):
+                     steps.extend((f'{offsets}[{index}] = {structure_offset(layout, index)};',
+-                                  f'{kinds}[{index}] = {2 if field_type.startswith("A<") else 0};'))
++                                  f'{kinds}[{index}] = {2 if field_type.startswith("A<") else 1 if field_type.startswith("&") else 0};'))
+                 steps.extend((f'{arm}[0].arm_name = "";', f'{arm}[0].field_count = {len(layout)};',
+                               f'{arm}[0].field_offsets = {offsets};', f'{arm}[0].field_kinds = {kinds};'))
+                 factory = f'source_enum_pool({arm}, 1, "{typ}")'
+@@ -2901,6 +2934,9 @@
+                 collection_types[name] = collection_types[original]
+             consumed.add(original)
+             storage_bindings[name] = storage_bindings.pop(original, frozenset())
++            move_stored_fields(original, name)
++            if original in reference_types:
++                reference_types[name] = reference_types[original]
+             if statement.mutable:
+                 mutable.add(name)
+         elif handle_move or task_move or join_move:
+@@ -4451,6 +4487,7 @@
+         if kind != 'array':
+             if kind in ('owned', 'join_owned', 'join_nested'):
+                 keep_storage(target, storage_of(result))
++                move_stored_fields(result, target)
+             steps.append(f'{target} = {result};')
+         elif all(returns_int):
+             steps.append(f'memcpy({target}, {result}, sizeof {target});')
+@@ -4568,6 +4605,7 @@
+                         join_results[payload] = inner, 'allocation', None
+                         owned_result_types[inner] = owned_result_types.get(result, 'Int')
+                         keep_storage(inner, storage_of(result))
++                        move_stored_fields(result, inner)
+                         scopes[-1][0][payload] = None
+                     else:
+                         declare(payload, line)
+@@ -4774,6 +4812,7 @@
+                         if kind != 'array':
+                             if kind in ('owned', 'join_owned', 'join_nested'):
+                                 keep_storage(target, storage_of(result))
++                                move_stored_fields(result, target)
+                             steps.append(f'{target} = {result};')
+                         elif all(shape):
+                             steps.append(f'memcpy({target}, {result}, sizeof {target});')
+@@ -4916,6 +4955,7 @@
+             member = f'frame->{fields[name]}'
+             result = temporary('Cell *')
+             keep_storage(result, storage_bindings.get(name, ()))
++            move_stored_fields(name, result)
+             if depth is not None:
+                 require_durable_storage(result, depth, line)
+             owned_result_types[result] = collection_types.get(name, 'Int')
+@@ -5145,6 +5185,7 @@
+     def drop_owned(name, line):
+         check_access(name, line, write=True)
+         consumed.add(name)
++        clear_stored_fields(name)
+         storage_bindings.pop(name, None)
+         member = f'frame->{fields[name]}'
+         steps.extend((f'cell_drop({member});', f'{member} = NULL;'))
+@@ -5290,12 +5331,12 @@
+         reservation = 'mut' if references.get(name) == 'mut' else mode
+         check_access(name, line, write=reservation == 'mut', path=path)
+         origins = [(name, reservation), *received_refs.get(name, ())]
+-        if references.get(name) == 'owned':
++        if references.get(name) == 'owned' and typ not in ('&Int', '&mut Int'):
+             # A field target is owned by the carrier: retaining the projection
+             # must still prevent transferring/dropping the whole carrier.
+             loans = project_field_loans(origins, path)
+         else:
+-            loans = project_result_field_loans(origins, reference_types[name], path)
++            loans = project_result_field_loans(origins, reference_types.get(name, collection_types.get(name)), path)
+         return pointer, loans
+ 
+     def store_struct_field(place, rhs, line, *, following):
+@@ -5712,6 +5753,7 @@
+                     drop_owned(receiver, line)
+                 consumed.remove(receiver)
+                 storage_bindings[receiver] = storage_of(replacement)
++                move_stored_fields(replacement, receiver)
+                 steps.append(f'frame->{fields[receiver]} = {replacement};')
+                 names = next(names for names, *_ in reversed(scopes) if receiver in names)
+                 del names[receiver]
+@@ -6289,7 +6331,9 @@
+         return utf8_value_live(tail, name, owned=owned)
+ 
+     def release_statement_loans(following, *, depth=None, earlier=(), utf8_only=False):
+-        if utf8_only and not mutable_utf8_bindings:
++        if utf8_only and not mutable_utf8_bindings and not any(
++                isinstance(key, tuple) and key[0] == 'stored_field'
++                and references.get(key[1]) == 'owned' for key in active_loans):
+             return
+         loop = loops[-1] if depth is None and loops else None
+         if depth is None:
+@@ -6319,6 +6363,28 @@
+                     continue
+                 if not any(mentions(tail, name) for tail in tails):
+                     active_loans.pop(id(loans), None)
++        # A last lexical use is not a last use through a live carrier loan.
++        # Iterate because retiring one stored reborrow can release another.
++        while True:
++            retired = []
++            for key in list(active_loans):
++                if not (isinstance(key, tuple) and key[0] == 'stored_field'):
++                    continue
++                _, holder, field_path = key
++                borrowed = any(loan_root(target) == holder
++                    and mode not in ('storage', 'shared_target', 'stored_mut_target')
++                    and (not isinstance(target, tuple) or all(
++                        left is None or right is None or left == right
++                        for left, right in zip(field_path, target[1])))
++                    for other, loans in active_loans.items() if other != key
++                    for target, mode in loans)
++                if references.get(holder) == 'owned' and not borrowed and not utf8_current_live(
++                        following, holder, depth=continuation[0][0], earlier=earlier, owned=True):
++                    retired.append(key)
++            if not retired:
++                break
++            for key in retired:
++                del active_loans[key]
+         current_depth = continuation[0][0]
+         for owner_depth, scope in enumerate(scopes[:current_depth + 1]):
+             for name, (loans, _) in scope[4].items():

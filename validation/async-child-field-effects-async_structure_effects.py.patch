@@ -1,0 +1,16 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -195,7 +195,11 @@
+                     payload_reference=any(value.payload_reference for value in completed_values))
+             if mode not in ('scalar', 'bool', 'byte', 'char', 'void'):
+                 raise IncompleteStructureEffects('origine du résultat async non raccordée aux effets de champs')
+-            # Scalar result data does not carry a field dependency. Its actual
+-            # value/type and the execution envelope are checked elsewhere.
++            # Match payloads still require the handle's execution envelope,
++            # even though scalar data itself carries no field dependency.
++            if task.mode == 'execution':
++                return flow, Value({'Int': 'join_int', 'Bool': 'join_bool',
++                    'bool': 'join_bool', 'u8': 'join_byte', 'char': 'join_char'}
++                    .get(typ, 'join_void'), typ)
+             return flow, Value(mode, typ)
+         return super().expression(expr, environment, line, expected_array)

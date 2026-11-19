@@ -1,0 +1,175 @@
+--- before/crust.py
++++ after/crust.py
+@@ -1889,6 +1889,7 @@
+         self.async_pool_capacities = {}
+         self.async_reference_paths = {}
+         self.async_sync_bridges = {}
++        self.async_local_variants = {}
+         self.async_sync_prototypes = []
+         self.async_sync_calls = {}
+         self.inline_array_projections = {}
+@@ -2653,7 +2654,7 @@
+         for name in self.function_effects:
+             node = self.functions[name]
+             check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+-            for attr in ('functions', 'async_definitions', 'async_reference_paths', 'enums', 'struct_fields',
++            for attr in ('functions', 'async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields',
+                          'function_effects', 'function_results',
+                          'function_constraints', 'function_contracts'):
+                 setattr(check, attr, getattr(self, attr))
+@@ -3026,7 +3027,7 @@
+     def verify_top_level(self, nodes):
+         """Verify script statements with opaque callee contracts too."""
+         check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+-        for attr in ('async_definitions', 'async_reference_paths', 'enums', 'struct_fields', 'function_effects', 'function_results',
++        for attr in ('async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields', 'function_effects', 'function_results',
+                      'function_constraints', 'function_contracts'):
+             setattr(check, attr, getattr(self, attr))
+         check.contract_calls = True
+@@ -9982,6 +9983,7 @@
+             self.fail(f"'{name}' attend {len(parameters)} argument(s), reçu {len(args)}")
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+         captures, loans, transferred, dependencies = [], [], [], []
++        local_captures = set()
+         pool_sources, pool_result_sources, pool_origins = [], [], set()
+         definitions = {name: declaration for name, (declaration, _) in self.async_definitions.items()}
+         result_indexes = owned_result_parameters(node, definitions, sync_result=self.function_results.get)
+@@ -10082,6 +10084,12 @@
+                 else:
+                     kind, value, target = self.expression(argument, scope, label)
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
++                if (not array_capture and mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES)
++                        and typ in self.struct_fields and target is not None
++                        and any(source.kind == 'local_stack' for source in target.sources)):
++                    if parameters[index][0] in node.handle_parameters:
++                        self.fail('capture A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
++                    local_captures.add(index)
+                 if array_capture:
+                     expected = 'array_mut' if mode in ('mut', 'array_mut') else 'array_ref'
+                     element = self.declared_array_type(typ) if mode in ('array_ref', 'array_mut') else 'uint8_t' if typ == 'u8' else 'int'
+@@ -10206,7 +10214,8 @@
+         self.expression_clock(expr)
+         uid = self.uid()
+         c = f'task{uid}'
+-        self.lines.append(f'CrustTask *{c} = crust_async_{name}_create({", ".join(captures)});')
++        target_name = self.reserve_async_local_variant(name, frozenset(local_captures)) if local_captures else name
++        self.lines.append(f'CrustTask *{c} = crust_async_{target_name}_create({", ".join(captures)});')
+         for target in transferred:
+             if target.guard:
+                 self.lines.append(f'*({target.guard}) = 0;')
+@@ -13849,7 +13858,9 @@
+                     node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+                     self.declared_array_type, self.async_frame_slots,
+                     sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+-                    struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
++                    struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
++                    specialize=self.reserve_async_local_variant)
++            self.lower_async_local_variants(refresh=True)
+             if all(previous[name] == node.cell_reference_parameters
+                    for name, node in async_functions.items()):
+                 break
+@@ -13867,9 +13878,41 @@
+                 self.function_contracts[callee].synchronous_task_slots for callee in callees)
+         if 'main' not in self.functions:
+             self.verify_top_level(main)
++        self.lower_async_local_variants()
+         self.async_pool_capacities = capacities(async_graph, explicit_capacities,
+                                                 self.async_sync_slots, self.async_frame_slots, Error)
+         return main
++
++    def reserve_async_local_variant(self, name, local_parameters):
++        key = name, local_parameters
++        if key not in self.async_local_variants:
++            symbol = name + '__crust_storage_' + str(len(self.async_local_variants))
++            while symbol in self.async_definitions:
++                symbol += '_'
++            self.async_local_variants[key] = symbol, None
++        return self.async_local_variants[key][0]
++
++    def lower_async_local_variants(self, *, refresh=False):
++        from async_lowering import lower_async_function
++        if refresh:
++            for key, (symbol, _) in self.async_local_variants.items():
++                self.async_local_variants[key] = symbol, None
++        definitions = {name: node for name, (node, _) in self.async_definitions.items()}
++        def enable_threads():
++            self.thread_runtime_used = self.async_thread_runtime_used = True
++        while pending := [key for key, (_, code) in self.async_local_variants.items() if code is None]:
++            for key in pending:
++                name, local_parameters = key
++                symbol, _ = self.async_local_variants[key]
++                code = lower_async_function(
++                    definitions[name], Error, definitions,
++                    lambda line, message, variable: self.warnings.add(f"ligne {line}: {message} : '{variable}'"),
++                    enable_threads, self.async_reference_paths, self.declared_array_type, self.async_frame_slots,
++                    sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
++                    struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
++                    local_parameters=local_parameters, variant_name=symbol,
++                    specialize=self.reserve_async_local_variant)
++                self.async_local_variants[key] = symbol, code
+ 
+     def reserve_async_sync_bridge(self, name, parent, *, local_parameters=frozenset()):
+         """Call-site verification uses signatures/effects, never callee C."""
+@@ -13892,7 +13935,7 @@
+         name, local_parameters = name if isinstance(name, tuple) else (name, frozenset())
+         contract = self.function_contracts[name]
+         check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+-        for attr in ('functions', 'async_definitions', 'async_reference_paths', 'enums', 'struct_fields',
++        for attr in ('functions', 'async_definitions', 'async_local_variants', 'async_reference_paths', 'enums', 'struct_fields',
+                      'function_effects', 'function_results', 'function_constraints', 'function_contracts',
+                      'array_types', 'array_definitions', 'handle_slot_types'):
+             setattr(check, attr, getattr(self, attr))
+@@ -14099,8 +14142,6 @@
+ 
+     def compile(self, nodes):
+         main = self.verify(nodes)
+-        for name in self.async_sync_bridges:
+-            self.emit_async_sync_bridge(name)
+         exit_value = '0'
+         if 'main' in self.functions:
+             root = Scope(self.uid(), 'root', None)
+@@ -14123,6 +14164,15 @@
+                 self.block('root', main)
+             except PathsReturned:
+                 pass
++        emitted_bridges = set()
++        while True:
++            self.lower_async_local_variants()
++            pending = [key for key in self.async_sync_bridges if key not in emitted_bridges]
++            if not pending:
++                break
++            for key in pending:
++                self.emit_async_sync_bridge(key)
++                emitted_bridges.add(key)
+         runtime = RUNTIME if self.allow_legacy_reset else PROTOTYPE_RUNTIME
+         # Emit structural layouts from this program, never from cache history.
+         layout_depth = 1
+@@ -14140,22 +14190,26 @@
+             from async_lowering import lower_task_context, task_factory_signature
+             from async_runtime import TASK_ASYNC_THREAD_RUNTIME, TASK_POOL_RUNTIME, TASK_RUNTIME_BODY, TASK_THREAD_RUNTIME, TASK_SELECT_RUNTIME
+             definitions = {name: node for name, (node, _) in self.async_definitions.items()}
++            variants = {symbol: definitions[name] for (name, _), (symbol, _) in self.async_local_variants.items()}
+             runtime += TASK_RUNTIME_BODY + TASK_POOL_RUNTIME + '\nstatic void task_discard(CrustTask *);\n'
+             if self.thread_runtime_used:
+                 runtime = '#define CRUST_THREAD_RUNTIME 1\n' + runtime + TASK_THREAD_RUNTIME
+             if self.async_thread_runtime_used:
+                 runtime += TASK_ASYNC_THREAD_RUNTIME
+-            if any('task_select_init(' in code for _, code in self.async_definitions.values()):
++            if any('task_select_init(' in code for _, code in (*self.async_definitions.values(), *self.async_local_variants.values())):
+                 runtime += TASK_SELECT_RUNTIME
+             if self.async_thread_runtime_used:
+                 runtime += '\nstatic void task_abandon_async(CrustAsyncExecution *);\n'
+             runtime += '\n' + '\n'.join(self.array_definitions) + '\n'
+             runtime += '\n'.join(task_factory_signature(name, node) + ';' for name, node in definitions.items())
++            runtime += '\n' + '\n'.join(task_factory_signature(name, node) + ';' for name, node in variants.items())
+             runtime += '\n' + '\n'.join(self.async_sync_prototypes) + '\n'
+             runtime += '\n'.join(code for _, code in self.async_definitions.values())
++            runtime += '\n'.join(code for _, code in self.async_local_variants.values())
+             runtime += lower_task_context(
+                 definitions, capacities=self.async_pool_capacities,
+-                threaded=self.thread_runtime_used, async_threaded=self.async_thread_runtime_used)
++                threaded=self.thread_runtime_used, async_threaded=self.async_thread_runtime_used,
++                variants={symbol: name for (name, _), (symbol, _) in self.async_local_variants.items()})
+             self.lines.insert(0, 'crust_task_context_init();')
+             self.lines.append('crust_task_context_close();')
+         declarations = self.definitions if self.async_definitions else self.array_definitions + self.definitions

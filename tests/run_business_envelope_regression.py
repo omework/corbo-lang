@@ -1,0 +1,27 @@
+"""Existing decoded-value, independent-result and source-loan interactions."""
+from pathlib import Path
+import sys
+import unittest
+ROOT=Path(__file__).resolve().parents[1]
+sys.path[:0]=[str(ROOT / 'prototype'),str(ROOT/'tests')]
+import test_async_runtime
+names=(
+ 'test_async_decode_result_capture_copies_before_source_drop',
+ 'test_async_decode_result_distinguishes_join_and_decode_errors',
+ 'test_async_string_pop_preserves_utf8_and_returns_independent_char_option',
+ 'test_async_string_pop_option_survives_source_drop_and_slot_reuse',
+ 'test_async_string_pop_discarded_result_still_mutates_once',
+ 'test_async_string_pop_sequence_matches_unicode_scalar_model',
+ 'test_async_string_replace_bytes_preserves_unit_type_and_suspended_order',
+ 'test_async_string_replace_bytes_matches_transactional_model',
+ 'test_async_string_replace_bytes_discarded_result_and_slice_guards',
+ 'test_async_string_replace_bytes_respects_last_use_in_loop_and_value_branch',
+ 'test_async_string_replace_bytes_result_outlives_source_pools',
+ 'test_async_string_replace_byte_sequences_suspended_arguments_and_preserves_type',
+ 'test_async_string_replace_byte_matches_transactional_utf8_model',
+ 'test_async_string_replace_byte_discarded_result_executes_write',
+ 'test_async_string_replace_byte_payload_is_u8_detached_from_source',
+)
+suite=unittest.TestSuite(test_async_runtime.AsyncRuntimeTests(name) for name in names)
+result=unittest.TextTestRunner(verbosity=2).run(suite)
+sys.exit(not result.wasSuccessful())

@@ -1,0 +1,27 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -452,9 +452,15 @@
+                   'retour async &mut Int : un paramètre mutable durable est requis')
+ 
+     def projected_origin(expr, line):
++        dereference = expr[0] == 'array_deref_slot'
+         if expr[0] == 'array_deref_slot':
+             expr = expr[1]
+         name, indices = reference_array_path(expr)
++        if name in inputs:
++            index, mode = inputs[name]
++            if dereference and parameters[index][2] == HANDLE_VECTOR and mode in ('ref', 'mut'):
++                # A returned pointee loan keeps the owning vector reserved.
++                return name, ()
+         if name not in inputs or inputs[name][1] not in ARRAY_BORROWS:
+             fail(line, diagnostic)
+         return name, tuple(index[1] if index[0] == 'int' else None for index in indices)
+@@ -649,7 +655,7 @@
+         elif expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('array_index', 'array_deref_slot'):
+             source, path = projected_origin(expr[1], line)
+             index, mode = inputs[source]
+-            if expr[0] == 'mut_expr' and mode != 'array_mut':
++            if expr[0] == 'mut_expr' and mode not in ('mut', 'array_mut'):
+                 fail(line, diagnostic)
+             mode = 'mut' if expr[0] == 'mut_expr' else 'ref'
+             origins = ((index, path),)

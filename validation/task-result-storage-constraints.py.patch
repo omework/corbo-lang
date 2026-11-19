@@ -1,0 +1,19 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -1510,12 +1510,14 @@
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+                 self.touch_assets(reservations, paths['next'], line)
+                 indexes = owned_result_parameters(catalog[name], catalog, sync_result=self.analyzer.results.get)
+-                result_assets = frozenset(asset for index in indexes if isinstance(actuals[index], Value)
++                from async_result_storage import root_result_parameters
++                root_indexes = root_result_parameters(catalog[name], indexes)
++                result_assets = frozenset(asset for index in root_indexes if isinstance(actuals[index], Value)
+                                           for asset in actuals[index].assets)
+                 pool_assets = {index: self.born(('task_pool', id(expr), index), value, paths['next'])
+                                for index, value in enumerate(actuals) if isinstance(value, Source)}
+                 assets |= frozenset(pool_assets.values())
+-                result_assets |= frozenset(asset for index, asset in pool_assets.items() if index in indexes)
++                result_assets |= frozenset(asset for index, asset in pool_assets.items() if index in root_indexes)
+                 from async_result_storage import result_storage
+                 local_inputs = frozenset(index for index, value in enumerate(actuals)
+                     if isinstance(value, Value) and value.assets and all(

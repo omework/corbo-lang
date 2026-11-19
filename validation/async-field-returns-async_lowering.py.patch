@@ -1,0 +1,96 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -478,29 +478,23 @@
+         origins = set()
+         for index, suffix in paths:
+             argument = operand[2][index]
+-            prefix = ()
+-            if argument[0] == 'call' and argument[1] in sync_contracts:
+-                if suffix:
+-                    fail(line, diagnostic)
+-                _, inherited = reference_origin(argument, {}, awaited, line)
+-                origins.update(inherited)
++            if (argument[0] in ('name', 'reborrow') and argument[1] in inputs
++                    and inputs[argument[1]][1] in ARRAY_BORROWS):
++                origins.add((inputs[argument[1]][0], suffix))
+                 continue
+-            if argument[0] in ('ref_expr', 'mut_expr'):
+-                source, prefix = projected_origin(argument[1], line)
+-            elif argument[0] in ('name', 'reborrow'):
+-                source = argument[1]
+-            else:
++            _, inherited = reference_origin(argument, {}, awaited, line)
++            origins.update((source, prefix + suffix) for source, prefix in inherited)
++        return mode, origins
++
++    def reference_origin(expr, task_calls, awaited, line):
++        if expr[0] == 'method_call' and expr[1][0] == 'name':
++            _, receivers = reference_origin(expr[1], task_calls, awaited, line)
++            types = {parameters[index][2] for index, path in receivers if not path}
++            if len(types) != 1 or any(path for _, path in receivers):
+                 fail(line, diagnostic)
+-            if source in inputs:
+-                origins.add((inputs[source][0], prefix + suffix))
+-            elif source in awaited:
+-                _, inherited = awaited_origin(*awaited[source], line)
+-                origins.update(inherited)
+-            else:
+-                fail(line, diagnostic)
+-        return mode, origins
+-
+-    def reference_origin(expr, task_calls, awaited, line):
++            symbol = next(iter(types)) + '.' + expr[2]
++            if symbol in sync_contracts:
++                expr = ('call', symbol, [expr[1], *expr[3]])
+         if expr[0] == 'call' and expr[1] in sync_contracts:
+             contract = sync_contracts[expr[1]]
+             mode, typ = contract.result_type
+@@ -508,10 +502,11 @@
+                 fail(line, diagnostic)
+             origins = set()
+             for target in contract.result.reference_targets:
+-                if target.kind != 'parameter':
++                if target.kind not in ('parameter', 'inline_field_parameter', 'indirect_field_parameter'):
+                     fail(line, 'prototype : projection du résultat synchrone non prise en charge dans un état')
+                 _, inherited = reference_origin(expr[2][target.parameter], task_calls, awaited, line)
+-                origins.update(inherited)
++                suffix = tuple(target.field.split('.')) if target.kind != 'parameter' else ()
++                origins.update((index, path + suffix) for index, path in inherited)
+             return mode, origins
+         if expr[0] == 'loop_expr':
+             possibilities = []
+@@ -552,6 +547,13 @@
+             return mode, set().union(*(origins for _, origins in possibilities))
+         if expr[0] == 'await' or push_new_receiver(expr) is not None:
+             mode, origins = awaited_origin(expr if push_new_receiver(expr) is not None else expr[1], task_calls, awaited, line)
++        elif expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('field', 'field_deref'):
++            place = expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
++            inherited_mode, inherited = reference_origin(('name', place[1]), task_calls, awaited, line)
++            mode = 'mut' if expr[0] == 'mut_expr' else 'ref'
++            if mode == 'mut' and inherited_mode != 'mut':
++                fail(line, diagnostic)
++            origins = tuple((index, path + tuple(place[2].split('.'))) for index, path in inherited)
+         elif expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('array_index', 'array_deref_slot'):
+             source, path = projected_origin(expr[1], line)
+             index, mode = inputs[source]
+@@ -1435,6 +1437,9 @@
+                         if (index in utf8_indexes and actual == 'mut' and typ in VECTOR_SLICE_MODES
+                                 and declaration.args[2][0] in (*VECTOR_SLICE_ELEMENTS, 'byte_ref')):
+                             returned_loans.append((name, 'ref'))
++                        elif index in result_paths and typ in reference_structs:
++                            for path in result_paths[index]:
++                                returned_loans.extend(project_field_loans(capture_loans, path))
+                         elif index in result_paths or index in utf8_indexes:
+                             returned_loans.extend(capture_loans)
+                 if mode in ASYNC_SHARED_VIEW_MODES:
+@@ -4047,6 +4052,10 @@
+                 if await_signature(value) not in (None, result):
+                     fail(line, 'retour emprunté async : type incompatible')
+                 pointer, _, _ = await_task(value, line, returns_value=True, borrow=True)
++            elif field_reference_shape(value) is not None:
++                pointer, _, signature = reference_value(value, line, following=())
++                if signature != result:
++                    fail(line, 'retour emprunté async : type ou mode incompatible')
+             elif value[0] in ('ref_expr', 'mut_expr'):
+                 pointer, _ = capture_array_place(value[1], result[0], line, expected_element='uint8_t' if result[1] == 'u8' else 'int')
+             else:

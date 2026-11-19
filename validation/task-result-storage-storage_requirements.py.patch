@@ -1,0 +1,70 @@
+--- before/storage_requirements.py
++++ after/storage_requirements.py
+@@ -60,16 +60,20 @@
+     analyzer.summaries.update(constraints)
+ 
+     def require(context, value, required, line):
++        if isinstance(value, Value) and value.mode in ('task', 'execution'):
++            value = context.completed_task(value)
+         if not isinstance(value, Value) or value.typ not in structures:
+             return
+         demands = dict(context.node.storage_requirements)
++        def demand(index):
++            previous = demands.get(index)
++            if previous is not None and previous != required:
++                context.fail(line, 'exigences de stockage incompatibles : local T et allocation A<T>')
++            demands[index] = required
+         for asset in value.assets:
+             source = asset.source
+             if source.kind == 'allocation_parameter' and context.params[source.index][2] in structures:
+-                previous = demands.get(source.index)
+-                if previous is not None and previous != required:
+-                    context.fail(line, 'exigences de stockage incompatibles : local T et allocation A<T>')
+-                demands[source.index] = required
++                demand(source.index)
+             elif source.kind == 'local':
+                 actual = 'local' if source.name == 'data stack implicite' else 'pool'
+                 if actual != required:
+@@ -78,20 +82,36 @@
+                 if required != 'pool':
+                     context.fail(line, 'exigence de stockage local incompatible avec une allocation de pool')
+             elif source.kind == 'task_result_parameter':
+-                definition = async_functions[context.params[source.index][2]]
++                definition = context.analyzer.async_functions[context.params[source.index][2]]
+                 actual = getattr(definition, 'join_storage_result', None)
+                 if actual is None and getattr(definition, 'handle_result', False):
+                     actual = 'pool'
+                 effect = getattr(definition, 'field_effect_summary', None)
+                 if actual is None and effect and effect.complete:
+                     candidates = effect.completion_result.candidates
+-                    if candidates and all(candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
+-                                          for candidate in candidates):
+-                        actual = 'local'
++                    for candidate in candidates:
++                        known = None
++                        if candidate.kind == 'fresh' and candidate.source.kind == 'local_value':
++                            known = 'local'
++                        elif candidate.kind == 'fresh' and candidate.source.kind == 'source_parameter':
++                            known = 'pool'
++                        elif candidate.kind == 'parameter' or (candidate.kind == 'fresh'
++                                and candidate.source.kind == 'allocation_parameter'):
++                            index = candidate.parameter if candidate.kind == 'parameter' else candidate.source.index
++                            name = definition.args[1][index][0]
++                            known = dict(getattr(definition, 'storage_requirements', ())).get(index)
++                            if name in getattr(definition, 'handle_parameters', ()):
++                                known = 'pool'
++                        if known is not None and known != required:
++                            context.fail(line, f'exigence de stockage {required} incompatible avec un résultat de tâche {known}')
+                 if actual is None:
+-                    context.fail(line, 'exigence de stockage du résultat de tâche non démontrée par son contrat')
+-                if actual != required:
++                    # The opaque input's completion source is an obligation
++                    # on its caller, just like an owned structure parameter.
++                    demand(source.index)
++                elif actual != required:
+                     context.fail(line, f'exigence de stockage {required} incompatible avec le résultat de tâche {actual}')
++                else:
++                    demand(source.index)
+             else:
+                 context.fail(line, 'prototype : exigence de stockage sur une projection non raccordée')
+         context.node.storage_requirements = tuple(sorted(demands.items()))

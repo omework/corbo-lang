@@ -1,0 +1,16 @@
+--- before/crust.py
++++ crust.py
+@@ -7120,6 +7120,13 @@
+                 return 'scalar', value, None
+             if place[0] == 'array_index' and place[1][0] == 'name':
+                 vector = self.lookup(place[1][1])
++                if vector.alloc is not None and vector.alloc.typ == HANDLE_VECTOR:
++                    borrow = ('ref_expr', place)
++                    self.positions[id(borrow)] = self.positions[id(expr)]
++                    _, slot, _ = self.expression(borrow, scope, label)
++                    value = f'read{self.uid()}'
++                    self.lines.append(f'int {value} = (*{slot})->value;')
++                    return 'scalar', value, None
+                 if vector.alloc is not None and vector.alloc.typ == SHARED_REF_VECTOR:
+                     _, reference, _ = self.expression(place, scope, label)
+                     value = f'read{self.uid()}'

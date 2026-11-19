@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Shared socket errors and metadata for incoming UDP datagrams.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    use std::sys::unix::linux::x86_64::socket as raw;
+#(endif)
+#(if: target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    use std::sys::unix::native::socket as raw;
+#(endif)
+#(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    use std::sys::win::native::socket as raw;
+#(endif)
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    use std::net::ipv4::{SocketAddr, from_parts};
+
+    /// Reports platform errors and socket conditions such as an occupied address or an oversized datagram.
+    pub enum SocketError {
+        /// Preserves the native operating-system error code in code.
+        Os {
+            /// Native operating-system status code preserved by this error.
+            code: i64
+        },
+        /// The requested local endpoint is already in use.
+        AddressInUse,
+        /// The remote endpoint refused the connection.
+        ConnectionRefused,
+        /// The received datagram exceeded the supplied buffer and was consumed.
+        DatagramTooLarge,
+    }
+
+    /// Stores the received datagram's byte count and sender address.
+    pub struct Datagram {
+        /// Number of received datagram payload bytes.
+        size: u64,
+        /// Packed sender IPv4 address and port, decoded by the public peer accessor.
+        peer: u64,
+    }
+
+    impl Datagram {
+        /// Returns how many payload bytes were received.
+        fn count(&self) -> usize { (*self).size as usize }
+
+        /// Returns the datagram's source IPv4 address and port.
+        fn sender(&self) -> SocketAddr {
+            let (ip, port) = raw::decode_peer((*self).peer);
+            from_parts(ip, port)
+        }
+    }
+
+    /// Creates metadata for the byte count and sender returned by a receive operation.
+    pub fn datagram(size: u64, peer: u64) -> Datagram {
+        Datagram { size: size, peer: peer }
+    }
+#(endif)

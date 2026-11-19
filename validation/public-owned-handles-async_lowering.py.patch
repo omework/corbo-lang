@@ -1,0 +1,13 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -635,6 +635,10 @@
+     name, parameters, result, body = node.args
+     if result[0] not in ('owned', *JOIN_PAYLOADS):
+         return frozenset()
++    # An opaque public handle describes this provenance in its contract;
++    # it has no task body from which to infer it.
++    if (position := getattr(node, 'public_result_storage', None)) is not None:
++        return frozenset({position})
+     if cache is None:
+         cache = {}
+     if name in cache:

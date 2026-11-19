@@ -1,0 +1,192 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -105,6 +105,10 @@
+                          if source_parameter(mode, typ))
+     definitions = {}
+     returns = []
++
++    def view_result_contract(callee):
++        contract = (sync_contracts or {}).get(callee)
++        return contract if contract is not None or sync_result_contract is None else sync_result_contract(callee)
+ 
+     def branch_call_names(branch, expanding):
+         if isinstance(branch, tuple):
+@@ -160,6 +164,13 @@
+             if alternatives and all(origins is not None for origins in alternatives):
+                 return set().union(*alternatives)
+             return None
++        if op == 'call' and (contract := view_result_contract(operand[1])) is not None:
++            if contract.result_type[0] == 'execution':
++                targets = {target for field, targets in contract.result.borrowed_fields
++                           if field.partition('.')[2] in ('4', '5') for target in targets}
++                if all(target.kind in ('utf8_parameter', 'parameter', 'string_parameter', 'vector_parameter')
++                       for target in targets):
++                    return {origin for target in targets for origin in mentions(operand[2][target.parameter], expanding)}
+         if op != 'call' or operand[1] not in functions:
+             return None
+         child = functions[operand[1]]
+@@ -172,9 +183,7 @@
+ 
+     def mentions(value, expanding=frozenset()):
+         if isinstance(value, tuple) and value and value[0] == 'call':
+-            contract = (sync_contracts or {}).get(value[1])
+-            if contract is None and sync_result_contract is not None:
+-                contract = sync_result_contract(value[1])
++            contract = view_result_contract(value[1])
+             if (contract is not None and contract.result_type[0] in ASYNC_CAPTURE_VIEW_MODES
+                     and len(value[2]) == len(contract.parameters)
+                     and all(target.kind in ('utf8_parameter', 'parameter', 'string_parameter', 'vector_parameter')
+@@ -493,6 +502,20 @@
+         return mode, origins
+ 
+     def call_origin(operand, awaited, line):
++        if operand and operand[0] == 'call' and (contract := result_contract(operand[1])) is not None:
++            from handle_types import public_signature
++            signature = public_signature(contract.result_type[1]) if contract.result_type[0] == 'execution' else None
++            if signature is not None and signature[0] in ('ref', 'mut') and signature[1] == result[1]:
++                origins = set()
++                for field, targets in contract.result.borrowed_fields:
++                    if field.partition('.')[2] not in ('4', '5'):
++                        continue
++                    for target in targets:
++                        if target.kind != 'parameter':
++                            fail(line, 'prototype : projection du résultat du handle sans paramètre direct')
++                        _, inherited = reference_origin(operand[2][target.parameter], {}, awaited, line)
++                        origins.update(inherited)
++                return signature[0], origins
+         if not operand or operand[0] != 'call' or operand[1] not in functions:
+             fail(line, diagnostic)
+         child = functions[operand[1]]
+@@ -884,6 +907,8 @@
+ 
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+                           utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts):
++    from handle_types import HandleDefinitions, public_signature
++    functions = HandleDefinitions(functions)
+     name, parameters, result, body = node.args
+ 
+     def fail(line, message):
+@@ -900,6 +925,9 @@
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+                        for mode in ('ref', 'mut') for _, typ in owned_sync_types}
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | pool_sync_types
++    handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
++                         if contract.result_type[0] == 'execution'
++                         and public_signature(contract.result_type[1]) is not None}
+ 
+     def pool_argument(argument, mode, typ, line):
+         local = argument[1] in local_pools if argument[0] in ('name', 'ref', 'mut') else False
+@@ -1024,7 +1052,7 @@
+         keep_storage(cell, pool_storage(expr[1]))
+         return cell
+ 
+-    def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
++    def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False):
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+         if contract.result.structure_fields:
+@@ -1032,13 +1060,15 @@
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+         signature = contract.result_type
+-        if (signature not in sync_types and signature != ('void', 'Void')
++        if (signature not in sync_types and signature not in handle_sync_types and signature != ('void', 'Void')
+                 or any((mode, typ) not in sync_types for _, mode, typ in contract.parameters)):
+             fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+         if expected is not None and signature != expected:
+             fail(line, f'appel synchrone : résultat {signature[1]}, attendu {expected[1]}')
+         if signature in owned_sync_types and not owned:
+             fail(line, 'résultat propriétaire : recevoir, transférer ou drop explicitement')
++        if signature in handle_sync_types and not execution:
++            fail(line, 'handle lancé : recevoir puis attendre explicitement le résultat')
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+         prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
+@@ -1110,8 +1140,31 @@
+             if diverges:
+                 raise NoAsyncContinuation()
+             return '', 'Void'
+-        value = temporary(sync_types[signature])
++        value = temporary((sync_types | handle_sync_types)[signature])
+         steps.append(f'{value} = {call};')
++        if signature in handle_sync_types:
++            retained, returned = [], []
++            for field, targets in contract.result.borrowed_fields:
++                held = []
++                for target in targets:
++                    if target.kind not in ('parameter', 'utf8_parameter', 'string_parameter', 'vector_parameter'):
++                        fail(line, 'prototype : capture du handle synchrone sans paramètre direct')
++                    held.extend(argument_loans[target.parameter])
++                retained.extend(held)
++                if field.partition('.')[2] in ('4', '5'):
++                    returned.extend(held)
++            for sources, output in ((contract.result.task_sources, retained),
++                                    (contract.result.task_result_sources, returned)):
++                for source in sources:
++                    if source.kind not in ('source_parameter', 'allocation_parameter'):
++                        fail(line, 'prototype : stockage du handle synchrone sans paramètre direct')
++                    output.extend((origin, 'storage') for origin in argument_storage[source.index])
++            retained.extend(returned)
++            active_loans[id(retained)] = retained
++            enable_threads()
++            handle = temporary('CrustAsyncExecution')
++            steps.append(f'task_async_adopt(&{handle}, &{value});')
++            return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned
+         if signature in owned_sync_types:
+             owned_result_types[value] = signature[1]
+             for candidate in contract.result.candidates:
+@@ -1535,6 +1588,8 @@
+     def await_task(expr, line, *, returns_value, borrow=False, owned=False, joined=False, array_shape=(),
+                    prepared=None, scalar_type='Int'):
+         nonlocal resume_point
++        if not returns_value and awaits_execution(expr):
++            fail(line, 'résultat faillible du handle sans usage explicite')
+         operand = expr[1]
+         if prepared is not None:
+             task, returns_int, loans, nominal, returned_loans = prepared
+@@ -1665,7 +1720,8 @@
+ 
+     def execution_await(expr, line, *, prepared=None):
+         nonlocal resume_point
+-        record = consume_execution(expr[1][1], line) if prepared is None else prepared
++        record = (sync_call(expr[1], line, execution=True) if sync_signature(expr[1]) in handle_sync_types else
++                  consume_execution(expr[1][1], line)) if prepared is None else prepared
+         handle, returns_int, loans, nominal, returned_loans = record
+         mode, typ = functions[nominal].args[2]
+         outer = PLAIN_RETURN_JOINS.get((mode, typ)) if mode in PLAIN_JOIN_TYPES else None
+@@ -1723,7 +1779,8 @@
+         return result, payload or scalar_payload, returned_loans
+ 
+     def awaits_execution(expr):
+-        return expr[0] == 'await' and expr[1][0] == 'name' and expr[1][1] in executions
++        return expr[0] == 'await' and (sync_signature(expr[1]) in handle_sync_types or
++                                      expr[1][0] == 'name' and expr[1][1] in executions)
+ 
+     def computed_await(expr):
+         return expr[0] == 'await' and expr[1][0] not in ('name', 'call')
+@@ -2063,6 +2120,7 @@
+             bind_vector_split(statement, body, position)
+             return True
+         task_creation = operator == 'call' and initializer[1] in functions
++        handle_creation = sync_signature(initializer) in handle_sync_types
+         task_move = operator == 'move' and initializer[1] in tasks
+         handle_move = operator == 'move' and initializer[1] in executions
+         join_move = operator == 'move' and is_owned_join(initializer[1], nested=True)
+@@ -2073,7 +2131,7 @@
+         block = operator == 'scope' and initializer[2]
+         export = ends_in_transfer(block)
+         conditional_move = has_transfer_result(initializer)
+-        if not (operator in ('task_spawn', 'loop_expr') or task_creation or task_move or handle_move
++        if not (operator in ('task_spawn', 'loop_expr') or task_creation or handle_creation or task_move or handle_move
+                 or join_move or owned_move or join or joined_await or export or conditional_move):
+             return False
+         array_annotation = statement.annotation is not None and scalar_array_layout(statement.annotation)[0]
+@@ -2110,6 +2168,8 @@
+         elif export:
+             kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+             bind_transferred_value(name, kind, value, statement)
++        elif handle_creation:
++            executions[name] = sync_call(initializer, statement.line, execution=True, following=body[position + 1:])
+         elif operator == 'task_spawn':
+             executions[name] = spawn_task(initializer[1], statement.line,
+                 blocking=len(initializer) > 2 and initializer[2] == 'blocking',

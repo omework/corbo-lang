@@ -1,0 +1,27 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -30,6 +30,15 @@
+             return env.get(expr[1])
+         if op in ('array_transfer', 'new_transfer', 'transfer'):
+             return evaluate(expr[1], env)
++        if op == 'task_select':
++            branches = [evaluate(argument, env) for argument in expr[1]]
++            if any(branch is None or not isinstance(branch[0], tuple) or branch[0][0] != 'task'
++                   for branch in branches):
++                return None
++            selected = merge(branches)
++            if selected is not None:
++                return ('selection', selected[0][1]), selected[1]
++            return None
+         if op in ('task_spawn', 'await', 'task_join', 'task_join_value', 'utf8_value'):
+             operand = ('name', expr[1]) if op == 'task_join' else expr[1]
+             value = evaluate(operand, env)
+@@ -40,7 +49,7 @@
+                 return ('execution', typ), value[1]
+             if op in ('task_join', 'task_join_value', 'await') and kind == 'execution':
+                 return ('join', typ), value[1]
+-            if op == 'await' and kind == 'task' or op == 'utf8_value' and kind == 'join':
++            if op == 'await' and kind in ('task', 'selection') or op == 'utf8_value' and kind == 'join':
+                 return typ, value[1]
+             return None
+         call_name, arguments = (expr[1], expr[2]) if op == 'call' else (None, ())

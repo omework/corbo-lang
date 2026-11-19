@@ -1,0 +1,7 @@
+struct View{target:&Int}
+async fn own(v:->View)-><-View{yield;return <-v;}
+fn start(t:->own)-><-runtime::Handle<View>{return <-runtime::spawn(->t);}
+fn relay(h:->runtime::Handle<View>)-><-runtime::Handle<View>{return <-h;}
+fn finish(h:->runtime::Handle<View>)-><-View{let v=match h.join(){Ok(found)=>{<-found},Err(_)=>{loop{}}};return <-v;}
+fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let v=View{target:&n};
+let h=relay(->start(->own(->v)));let result=finish(->h);print(*result.target);drop(->result);drop(->n);}

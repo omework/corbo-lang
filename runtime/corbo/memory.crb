@@ -1,0 +1,445 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Stable-address storage, aligned cursor allocation and intrusive region ownership.
+//! Region descriptors remain fixed while linked; closed bands survive until their last region drops.
+// Runtime policy. Raw address and platform operations are isolated in primitives.crb.
+/// Rounds a byte count up to the OS page size; terminates if rounding would overflow.
+fn rounded(bytes:usize)->usize {
+    let page=get_page_size();
+    ((copy(bytes)+copy(page)-1)/copy(page))*copy(page)
+}
+/// Reports fixed datastack exhaustion or an invalid storage operation and terminates the process.
+fn storage_error() {
+    fault(1);
+}
+/// Reports an invalid or exhausted region operation and terminates the process.
+fn region_error() {
+    fault(2);
+}
+/// Reserves the calling thread's fixed datastack, initializes page metadata and commits storage on demand.
+fn reserve(bytes:u64) {
+    let capacity:usize=if copy(bytes)==0 {
+        1
+    } else {
+        copy(bytes) as usize
+    };
+    set_limit(copy(capacity));
+    let page=os_page_size();
+    if copy(page)==0 {
+        fault(0);
+    }
+    set_page_size(copy(page));
+    if copy(capacity)>max_size()-(copy(page)-1) {
+        fault(0);
+    }
+    let mapped=rounded(copy(capacity));
+    set_mapped_size(copy(mapped));
+    let address=os_reserve(copy(mapped));
+    if copy(address)==0 {
+        fault(0);
+    }
+    set_base(copy(address));
+}
+/// Reserves count aligned fixed-size elements at the current cursor; checks multiplication, alignment and capacity before advancing.
+fn push(size:usize,alignment:usize,count:usize)->usize {
+    let current=get_cursor();
+    let capacity=get_limit();
+    let padding=(copy(alignment)-copy(current)%copy(alignment))%copy(alignment);
+    if copy(padding)>copy(capacity)-copy(current) || copy(count)>(copy(capacity)-copy(current)-copy(padding))/copy(size) {
+        storage_error();
+    }
+    let start=copy(current)+copy(padding);
+    let end=copy(start)+copy(size)*copy(count);
+    let done=get_committed();
+    if copy(end)>copy(done) {
+        let pages=rounded(copy(end));
+        if !os_commit(get_base()+copy(done),copy(pages)-copy(done)) {
+            fault(0);
+        }
+        set_committed(copy(pages));
+    }
+    set_cursor(copy(end));
+    get_base()+copy(start)
+}
+/// Unmaps the calling thread's fixed datastack after its values and workers have been cleaned up.
+fn release() {
+    os_unmap(get_base(),get_mapped_size());
+}
+/// Finds the first free flag in a count-element slot bitmap, marks it used and returns its index; exhaustion terminates.
+fn take(used:usize,count:usize)->usize {
+    let mut index:usize=0;
+    while copy(index)<copy(count) {
+        let slot=copy(used)+copy(index)*4;
+        if read_integer(copy(slot))==0 {
+            write_integer(copy(slot),1);
+            return copy(index);
+        }
+        index=copy(index)+1;
+    }
+    fault(0);
+    0
+}
+/// Returns an unsigned magnitude without overflowing on the minimum signed 64-bit integer.
+fn magnitude(value:i64)->usize {
+    if copy(value)<0 {
+        return unsigned_bits(-(copy(value)+1))+1;
+    }
+    unsigned_bits(copy(value))
+}
+/// Evaluates the selected signed integer operation with the reference runtime's overflow and zero-divisor failures.
+fn numeric(op:i64,left:i64,right:i64)->i64 {
+    let minimum:i64=-9223372036854775808;
+    let maximum:i64=9223372036854775807;
+    if copy(op)==43 {
+        if (copy(right)>0 && copy(left)>copy(maximum)-copy(right)) || (copy(right)<0 && copy(left)<copy(minimum)-copy(right)) {
+            fault(0);
+        }
+        return copy(left)+copy(right);
+    }
+    if copy(op)==45 {
+        if (copy(right)>0 && copy(left)<copy(minimum)+copy(right)) || (copy(right)<0 && copy(left)>copy(maximum)+copy(right)) {
+            fault(0);
+        }
+        return copy(left)-copy(right);
+    }
+    if copy(op)==42 {
+        if copy(left)==0 || copy(right)==0 {
+            return 0;
+        }
+        let negative=(copy(left)<0)!=(copy(right)<0);
+        let bound:usize=if copy(negative) {
+            9223372036854775808
+        } else {
+            9223372036854775807
+        };
+        if magnitude(copy(left))>copy(bound)/magnitude(copy(right)) {
+            fault(0);
+        }
+        return copy(left)*copy(right);
+    }
+    if copy(op)==47 || copy(op)==37 {
+        if copy(right)==0 {
+            fault(0);
+        }
+        if copy(left)==copy(minimum) && copy(right)==(-1) {
+            if copy(op)==37 {
+                return 0;
+            }
+            fault(0);
+        }
+        if copy(op)==47 {
+            return copy(left)/copy(right);
+        }
+        return copy(left)%copy(right);
+    }
+    fault(0);
+    0
+}
+/// Computes the region-stack byte budget from OS memory and CPU information, bounded by PTRDIFF_MAX.
+fn region_default_capacity()->usize {
+    if os_windows() {
+        let available=os_available_bytes();let cpus=os_cpus();
+        if copy(available)==max_size() || copy(cpus)==0 {region_error();}
+        let bytes=copy(available)/copy(cpus);let bound=max_difference();
+        if copy(bytes)>copy(bound) {return copy(bound);}return copy(bytes);
+    }
+    let mut pages=os_available_pages();
+    if copy(pages)<=0 {
+        pages=os_physical_pages();
+    }
+    let cpus=os_cpus();
+    let page=get_page_size();
+    if copy(pages)<=0 || copy(cpus)==0 || unsigned_bits(copy(pages))>max_size()/copy(page) {
+        region_error();
+    }
+    let bytes=(unsigned_bits(copy(pages)))*copy(page)/copy(cpus);
+    let maximum=max_difference();
+    if copy(bytes)>copy(maximum) {
+        copy(maximum)
+    } else {
+        copy(bytes)
+    }
+}
+/// Maps zero-initialized RegionBand metadata independently of storage whose scope may end first.
+fn region_metadata()->usize {
+    let pointer=os_metadata(size_RegionBand());
+    if copy(pointer)==0 {
+        region_error();
+    }
+    copy(pointer)
+}
+/// Reserves a virtual address range for a band and records its capacity and per-region limit; commits no payload yet.
+fn region_reserve(band:usize,bytes:usize,maximum:usize) {
+    if copy(bytes)==0 || copy(bytes)>max_size()-(get_page_size()-1) {
+        region_error();
+    }
+    s_RegionBand_capacity(copy(band),copy(bytes));
+    s_RegionBand_limit(copy(band),copy(maximum));
+    let pointer=os_reserve(rounded(copy(bytes)));
+    if copy(pointer)==0 {
+        region_error();
+    }
+    s_RegionBand_base(copy(band),copy(pointer));
+}
+/// Unmaps an empty band and its separately mapped metadata when applicable; no active region may remain.
+fn region_release_band(band:usize) {
+    os_unmap(g_RegionBand_base(copy(band)),rounded(g_RegionBand_capacity(copy(band))));
+    if copy(band)!=global_band_address() {
+        os_unmap(copy(band),size_RegionBand());
+    }
+}
+/// Rounds a region width to max_align_t with checked size arithmetic.
+fn region_stride(bytes:usize)->usize {
+    let alignment=max_alignment();
+    if copy(bytes)==0 || copy(bytes)>max_size()-(copy(alignment)-1) {
+        region_error();
+    }
+    return ((copy(bytes)+copy(alignment)-1)/copy(alignment))*copy(alignment);
+}
+/// Creates a child region scope with the explicit or inferred count; the caller holds the runtime lock.
+fn region_enter(bytes:usize,count:usize,inferred:usize) {
+    let current=get_current_band();
+    let inherited:usize=if copy(current)!=0 {
+        g_RegionBand_limit(copy(current))
+    } else {
+        get_global_limit()
+    };
+    if copy(count)==0 && copy(bytes)==copy(inherited) {
+        return;
+    }
+    if copy(bytes)==0 {
+        region_error();
+    }
+    let cells:usize=if copy(count)!=0 {
+        copy(count)
+    } else {
+        if copy(inferred)!=0 {
+            copy(inferred)
+        } else {
+            1
+        }
+    };
+    let stride=region_stride(copy(bytes));
+    if copy(cells)>max_size()/copy(stride) {
+        region_error();
+    }
+    let band=region_metadata();
+    region_reserve(copy(band),copy(stride)*copy(cells),copy(bytes));
+    s_RegionBand_parent(copy(band),copy(current));
+    set_current_band(copy(band));
+}
+/// Closes region scopes back to mark, releasing only empty bands so transferred live regions survive; requires the lock.
+fn region_restore(mark:usize) {
+    while get_current_band()!=copy(mark) {
+        let band=get_current_band();
+        set_current_band(g_RegionBand_parent(copy(band)));
+        s_RegionBand_closed(copy(band),1);
+        if g_RegionBand_active(copy(band))==0 {
+            region_release_band(copy(band));
+        }
+    }
+}
+/// Links a stable descriptor into an available band or a dedicated band; owned regions store child-region cleanup links. Requires the runtime lock.
+fn region_new(region:usize,width:usize,owned:i32,dedicated:bool) {
+    let current=get_current_band();
+    let mut band:usize=if copy(current)!=0 {
+        copy(current)
+    } else {
+        global_band_address()
+    };
+    let bytes:usize=if copy(current)!=0 {
+        g_RegionBand_limit(copy(band))
+    } else {
+        get_global_limit()
+    };
+    let element:usize=if copy(owned)!=0 {
+        size_RegionOwner()
+    } else {
+        copy(width)
+    };
+    if copy(bytes)<copy(element) {
+        region_error();
+    }
+    let stride=region_stride(copy(bytes));
+    if copy(dedicated) {
+        band=region_metadata();
+        region_reserve(copy(band),copy(stride),copy(bytes));
+        s_RegionBand_closed(copy(band),1);
+    }  else {
+        if g_RegionBand_base(copy(band))==0 {
+            let budget=get_global_budget();
+            region_reserve(copy(band),if copy(budget)!=0 {
+                copy(budget)
+            } else {
+                region_default_capacity()
+            },copy(bytes));
+        }
+    }
+    let mut offset:usize=0;
+    let mut link=a_RegionBand_active(copy(band));
+    while read_word(copy(link))!=0 && copy(stride)>g_Region_offset(read_word(copy(link)))-copy(offset) {
+        let previous=read_word(copy(link));
+        offset=g_Region_offset(copy(previous))+region_stride(g_Region_bytes(copy(previous)));
+        link=a_Region_next(copy(previous));
+    }
+    if copy(stride)>g_RegionBand_capacity(copy(band))-copy(offset) {
+        if copy(band)==global_band_address() {
+            region_error();
+        }
+        band=region_metadata();
+        region_reserve(copy(band),copy(stride),copy(bytes));
+        s_RegionBand_closed(copy(band),1);
+        offset=0;
+        link=a_RegionBand_active(copy(band));
+    }
+    s_Region_data(copy(region),g_RegionBand_base(copy(band))+copy(offset));
+    s_Region_len(copy(region),0);
+    s_Region_offset(copy(region),copy(offset));
+    s_Region_bytes(copy(region),copy(bytes));
+    s_Region_width(copy(region),copy(element));
+    s_Region_next(copy(region),read_word(copy(link)));
+    s_Region_band(copy(region),copy(band));
+    s_Region_owned(copy(region),copy(owned));
+    write_word(copy(link),copy(region));
+}
+/// Destroys owned child regions before unlinking this region and releasing an empty closed band; requires the runtime lock.
+fn region_drop(region:usize) {
+    if g_Region_owned(copy(region))!=0 {
+        let mut index=g_Region_len(copy(region));
+        let data=g_Region_data(copy(region));
+        while copy(index)!=0 {
+            index=copy(index)-1;
+            let item=copy(data)+copy(index)*size_RegionOwner();
+            region_drop(g_RegionOwner_region(copy(item)));
+            write_integer(g_RegionOwner_slot(copy(item)),0);
+        }
+    }
+    let band=g_Region_band(copy(region));
+    let mut link=a_RegionBand_active(copy(band));
+    while read_word(copy(link))!=0 && read_word(copy(link))!=copy(region) {
+        link=a_Region_next(read_word(copy(link)));
+    }
+    if read_word(copy(link))==0 {
+        region_error();
+    }
+    write_word(copy(link),g_Region_next(copy(region)));
+    if g_RegionBand_closed(copy(band))!=0 && g_RegionBand_active(copy(band))==0 {
+        region_release_band(copy(band));
+    }
+}
+/// Commits pages as needed and returns one new element slot; terminates at the region limit. Requires the runtime lock.
+fn region_add(region:usize)->usize {
+    let length=g_Region_len(copy(region));
+    let width=g_Region_width(copy(region));
+    if copy(length)==g_Region_bytes(copy(region))/copy(width) {
+        region_error();
+    }
+    let band=g_Region_band(copy(region));
+    let end=g_Region_offset(copy(region))+(copy(length)+1)*copy(width);
+    let pages=rounded(copy(end));
+    let done=g_RegionBand_committed(copy(band));
+    if copy(pages)>copy(done) {
+        if !os_commit(g_RegionBand_base(copy(band))+copy(done),copy(pages)-copy(done)) {
+            region_error();
+        }
+        s_RegionBand_committed(copy(band),copy(pages));
+    }
+    s_Region_len(copy(region),copy(length)+1);
+    g_Region_data(copy(region))+copy(width)*copy(length)
+}
+/// Releases the global region band after its live values have been destroyed.
+fn region_release() {
+    let band=global_band_address();
+    if g_RegionBand_base(copy(band))!=0 {
+        region_release_band(copy(band));
+    }
+}
+/// Allocates a pool descriptor, atomic occupancy bytes and fixed slots on the datastack; validates sizes and arm counts.
+fn new_pool(slots:usize,bytes:usize,arms:usize)->usize {
+    if copy(slots)==0 || copy(arms)==0 || copy(slots)>max_size()/copy(arms) || copy(slots)*copy(arms)>max_size()/copy(bytes) {
+        storage_error();
+    }
+    let pool=push(size_Pools(),align_Pools(),1);
+    s_Pools_cap(copy(pool),copy(slots));
+    s_Pools_stride(copy(pool),copy(bytes));
+    s_Pools_arms(copy(pool),copy(arms));
+    let used=push(1,1,copy(slots)*copy(arms));
+    let data=push(copy(bytes),max_alignment(),copy(slots)*copy(arms));
+    s_Pools_used(copy(pool),copy(used));
+    s_Pools_data(copy(pool),copy(data));
+    let mut index:usize=0;
+    while copy(index)<copy(slots)*copy(arms) {
+        atomic_init_slot(copy(used)+copy(index));
+        index=copy(index)+1;
+    }
+    copy(pool)
+}
+/// Atomically claims a free slot in the requested arm, zeroes it and writes an Owned descriptor to out; exhaustion terminates.
+fn pool_take(out:usize,pool:usize,arm:usize) {
+    let low=copy(arm)*g_Pools_cap(copy(pool));
+    let high=copy(low)+g_Pools_cap(copy(pool));
+    let mut index=copy(low);
+    while copy(index)<copy(high) {
+        if atomic_claim(g_Pools_used(copy(pool))+copy(index)) {
+            let place=g_Pools_data(copy(pool))+copy(index)*g_Pools_stride(copy(pool));
+            memory_zero(copy(place),g_Pools_stride(copy(pool)));
+            s_Owned_pool(copy(out),copy(pool));
+            s_Owned_slot(copy(out),copy(place));
+            s_Owned_index(copy(out),copy(index));
+            s_Owned_destroy(copy(out),0);
+            return;
+        }
+        index=copy(index)+1;
+    }
+    fault(3);
+}
+/// Calls a live allocation's typed cleanup callback before releasing its pool slot, then clears the descriptor's pool link.
+fn put(value:usize) {
+    let pool=g_Owned_pool(copy(value));
+    if copy(pool)!=0 {
+        let destructor=g_Owned_destroy(copy(value));
+        if copy(destructor)!=0 {
+            call_drop(copy(destructor),g_Owned_slot(copy(value)));
+        }
+        atomic_clear(g_Pools_used(copy(pool))+g_Owned_index(copy(value)));
+        s_Owned_pool(copy(value),0);
+    }
+}
+/// Initializes a region while holding the shared runtime lock; the descriptor must remain at a stable address.
+fn value_region_new(region:usize,width:usize,owned:i32,dedicated:bool) {
+    lock();
+    region_new(copy(region),copy(width),copy(owned),copy(dedicated));
+    unlock();
+}
+/// Appends one region slot under the runtime lock and returns its address.
+fn value_region_add(region:usize)->usize {
+    lock();
+    let place=region_add(copy(region));
+    unlock();
+    copy(place)
+}
+/// Unlinks and releases a region under the runtime lock after owned child cleanup.
+fn value_region_drop(region:usize) {
+    lock();
+    region_drop(copy(region));
+    unlock();
+}
+/// Enters a region scope under the runtime lock using explicit and inferred slot budgets.
+fn scoped_region_enter(bytes:usize,count:usize,inferred:usize) {
+    lock();
+    region_enter(copy(bytes),copy(count),copy(inferred));
+    unlock();
+}
+/// Restores the saved region-scope mark under the runtime lock while preserving live transferred regions.
+fn scoped_region_restore(mark:usize) {
+    lock();
+    region_restore(copy(mark));
+    unlock();
+}
+/// Cleanup-callback adapter for a region descriptor; releases its payload through the synchronized region path.
+fn destroy_region(pointer:usize) {
+    value_region_drop(copy(pointer));
+}
+/// Cleanup-callback adapter that destroys and releases the Owned descriptor at pointer.
+fn dispose_owned(pointer:usize) {
+    put(copy(pointer));
+}

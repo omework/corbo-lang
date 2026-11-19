@@ -1,0 +1,17 @@
+use std::crypto::sha256::Sha256;
+use std::encoding::hex::encode;
+
+fn main() {
+    let input: [u8; 2] = [111, 107];
+    let mut hash = Sha256::new();
+    match hash.update(&input[..]) {
+        Ok(()) => {},
+        Err(error) => { drop(error); return; },
+    }
+    let digest = hash.finish();
+    let mut encoded: [u8; 64] = [0; 64];
+    match encode(&digest[..], &mut encoded[..]) {
+        Ok(count) => { print(count); },
+        Err(error) => { drop(error); print(0); },
+    }
+}

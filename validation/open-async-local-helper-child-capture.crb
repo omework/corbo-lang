@@ -1,0 +1,5 @@
+struct Point{x:Int}
+fn make()-><-Point{let p=Point{x:7};return <-p;}
+async fn read(p:&Point)->Int{yield;return p.x;}
+async fn work()->Int{let p=make();return read(&p).await;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

@@ -1,0 +1,77 @@
+test_borrow_from_another_descendant (test_nested_field_wrappers.NestedFieldWrapperTests.test_borrow_from_another_descendant) ... ok
+test_conditional_contract_keeps_old_and_new (test_nested_field_wrappers.NestedFieldWrapperTests.test_conditional_contract_keeps_old_and_new) ... 
+  test_conditional_contract_keeps_old_and_new (test_nested_field_wrappers.NestedFieldWrapperTests.test_conditional_contract_keeps_old_and_new) (checker='verify_program') ... FAIL
+  test_conditional_contract_keeps_old_and_new (test_nested_field_wrappers.NestedFieldWrapperTests.test_conditional_contract_keeps_old_and_new) (checker='compile_source') ... FAIL
+test_launch_failure_after_wrapper_and_pool_reuse (test_nested_field_wrappers.NestedFieldWrapperTests.test_launch_failure_after_wrapper_and_pool_reuse) ... ok
+test_mutable_target_and_last_use (test_nested_field_wrappers.NestedFieldWrapperTests.test_mutable_target_and_last_use) ... ok
+test_recorded_wrapper_contract (test_nested_field_wrappers.NestedFieldWrapperTests.test_recorded_wrapper_contract) ... ok
+test_sync_caller_and_conditional_old_target (test_nested_field_wrappers.NestedFieldWrapperTests.test_sync_caller_and_conditional_old_target) ... FAIL
+test_two_relays_and_named_parent_loan (test_nested_field_wrappers.NestedFieldWrapperTests.test_two_relays_and_named_parent_loan) ... ok
+
+======================================================================
+FAIL: test_conditional_contract_keeps_old_and_new (test_nested_field_wrappers.NestedFieldWrapperTests.test_conditional_contract_keeps_old_and_new) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_conditional_contract_keeps_old_and_new (test_nested_field_wrappers.NestedFieldWrapperTests.test_conditional_contract_keeps_old_and_new) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_sync_caller_and_conditional_old_target (test_nested_field_wrappers.NestedFieldWrapperTests.test_sync_caller_and_conditional_old_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16092, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14250, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3100, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10003, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11403, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12736, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13754, in statements
+    self.movable(binding)
+    ~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3549, in movable
+    self.fail(f"déplacement de '{binding.name}' interdit : emprunt encore utilisé")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1962, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 16: déplacement de 'first' interdit : emprunt encore utilisé
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_field_wrappers.py", line 62, in test_sync_caller_and_conditional_old_target
+    self.assertEqual(self.run_source(source).stdout,'1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 16: déplacement de 'first' interdit : emprunt encore utilisé
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.540s
+
+FAILED (failures=3)

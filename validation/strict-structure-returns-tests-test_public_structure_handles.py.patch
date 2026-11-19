@@ -1,0 +1,36 @@
+--- tests/test_public_structure_handles.py
++++ tests/test_public_structure_handles.py
+@@ -40,6 +40,7 @@
+         for asynchronous in (False, True):
+             for kind, other in (('View', 'A<View>'), ('A<View>', 'View')):
+                 helpers = 'struct View{target:&Int}async fn own(v:->View)-><-View{yield;return <-v;}'
++                if kind == 'A<View>': helpers = helpers.replace('-><-View','-><-A<View>')
+                 made = 'View{target:&n}' if kind == 'View' else 'vs.new(target:&n)'
+                 body = 'let mut ns=pool<Int>(1);let mut vs=pool<View>(1);let n=ns.new(7);let v='+made+''';
+ let h:runtime::Handle<TYPE>=runtime::spawn(->own(->v));
+@@ -60,6 +61,7 @@
+             for parameter, argument in (('t:->own','->own(->v)'), ('v:->View','->v')):
+                 call = 't' if parameter.startswith('t:') else 'own(->v)'
+                 helpers = 'struct View{target:&Int}async fn own(v:->View)-><-View{yield;return <-v;}'
++                if public == 'A<View>': helpers = helpers.replace('-><-View','-><-A<View>')
+                 helpers += 'fn start('+parameter+')-><-runtime::Handle<'+public+'>{return <-runtime::spawn(->'+call+');}'
+                 body = 'let mut ns=pool<Int>(1);let mut vs=pool<View>(1);let n=ns.new(7);let v='+init+''';
+ let h=start(ARG);let result=match h.await{Ok(found)=>{<-found},Err(_)=>{return 99;}};
+@@ -95,7 +97,7 @@
+         self.refused(source.replace('drop(->n);','').replace('yield;print(get', 'drop(->n);yield;print(get'), 'emprunt|réserv|référenc')
+ 
+     def test_public_handle_cannot_export_short_source(self):
+-        helpers = '''struct Point{x:Int}async fn own(v:->Point)-><-Point{yield;return <-v;}
++        helpers = '''struct Point{x:Int}async fn own(v:->Point)-><-A<Point>{yield;return <-v;}
+ fn start(v:->Point)-><-runtime::Handle<A<Point>>{return <-runtime::spawn(->own(->v));}'''
+         source = helpers+'''fn main(){let h={let mut ps=pool<Point>(1);let p=ps.new(x:7);
+ let h=start(->p);<-h};match h.join(){Ok(v)=>{print(v.x);drop(->v);},Err(_)=>{}}}'''
+@@ -141,7 +143,7 @@
+ 
+     def test_cleanup_failure_and_repeated_pool_slot_reuse(self):
+         source = '''#(directive, async_pool_sizes={own:1})
+-struct Point{x:Int}async fn own(v:->Point)-><-Point{yield;return <-v;}
++struct Point{x:Int}async fn own(v:->Point)-><-A<Point>{yield;return <-v;}
+ fn start(v:->A<Point>)-><-runtime::Handle<A<Point>>{return <-runtime::spawn(->own(->v));}
+ fn main(){let mut ps=pool<Point>(1);let mut i=0;while i<3{let p=ps.new(x:i);
+ let h=start(->p);match h.join(){Ok(v)=>{print(v.x);drop(->v);},Err(_)=>{print(99);}}i=i+1;}

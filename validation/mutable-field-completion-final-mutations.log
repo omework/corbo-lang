@@ -1,0 +1,246 @@
+forget_exclusive_stored_target DETECTED
+test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) ... 
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 1.663s
+
+FAILED (failures=4)
+
+skip_direct_mutable_store DETECTED
+test_direct_and_helper_store_then_reborrow (test_mutable_field_completion.MutableFieldCompletionTests.test_direct_and_helper_store_then_reborrow) ... 
+  test_direct_and_helper_store_then_reborrow (test_mutable_field_completion.MutableFieldCompletionTests.test_direct_and_helper_store_then_reborrow) (store='v.data=&mut *n;') ... FAIL
+
+======================================================================
+FAIL: test_direct_and_helper_store_then_reborrow (test_mutable_field_completion.MutableFieldCompletionTests.test_direct_and_helper_store_then_reborrow) (store='v.data=&mut *n;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_mutable_field_completion.py", line 29, in test_direct_and_helper_store_then_reborrow
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'21\n21\n7\n21\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '21\n21\n21\n9\n' != '21\n21\n7\n21\n'
+  21
+  21
++ 7
+  21
+- 9
+
+
+----------------------------------------------------------------------
+Ran 1 test in 2.478s
+
+FAILED (failures=1)
+
+self_borrow_unchanged_field DETECTED
+test_conditional_child_completion_does_not_borrow_its_own_field (test_mutable_field_completion.MutableFieldCompletionTests.test_conditional_child_completion_does_not_borrow_its_own_field) ... ERROR
+
+======================================================================
+ERROR: test_conditional_child_completion_does_not_borrow_its_own_field (test_mutable_field_completion.MutableFieldCompletionTests.test_conditional_child_completion_does_not_borrow_its_own_field)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_mutable_field_completion.py", line 89, in test_conditional_child_completion_does_not_borrow_its_own_field
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 5856, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 2268, in bind_special
+    pointer, loans, (mode, typ) = reference_value(initializer, statement.line, following=body[position + 1:])
+                                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 2191, in reference_value
+    pointer, loans = borrow_struct_field(expr, mode, line)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 4593, in borrow_struct_field
+    check_access(name, line, write=reservation == 'mut', path=path)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 4447, in check_access
+    fail(line, f"accès à '{name}' incompatible avec un emprunt actif")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-mutable-completion-wwya4qlu/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 7: accès à 'v' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 1 test in 0.069s
+
+FAILED (errors=1)
+
+read_stored_exclusive_target DETECTED
+test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) ... 
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program') ... FAIL
+  test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_new_target_access_blocked_inside_task (test_mutable_field_completion.MutableFieldCompletionTests.test_new_target_access_blocked_inside_task) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 1.562s
+
+FAILED (failures=8)
+
+drop_mutable_field_capability DETECTED
+test_named_reborrow_blocks_replacement_until_last_use (test_mutable_field_completion.MutableFieldCompletionTests.test_named_reborrow_blocks_replacement_until_last_use) ... 
+  test_named_reborrow_blocks_replacement_until_last_use (test_mutable_field_completion.MutableFieldCompletionTests.test_named_reborrow_blocks_replacement_until_last_use) (stage='verify_program') ... FAIL
+  test_named_reborrow_blocks_replacement_until_last_use (test_mutable_field_completion.MutableFieldCompletionTests.test_named_reborrow_blocks_replacement_until_last_use) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_named_reborrow_blocks_replacement_until_last_use (test_mutable_field_completion.MutableFieldCompletionTests.test_named_reborrow_blocks_replacement_until_last_use) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_named_reborrow_blocks_replacement_until_last_use (test_mutable_field_completion.MutableFieldCompletionTests.test_named_reborrow_blocks_replacement_until_last_use) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.888s
+
+FAILED (failures=2)
+

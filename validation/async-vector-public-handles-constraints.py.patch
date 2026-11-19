@@ -1,0 +1,27 @@
+--- before/constraints.py
++++ constraints.py
+@@ -455,7 +455,13 @@
+                     history[asset] = frozenset()
+                     reference_assets = frozenset({asset})
+                 result_fields = []
+-                for path, child_type in aggregate_owned_paths(self.analyzer.enums, definition.args[2][1]):
++                result_type = definition.args[2][1]
++                owned_paths = tuple(aggregate_owned_paths(self.analyzer.enums, result_type))
++                if is_handle_vector(result_type):
++                    element = handle_vector_element(result_type)
++                    owned_paths = (('[]', element), *(( '[]/' + path, child_type)
++                        for path, child_type in aggregate_owned_paths(self.analyzer.enums, element)))
++                for path, child_type in owned_paths:
+                     asset = Asset(('task_result_field_parameter', index, path),
+                                   Source('task_result_field_parameter', index, path, child_type))
+                     history[asset] = frozenset()
+@@ -2286,6 +2292,9 @@
+         for candidate in candidates:
+             vector = (actuals[candidate.parameter] if candidate.kind == 'parameter'
+                       else Value('owned', HANDLE_VECTOR, handle_items=()))
++            if candidate.kind == 'task_capture':
++                vector = Value('owned', HANDLE_VECTOR, handle_items=dict(
++                    actuals[candidate.parameter].task_result_fields).get('[]', frozenset()))
+             items = remaining_handle_items(vector.handle_items, candidate.vector_removals)
+             if (candidate.vector_removals == UNKNOWN_VECTOR_REMOVALS and items is not None
+                     and not (candidate.vector_layout or candidate.vector_replacements)

@@ -1,0 +1,10 @@
+// Admitted by the retained design; still rejected by async capture lowering.
+type feature Read { fn read(&self) -> Int; }
+struct Item { value: Int }
+impl Item { fn read(self: &Item) -> Int { return self.value; } }
+async fn read(t: &Read) -> Int { yield; return t.read(); }
+fn main() {
+    let t = Item { value: 7 };
+    let e = runtime::spawn(-> read(&t));
+    match e.join() { Ok(n) => { print(n); }, Err(_) => {} }
+}

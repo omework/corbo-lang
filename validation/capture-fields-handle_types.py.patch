@@ -1,0 +1,20 @@
+--- before/handle_types.py
++++ handle_types.py
+@@ -8,6 +8,8 @@
+ and group 5 preserves an exclusive capability behind a shared result. These
+ groups survive join; unrelated capture groups do not.
+ """
++
++from capture_paths import capture_index
+ from types import SimpleNamespace
+ 
+ 
+@@ -43,7 +45,7 @@
+     groups = {'ref.1': [], 'mut.2': [], 'mut.3': []}
+     seen = {key: set() for key in groups}
+     for key, targets in fields:
+-        shared_capability = parameters[int(key.partition('.')[2])][1] == 'ref'
++        shared_capability = parameters[capture_index(key.partition('.')[2])][1] == 'ref'
+         key = ('mut.3' if shared_capability else 'mut.2') if key.startswith('mut.') else 'ref.1'
+         group = groups[key]
+         for target in targets:

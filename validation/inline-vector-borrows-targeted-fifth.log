@@ -1,0 +1,142 @@
+test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_functions_and_returned_element) ... FAIL
+test_mutable_field_transfer_and_release (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_mutable_field_transfer_and_release) ... ok
+test_recorded_shared_remove_and_drop (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_recorded_shared_remove_and_drop) ... ok
+test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_scope_dependency_survives_carrier_move) ... 
+  test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_scope_dependency_survives_carrier_move) (checker='verify_program') ... FAIL
+  test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_scope_dependency_survives_carrier_move) (checker='compile_source') ... FAIL
+test_shared_copy_preserves_target_not_vector (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_shared_copy_preserves_target_not_vector) ... ok
+test_two_positions_release_only_extracted_loan (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_two_positions_release_only_extracted_loan) ... FAIL
+test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorBorrowTests.test_functions_and_returned_element) ... ok
+test_mutable_field_transfer_and_release (test_inline_vector_borrows.InlineVectorBorrowTests.test_mutable_field_transfer_and_release) ... ok
+test_recorded_shared_remove_and_drop (test_inline_vector_borrows.InlineVectorBorrowTests.test_recorded_shared_remove_and_drop) ... ok
+test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorBorrowTests.test_scope_dependency_survives_carrier_move) ... ok
+test_shared_copy_preserves_target_not_vector (test_inline_vector_borrows.InlineVectorBorrowTests.test_shared_copy_preserves_target_not_vector) ... ok
+test_two_positions_release_only_extracted_loan (test_inline_vector_borrows.InlineVectorBorrowTests.test_two_positions_release_only_extracted_loan) ... ok
+
+======================================================================
+FAIL: test_functions_and_returned_element (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_functions_and_returned_element)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17696, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17689, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16180, in compile
+    self.emit_async_sync_bridge(key)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16092, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10923, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12459, in invoke_arguments
+    result_contract = self.resolve_result_contract(name, params, bindings, effects_base)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10646, in resolve_result_contract
+    dependencies, variants, parents = self.resolve_borrowed_result(payload_summary, params, bindings) if payload_summary.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2715, in resolve_borrowed_result
+    self.fail('contrat de champ : provenance du descendant introuvable')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2016, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: contrat de champ : provenance du descendant introuvable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 61, in test_functions_and_returned_element
+    self.assertEqual(self.run_source(s).stdout,'7\n19\n')
+                     ~~~~~~~~~~~~~~~^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 76, in run_source
+    return harness.SelectSourceTests.run_source(self,self.async_source(source))
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: contrat de champ : provenance du descendant introuvable
+
+======================================================================
+FAIL: test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_scope_dependency_survives_carrier_move) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 1: accès à 'local' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "durable|survit|scope" does not match "ligne 1: accès à 'local' incompatible avec un emprunt actif"
+
+======================================================================
+FAIL: test_scope_dependency_survives_carrier_move (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_scope_dependency_survives_carrier_move) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 1: accès à 'local' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "durable|survit|scope" does not match "ligne 1: accès à 'local' incompatible avec un emprunt actif"
+
+======================================================================
+FAIL: test_two_positions_release_only_extracted_loan (test_inline_vector_borrows.InlineVectorAsyncBorrowTests.test_two_positions_release_only_extracted_loan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17703, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15672, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1007, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 8114, in _lower_async_function
+    assign(*args, line, following=body[index + 1:])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7143, in assign
+    check_access(receiver, line, write=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6419, in check_access
+    fail(line, f"accès à '{name}' incompatible avec un emprunt actif")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1043, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: accès à 'number' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 45, in test_two_positions_release_only_extracted_loan
+    self.assertEqual(self.run_source(s).stdout,'11\n13\n')
+                     ~~~~~~~~~~~~~~~^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_borrows.py", line 76, in run_source
+    return harness.SelectSourceTests.run_source(self,self.async_source(source))
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: accès à 'number' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 12 tests in 4.404s
+
+FAILED (failures=4)

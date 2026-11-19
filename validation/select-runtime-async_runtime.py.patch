@@ -1,0 +1,174 @@
+--- /tmp/crust-before-select-runtime/async_runtime.py	2026-11-08 04:16:07
++++ async_runtime.py	2026-11-08 04:21:53
+@@ -494,6 +494,7 @@
+     CrustTask *task;
+     uint64_t generation;
+     CrustWakeTicket waiter;
++    CrustWakeTicket forward; /* Select branch -> enclosing poll, never a frame pointer. */
+     int scheduled; /* Queued, claimed by a worker, or currently being polled. */
+     CrustQueueEntry *next; /* Queue mutex, not entry mutex. */
+ };
+@@ -530,6 +531,7 @@
+     entry->task = NULL;
+     entry->generation = 0;
+     entry->waiter = (CrustWakeTicket){0};
++    entry->forward = (CrustWakeTicket){0};
+     entry->scheduled = 0;
+     entry->next = NULL;
+ }
+@@ -569,6 +571,7 @@
+             *ticket = (CrustWakeTicket){entry, entry->generation};
+             task->wake_target = *ticket;
+             entry->waiter = (CrustWakeTicket){0};
++            entry->forward = (CrustWakeTicket){0};
+             task_queue_push_locked(queue, entry);
+         }
+     }
+@@ -581,11 +584,16 @@
+     if (!entry) return 0;
+     task_queue_lock(&entry->mutex);
+     int valid = entry->generation == ticket.generation && entry->task;
++    CrustWakeTicket forward = {0};
+     if (valid) {
+         valid = task_wake(entry->task);
+         if (valid && !entry->scheduled) task_queue_push(entry->queue, entry);
++        if (valid) forward = entry->forward;
+     }
+     task_queue_unlock(&entry->mutex);
++    /* Never nest entry locks. A detached/reused enclosing entry rejects the
++       saved generation; no task frame is retained across this notification. */
++    if (forward.entry) task_queue_wake(forward);
+     return valid;
+ }
+ 
+@@ -599,8 +607,9 @@
+         ++entry->generation;
+         entry->queue = NULL;
+         entry->task = task;
+-        entry->scheduled = 1; /* Dedicated worker, never enqueued. */
++        entry->scheduled = 1; /* Dedicated worker or owned Select branch; never enqueued. */
+         entry->waiter = (CrustWakeTicket){0};
++        entry->forward = (CrustWakeTicket){0};
+         task->wake_target = (CrustWakeTicket){entry, entry->generation};
+     }
+     task_queue_unlock(&entry->mutex);
+@@ -614,6 +623,7 @@
+         entry->task = NULL;
+         entry->scheduled = 0;
+         entry->waiter = (CrustWakeTicket){0};
++        entry->forward = (CrustWakeTicket){0};
+     }
+     task_queue_unlock(&entry->mutex);
+ }
+@@ -792,7 +802,111 @@
+ '''
+ 
+ TASK_THREAD_RUNTIME += TASK_READY_QUEUE_RUNTIME
++
++TASK_SELECT_RUNTIME = r'''
++/* Internal Select mechanism. Storage and branch descriptors belong to the
++   enclosing state. The compiler must provide a suspended destructor for each
++   branch; the ordinary release callback alone describes only inactive and
++   completed states. No Select operation races with its own poll or drop.
++   Event producers use persistent entries/tickets and may race with either. */
++typedef struct {
++    CrustTask *task;
++    void (*discard_suspended)(CrustTask *);
++} CrustSelectBranch;
++typedef struct {
++    CrustSelectBranch *branches;
++    size_t count, winner;
++    int started, taken, dropped;
++} CrustSelect;
++
++static void task_select_init(CrustSelect *selection,
++                            CrustSelectBranch *branches, size_t count) {
++    if (!count) abort();
++    for (size_t i = 0; i < count; ++i) {
++        CrustTask *task = branches[i].task;
++        if (!task || !task->queue_entry || !branches[i].discard_suspended ||
++                atomic_load(&task->state) != TASK_INACTIVE) abort();
++        for (size_t j = 0; j < i; ++j)
++            if (task == branches[j].task ||
++                    task->queue_entry == branches[j].task->queue_entry) abort();
++    }
++    *selection = (CrustSelect){.branches = branches, .count = count, .winner = SIZE_MAX};
++}
++
++static void task_select_detach(CrustSelect *selection) {
++    if (!selection->started) return;
++    for (size_t i = 0; i < selection->count; ++i)
++        if (selection->branches[i].task)
++            task_external_forget(selection->branches[i].task);
++}
++
++static CrustTaskStep task_select_poll(CrustSelect *selection, CrustTask *parent) {
++    if (selection->dropped || selection->taken) abort();
++    if (selection->winner != SIZE_MAX) return TASK_STEP_RETURN;
++    /* Register all branches before polling any one: their wake targets must
++       distinguish siblings, including through chains of direct awaits. */
++    for (size_t i = 0; i < selection->count; ++i) {
++        CrustTask *task = selection->branches[i].task;
++        if (!selection->started && task_external_register(task)) abort();
++        CrustQueueEntry *entry = task->queue_entry;
++        task_queue_lock(&entry->mutex);
++        if (entry->task != task || entry->queue ||
++                parent->wake_target.entry == entry) abort();
++        entry->forward = parent->wake_target;
++        task_queue_unlock(&entry->mutex);
++    }
++    selection->started = 1;
++    for (size_t i = 0; i < selection->count; ++i) {
++        CrustTask *task = selection->branches[i].task;
++        /* task_poll spends readiness. Do not force a wake as for a direct
++           child: an unrelated branch notification cannot make this eligible. */
++        if (task_poll(task) == TASK_COMPLETE) {
++            selection->winner = i;
++            task_select_detach(selection);
++            return TASK_STEP_RETURN;
++        }
++    }
++    /* Yield is a readiness event for that branch. A concurrent wake received
++       after this check also reaches the parent and survives its Pending. */
++    for (size_t i = 0; i < selection->count; ++i) {
++        CrustTask *task = selection->branches[i].task;
++        task_scheduling_lock(task);
++        int ready = task->ready;
++        task_scheduling_unlock(task);
++        if (ready) return TASK_STEP_YIELD;
++    }
++    return TASK_STEP_PENDING;
++}
+ 
++static int task_select_take(CrustSelect *selection, void *out) {
++    if (selection->dropped || selection->taken || selection->winner == SIZE_MAX) return 0;
++    CrustSelectBranch *branch = &selection->branches[selection->winner];
++    if (!task_take(branch->task, out)) abort();
++    branch->task = NULL;
++    selection->taken = 1;
++    return 1;
++}
++
++static void task_select_drop(CrustSelect *selection) {
++    if (selection->dropped) abort();
++    /* Revoke routes before any frame can be released. Concurrent producers
++       can then only notify a persistent entry with an obsolete generation. */
++    task_select_detach(selection);
++    for (size_t i = selection->count; i > 0; --i) {
++        CrustSelectBranch *branch = &selection->branches[i - 1];
++        CrustTask *task = branch->task;
++        if (!task) continue;
++        CrustTaskState state = atomic_load(&task->state);
++        if ((state != TASK_INACTIVE && state != TASK_SUSPENDED && state != TASK_COMPLETE) ||
++                !task_consume(task, state)) abort();
++        if (state == TASK_SUSPENDED) branch->discard_suspended(task);
++        else task->ops->release(task);
++        branch->task = NULL;
++    }
++    selection->dropped = 1;
++}
++'''
++
+ TASK_ASYNC_THREAD_RUNTIME = r'''
+ /* The worker only accesses its own stable task slot. It publishes
+    completion as its last access, so the parent handle can disappear. */

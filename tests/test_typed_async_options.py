@@ -1,0 +1,156 @@
+"""Async optional allocations preserve the leaf type, origin and cleanup."""
+from pathlib import Path
+import unittest
+import test_select_source as harness
+from crust import compile_source
+from scheduler_faults import inject_submission_failure
+
+POINT = 'struct Point{x:Int}'
+FILL = 'v.push(->p.new(x:7));'
+ACTION = 'let result=h.join();drop(->result);'
+READ = 'match (->option){Some(n)=>{print(n.x);drop(->n);},None=>{print(0);}}'
+
+
+def envelope(depth, typ='Point'):
+    result = f'Option<A<{typ}>>'
+    for _ in range(depth):
+        result = f'Result<{result},runtime::Error>'
+    return result
+
+
+def inspect(depth, expression='h.join()'):
+    body = READ
+    for level in range(depth):
+        child = 'option' if level == 0 else f'inner{level}'
+        receiver = expression if level == depth - 1 else f'inner{level+1}'
+        body = f'match {receiver}{{Ok({child})=>{{{body}}},Err(_)=>{{print({90+level});}}}}'
+    return body
+
+
+def program(depth=1, some=True):
+    source = POINT + 'async fn extract(v:&mut Vector<A<Point>>)-><-Option<A<Point>>{yield;return <-v.pop();}'
+    previous = 'extract'
+    for level in range(1, depth):
+        name = f'wrapped{level}'
+        source += f'''async fn {name}(v:&mut Vector<A<Point>>)-><-{envelope(level)}{{
+            let h=runtime::spawn(->{previous}(v));return <-h.await;}}'''
+        previous = name
+    source += f'''fn main(){{let mut p=pool<Point>(1);let mut vp=pool<Vector<A<Point>>>(1);
+        let mut v=vp.new();{FILL if some else ''}let h=runtime::spawn(->{previous}(&mut v));{ACTION}
+        drop(->v);let next=p.new(x:8);print(next.x);}}'''
+    return source
+
+
+class TypedAsyncOptionTests(unittest.TestCase):
+    run_source = harness.SelectSourceTests.run_source
+    run_c_oracle = harness.SelectSourceTests.run_c_oracle
+    refused = harness.SelectSourceTests.refused
+
+    def test_recorded_case_and_nested_some_none(self):
+        recorded = Path(__file__).resolve().parents[1].joinpath('validation/open-typed-async-vector-option.crb').read_text()
+        self.assertEqual(self.run_source(recorded).stdout, '7\n9\n')
+        for depth in (1, 3):
+            for some in (True, False):
+                source = program(depth, some).replace(ACTION, inspect(depth))
+                self.assertEqual(self.run_source(source).stdout, ('7' if some else '0')+'\n8\n')
+        self.refused(source.replace('return <-v.pop();','return v.pop();'), 'explicite|transfert|<-')
+
+    def test_direct_await_capture_and_named_relay(self):
+        helpers = '''async fn forward(x:->Option<A<Point>>)-><-Option<A<Point>>{yield;return <-x;}
+            fn relay(x:->Option<A<Point>>)-><-Option<A<Point>>{return <-x;}
+            fn make(v:&mut Vector<A<Point>>)-><-extract{return <-extract(v);}
+            async fn work(v:&mut Vector<A<Point>>)->Int{
+                let task=make(v);let first=task.await;
+                let saved:Option<A<Point>>=relay(->forward(->first).await);yield;
+                match (->saved){Some(n)=>{let value=n.x;drop(->n);return value;},None=>{return 0;}}}'''
+        for some in (True,False):
+            source=helpers+program(some=some).replace('spawn(->extract(&mut v))','spawn(->work(&mut v))').replace(
+                ACTION,'match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}')
+            self.assertEqual(self.run_source(source).stdout,('7' if some else '0')+'\n8\n')
+            self.refused(source.replace('let saved:Option<A<Point>>','let saved:Option<A<Int>>'), 'annotation|type')
+            self.refused(source.replace('forward(->first)','forward(first)'), 'transfert|->')
+
+    def test_public_handle_and_typed_envelope_parameters(self):
+        helpers=f'''fn wait(h:->runtime::Handle<{envelope(2)}>)-><-{envelope(3)}{{return <-h.join();}}
+            fn relay(r:->{envelope(3)})-><-{envelope(3)}{{return <-r;}}
+            async fn forward(r:->{envelope(3)})-><-{envelope(3)}{{yield;return <-r;}}
+            async fn work(r:->{envelope(3)})->Int{{let saved=forward(->r).await;
+                {inspect(3,'saved')}return 42;}}'''
+        for some in (True,False):
+            source=helpers+program(3,some).replace(ACTION,
+                'let r=relay(->wait(->h));let e=runtime::spawn(->work(->r));match e.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}')
+            self.assertEqual(self.run_source(source).stdout,('7' if some else '0')+'\n42\n8\n')
+        self.refused(source.replace('wait(->h)','wait(h)'), 'transfert|->')
+        self.refused(source.replace('async fn forward(r:->'+envelope(3),'async fn forward(r:->'+envelope(3,'Int')),
+                     'type|attend|annotation')
+
+    def test_launch_failures_drop_original_pool_payload(self):
+        for some in (True,False):
+            code=compile_source(program(3,some).replace(ACTION,inspect(3)))
+            for asynchronous,at,tag in ((False,1,92),(True,1,91),(True,2,90)):
+                run=self.run_c_oracle(inject_submission_failure(code,asynchronous=asynchronous,at=at))
+                self.assertEqual(run.stdout,f'{tag}\n8\n')
+                self.assertEqual(run.stderr.count('=Point\n'),1+int(some))
+
+    def test_capture_cleanup_inactive_and_failed_launch(self):
+        helper='async fn consume(r:->Option<A<Point>>)->Int{yield;drop(->r);return 42;}'
+        start='let r=<-v.pop();let t=consume(->r);'
+        for some in (True,False):
+            source=helper+program(some=some).replace('let h=runtime::spawn(->extract(&mut v));'+ACTION,
+                start+'drop(->t);')
+            run=self.run_source(source)
+            self.assertEqual(run.stdout,'8\n')
+            self.assertEqual(run.stderr.count('=Point\n'),1+int(some))
+            launched=source.replace('drop(->t);','let h=runtime::spawn(->t);match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}')
+            run=self.run_c_oracle(inject_submission_failure(compile_source(launched),asynchronous=False,at=1))
+            self.assertEqual(run.stdout,'99\n8\n')
+            self.assertEqual(run.stderr.count('=Point\n'),1+int(some))
+            self.refused(source.replace('consume(->r)','consume(r)'), 'transfert|->')
+            self.refused(source.replace('drop(->t);','drop(->t);drop(->r);'), 'consomm|utilis|transfert')
+
+    def test_pool_lifetime_and_explicit_usage(self):
+        definitions=program(3).split('fn main()')[0]
+        main='''fn main(){let mut p=pool<Point>(1);let result={let mut q=pool<Point>(1);
+            let mut vp=pool<Vector<A<Point>>>(1);let mut v=vp.new();v.push(->p.new(x:7));
+            let h=runtime::spawn(->wrapped2(&mut v));let r=h.join();<-r};OBSERVE
+            let next=p.new(x:8);print(next.x);}'''.replace('OBSERVE',inspect(3,'result'))
+        self.assertEqual(self.run_source(definitions+main).stdout,'7\n8\n')
+        self.refused(definitions+main.replace('v.push(->p.new(x:7))','v.push(->q.new(x:7))'),'pool|source|survi')
+        source=program(3)
+        self.refused(source.replace('drop(->result);',''), 'sans usage explicite')
+        self.refused(source.replace('drop(->result);','drop(->result);drop(->result);'),'consomm|utilis')
+        self.refused(source.replace(ACTION,'print(v.len());'+ACTION),'emprunt|réserv')
+
+    def test_distinct_payload_types_and_empty_capture_arguments(self):
+        helper = 'async fn consume(r:->Option<A<Point>>)->Int{yield;drop(->r);return 42;}'
+        for some in (True,False):
+            source=helper+program(some=some).replace('let h=runtime::spawn(->extract(&mut v));'+ACTION,
+                'let r=<-v.pop();let h=runtime::spawn(->consume(->r));match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}')
+            self.assertEqual(self.run_source(source).stdout,'42\n8\n')
+            self.refused(source.replace('consume(r:->Option<A<Point>>','consume(r:->Option<A<Int>>'), 'type|attend|Int')
+        helpers = 'async fn ints(v:&mut Vector<A<Int>>)-><-Option<A<Int>>{yield;return <-v.pop();}'
+        source=helpers+program().replace(ACTION,inspect(1)).replace('drop(->v);',
+            'let mut ip=pool<Int>(1);let mut ivp=pool<Vector<A<Int>>>(1);let mut iv=ivp.new();'
+            'iv.push(->ip.new(11));let ih=runtime::spawn(->ints(&mut iv));'
+            'match ih.join(){Ok(r)=>{match (->r){Some(n)=>{print(*n);drop(->n);},None=>{print(0);}}},Err(_)=>{print(99);}}'
+            'drop(->iv);drop(->v);')
+        self.assertEqual(self.run_source(source).stdout,'7\n11\n8\n')
+
+    def test_growing_payloads_with_typed_async_signatures(self):
+        for typ,fill,read,expected in (
+            ('String','item.push_str("été");','print(&item[..]);','été\n'),
+            ('Vector<Int>','item.push(7);','print(item[0]);','7\n'),
+            ('Vector<u8>','let byte:u8=7;item.push(byte);','print(item[0] as Int);','7\n'),
+        ):
+            source=f'''async fn take(v:&mut Vector<A<{typ}>>)-><-Option<A<{typ}>>{{yield;return <-v.pop();}}
+                async fn forward(r:->Option<A<{typ}>>)-><-Option<A<{typ}>>{{yield;return <-r;}}
+                async fn work(v:&mut Vector<A<{typ}>>)->Int{{let initial=take(v).await;
+                    let result=forward(->initial).await;
+                    match (->result){{Some(item)=>{{{read}drop(->item);}},None=>{{print(0);}}}}return 1;}}
+                fn main(){{let mut p=pool<{typ}>(1);let mut vp=pool<Vector<A<{typ}>>>(1);
+                    let mut v=vp.new();let mut item=p.new();{fill}v.push(->item);
+                    let h=runtime::spawn(->work(&mut v));match h.join(){{Ok(n)=>{{print(n);}},Err(_)=>{{print(99);}}}}
+                    drop(->v);let reused=p.new();drop(->reused);}}'''
+            self.assertEqual(self.run_source(source).stdout,expected+'1\n')
+
+if __name__=='__main__':unittest.main()

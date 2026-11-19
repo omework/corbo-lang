@@ -1,0 +1,17 @@
+// B5 / AS9: both targets are borrowed from the parent, and remain alive.
+async fn choose(flag: Int, left: &mut Int, right: &mut Int) -> &mut Int {
+    yield;
+    return if flag == 1 { left } else { right };
+}
+fn main() {
+    let mut p = pool<Int>(2);
+    let mut left = p.new(10);
+    let mut right = p.new(20);
+    let h = runtime::spawn(-> choose(1, &mut left, &mut right));
+    match h.join() {
+        Ok(cell) => { *cell = 30; },
+        Err(_) => { print(999); }
+    }
+    print(left);
+    print(right);
+}

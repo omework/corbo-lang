@@ -1,0 +1,126 @@
+--- /tmp/crust-before-nested-exchange-joins/crust.py
++++ crust.py
+@@ -1,7 +1,11 @@
+ #!/usr/bin/env python3
+ """Experimental scope checker and C emitter. No unchecked C input is accepted."""
+ from __future__ import annotations
+-from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
++from exchange_join_types import (
++    EXCHANGE_JOIN_TYPES, exchange_join_mode, EXCHANGE_JOIN_CTYPES, EXCHANGE_JOIN_CELLS, 
++    EXCHANGE_JOIN_DEPTHS, exchange_type_mode, exchange_inner_signature, exchange_is_try_push, 
++    exchange_cleanup, exchange_join_layouts,
++)
+ from capture_paths import result_capture_selector, capture_index
+ from structure_views import field_kind, field_size
+ 
+@@ -58,14 +62,14 @@
+ JOIN_RESULT_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'join_option': 'value.value'}
+ 
+ 
+-JOIN_RESULT_TYPES.update(EXCHANGE_JOIN_TYPES)
+-JOIN_RESULT_C_TYPES.update(dict.fromkeys(EXCHANGE_JOIN_TYPES, 'CrustExchangeJoinResult'))
+-JOIN_RESULT_CELLS.update(dict.fromkeys(EXCHANGE_JOIN_TYPES, 'value.value'))
++JOIN_RESULT_TYPES = ChainMap(EXCHANGE_JOIN_TYPES, JOIN_RESULT_TYPES)
++JOIN_RESULT_C_TYPES = ChainMap(EXCHANGE_JOIN_CTYPES, JOIN_RESULT_C_TYPES)
++JOIN_RESULT_CELLS = ChainMap(EXCHANGE_JOIN_CELLS, JOIN_RESULT_CELLS)
+ 
+ 
+ def join_allocation_signature(typ):
+-    if typ in EXCHANGE_JOIN_TYPES.values():
+-        return next(mode for mode, name in EXCHANGE_JOIN_TYPES.items() if name == typ), 'Int', 'pool'
++    if (mode := exchange_type_mode(typ)) is not None:
++        return mode, 'Int', 'pool'
+     if typ == 'Result<Option<A<Int>>,runtime::Error>':
+         return 'join_option', 'Int', 'pool'
+     for mode, prefix, suffix, storage in (
+@@ -588,6 +592,8 @@
+                 body = self.block()
+         finally:
+             self.async_body = previous
++        if asynchronous and (result[0] == 'buffered_handle_exchange' or result[0] in EXCHANGE_JOIN_TYPES):
++            exchange_join_mode(result[1] if result[0] == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[result[0]])
+         return Node('async_fn' if asynchronous else 'fn', (name, params, result, body), line,
+                     mutable_parameters=frozenset(mutable_parameters),
+                     handle_parameters=frozenset(handle_parameters), handle_result=handle_result,
+@@ -3188,7 +3194,7 @@
+                         check.ensure_guard(allocation)
+                     if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                         payload = (allocation.sources, allocation.origins)
+-                        allocation.exchange_payloads = (((), frozenset()) if typ == 'Result<(),A<Int>>' or mode == 'join_try_push' else payload,
++                        allocation.exchange_payloads = (((), frozenset()) if typ == 'Result<(),A<Int>>' or exchange_is_try_push(mode) else payload,
+                                                         payload)
+                     root.allocations.append(allocation)
+                     check.allocations.append(allocation)
+@@ -7480,7 +7486,13 @@
+                 binding.valid = descriptor.alive = descriptor.definite = False
+                 self.lines.append(f'*({descriptor.guard}) = 0;')
+                 if kind in EXCHANGE_JOIN_TYPES:
+-                    return self.join_buffered_exchange(f'({value}).value', [dict(vars(descriptor), optional_payload=kind == 'join_try_push')], scope, label)
++                    inner_mode, _ = exchange_inner_signature(kind)
++                    if inner_mode == 'buffered_handle_exchange':
++                        return self.join_buffered_exchange(f'({value}).value', [dict(vars(descriptor), optional_payload=exchange_is_try_push(kind))], scope, label)
++                    return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
++                        label, descriptor.origins, exchange=inner_mode,
++                        absent=descriptor.absent_owned_payload,
++                        owned_fields=self.task_owned_result_fields((descriptor,)))
+                 if kind == 'join_option':
+                     return self.buffered_handle_result(f'({value}).value', descriptor.sources, scope,
+                                                        label, descriptor.origins)
+@@ -8288,7 +8300,7 @@
+         # carries no allocation. The outer Result still needs its descriptor.
+         absent = absent or (optional and not sources)
+         storage = 'pool' if optional else storage
+-        cell = f'{name}.value.value' if optional or exchange else f'{name}.value.allocation' if nested else f'{name}.allocation'
++        cell = f'{name}.{EXCHANGE_JOIN_CELLS[exchange]}' if exchange else f'{name}.value.value' if optional else f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+         payload.absent_owned_payload = absent
+@@ -8315,10 +8327,10 @@
+         self.check_borrow_destination(payload, scope)
+         payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested or optional else None
+         if exchange:
+-            payload_status = f'{name}.value.status != CRUST_CHAR_OK' if exchange == 'join_try_push' else None
++            _, payload_status = exchange_cleanup(name, exchange)
+             fields = {path: (sources, origins) for path, sources, origins in owned_fields}
+             payload.exchange_payloads = tuple(fields.get(arm, (payload.sources, payload.origins)) for arm in ('ok', 'err'))
+-            if exchange == 'join_try_push':
++            if exchange_is_try_push(exchange):
+                 payload.exchange_payloads = (((), frozenset()), payload.exchange_payloads[1])
+             payload.task_result_fields = tuple((arm, *record) for arm, record in zip(('ok', 'err'), payload.exchange_payloads))
+         self.guard_buffered_handle(name, payload, '==', payload_status=payload_status)
+@@ -11131,7 +11143,7 @@
+             self.fail('spawn exige une tâche inactive du scope courant' if spawn else
+                       'join exige un handle d’exécution du scope courant')
+         task_name = allocation.typ.split('<', 1)[1][:-1]
+-        if spawn and self.async_definitions[task_name][0].args[2][0] in ('join_nested', 'join_option', *EXCHANGE_JOIN_TYPES):
++        if spawn and self.async_definitions[task_name][0].args[2][0] in ('join_nested', 'join_option'):
+             self.fail('spawn avec trois niveaux de Result non pris en charge')
+         self.expression_clock(expr)
+         self.thread_runtime_used = True
+@@ -11184,11 +11196,12 @@
+             self.lines.append(f'{COPY_VALUE_TYPES[outer]} {c} = {{0}};')
+             self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.value).status;')
+             return outer, c, None
+-        if mode == 'buffered_handle_exchange':
+-            self.flag_declarations.append(f'CrustExchangeJoinResult {c} = {{0}};')
++        if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
++            outer_mode = exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode])
++            self.flag_declarations.append(f'{EXCHANGE_JOIN_CTYPES[outer_mode]} {c} = {{0}};')
+             self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.value).status;')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+-                allocation.task_result_origins, exchange=exchange_join_mode(typ),
++                allocation.task_result_origins, exchange=outer_mode,
+                 owned_fields=allocation.task_result_fields, absent=absent_payload)
+         if mode == 'handle_option':
+             self.flag_declarations.append(f'CrustOptionJoinResult {c} = {{0}};')
+@@ -15581,6 +15594,10 @@
+             if mode in PLAIN_JOIN_TYPES:
+                 layout_depth = max(layout_depth, mode.count('join_') + int(asynchronous))
+         runtime = runtime.replace(UTF8_VALUE_TYPES_C, UTF8_VALUE_TYPES_C + plain_join_layouts(layout_depth), 1)
++        exchange_depth = max((EXCHANGE_JOIN_DEPTHS.get(mode, 0) + int(asynchronous and mode in EXCHANGE_JOIN_TYPES)
++            for node, asynchronous in signatures
++            for mode in [node.args[2][0], *(mode for _, mode, _ in node.args[1])]), default=1)
++        runtime += '\n' + exchange_join_layouts(exchange_depth) + '\n'
+         if self.async_definitions:
+             from async_lowering import lower_task_context, task_factory_signature
+             from async_runtime import TASK_ASYNC_THREAD_RUNTIME, TASK_POOL_RUNTIME, TASK_RUNTIME_BODY, TASK_THREAD_RUNTIME, TASK_SELECT_RUNTIME

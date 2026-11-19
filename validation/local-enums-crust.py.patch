@@ -1,0 +1,172 @@
+--- before/crust.py
++++ after/crust.py
+@@ -178,6 +178,8 @@
+         self.async_body = False
+         self.structure_names = {self.tokens[i + 1][0] for i, token in enumerate(self.tokens[:-1])
+                                 if token[0] == 'struct'}
++        self.enum_names = {self.tokens[i + 1][0] for i, token in enumerate(self.tokens[:-1])
++                           if token[0] == 'enum'}
+ 
+     def peek(self, offset=0):
+         index = self.i + offset
+@@ -1345,6 +1347,10 @@
+         if self.is_integer_token(word) or word == '-':
+             return ('int', self.integer())
+         name = self.name()
++        if name in self.enum_names and self.peek() == '.' and self.peek(2) == '{':
++            self.take('.')
++            arm = self.name()
++            return ('new_enum', None, name, arm, self.field_values())
+         if name in self.structure_names and self.peek() == '{':
+             return ('new_enum', None, name, '', self.field_values())
+         if self.peek() == '(':
+@@ -5793,18 +5799,29 @@
+             self.lines.append(f'Source s{sid} = source_stack(16 * 1024 * 1024);')
+         return source
+ 
+-    def local_structure_storage(self, scope, typ):
++    def local_structure_storage(self, scope, typ, arm=None):
+         source = self.local_stack_storage(scope)
+-        return source, self.structure_layout_definition(typ)
+-
+-    def structure_layout_definition(self, typ):
+-        fields = self.enums[typ]['']
++        return source, self.structure_layout_definition(typ, arm)
++
++    def local_payload_size(self, typ):
++        variants = self.enums[typ]
++        sizes = [self.field_offset(fields, len(fields)) for fields in variants.values()]
++        if len(sizes) == 1:
++            return sizes[0]
++        arms = ' '.join(f'unsigned char arm{i}[{size if size != "0" else "1"}];'
++                        for i, size in enumerate(sizes))
++        return f'sizeof(union {{ {arms} }})'
++
++    def structure_layout_definition(self, typ, arm=None):
++        arm = next(iter(self.enums[typ])) if arm is None else arm
++        fields = self.enums[typ][arm]
++        tag = list(self.enums[typ]).index(arm)
+         layout = f'layout{self.uid()}'
+         offsets = ', '.join(self.field_offset(fields, i) for i in range(len(fields))) or '0'
+         kinds = ', '.join(str(field_kind(t)) for _, t in fields) or '0'
+         self.lines.append(f'static const size_t {layout}_offsets[] = {{ {offsets} }};')
+         self.lines.append(f'static const unsigned char {layout}_kinds[] = {{ {kinds} }};')
+-        self.lines.append(f'static const Source {layout} = {{.enum_name = "{typ}", .arm_name = "", '
++        self.lines.append(f'static const Source {layout} = {{.enum_name = "{typ}", .arm_name = "{arm}", .arm_tag = {tag}, '
+                           f'.field_count = {len(fields)}, .field_offsets = {layout}_offsets, '
+                           f'.field_kinds = {layout}_kinds}};')
+         return layout
+@@ -5897,7 +5914,9 @@
+                 if local_reservation:
+                     source, layout, reserved = local_reservation
+                 else:
+-                    source, layout = self.local_structure_storage(scope, typ)
++                    source, layout = self.local_structure_storage(scope, typ, arm)
++                if local_reservation and typ not in self.struct_fields:
++                    layout = self.structure_layout_definition(typ, arm)
+             else:
+                 source = self.memory_source(expr[1])
+                 if not source.supports_pool(typ):
+@@ -5926,6 +5945,8 @@
+                            if local_reservation else
+                            f'local_cell_new({source_c}, &{layout}, {size}, "{source_name}")')
+             self.lines.append(f'Cell *{allocation.c} = {factory};')
++            if local and typ not in self.struct_fields:
++                self.lines.append(f'{allocation.c}->layout = &{layout};')
+             for i, (name, field_type) in enumerate(expected):
+                 helper = 'cell_store_ref' if reference_type(field_type) or field_type.startswith('A<') else 'cell_store_int'
+                 if name in stored_views:
+@@ -7651,10 +7672,10 @@
+         else:
+             right = f'compared{self.uid()}'
+             self.lines.append(f'Cell *{right} = *({code});')
+-            same_arm = f'{binding.c}->source->arm_tag == {right}->source->arm_tag'
++            same_arm = f'{binding.c}->layout->arm_tag == {right}->layout->arm_tag'
+             alternatives = []
+             for index, fields in enumerate(arms.values()):
+-                comparisons = [f'{binding.c}->source->arm_tag == {index}']
++                comparisons = [f'{binding.c}->layout->arm_tag == {index}']
+                 for field in range(len(fields)):
+                     offset = self.field_offset(fields, field)
+                     comparisons.append(f'cell_load_int({binding.c}, {offset}) == cell_load_int({right}, {offset})')
+@@ -8935,11 +8956,10 @@
+             if len(types) != 1:
+                 self.fail('un résultat local conditionnel doit conserver le même type')
+             typ = types.pop()
+-            if typ not in self.struct_fields:
+-                self.fail(f"structure locale inconnue '{typ}'")
++            if typ not in self.enums:
++                self.fail(f"type local inconnu '{typ}'")
+             source, layout = self.local_structure_storage(self.scopes[-1], typ)
+-            fields = self.enums[typ]['']
+-            size = self.field_offset(fields, len(fields))
++            size = self.local_payload_size(typ)
+             reserved = f'local_reserved{self.uid()}'
+             self.lines.append(f'Cell *{reserved} = local_cell_new({source.c}, &{layout}, {size}, NULL);')
+             for constructor in constructors:
+@@ -9525,7 +9545,8 @@
+             return 'owned', f'a{allocation.id}', allocation
+         if op == 'new_enum':
+             if expr[1] is None:
+-                return self.construct_enum(expr, scope, source_name, structure=expr[2])
++                return self.construct_enum(expr, scope, source_name,
++                                           structure=expr[2] if expr[2] in self.struct_fields else None)
+             if expr[2] is None:
+                 element = self.memory_source(expr[1]).element_type
+                 if '' not in self.enums.get(element, {}):
+@@ -11603,8 +11624,7 @@
+                 source, layout, reserved = reservation
+             else:
+                 source, layout = self.local_structure_storage(caller, declared[1])
+-                fields = self.enums[declared[1]]['']
+-                size = self.field_offset(fields, len(fields))
++                size = self.local_payload_size(declared[1])
+                 reserved = f'local_return{self.uid()}'
+                 self.lines.append(f'Cell *{reserved} = local_cell_new({source.c}, &{layout}, {size}, NULL);')
+                 self.lines.append(f'{reserved}->reservation_depth++;')
+@@ -12741,7 +12761,7 @@
+         if destination is not None:
+             result_c = f'match_result{self.uid()}'
+             self.lines.append(f'Cell *{result_c} = NULL;')
+-        self.lines.append(f'switch ({binding.c}->source->arm_tag) {{')
++        self.lines.append(f'switch ({binding.c}->layout->arm_tag) {{')
+         # Keep the subject borrowed across the entire arm, even if a projected
+         # name has already reached its last use.
+         subject_loan = (Binding(subject, 'mut', binding.c, binding.alloc,
+@@ -13061,7 +13081,7 @@
+                 else:
+                     c_type = typ[0] if kind == 'array_refs' else 'Cell *' if kind in ('owned', 'ref', 'mut') else typ
+                 self.lines.append(f'{c_type} {result_c};')
+-        self.lines.append(f'switch ({binding.c}->source->arm_tag) {{')
++        self.lines.append(f'switch ({binding.c}->layout->arm_tag) {{')
+         for (_, arm, _, _), code in zip(arms, branches):
+             self.lines.append(f'case {list(variants).index(arm)}: {{')
+             self.lines.extend(code)
+@@ -14637,7 +14657,7 @@
+             for name, node in async_functions.items():
+                 node.field_effect_summary = self.async_structure_effects[name]
+                 from async_result_storage import may_need_destination
+-                node.result_storage = may_need_destination(node, self.struct_fields)
++                node.result_storage = may_need_destination(node, self.enums)
+             self.function_results = ResultAnalyzer(self.functions, self.function_effects, Error, self.enums,
+                                                    async_functions).infer_all()
+             inference_contracts = function_contracts(self.functions, self.function_effects,
+@@ -14778,7 +14798,7 @@
+             fields = []
+             borrowed = []
+             for tag, (variant, members) in enumerate(check.enums.get(allocation.typ, {}).items()):
+-                present = '1' if check.is_structure_view(allocation) else f'{pointer} && {pointer}->source->arm_tag == {tag}'
++                present = '1' if check.is_structure_view(allocation) else f'{pointer} && {pointer}->layout->arm_tag == {tag}'
+                 for field_index, (name, declared) in enumerate(members):
+                     if declared in ('&Int', '&mut Int'):
+                         target_pointer = f'bridge_borrowed_field_{check.uid()}'
+@@ -14985,8 +15005,7 @@
+                                   'data stack du receveur async', parameter)
+             external.sources.append(source)
+             _, layout = check.local_structure_storage(external, contract.result_type[1])
+-            members = check.enums[contract.result_type[1]]['']
+-            size = check.field_offset(members, len(members))
++            size = check.local_payload_size(contract.result_type[1])
+             reserved = 'bridge_local_output'
+             check.lines.append(f'Cell *{reserved} = local_cell_new({parameter}, &{layout}, {size}, NULL);')
+             check.local_reservations[id(call)] = source, layout, reserved

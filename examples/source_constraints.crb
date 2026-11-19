@@ -1,0 +1,28 @@
+fn clear_then_read(memory: &mut Allocator, data: &Int) -> Int {
+    memory.reset();
+    return *data;
+}
+
+fn read_then_clear(memory: &mut Allocator, data: &Int) -> Int {
+    let mut value = *data;
+    memory.reset();
+    return value;
+}
+
+fn consume(memory: &mut Allocator, mut data: -> Int) {
+    memory.drop(-> data);
+}
+
+fn main() {
+    let mut memory = pool<Int>(1);
+    let mut other = pool<Int>(1);
+    let mut data = new(other) Int(42);
+
+    let mut first = clear_then_read(&mut memory, &data); // Sources distinctes.
+    print(first);
+    let mut second = read_then_clear(&mut other, &data); // Même source autorisée.
+    print(second);
+
+    let mut fresh = new(memory) Int(7);
+    consume(&mut memory, -> fresh); // Égalité de source vérifiée.
+}

@@ -1,0 +1,179 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -909,7 +909,8 @@
+ 
+ 
+ def lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type, frame_slots=None,
+-                         *, sync_contracts=None, sync_bridge=None, struct_layouts=None):
++                         *, sync_contracts=None, sync_bridge=None, struct_layouts=None,
++                         local_parameters=frozenset(), variant_name=None, specialize=None):
+     # Each retry starts with fresh lowering state. Only finite sets of source
+     # names survive, so no emitted frame member or cleanup is duplicated.
+     node = expand_reference_return_branches(node)
+@@ -920,7 +921,8 @@
+         try:
+             result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                            enable_threads, result_parameters_cache, array_c_type, hints, slots,
+-                                           sync_contracts or {}, sync_bridge, struct_layouts or {})
++                                           sync_contracts or {}, sync_bridge, struct_layouts or {},
++                                           local_parameters, variant_name, specialize)
+         except _WidenUtf8Loop as request:
+             entry = hints.setdefault(request.key, {})
+             changed = False
+@@ -933,14 +935,16 @@
+                 raise error('analyse des provenances de boucle async sans progression')
+             continue
+         if frame_slots is not None:
+-            frame_slots.update(slots)
++            for name, count in slots.items():
++                frame_slots[name] = max(frame_slots.get(name, 0), count)
+         for warning in warnings:
+             warn(*warning)
+         return result
+ 
+ 
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+-                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts):
++                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts,
++                          local_parameters, variant_name, specialize):
+     from handle_types import HandleDefinitions, public_signature
+     functions = HandleDefinitions(functions)
+     name, parameters, result, body = node.args
+@@ -1612,7 +1616,7 @@
+     array_elements = {}
+     reference_rows = {parameter: (array_c_type(typ), layout) for parameter, mode, typ in parameters
+                       if (layout := int_reference_layout(typ, mode))}
+-    prefix = f'crust_async_{name}'
++    prefix = f'crust_async_{variant_name or name}'
+     fields = {}
+     mutable = set(node.mutable_parameters)
+     consumed = set()
+@@ -1668,6 +1672,7 @@
+         if len(arguments) != len(declaration.args[1]):
+             fail(line, f"'{callee}' attend {len(declaration.args[1])} argument(s), reçu {len(arguments)}")
+         captures, loans, returned_loans, argument_loans = [], [], [], []
++        local_captures = set()
+         owner_indexes = owned_result_parameters(declaration, functions,
+                                                 sync_result=lambda name: sync_contracts[name].result if name in sync_contracts else None)
+         result_paths = {}
+@@ -1891,10 +1896,12 @@
+                 if typ in struct_layouts and mode in ('ref', 'mut') and any(
+                         storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
+                         for target, _ in loans[argument_loan_start:]):
+-                    fail(line, 'prototype : capture de structure locale dans un état enfant : provenance de data stack non raccordée')
++                    local_captures.add(index)
+                 if mode in ('owned', *JOIN_PAYLOADS):
+                     if storage_of(value) & implicit_stacks:
+-                        fail(line, 'prototype : capture de structure locale dans un état enfant : provenance de data stack non raccordée')
++                        if declaration.args[1][index][0] in declaration.handle_parameters:
++                            fail(line, 'capture A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
++                        local_captures.add(index)
+                     held_storage = [(origin, 'storage') for origin in storage_of(value)]
+                     loans.extend(held_storage)
+                     if index in owner_indexes:
+@@ -1919,7 +1926,8 @@
+                 argument_loans.append(tuple(loans[argument_loan_start:]))
+                 argument_tails.pop()
+             task = temporary('CrustTask *')
+-            steps.append(f'{task} = crust_async_{callee}_create({", ".join(captures)});')
++            target = specialize(callee, frozenset(local_captures)) if local_captures else callee
++            steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
+                        if effects is not None and effects.complete else ())
+             # Resolve only when Select needs it; ordinary awaits may use types
+@@ -4867,6 +4875,8 @@
+             if value[0] in ('array_transfer', 'new_transfer'):
+                 received = sync_owned_value(value[1], line, following=())
+                 require_durable_storage(received, 0, line)
++                if node.handle_result and storage_of(received) & implicit_stacks:
++                    fail(line, 'retour A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
+                 if owned_result_types[received] != result[1]:
+                     fail(line, 'retour propriétaire : type incompatible')
+                 steps.extend((f'frame->result = {received};', f'{received} = NULL;'))
+@@ -4880,6 +4890,8 @@
+             check_access(name, line, write=True)
+             member = f'frame->{fields[name]}'
+             require_durable_storage(member, 0, line)
++            if node.handle_result and storage_of(member) & implicit_stacks:
++                fail(line, 'retour A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
+             steps.extend((f'frame->result = {member};', f'{member} = NULL;'))
+             consumed.add(name)
+         elif returns_ref:
+@@ -6356,8 +6368,14 @@
+         steps.append(f'{value_place(receiver)} = {value};')
+         return True
+ 
+-    for parameter, mode, typ in parameters:
++    for parameter_index, (parameter, mode, typ) in enumerate(parameters):
+         member = declare(parameter, node.line)
++        if parameter_index in local_parameters:
++            origin = '\0local-input-' + parameter
++            implicit_stacks.add(origin)
++            pointer = f'frame->{member}' + (f'.{JOIN_CELLS[mode]}' if mode in JOIN_CELLS else '')
++            local_pools[origin] = f'(*({pointer}->source))'
++            storage_bindings[parameter] = frozenset({origin})
+         if mode in ('array', *ARRAY_BORROWS):
+             shape, element = scalar_array_layout(typ)
+             arrays[parameter] = shape or int_reference_row(typ, mode)
+@@ -6574,8 +6592,10 @@
+     return f'static CrustTask *crust_async_{name}_create({declarations})'
+ 
+ 
+-def lower_task_context(definitions, *, capacities, threaded=False, async_threaded=False):
++def lower_task_context(definitions, *, capacities, threaded=False, async_threaded=False, variants=None):
++    variants = variants or {}
+     members, initialize, checks, factories = [], [], [], []
++    storage_types = []
+     capacity_defines = []
+     capacity_names = []
+     for index, (name, node) in enumerate(definitions.items()):
+@@ -6588,14 +6608,23 @@
+             f'#else\n#define {capacity} CRUST_TASK_POOL_CAPACITY\n#endif\n'
+             f'_Static_assert({capacity} > 0, "task pool capacity must be positive");')
+         prefix = f'crust_async_{name}'
++        specialized = [symbol for symbol, nominal in variants.items() if nominal == name]
++        storage_type = prefix + '_state'
++        if specialized:
++            storage_type = prefix + '_storage'
++            storage_types.append('typedef union {\n' +
++                f'    {prefix}_state ordinary;\n' +
++                ''.join(f'    crust_async_{symbol}_state variant_{i};\n'
++                        for i, symbol in enumerate(specialized)) +
++                f'}} {storage_type};\n')
+         members.extend((
+             f'    CrustTaskPool pool_{name};',
+-            f'    {prefix}_state states_{name}[{capacity}];',
++            f'    {storage_type} states_{name}[{capacity}];',
+             f'    _Atomic size_t generations_{name}[{capacity}];',
+         ))
+         initialize.append(
+             f'    task_pool_init(&crust_task_context.pool_{name}, &crust_task_context.states_{name}, '
+-            f'sizeof({prefix}_state), {capacity}, crust_task_context.generations_{name});')
++            f'sizeof({storage_type}), {capacity}, crust_task_context.generations_{name});')
+         if threaded:
+             members.append(f'    CrustQueueEntry queue_entries_{name}[{capacity}];')
+             initialize.append(f'    for (size_t i = 0; i < {capacity}; ++i) '
+@@ -6615,6 +6644,14 @@
+                f'[(({prefix}_state *)task)->slot.index];\n' if threaded else '')
+             + '    return task;\n'
+             '}')
++        for symbol in specialized:
++            variant_prefix = f'crust_async_{symbol}'
++            factories.append(
++                f'{task_factory_signature(symbol, node)} {{\n'
++                f'{reap}    CrustTask *task = {variant_prefix}_create_in_pool(&crust_task_context.pool_{name}{captures});\n'
++                + (f'    task->queue_entry = &crust_task_context.queue_entries_{name}'
++                   f'[(({variant_prefix}_state *)task)->slot.index];\n' if threaded else '')
++                + '    return task;\n}')
+     total_capacity = ' + '.join(capacity_names)
+     abandoned = ''
+     if threaded:
+@@ -6636,7 +6673,7 @@
+ """
+         checks.insert(0, '    task_default_close();')
+         checks.insert(0, '    task_thread_drain(&crust_abandoned_tasks);')
+-    return '\n' + '\n'.join(capacity_defines) + '''
++    return '\n' + '\n'.join(storage_types + capacity_defines) + '''
+ static struct {
+ ''' + '\n'.join(members) + '''
+ } crust_task_context;

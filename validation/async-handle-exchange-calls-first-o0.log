@@ -1,0 +1,69 @@
+test_argument_forms_and_await_order (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_argument_forms_and_await_order) ... 
+  test_argument_forms_and_await_order (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_argument_forms_and_await_order) (argument='v.replace(0,->incoming)') ... FAIL
+test_replace_return_and_relay (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_replace_return_and_relay) ... ok
+test_returned_arm_outlives_other_pool (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_returned_arm_outlives_other_pool) ... ok
+test_select_cleans_prepared_argument (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_select_cleans_prepared_argument) ... ok
+test_try_push_return_and_relay (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_try_push_return_and_relay) ... ok
+test_void_consumer_and_drop_return (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_void_consumer_and_drop_return) ... ok
+
+======================================================================
+FAIL: test_argument_forms_and_await_order (test_async_handle_exchange_calls.AsyncHandleExchangeCallTests.test_argument_forms_and_await_order) (argument='v.replace(0,->incoming)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17035, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15055, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 963, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7758, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3445, in bind_special
+    value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+               ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1867, in sync_call
+    value, payload, _ = owned_join_value(
+                        ~~~~~~~~~~~~~~~~^
+        argument if argument[0] == 'down' else argument[1], line)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1351, in owned_join_value
+    kind, value = emit_computed_transfer(expr, line, following=following)
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4929, in emit_computed_transfer
+    fail(line, 'une tâche calculée exige une expression avec transfert <-')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 999, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 5: une tâche calculée exige une expression avec transfert <-
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_handle_exchange_calls.py", line 45, in test_argument_forms_and_await_order
+    self.assertEqual(self.run_source(source).stdout,'4\n7\n8\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: une tâche calculée exige une expression avec transfert <-
+
+----------------------------------------------------------------------
+Ran 6 tests in 5.298s
+
+FAILED (failures=1)

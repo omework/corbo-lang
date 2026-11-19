@@ -1,0 +1,4 @@
+struct Point{x:Int}async fn make()-><-Point{yield;return <-Point{x:7};}
+fn start()-><-runtime::Handle<Point>{return <-runtime::spawn(->make());}
+async fn work()->Int{let h=start();let v=match h.await{Ok(found)=>{<-found},Err(_)=>{return 99;}};let n=v.x;drop(->v);return n;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

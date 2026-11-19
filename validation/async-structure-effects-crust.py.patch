@@ -1,0 +1,12 @@
+--- before/crust.py
++++ crust.py
+@@ -13615,6 +13615,9 @@
+                                                       self.function_results, Error, self.enums, async_functions).infer_all()
+         self.function_contracts = function_contracts(self.functions, self.function_effects,
+                                                      self.function_results, self.function_constraints)
++        from async_structure_effects import AsyncStructureEffectAnalyzer
++        self.async_structure_effects = AsyncStructureEffectAnalyzer(
++            async_functions, self.function_contracts, self.enums, Error).infer_all()
+         # Synchronous callers can join a borrowed result before frame C is
+         # emitted. Its provenance contract must already be available then.
+         from async_lowering import borrowed_result_paths

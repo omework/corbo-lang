@@ -1,0 +1,14 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -62,7 +62,10 @@
+             # the separately pooled descendants at their original addresses.
+             if plan.destination and not plan.mixed and (
+                     plan.parameters == frozenset() or pool_result_graph(node) is not None):
+-                return ('task', node.args[2][1]), {id(expr): expr}
++                shape = node.args[2][1]
++                for _ in range({'join_owned': 1, 'join_nested': 2}.get(node.args[2][0], 0)):
++                    shape = 'join', shape
++                return ('task', shape), {id(expr): expr}
+             return None
+         if call_name in contracts:
+             summary = contracts[call_name].result

@@ -1,0 +1,106 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -659,9 +659,9 @@
+         op = expr[0]
+         if op in ('move', 'name', 'down'):
+             return bindings.get(expr[1])
+-        if op == 'new' and expr[1] in bindings and bindings[expr[1]][0] == 'source':
++        if op == 'new' and bindings.get(expr[1]) is not None and bindings[expr[1]][0] == 'source':
+             return 'owner', bindings[expr[1]][1]
+-        if op in ('task_spawn', 'transfer', 'array_transfer'):
++        if op in ('task_spawn', 'transfer', 'array_transfer', 'new_transfer'):
+             return expression(expr[1], bindings, breaks)
+         if op in ('await', 'utf8_value'):
+             value = expression(expr[1], bindings, breaks)
+@@ -931,11 +931,13 @@
+         return value
+ 
+     def pool_new_value(expr, line, *, following=None, label='async allocation'):
+-        if expr[3] != 'Int':
+-            fail(line, 'création directe async : type incompatible avec Pool<Int>')
+-        if pool_types.get(expr[1]) != 'Pool<Int>':
+-            fail(line, 'prototype : création directe dans un état exige un Pool<Int> injecté')
+-        source, loans = pool_argument(('name', expr[1]), 'mut', 'Pool<Int>', line)
++        pool_type = pool_types.get(expr[1])
++        if pool_type is None:
++            fail(line, 'prototype : création directe dans un état exige un pool injecté')
++        typ = pool_type[5:-1] if expr[4:] == ('pool_default',) else expr[3]
++        if pool_type != f'Pool<{typ}>' or (typ != 'Int' and expr[4:] != ('pool_default',)):
++            fail(line, f'création directe async : type incompatible avec {pool_type}')
++        source, loans = pool_argument(('name', expr[1]), 'mut', pool_type, line)
+         active_loans[id(loans)] = loans
+         try:
+             value = expression(expr[2], line, following=following)
+@@ -943,8 +945,16 @@
+             active_loans.pop(id(loans), None)
+         cell = temporary('Cell *')
+         # Labels are diagnostics only; the pointer retains its source at runtime.
+-        steps.append(f'{cell} = cell_new({source}, {value}, "{label}");')
+-        owned_result_types[cell] = 'Int'
++        if typ == 'Int':
++            factory = f'cell_new({source}, {value}, "{label}")'
++        elif typ == 'String':
++            factory = f'string_new({source}, UINT64_C(0), "{label}")'
++        else:
++            element = 'int' if typ == 'Vector<Int>' else 'uint8_t'
++            factory = (f'vector_new({source}, UINT64_C(0), sizeof({element}), '
++                       f'_Alignof({element}), 0, "{label}")')
++        steps.append(f'{cell} = {factory};')
++        owned_result_types[cell] = typ
+         return cell
+ 
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
+@@ -1745,6 +1755,9 @@
+             return ('mut', 'Int' if typ == 'Vector<Int>' else 'u8') if typ in VECTOR_SLICE_MODES else None
+         if expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('array_index', 'array_deref_slot'):
+             projection = expr[1][1] if expr[1][0] == 'array_deref_slot' else expr[1]
++            collection = collection_index_type(projection)
++            if collection in ('Vector<Int>', 'Vector<u8>'):
++                return ('mut' if expr[0] == 'mut_expr' else 'ref', 'Int' if collection == 'Vector<Int>' else 'u8')
+             root, _ = reference_array_path(projection)
+             if root in arrays:
+                 return ('mut' if expr[0] == 'mut_expr' else 'ref', 'u8' if array_elements.get(root) == 'uint8_t' else 'Int')
+@@ -2916,6 +2929,7 @@
+                 or expr[0] == 'name' and expr[1] in byte_ref_bindings
+                 or expr[0] == 'reborrow' and expr[2] == 'ref' and (expr[1] in byte_ref_bindings or reference_types.get(expr[1]) == 'u8')
+                 or expr[0] == 'ref_expr' and (is_text_index(expr[1]) or is_byte_array_element(expr[1])
++                                             or collection_index_type(expr[1]) == 'Vector<u8>'
+                                              or indexed_vector_view_mode(expr[1]) == 'vector_bytes'))
+ 
+     def static_byte_ref_value(expr, line, *, following=None):
+@@ -2941,7 +2955,7 @@
+         if expr[0] == 'ref_expr':
+             if indexed_vector_view_mode(expr[1]) == 'vector_bytes':
+                 return vector_view_address(expr[1], line, 'vector_bytes')
+-            if is_byte_array_element(expr[1]):
++            if is_byte_array_element(expr[1]) or collection_index_type(expr[1]) == 'Vector<u8>':
+                 pointer, _ = capture_array_place(expr[1], 'ref', line, expected_element='uint8_t')
+                 return pointer
+             return static_text_byte_address(expr[1], line, following=following)
+@@ -4261,6 +4275,26 @@
+         steps.append('}')
+ 
+     def capture_array_place(projection, mode, line, *, remaining=(), expected_element='int'):
++        collection = collection_index_type(projection)
++        if collection in ('Vector<Int>', 'Vector<u8>'):
++            name = projection[1][1]
++            element = 'int' if collection == 'Vector<Int>' else 'uint8_t'
++            if element != expected_element or remaining:
++                fail(line, 'emprunt de case Vector : type incompatible')
++            if mode == 'mut' and not (references.get(name) == 'mut'
++                                     or references.get(name) == 'owned' and name in mutable):
++                fail(line, 'emprunt de case Vector : une liaison mutable est requise')
++            reservation = 'mut' if references.get(name) == 'mut' else mode
++            check_access(name, line, write=reservation == 'mut')
++            loans = [(name, reservation)]
++            active_loans[id(loans)] = loans
++            try:
++                index = expression(projection[2], line)
++            finally:
++                active_loans.pop(id(loans), None)
++            pointer = temporary(element + ' *')
++            steps.append(f'{pointer} = ({element} *)vector_checked_item(frame->{fields[name]}, {index});')
++            return pointer, (name, reservation)
+         dereference = projection[0] == 'array_deref_slot'
+         if dereference:
+             projection = projection[1]

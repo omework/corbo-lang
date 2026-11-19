@@ -1,0 +1,48 @@
+--- before/constraints.py
++++ constraints.py
+@@ -911,7 +911,14 @@
+                         fields[field] = frozenset(asset for target in targets
+                             for _, assets in capture_slots(execution.fields, result_capture_selector(target))
+                             for asset in assets)
+-                    return paths, Value(kind, definition.args[2][1], execution.task_result_assets, tuple(fields.items()))
++                    typ = definition.args[2][1]
++                    if is_handle_vector(typ):
++                        items = fields.get('[]', frozenset())
++                        payload = Value('owned', handle_vector_element(typ), items,
++                            tuple((path[3:], targets) for path, targets in fields.items() if path.startswith('[]/')))
++                        return paths, Value(kind, typ, execution.task_result_assets,
++                            handle_items=items, handle_payloads=(payload,) if items else ())
++                    return paths, Value(kind, typ, execution.task_result_assets, tuple(fields.items()))
+                 if (plain := PLAIN_RETURN_JOINS.get(definition.args[2])) is not None:
+                     return paths, Value(plain, PLAIN_JOIN_TYPES[plain])
+                 if mode in ASYNC_CAPTURE_VIEW_MODES:
+@@ -1696,9 +1703,28 @@
+                     result_assets |= frozenset({output})
+                     assets |= frozenset({output})
+                 reference_assets = self.async_reference_assets(catalog[name], actuals, line)
++                result_fields = dict(merge_fields(actuals[index] for index in indexes if isinstance(actuals[index], Value)))
++                from async_result_storage import pool_result_graph
++                graph = pool_result_graph(catalog[name], self.analyzer.enums)
++                if graph is not None and is_handle_vector(catalog[name].args[2][1]):
++                    def graph_assets(symbol):
++                        if symbol.kind == 'source_parameter':
++                            return frozenset({pool_assets[symbol.index]})
++                        actual = actuals[symbol.index]
++                        if not isinstance(actual, Value):
++                            return frozenset()
++                        if symbol.kind == 'allocation_parameter':
++                            return actual.assets
++                        if symbol.kind == 'vector_element_parameter':
++                            return possible_handle_items(actual.handle_items) or frozenset()
++                        if symbol.kind == 'allocation_field_parameter':
++                            return self.projected_assets(actual, symbol.name, paths['next'])
++                        return frozenset()
++                    for path, symbols in graph[1]:
++                        result_fields[path] = frozenset().union(*(graph_assets(symbol) for symbol in symbols))
+                 return paths, Value('task', name, assets, captures, reservations=reservations,
+                                     task_result_assets=result_assets, task_reference_assets=reference_assets,
+-                                    task_result_fields=merge_fields(actuals[index] for index in indexes if isinstance(actuals[index], Value)))
++                                    task_result_fields=tuple(result_fields.items()))
+             current = paths['next']
+             for (pname, mode, typ), value in zip(params, actuals):
+                 if mode in ('task', 'execution'):

@@ -1,0 +1,31 @@
+--- results.py (before)
++++ results.py
+@@ -936,6 +936,11 @@
+             return set().union(*(self.owned_capture_storage(item, path) for item in value.owned_alternatives))
+         if path:
+             key, _, tail = path.partition('/')
++            if key == '[]' and is_handle_vector(value.typ):
++                items = possible_handle_items(value.handle_items)
++                payloads = tuple(child for child in value.handle_payloads if items is None or child.candidates & items)
++                if payloads:
++                    return set().union(*(self.owned_capture_storage(child, tail) for child in payloads))
+             child = dict(value.owned_fields).get(key)
+             if child is not None:
+                 return self.owned_capture_storage(child, tail)
+@@ -1034,6 +1039,16 @@
+                  if not self.owned_capture_path_absent(value, path)}
+         references = {path: (mode, typ)
+                       for path, mode, typ in owned_reference_paths(self.analyzer.enums, value.typ)}
++        if is_handle_vector(value.typ):
++            items = possible_handle_items(value.handle_items)
++            payloads = tuple(child for child in value.handle_payloads if items is None or child.candidates & items)
++            if not payloads and items is not None and not items:
++                return {}, {}
++            for child in payloads:
++                owned['[]'] = child.typ
++                children, fields = self.owned_capture_paths(child)
++                owned.update(('[]/' + path, typ) for path, typ in children.items())
++                references.update(('[]/' + path, capability) for path, capability in fields.items())
+         for alternative in value.owned_alternatives:
+             children, fields = self.owned_capture_paths(alternative)
+             owned.update(children)

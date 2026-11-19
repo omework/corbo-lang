@@ -1,0 +1,27 @@
+fn apply(f: fn(i64) -> i64, value: i64) -> i64 {
+    f(value)
+}
+
+fn inspect(f: &fn(i64) -> i64, value: i64) -> i64 {
+    f(value)
+}
+
+fn advance(f: &mut fn() -> i64) -> i64 {
+    f()
+}
+
+fn main() {
+    let offset: i64 = 2;
+    let c = |value: i64| { value + offset };
+
+    print(c(40));
+    print(inspect(&c, 8));
+    print(apply(c, 18));
+    print(offset);
+
+    let mut count: i64 = 0;
+    let mut next = move || { count += 1; count };
+
+    print(advance(&mut next));
+    print(next());
+}

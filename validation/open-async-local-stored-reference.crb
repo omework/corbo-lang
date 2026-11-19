@@ -1,0 +1,21 @@
+struct View { data: &Int }
+
+fn inspect(data: &Int) -> Int {
+    let view = View { data: &*data };
+    return *view.data;
+}
+
+async fn work() -> Int {
+    let mut memory = pool<Int>(1);
+    let data = memory.new(7);
+    yield;
+    return inspect(&data);
+}
+
+fn main() {
+    let execution = runtime::spawn(->work());
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(99); }
+    }
+}

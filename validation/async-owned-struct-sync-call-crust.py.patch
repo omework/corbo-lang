@@ -1,0 +1,74 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13520,7 +13520,7 @@
+         return True
+ 
+     def supports_owned_signature(self, typ, visited=frozenset(), *, allow_cycles=False):
+-        if typ == 'Int':
++        if typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
+             return True
+         if typ in visited:
+             return allow_cycles
+@@ -13882,7 +13882,7 @@
+     def emit_async_sync_bridge(self, name):
+         """Emit an ordinary synchronous ABI once, using the checked backend.
+ 
+-        Scalar values, scalar references and owned Int/String/Vector cells cross this boundary.
++        Scalar values, references and supported owned Cell graphs cross this boundary.
+         Callee-local pools, loans and cleanup use the synchronous verifier.
+         Separate compiler state prevents speculative lowering/loop retries from
+         leaking those local lifetimes into a caller's frame.
+@@ -13898,6 +13898,32 @@
+         root = Scope(check.uid(), 'synchronous bridge inputs', external)
+         check.scopes.extend((external, root))
+         parameters, arguments = [], []
++
++        def owned_bridge_fields(allocation, pointer):
++            """Describe the live graph without relocating or separately owning children."""
++            members = check.enums.get(allocation.typ, {}).get('', ())
++            fields = []
++            for field_index, (name, declared) in enumerate(members):
++                if not declared.startswith('A<'):
++                    continue
++                child_pointer = f'bridge_owned_field_{check.uid()}'
++                offset = check.field_offset(members, field_index)
++                # A Result::Err has no root. Inspect no field on that path.
++                check.lines.append(f'Cell *{child_pointer} = {pointer} ? cell_load_ref({pointer}, {offset}) : NULL;')
++                check.lines.append(f'(void){child_pointer};')
++                source = MemorySource(check.uid(), external.id, 'symbolic', name,
++                                      f'({child_pointer} ? {child_pointer}->source : NULL)',
++                                      element_type=declared[2:-1])
++                external.sources.append(source)
++                child = Allocation(check.uid(), allocation.scope, name, (source,), c=child_pointer,
++                                   typ=declared[2:-1], variants=frozenset(check.enums.get(declared[2:-1], {})))
++                check.origin_sources[child.id] = source
++                owned_bridge_fields(child, child_pointer)
++                fields.append(('.' + name, (child,)))
++            allocation.owned_fields = tuple(fields)
++            allocation.item_sources = check.owned_field_sources(fields)
++            allocation.variants = frozenset(check.enums.get(allocation.typ, {}))
++
+         for index, (_, mode, typ) in enumerate(contract.parameters):
+             parameter = f'bridge_input_{index}'
+             if mode == 'owned':
+@@ -13908,6 +13934,7 @@
+                 check.allocations.append(allocation)
+                 root.allocations.append(allocation)
+                 check.origin_sources[allocation.id] = source
++                owned_bridge_fields(allocation, parameter)
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
+             elif mode in JOIN_RESULT_TYPES:
+@@ -13916,8 +13943,11 @@
+                 source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
+                                       f'({pointer} ? {pointer}->source : NULL)', element_type=typ)
+                 external.sources.append(source)
++                prototype = Allocation(check.uid(), root.id, parameter, (source,), c=pointer, typ=typ)
++                owned_bridge_fields(prototype, pointer)
+                 kind, _, allocation = check.join_allocation_result(parameter, (source,), root, parameter,
+-                    frozenset(), nested=mode == 'join_nested', typ=typ)
++                    frozenset(), nested=mode == 'join_nested', typ=typ,
++                    owned_fields=check.task_owned_result_fields((prototype,)))
+                 check.lines.append(f'(void)*({allocation.guard});')
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, kind, parameter, allocation, mutable=True)

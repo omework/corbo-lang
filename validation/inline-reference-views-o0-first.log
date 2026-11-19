@@ -1,0 +1,143 @@
+test_mutable_field_reborrow_keeps_capacity_and_target (test_inline_reference_views.InlineReferenceViewTests.test_mutable_field_reborrow_keeps_capacity_and_target) ... FAIL
+test_reference_replacement_through_contract (test_inline_reference_views.InlineReferenceViewTests.test_reference_replacement_through_contract) ... FAIL
+test_reference_replacement_updates_root (test_inline_reference_views.InlineReferenceViewTests.test_reference_replacement_updates_root) ... ok
+test_returned_mutable_view_updates_root (test_inline_reference_views.InlineReferenceViewTests.test_returned_mutable_view_updates_root) ... ok
+test_shared_field_return_detaches_from_view_and_root (test_inline_reference_views.InlineReferenceViewTests.test_shared_field_return_detaches_from_view_and_root) ... FAIL
+test_shared_view_and_copy_keep_target_without_root (test_inline_reference_views.InlineReferenceViewTests.test_shared_view_and_copy_keep_target_without_root) ... ok
+
+======================================================================
+FAIL: test_mutable_field_reborrow_keeps_capacity_and_target (test_inline_reference_views.InlineReferenceViewTests.test_mutable_field_reborrow_keeps_capacity_and_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16450, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14603, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3130, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10220, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11700, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13077, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13138, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3319, in verify_state
+    self.fail('invariant interne : emprunt mutable non exclusif')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1968, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: invariant interne : emprunt mutable non exclusif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_reference_views.py", line 59, in test_mutable_field_reborrow_keeps_capacity_and_target
+    self.assertEqual(self.run_source(source).stdout,'11\n11\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: invariant interne : emprunt mutable non exclusif
+
+======================================================================
+FAIL: test_reference_replacement_through_contract (test_inline_reference_views.InlineReferenceViewTests.test_reference_replacement_through_contract)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16450, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14603, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3130, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10220, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11700, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13077, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13305, in statements
+    kind, value, descriptor = self.expression(rhs, scope, 'champ')
+                              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9589, in expression
+    self.fail('affectation implicite interdite : utiliser &, &mut ou <-')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1968, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_reference_views.py", line 41, in test_reference_replacement_through_contract
+    self.assertEqual(self.run_source(source).stdout,'9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: affectation implicite interdite : utiliser &, &mut ou <-
+
+======================================================================
+FAIL: test_shared_field_return_detaches_from_view_and_root (test_inline_reference_views.InlineReferenceViewTests.test_shared_field_return_detaches_from_view_and_root)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16450, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14514, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 589, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 632, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 936, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 3288, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 1290, in collect
+    self.fail(line, 'retour de match : porteur emprunté avec &mut requis')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 684, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 3: retour de match : porteur emprunté avec &mut requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_reference_views.py", line 28, in test_shared_field_return_detaches_from_view_and_root
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: retour de match : porteur emprunté avec &mut requis
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.232s
+
+FAILED (failures=3)

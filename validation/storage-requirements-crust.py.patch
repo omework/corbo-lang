@@ -1,0 +1,93 @@
+--- before/crust.py
++++ after/crust.py
+@@ -135,6 +135,7 @@
+     mutable_parameters: frozenset[str] = frozenset()
+     handle_parameters: frozenset[str] = frozenset()
+     handle_result: bool = False
++    storage_requirements: tuple[tuple[int, str], ...] = ()
+     terminated: bool = False
+     consuming: bool = False
+     annotation: str | None = None
+@@ -2954,7 +2955,9 @@
+                 group = find(('source_parameter' if is_source else 'allocation_parameter', index, ''))
+                 if group not in sources:
+                     sid = check.uid()
+-                    source = MemorySource(sid, root.id, 'symbolic', actual, f'symbolic_source_{sid}')
++                    storage_kind = ('local_stack' if dict(node.storage_requirements).get(index) == 'local'
++                                    else 'symbolic')
++                    source = MemorySource(sid, root.id, storage_kind, actual, f'symbolic_source_{sid}')
+                     sources[group] = source
+                     root.sources.append(source)
+                 source = sources[group]
+@@ -8387,9 +8390,13 @@
+                 producers[node.args[0]] = node.args[1]
+             if node.op == exit_op:
+                 value = node.args[0]
+-                if value is None or value[0] != 'move' or value[1] not in producers:
++                if value is not None and value[0] in ('array_transfer', 'new_transfer'):
++                    producer = value[1]
++                elif value is not None and value[0] == 'move' and value[1] in producers:
++                    producer = producers[value[1]]
++                else:
+                     return None
+-                result = self.local_result_constructors(producers[value[1]], producers)
++                result = self.local_result_constructors(producer, producers)
+                 if not result:
+                     return None
+                 constructors.extend(result)
+@@ -10214,7 +10221,7 @@
+         self.expression_clock(expr)
+         uid = self.uid()
+         c = f'task{uid}'
+-        target_name = self.reserve_async_local_variant(name, frozenset(local_captures)) if local_captures else name
++        target_name = self.reserve_async_local_variant(name, frozenset(local_captures))
+         self.lines.append(f'CrustTask *{c} = crust_async_{target_name}_create({", ".join(captures)});')
+         for target in transferred:
+             if target.guard:
+@@ -10851,6 +10858,12 @@
+         self.check_source_constraints(name, params, bindings,
+                                       contract.constraints.all_requirements if modular else None,
+                                       utf8_arguments, summary.structure_fields)
++        for index, required in signature.storage_requirements:
++            binding = bindings[params[index][0]]
++            targets = binding.referents or ((binding.alloc,) if binding.alloc else ())
++            kinds = {source.kind == 'local_stack' for target in targets for source in target.sources}
++            if kinds != {required == 'local'}:
++                self.fail(f"exigence de stockage {required} (T local / allocation A<T>) non satisfaite pour '{params[index][0]}'")
+         # Prepared arguments now become the callee's parameters. Other frames
+         # remain protected while this call evaluates an enclosing argument.
+         frame.clear()
+@@ -13837,6 +13850,11 @@
+             self.function_results, Error, self.enums, async_functions).infer_all()
+         self.function_contracts = function_contracts(self.functions, self.function_effects,
+             self.function_results, self.function_constraints)
++        from storage_requirements import infer_storage_requirements
++        infer_storage_requirements(self.functions, async_functions, self.function_effects,
++                                   self.function_results, self.function_constraints, self.enums, Error)
++        self.function_contracts = function_contracts(self.functions, self.function_effects,
++            self.function_results, self.function_constraints)
+         # Synchronous callers can join a borrowed result before frame C is
+         # emitted. Its provenance contract must already be available then.
+         from async_lowering import borrowed_result_paths
+@@ -13859,6 +13877,7 @@
+                     self.declared_array_type, self.async_frame_slots,
+                     sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+                     struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields},
++                    local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+                     specialize=self.reserve_async_local_variant)
+             self.lower_async_local_variants(refresh=True)
+             if all(previous[name] == node.cell_reference_parameters
+@@ -13884,6 +13903,13 @@
+         return main
+ 
+     def reserve_async_local_variant(self, name, local_parameters):
++        node = self.async_definitions[name][0]
++        for index, required in node.storage_requirements:
++            if (index in local_parameters) != (required == 'local'):
++                self.fail(f"exigence de stockage {required} (T local / allocation A<T>) non satisfaite pour '{node.args[1][index][0]}'")
++        baseline = frozenset(index for index, required in node.storage_requirements if required == 'local')
++        if local_parameters == baseline:
++            return name
+         key = name, local_parameters
+         if key not in self.async_local_variants:
+             symbol = name + '__crust_storage_' + str(len(self.async_local_variants))

@@ -1,0 +1,81 @@
+--- /tmp/crust-before-async-handle-exchange-results/crust.py
++++ crust.py
+@@ -10014,6 +10014,8 @@
+         if symbol.kind == 'task_result_field_parameter':
+             return next((sources for path, sources, _ in binding.alloc.task_result_fields if path == symbol.name), ())
+         if symbol.kind == 'allocation_field_parameter':
++            if binding.kind == 'buffered_handle_exchange' and symbol.name in ('ok', 'err'):
++                return binding.alloc.exchange_payloads[('ok', 'err').index(symbol.name)][0]
+             return source_union(*(child.sources for carrier in binding.referents or (binding.alloc,)
+                                   for child in self.aggregate_field_targets(carrier, symbol.name)))
+         sources = source_union(*(item.sources for item in binding.referents or (binding.alloc,) if item is not None))
+@@ -10811,7 +10813,7 @@
+                     if view.kind not in VECTOR_MUT_VIEW_KINDS:
+                         self.fail(f'capture async : une tranche mutable &mut {typ} est requise')
+                     kind, value, target = self.vector_slice_reborrow(view, write=True)
+-                elif mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES):
++                elif mode in ('owned', 'handle_option', 'buffered_handle_exchange', *JOIN_RESULT_TYPES):
+                     if argument[0] == 'down':
+                         self.expression_clock(argument)
+                         binding = self.lookup(argument[1])
+@@ -10829,7 +10831,9 @@
+                         captures.append(temporary)
+                         field_bindings[parameters[index][0]] = Binding(parameters[index][0], mode, value)
+                         continue
+-                    if kind != mode or target is None or target.typ != typ or target.scope != scope.id:
++                    if (kind != mode or target is None or target.typ != ('Int' if mode == 'buffered_handle_exchange' else typ)
++                            or mode == 'buffered_handle_exchange' and self.exchange_result_type(target) != typ
++                            or target.scope != scope.id):
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
+                     from array_syntax import owned_reference_paths
+@@ -10838,7 +10842,7 @@
+                             dependencies.append((f'{access}.{index}/{field}', ()))
+                     for field, access, borrowed in self.owned_dependency_fields(target):
+                         dependencies.append((f'{access}.{index}/{field}', borrowed))
+-                    field_bindings[parameters[index][0]] = Binding(parameters[index][0], 'owned', value, target)
++                    field_bindings[parameters[index][0]] = Binding(parameters[index][0], mode, value, target)
+                     if index in result_indexes:
+                         result_targets.append(target)
+                     loans.append(Binding(label, 'owned', value, target))
+@@ -10870,7 +10874,7 @@
+                                 for source in target.sources)):
+                     self.fail('copie implicite de sous-structure : racine locale ou pool de destination explicite requis')
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
+-                if not array_capture and mode in ('owned', 'handle_option', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
++                if not array_capture and mode in ('owned', 'handle_option', 'buffered_handle_exchange', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
+                     targets_by_parameter[index] = target
+                 if (not array_capture and mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES)
+                         and typ in self.struct_fields and target is not None
+@@ -10988,6 +10992,8 @@
+                 if mode in ('ref', 'mut') and typ in self.struct_fields:
+                     value = f'structure_reference_for((CrustStructureView){{0}}, {value})'
+                 self.lines.append(f'{capture_ctype(mode, typ, structures=self.struct_fields)} {temporary} = {value};')
++                if mode == 'buffered_handle_exchange' and typ == 'Result<(),A<Int>>':
++                    self.lines.append(f'if ({temporary}.status == 0) {temporary}.value = NULL;')
+                 captures.append(temporary)
+                 if index in node.cell_reference_parameters:
+                     if array_capture:
+@@ -11103,6 +11109,8 @@
+             self.fail('spawn exige une tâche inactive du scope courant' if spawn else
+                       'join exige un handle d’exécution du scope courant')
+         task_name = allocation.typ.split('<', 1)[1][:-1]
++        if spawn and self.async_definitions[task_name][0].args[2][0] == 'buffered_handle_exchange':
++            self.fail('prototype : enveloppe spawn/join de replace ou try_push non raccordée')
+         if spawn and self.async_definitions[task_name][0].args[2][0] in ('join_nested', 'join_option'):
+             self.fail('spawn avec trois niveaux de Result non pris en charge')
+         self.expression_clock(expr)
+@@ -11507,8 +11515,11 @@
+             if symbol.kind == 'allocation_parameter':
+                 origins.update(binding.alloc.origins)
+             elif symbol.kind == 'allocation_field_parameter':
+-                origins.update(origin for carrier in binding.referents or (binding.alloc,)
+-                    for child in self.aggregate_field_targets(carrier, symbol.name) for origin in child.origins)
++                if binding.kind == 'buffered_handle_exchange' and symbol.name in ('ok', 'err'):
++                    origins.update(binding.alloc.exchange_payloads[('ok', 'err').index(symbol.name)][1])
++                else:
++                    origins.update(origin for carrier in binding.referents or (binding.alloc,)
++                        for child in self.aggregate_field_targets(carrier, symbol.name) for origin in child.origins)
+             elif symbol.kind == 'task_result_field_parameter':
+                 origins.update(origin for path, _, values in binding.alloc.task_result_fields
+                                if path == symbol.name for origin in values)

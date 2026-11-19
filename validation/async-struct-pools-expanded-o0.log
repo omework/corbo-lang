@@ -1,0 +1,69 @@
+test_constructor_type_checks (test_async_struct_pools.AsyncStructPoolTests.test_constructor_type_checks) ... ok
+test_defaults_named_order_and_multiple_slots (test_async_struct_pools.AsyncStructPoolTests.test_defaults_named_order_and_multiple_slots) ... ok
+test_fields_reborrow_methods_and_drop (test_async_struct_pools.AsyncStructPoolTests.test_fields_reborrow_methods_and_drop) ... ok
+test_injected_pool_sync_async_and_alias (test_async_struct_pools.AsyncStructPoolTests.test_injected_pool_sync_async_and_alias) ... ok
+test_loop_cleanup_continue_break_and_native_block (test_async_struct_pools.AsyncStructPoolTests.test_loop_cleanup_continue_break_and_native_block) ... ok
+test_nested_owned_graph_and_injected_source_return (test_async_struct_pools.AsyncStructPoolTests.test_nested_owned_graph_and_injected_source_return) ... FAIL
+test_ownership_of_fields_and_cross_pool_lifetimes (test_async_struct_pools.AsyncStructPoolTests.test_ownership_of_fields_and_cross_pool_lifetimes) ... ok
+test_parent_receiver_and_short_sources (test_async_struct_pools.AsyncStructPoolTests.test_parent_receiver_and_short_sources) ... ok
+test_pending_owner_cleanup_during_later_field (test_async_struct_pools.AsyncStructPoolTests.test_pending_owner_cleanup_during_later_field) ... ok
+test_recorded_local_pool (test_async_struct_pools.AsyncStructPoolTests.test_recorded_local_pool) ... ok
+test_scalar_snapshot_and_borrowed_arguments (test_async_struct_pools.AsyncStructPoolTests.test_scalar_snapshot_and_borrowed_arguments) ... ok
+test_scope_cycles_model (test_async_struct_pools.AsyncStructPoolTests.test_scope_cycles_model) ... ok
+test_slot_identity_capacity_and_suspended_cleanup (test_async_struct_pools.AsyncStructPoolTests.test_slot_identity_capacity_and_suspended_cleanup) ... ok
+
+======================================================================
+FAIL: test_nested_owned_graph_and_injected_source_return (test_async_struct_pools.AsyncStructPoolTests.test_nested_owned_graph_and_injected_source_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15797, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13968, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 927, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6594, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6081, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5927, in infer_scalar_value
+    value, typ = sync_call(expr, line, following=following)
+                 ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1439, in sync_call
+    fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 960, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: prototype : appel synchrone depuis un état : signature non prise en charge
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_pools.py", line 107, in test_nested_owned_graph_and_injected_source_return
+    run=self.run_source(source);self.assertEqual(run.stdout,'11\n16\n')
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: prototype : appel synchrone depuis un état : signature non prise en charge
+
+----------------------------------------------------------------------
+Ran 13 tests in 8.097s
+
+FAILED (failures=1)

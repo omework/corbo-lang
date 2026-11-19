@@ -1,0 +1,92 @@
+test_mutable_field_through_sync_bridge (test_async_stored_views.AsyncStoredViewTests.test_mutable_field_through_sync_bridge) ... FAIL
+test_mutable_stored_reference_and_child_task (test_async_stored_views.AsyncStoredViewTests.test_mutable_stored_reference_and_child_task) ... ok
+test_shared_chain_and_copy_of_carrier (test_async_stored_views.AsyncStoredViewTests.test_shared_chain_and_copy_of_carrier) ... ok
+test_shared_stored_reference_after_suspension (test_async_stored_views.AsyncStoredViewTests.test_shared_stored_reference_after_suspension) ... ok
+test_typed_reference_through_sync_bridge (test_async_stored_views.AsyncStoredViewTests.test_typed_reference_through_sync_bridge) ... FAIL
+test_async_capture_of_stored_view_can_be_discarded_inactive (test_stored_inline_views.StoredInlineViewTests.test_async_capture_of_stored_view_can_be_discarded_inactive) ... ok
+test_enum_match_loads_stored_descriptor (test_stored_inline_views.StoredInlineViewTests.test_enum_match_loads_stored_descriptor) ... ok
+test_mutable_stored_view_reborrow_through_function (test_stored_inline_views.StoredInlineViewTests.test_mutable_stored_view_reborrow_through_function) ... ok
+test_pool_copy_keeps_descriptor_after_slot_reuse (test_stored_inline_views.StoredInlineViewTests.test_pool_copy_keeps_descriptor_after_slot_reuse) ... ok
+test_replace_between_whole_and_interior_references (test_stored_inline_views.StoredInlineViewTests.test_replace_between_whole_and_interior_references) ... ok
+test_returned_carrier_and_reference_survive_producer (test_stored_inline_views.StoredInlineViewTests.test_returned_carrier_and_reference_survive_producer) ... ok
+test_shared_copy_detaches_from_carrier_but_keeps_root (test_stored_inline_views.StoredInlineViewTests.test_shared_copy_detaches_from_carrier_but_keeps_root) ... ok
+test_store_through_interior_carrier (test_stored_inline_views.StoredInlineViewTests.test_store_through_interior_carrier) ... ok
+test_stored_view_cannot_make_its_root_self_referential (test_stored_inline_views.StoredInlineViewTests.test_stored_view_cannot_make_its_root_self_referential) ... ok
+
+======================================================================
+FAIL: test_mutable_field_through_sync_bridge (test_async_stored_views.AsyncStoredViewTests.test_mutable_field_through_sync_bridge)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16581, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14659, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 939, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7314, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3269, in bind_special
+    pointer, loans, (mode, typ) = reference_value(initializer, statement.line, following=body[position + 1:])
+                                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3109, in reference_value
+    return sync_call(expr, line, following=following, borrow=True)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2034, in sync_call
+    fail(line, 'prototype : résultat synchrone emprunté sans paramètre direct')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 975, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: prototype : résultat synchrone emprunté sans paramètre direct
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_stored_views.py", line 53, in test_mutable_field_through_sync_bridge
+    self.assertEqual(self.run_source(source).stdout,'13\n13\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: prototype : résultat synchrone emprunté sans paramètre direct
+
+======================================================================
+FAIL: test_typed_reference_through_sync_bridge (test_async_stored_views.AsyncStoredViewTests.test_typed_reference_through_sync_bridge)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_stored_views.py", line 45, in test_typed_reference_through_sync_bridge
+    self.assertEqual(self.run_source(source).stdout, '7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 17, in run_source
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12416, in run_c_oracle
+    self.assertEqual(build.returncode, 0, build.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp49k_qkp4/task.c:2908:24: error: unused variable 'bridge_typed_field_40' [-Werror,-Wunused-variable]
+ 2908 |     CrustStructureView bridge_typed_field_40 = 1 ? cell_load_view(bridge_input_0, 0) : (CrustStructureView){0};
+      |                        ^~~~~~~~~~~~~~~~~~~~~
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp49k_qkp4/task.c:2922:24: error: unused variable 'bridge_typed_field_58' [-Werror,-Wunused-variable]
+ 2922 |     CrustStructureView bridge_typed_field_58 = 1 ? cell_load_view(bridge_input_0, 0) : (CrustStructureView){0};
+      |                        ^~~~~~~~~~~~~~~~~~~~~
+2 errors generated.
+
+
+----------------------------------------------------------------------
+Ran 14 tests in 4.187s
+
+FAILED (failures=2)

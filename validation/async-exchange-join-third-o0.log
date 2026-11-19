@@ -1,0 +1,107 @@
+test_async_handle_await (test_async_exchange_join.AsyncExchangeJoinTests.test_async_handle_await) ... ok
+test_async_return_of_outer_envelope (test_async_exchange_join.AsyncExchangeJoinTests.test_async_return_of_outer_envelope) ... ok
+test_capture_outer_result_and_inactive_cleanup (test_async_exchange_join.AsyncExchangeJoinTests.test_capture_outer_result_and_inactive_cleanup) ... ok
+test_join_inner_variants_and_launch_failure (test_async_exchange_join.AsyncExchangeJoinTests.test_join_inner_variants_and_launch_failure) ... ok
+test_named_drop_scope_and_transfer (test_async_exchange_join.AsyncExchangeJoinTests.test_named_drop_scope_and_transfer) ... ok
+test_outer_envelope_branch_and_loop (test_async_exchange_join.AsyncExchangeJoinTests.test_outer_envelope_branch_and_loop) ... FAIL
+test_prepared_result_and_select_cleanup (test_async_exchange_join.AsyncExchangeJoinTests.test_prepared_result_and_select_cleanup) ... FAIL
+test_public_handle_and_result_helpers (test_async_exchange_join.AsyncExchangeJoinTests.test_public_handle_and_result_helpers) ... ok
+test_source_pools_and_branch_projection (test_async_exchange_join.AsyncExchangeJoinTests.test_source_pools_and_branch_projection) ... ok
+test_try_push_join_variants (test_async_exchange_join.AsyncExchangeJoinTests.test_try_push_join_variants) ... ok
+
+======================================================================
+FAIL: test_outer_envelope_branch_and_loop (test_async_exchange_join.AsyncExchangeJoinTests.test_outer_envelope_branch_and_loop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17075, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15115, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3218, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10466, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12114, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13556, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13644, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4982, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13556, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13617, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3384, in verify_state
+    self.fail('invariant interne : allocation vivante sans provenance')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2008, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 11: invariant interne : allocation vivante sans provenance
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_exchange_join.py", line 119, in test_outer_envelope_branch_and_loop
+    self.assertEqual(self.run_source(source).stdout,'7\n8\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 11: invariant interne : allocation vivante sans provenance
+
+======================================================================
+FAIL: test_prepared_result_and_select_cleanup (test_async_exchange_join.AsyncExchangeJoinTests.test_prepared_result_and_select_cleanup)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17068, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17061, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15564, in compile
+    self.emit_async_sync_bridge(key)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15476, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10466, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12250, in invoke_arguments
+    self.check_result_contract(result_contract, allocation, checked)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10420, in check_result_contract
+    self.fail('invariant interne : identité entrante absente du résumé de résultat')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2008, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: invariant interne : identité entrante absente du résumé de résultat
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_exchange_join.py", line 87, in test_prepared_result_and_select_cleanup
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: invariant interne : identité entrante absente du résumé de résultat
+
+----------------------------------------------------------------------
+Ran 10 tests in 8.984s
+
+FAILED (failures=2)

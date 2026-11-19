@@ -1,0 +1,181 @@
+test_borrowed_fields_survive_vector_drop (test_inline_vector_replace.InlineVectorReplaceTests.test_borrowed_fields_survive_vector_drop) ... FAIL
+test_empty_struct_and_direct_drop (test_inline_vector_replace.InlineVectorReplaceTests.test_empty_struct_and_direct_drop) ... ok
+test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) ... 
+  test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='verify_program') ... FAIL
+  test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='compile_source') ... FAIL
+  test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='verify_program') ... FAIL
+  test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='compile_source') ... FAIL
+test_owned_fields_cleanup_once_and_pool_reuse (test_inline_vector_replace.InlineVectorReplaceTests.test_owned_fields_cleanup_once_and_pool_reuse) ... FAIL
+test_pool_value_and_borrowed_incoming_refused (test_inline_vector_replace.InlineVectorReplaceTests.test_pool_value_and_borrowed_incoming_refused) ... ok
+test_success_and_rejection_preserve_length (test_inline_vector_replace.InlineVectorReplaceTests.test_success_and_rejection_preserve_length) ... ok
+
+======================================================================
+FAIL: test_borrowed_fields_survive_vector_drop (test_inline_vector_replace.InlineVectorReplaceTests.test_borrowed_fields_survive_vector_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17869, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15829, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3278, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11049, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12718, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14237, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14325, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5083, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14237, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14786, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6804, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9850, in expression
+    targets, parents = self.struct_shared_reference(binding, '.' + expr[2])
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5761, in struct_shared_reference
+    self.fail('champ emprunté : cible non disponible')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2024, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: champ emprunté : cible non disponible
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_replace.py", line 52, in test_borrowed_fields_survive_vector_drop
+    self.assertEqual(self.run_source(source.replace('INDEX',index)).stdout,expected)
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: champ emprunté : cible non disponible
+
+======================================================================
+FAIL: test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 6: prototype : replace sur Vector<Point> à raccorder
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "transfert|explicite" does not match "ligne 6: prototype : replace sur Vector<Point> à raccorder"
+
+======================================================================
+FAIL: test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 6: prototype : replace sur Vector<Point> à raccorder
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "transfert|explicite" does not match "ligne 6: prototype : replace sur Vector<Point> à raccorder"
+
+======================================================================
+FAIL: test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 6: prototype : replace sur Vector<Point> à raccorder
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "transfert|explicite" does not match "ligne 6: prototype : replace sur Vector<Point> à raccorder"
+
+======================================================================
+FAIL: test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 6: prototype : replace sur Vector<Point> à raccorder
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "transfert|explicite" does not match "ligne 6: prototype : replace sur Vector<Point> à raccorder"
+
+======================================================================
+FAIL: test_owned_fields_cleanup_once_and_pool_reuse (test_inline_vector_replace.InlineVectorReplaceTests.test_owned_fields_cleanup_once_and_pool_reuse)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17869, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15829, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3278, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11049, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12718, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14237, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14325, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5083, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14237, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14496, in statements
+    kind, value, _ = self.expression(args[0], scope, 'print')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9836, in expression
+    _, pointer, _ = self.nominal_field_borrow(expr[1], binding, offset, write=False, owned=True)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5805, in nominal_field_borrow
+    self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2024, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: projection de champ propriétaire au-delà de la provenance suivie
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_replace.py", line 41, in test_owned_fields_cleanup_once_and_pool_reuse
+    run=self.run_source(source.replace('INDEX',index));self.assertEqual(run.stdout,expected)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: projection de champ propriétaire au-delà de la provenance suivie
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.218s
+
+FAILED (failures=6)

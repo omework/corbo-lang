@@ -1,0 +1,20 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -273,13 +273,13 @@
+         variants = self.analyzer.enums.get(actual.typ, {})
+         if path and '' not in variants and path[0] in variants:
+             declared = dict(variants[path[0]]).get('.'.join(path[1:]))
+-            if declared in ('&Int', '&mut Int'):
++            if declared and declared.startswith('&'):
+                 targets = dict(actual.fields).get(field, frozenset())
+-                return targets | (actual.assets | actual.reservations if declared == '&mut Int' else frozenset())
++                return targets | (actual.assets | actual.reservations if declared.startswith('&mut ') else frozenset())
+         declared = dict(self.analyzer.enums.get(actual.typ, {}).get('', ())).get(field)
+-        if declared in ('&Int', '&mut Int'):
++        if declared and declared.startswith('&'):
+             targets = dict(actual.fields).get('.' + field, frozenset())
+-            return targets | (actual.assets | actual.reservations if declared == '&mut Int' else frozenset())
++            return targets | (actual.assets | actual.reservations if declared.startswith('&mut ') else frozenset())
+         if reference_array_shape(actual.typ):
+             def select(row, typ, coordinates, offset=0):
+                 if not coordinates:

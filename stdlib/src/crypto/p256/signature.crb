@@ -1,0 +1,199 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Deterministic nonce generation and ECDSA signature arithmetic for P-256.
+
+use std::crypto::sha256::{digest, hmac};
+
+/// Holds the HMAC key and value for deterministic ECDSA nonce generation.
+struct Nonce {
+    /// Current deterministic nonce-generator HMAC key.
+    key: [u8; 32],
+    /// Current deterministic nonce-generator HMAC value.
+    value: [u8; 32],
+}
+
+// RFC 6979 section 3.2, steps d–g.
+/// Updates the RFC 6979 HMAC state with the supplied data and control byte.
+fn nonce_update(state: &mut Nonce, input: &[u8], flag: u8) -> Result<(), Error> {
+    let mut key: [u8; 32] = [0; 32];
+    let mut value: [u8; 32] = [0; 32];
+    let mut cursor: usize = 0;
+    while cursor < 32 {
+        key[cursor] = (*state).key[cursor];
+        value[cursor] = (*state).value[cursor];
+        cursor = cursor + 1;
+    }
+    let size = input.len();
+    let mut seed: [u8; 97] = [0; 97];
+    let mut i: usize = 0;
+    while i < 32 {
+        seed[i] = value[i];
+        i = i + 1;
+    }
+    seed[32] = flag;
+    i = 0;
+    while i < size {
+        seed[33 + i] = input[i];
+        i = i + 1;
+    }
+    let next_key = match fixed_hmac(&key[..], &seed[..33 + size]) {
+        Ok(bytes) => { bytes },
+        Err(error) => { return Err(error); },
+    };
+    let next_value = match fixed_hmac(&next_key[..], &value[..]) {
+        Ok(bytes) => { bytes },
+        Err(error) => { return Err(error); },
+    };
+    i = 0;
+    while i < 32 {
+        let k = &mut (*state).key[i];
+        *k = next_key[i];
+        let v = &mut (*state).value[i];
+        *v = next_value[i];
+        i = i + 1;
+    }
+    Ok(())
+}
+
+// All HMAC invocations for nonce derivation use at most 97 input bytes
+// and a 32-byte key, so SHA-256 length overflow is unreachable here.
+/// Computes HMAC-SHA-256 for deterministic nonce generation.
+fn fixed_hmac(key: &[u8], input: &[u8]) -> Result<[u8; 32], Error> {
+    let size = input.len();
+    match hmac(&key[0..32], &input[0..size]) {
+        Ok(hash) => { Ok(hash) },
+        Err(error) => { drop(error); Err(Error.InputTooLong) },
+    }
+}
+
+/// Produces the next valid nonce scalar from the RFC 6979 state.
+fn nonce_next(state: &mut Nonce) -> Result<[u64; 8], Error> {
+    let mut key: [u8; 32] = [0; 32];
+    let mut value: [u8; 32] = [0; 32];
+    let mut cursor: usize = 0;
+    while cursor < 32 {
+        key[cursor] = (*state).key[cursor];
+        value[cursor] = (*state).value[cursor];
+        cursor = cursor + 1;
+    }
+    let next = match fixed_hmac(&key[..], &value[..]) {
+        Ok(bytes) => { bytes },
+        Err(error) => { return Err(error); },
+    };
+    let mut i: usize = 0;
+    while i < 32 {
+        let v = &mut (*state).value[i];
+        *v = next[i];
+        i = i + 1;
+    }
+    let candidate = read_words(&next[..], 0);
+    Ok(candidate)
+}
+
+/// Hashes the message with SHA-256 and reduces the digest modulo the curve order.
+fn hash_scalar(message: &[u8]) -> Result<[u64; 8], Error> {
+    let size = message.len();
+    let hash = match digest(&message[0..size]) {
+        Ok(value) => { value },
+        Err(error) => { drop(error); return Err(Error.InputTooLong); },
+    };
+    let words = read_words(&hash[..], 0);
+    let order = modulus(true);
+    let reduced = reduce_once(&words[..], 0, &order[..]);
+    Ok(reduced)
+}
+
+/// Constructs ECDSA scalars with a deterministic nonce and encodes the resulting signature.
+fn sign_message(secret: &[u64], message: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    let length = message.len();
+    let z = match hash_scalar(&message[0..length]) {
+        Ok(value) => { value },
+        Err(error) => { return Err(error); },
+    };
+    let d = to_montgomery(&secret[0..8], true);
+    let zm = to_montgomery(&z[..], true);
+    let order = modulus(true);
+    let mut seed: [u8; 64] = [0; 64];
+    write_words(&secret[0..8], &mut seed[..], 0);
+    write_words(&z[..], &mut seed[..], 32);
+    let mut nonce = Nonce { key: [0; 32], value: [1; 32] };
+    match nonce_update(&mut nonce, &seed[..], 0) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
+    };
+    match nonce_update(&mut nonce, &seed[..], 1) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
+    };
+    let empty: [u8; 0] = [];
+    let base = generator();
+    while true {
+        let k = match nonce_next(&mut nonce) {
+            Ok(bytes) => { bytes },
+            Err(error) => { return Err(error); },
+        };
+        if valid_scalar(&k[..]) {
+            let point = scalar_multiply(&base[..], &k[..]);
+            let x = affine_x(&point[..]);
+            let r = reduce_once(&x[..], 0, &order[..]);
+            let rm = to_montgomery(&r[..], true);
+            let km = to_montgomery(&k[..], true);
+            let inverse = modular_inverse(&km[..], true);
+            let rd = montgomery_mul(&rm[..], &d[..], true);
+            let sum = modular_add(&zm[..], &rd[..], true);
+            let sm = montgomery_mul(&inverse[..], &sum[..], true);
+            let s = from_montgomery(&sm[..], true);
+            if (zero_bit(&r[..]) | zero_bit(&s[..])) == 0 {
+                let used = encode_signature(&r[..], &s[..], &mut output[0..72]);
+                return Ok(used);
+            }
+        }
+        match nonce_update(&mut nonce, &empty[..], 0) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        };
+    }
+    Err(Error.InvalidSignature)
+}
+
+/// Validates and verifies an ECDSA signature against the supplied point and message.
+fn verify_message(point: &[u64], message: &[u8], signature: &[u8]) -> Result<bool, Error> {
+    let size = signature.len();
+    if size < 8 || size > 72 { return Err(Error.InvalidSignature); }
+    if signature[0] != 48 || (signature[1] as usize) + 2 != size {
+        return Err(Error.InvalidSignature);
+    }
+    let mut rb: [u8; 32] = [0; 32];
+    let mut sb: [u8; 32] = [0; 32];
+    let next = decode_integer(&signature[0..size], 2, &mut rb[..]);
+    if next == 0 { return Err(Error.InvalidSignature); }
+    let end = decode_integer(&signature[0..size], next, &mut sb[..]);
+    if end != size { return Err(Error.InvalidSignature); }
+    let r = read_words(&rb[..], 0);
+    let s = read_words(&sb[..], 0);
+    if !valid_scalar(&r[..]) || !valid_scalar(&s[..]) { return Err(Error.InvalidSignature); }
+
+    let length = message.len();
+    let z = match hash_scalar(&message[0..length]) {
+        Ok(value) => { value },
+        Err(error) => { return Err(error); },
+    };
+    let rm = to_montgomery(&r[..], true);
+    let sm = to_montgomery(&s[..], true);
+    let zm = to_montgomery(&z[..], true);
+    let inverse = modular_inverse(&sm[..], true);
+    let left_scalar = montgomery_mul(&zm[..], &inverse[..], true);
+    let right_scalar = montgomery_mul(&rm[..], &inverse[..], true);
+    let u1 = from_montgomery(&left_scalar[..], true);
+    let u2 = from_montgomery(&right_scalar[..], true);
+    let base = generator();
+    let left = scalar_multiply(&base[..], &u1[..]);
+    let right = scalar_multiply(&point[0..24], &u2[..]);
+    let combined = point_add(&left[..], &right[..]);
+    let combined_z = coordinate(&combined[..], 16);
+    if zero_bit(&combined_z[..]) == 1 { return Ok(false); }
+    let x = affine_x(&combined[..]);
+    let order = modulus(true);
+    let reduced = reduce_once(&x[..], 0, &order[..]);
+    let difference = modular_sub(&reduced[..], &r[..], true);
+    Ok(zero_bit(&difference[..]) == 1)
+}

@@ -1,0 +1,70 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -84,6 +84,7 @@
+     execution_tokens: frozenset[tuple] = frozenset()
+     absent_owned_payload: bool = False
+     owned_path: tuple = ()
++    structure_choices: tuple = ()
+ 
+     @property
+     def all_assets(self):
+@@ -125,6 +126,7 @@
+ 
+ 
+ def join_values(values):
++    from array_syntax import merge_structure_choices
+     values = tuple(values)
+     first = values[0]
+     if all(isinstance(value, Value) for value in values):
+@@ -143,6 +145,7 @@
+                      task_reference_assets=frozenset(a for value in values for a in value.task_reference_assets),
+                      execution_tokens=frozenset(token for value in values for token in value.execution_tokens),
+                      owned_path=first.owned_path if all(value.owned_path == first.owned_path for value in values) else (),
++                     structure_choices=merge_structure_choices(values),
+                      absent_owned_payload=all(value.absent_owned_payload for value in values))
+     return replace(first, variants=frozenset()) if isinstance(first, Value) else first
+ 
+@@ -1365,6 +1368,16 @@
+                 return {'next': state}, SCALAR
+             if not isinstance(carrier, Value):
+                 self.fail(line, 'un réemprunt de champ exige une structure')
++            if carrier.structure_choices:
++                branches, values = [], []
++                for choice in carrier.structure_choices:
++                    branch = state.clone()
++                    branch.environment[place[1]] = choice
++                    paths, value = self.expression(expr, branch, line)
++                    branches.append(paths)
++                    if 'next' in paths:
++                        values.append(value)
++                return merge_paths(*branches), join_values(values) if values else UNKNOWN
+             key = '.' + place[2]
+             targets = dict(carrier.fields).get(key, frozenset())
+             declared = dict(self.analyzer.enums.get(carrier.typ, {}).get('', ())).get(place[2], '')
+@@ -1707,7 +1720,8 @@
+             updated_structures = {}
+             for parameter, fields in result.structure_fields:
+                 name = borrowed_array_name(args[parameter])
+-                projected = name is None and isinstance(actuals[parameter], Value) and actuals[parameter].owned_path
++                projected = name is None and isinstance(actuals[parameter], Value) and (
++                    actuals[parameter].owned_path or actuals[parameter].structure_choices)
+                 if projected:
+                     name = '\0projected_structure_update'
+                     current.environment[name] = actuals[parameter]
+@@ -2346,6 +2360,16 @@
+         return paths, tail
+ 
+     def update_structure(self, state, name, carrier, changes, line):
++        if carrier.structure_choices:
++            branches = []
++            for choice in carrier.structure_choices:
++                branch = state.clone()
++                self.update_structure(branch, name, choice, changes, line)
++                branches.append(branch)
++            merged = join_states(branches)
++            state.environment.update(merged.environment)
++            state.shadows = merged.shadows
++            return dict(state.environment[name].fields)
+         if carrier.mode == 'mut' and carrier.storage_owner is None:
+             borrowed = frozenset(asset for asset in carrier.assets
+                                  if asset.token[0] == 'parameter' and self.params[asset.token[1]][1] == 'mut')

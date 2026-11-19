@@ -1,0 +1,16 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -1906,7 +1906,12 @@
+                 if builtin is not None:
+                     op, args = builtin
+             following = {'next': current}
+-            if op in ('var', 'assign'):
++            if op == 'set_expr':
++                target = self.lookup(args[0], current, line)
++                following, _ = self.expression(args[1], current, line)
++                if 'next' in following:
++                    self.touch(target, following['next'], line)
++            elif op in ('var', 'assign'):
+                 name, expr = args
+                 if expr[0] == 'source':
+                     if op == 'var':

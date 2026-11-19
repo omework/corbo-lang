@@ -1,0 +1,49 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -351,14 +351,19 @@
+     return replace(node, args=(*node.args[:3], walk(node.args[3])))
+ 
+ 
+-def borrowed_result_parameters(node, functions, fail, cache):
+-    return frozenset(index for index, _ in borrowed_result_paths(node, functions, fail, cache))
+-
+-
+-def borrowed_result_paths(node, functions, fail, cache, visiting=(), *, sync_contracts=None):
++def borrowed_result_parameters(node, functions, fail, cache, **options):
++    return frozenset(index for index, _ in borrowed_result_paths(node, functions, fail, cache, **options))
++
++
++def borrowed_result_paths(node, functions, fail, cache, visiting=(), *, sync_contracts=None, sync_result_contract=None):
+     """Infer which input references can reach the result, including awaited relays."""
+     node = expand_reference_return_branches(node)
+     sync_contracts = sync_contracts or {}
++    def result_contract(callee):
++        contract = sync_contracts.get(callee)
++        if contract is None and sync_result_contract is not None:
++            contract = sync_result_contract(callee)
++        return contract
+     name, parameters, result, body = node.args
+     if result not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
+         return frozenset()
+@@ -474,7 +479,7 @@
+         if mode not in ('ref', 'mut') or typ != result[1] or len(operand[2]) != len(child.args[1]):
+             fail(line, diagnostic)
+         paths = borrowed_result_paths(child, functions, fail, cache, (*visiting, name),
+-                                      sync_contracts=sync_contracts)
++                                      sync_contracts=sync_contracts, sync_result_contract=sync_result_contract)
+         origins = set()
+         for index, suffix in paths:
+             argument = operand[2][index]
+@@ -493,10 +498,9 @@
+             if len(types) != 1 or any(path for _, path in receivers):
+                 fail(line, diagnostic)
+             symbol = next(iter(types)) + '.' + expr[2]
+-            if symbol in sync_contracts:
++            if result_contract(symbol) is not None:
+                 expr = ('call', symbol, [expr[1], *expr[3]])
+-        if expr[0] == 'call' and expr[1] in sync_contracts:
+-            contract = sync_contracts[expr[1]]
++        if expr[0] == 'call' and (contract := result_contract(expr[1])) is not None:
+             mode, typ = contract.result_type
+             if mode not in ('ref', 'mut') or typ != result[1] or len(expr[2]) != len(contract.parameters):
+                 fail(line, diagnostic)

@@ -1,0 +1,11 @@
+--- tests/test_stored_field_reborrows.py
++++ tests/test_stored_field_reborrows.py
+@@ -95,7 +95,7 @@
+         self.refused(source)
+ 
+     def test_returned_and_copied_shared_container_keeps_capability(self):
+-        helpers='''fn make(p:&mut Pool<View>,w:&mut Writer)-><-View{
++        helpers='''fn make(p:&mut Pool<View>,w:&mut Writer)-><-A<View>{
+           let v=p.new(data:&*w.data);return <-v;}'''
+         source=self.program(helpers=helpers, use='', async_result=True)
+         source=source.replace('views.new(data:&*writer.data)', 'make(&mut views,&mut writer)')

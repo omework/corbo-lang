@@ -1,0 +1,24 @@
+fn borrow_mut(data: &mut i32) -> &mut i32 {
+    return data;
+}
+
+fn relay(data: &mut i32) -> &mut i32 {
+    let mut vue = borrow_mut(data);
+    return vue;
+}
+
+fn main() {
+    let mut memory = pool<i32>(1);
+    let mut nombre = memory.new(10);
+    address(nombre);
+
+    let mut vue = relay(nombre.mut_vref());
+    address(vue);
+    *vue = 30;
+    print(*vue);
+
+    // Le dernier usage de vue est passé : l'accès d'origine reprend.
+    nombre = 40;
+    print(*nombre);
+    drop(nombre);
+}

@@ -1,0 +1,6 @@
+async fn pick(flag:Int,a:&mut Int,b:&mut Int)->&mut Int{let mut r=loop{let unused=if flag==1{break &mut *a;}else{break &mut *b;};};return r;}
+        fn main(){let mut p=pool<Int>(2);let mut a=p.new(10);let mut b=p.new(20);
+          let h=runtime::spawn(->pick(1,&mut a,&mut b));
+          match h.join(){Ok(r)=>{*r=42;},Err(_)=>{print(999);}}
+          print(a);print(b);drop(->a);drop(->b);let reused=p.new(77);print(reused);
+        }

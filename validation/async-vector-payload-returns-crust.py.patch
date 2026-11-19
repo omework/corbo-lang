@@ -1,0 +1,58 @@
+--- before/crust.py
++++ crust.py
+@@ -8278,6 +8278,11 @@
+             allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+             allocation.variants = prototype.variants
+             allocation.item_payloads = tuple(self.copy_owned_tree(item, scope.id) for item in prototype.item_payloads)
++            if is_handle_vector(typ):
++                allocation.item_sources = prototype.item_sources
++                allocation.item_origins = prototype.item_origins
++                allocation.item_positions = prototype.item_positions
++                allocation.item_position_origins = prototype.item_position_origins
+         self.allocations.append(allocation)
+         scope.allocations.append(allocation)
+         return 'owned', name, allocation
+@@ -8409,6 +8414,17 @@
+         recursive = {record.path: record.recursive_sources for record in fields if isinstance(record, AsyncFieldStorage)}
+         def restore(typ, prefix='', possible=frozenset()):
+             children = []
++            if is_handle_vector(typ):
++                path = prefix + '[]'
++                sources, origins = storage.get(path, ((), frozenset()))
++                if sources:
++                    child_type = handle_vector_element(typ)
++                    nested = restore(child_type, path + '/', child_variants.get(path, frozenset()))
++                    child = Allocation(self.uid(), allocation.scope, '[]', sources, typ=child_type,
++                        origins=origins, owned_fields=nested, item_sources=self.owned_field_sources(nested),
++                        variants=child_variants.get(path) or frozenset(self.enums.get(child_type, {})))
++                    children.append(('[]', (child,)))
++                return tuple(children)
+             for arm, members in self.enums.get(typ, {}).items():
+                 if possible and arm not in possible:
+                     continue
+@@ -8432,7 +8448,12 @@
+         if not allocation.absent_owned_payload:
+             allocation.owned_fields = restore(allocation.typ, possible=variants)
+             allocation.variants = variants or frozenset(self.enums.get(allocation.typ, {}))
+-            if allocation.owned_fields:
++            if is_handle_vector(allocation.typ):
++                allocation.item_payloads = dict(allocation.owned_fields).get('[]', ())
++                allocation.owned_fields = ()
++                allocation.item_sources, allocation.item_origins = storage.get('[]', ((), frozenset()))
++                allocation.item_positions = allocation.item_position_origins = None if allocation.item_sources else ()
++            elif allocation.owned_fields:
+                 allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+         return allocation
+ 
+@@ -8469,6 +8490,11 @@
+             borrowed_fields, borrow_parents = (), ()
+         self.restore_async_owned_fields(payload, owned_fields, variants)
+         def restore_borrowed_fields(holder, fields):
++            if is_handle_vector(holder.typ):
++                descendants = tuple((path[3:], targets) for path, targets in fields if path.startswith('[]/'))
++                for child in holder.item_payloads:
++                    restore_borrowed_fields(child, descendants)
++                fields = tuple((path, targets) for path, targets in fields if not path.startswith('[]/'))
+             owned_prefixes = tuple(key + '/' for key, _ in holder.owned_fields)
+             holder.dependencies = tuple((path, targets) for path, targets in fields
+                                         if not path.startswith(owned_prefixes)

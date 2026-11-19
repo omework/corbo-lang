@@ -1,0 +1,27 @@
+--- before/results.py
++++ results.py
+@@ -3434,13 +3434,23 @@
+                 if not capability:
+                     bindings[name] = SCALAR
+                     continue
+-                carriers = borrowed_targets(subject) if isinstance(subject, Value) and subject.mode in ('ref', 'mut') else ()
++                projections = (tuple(candidate for candidate in subject.candidates
++                                     if candidate.kind in ('owned_projection', 'owned_field_input'))
++                               if isinstance(subject, Value) and subject.mode in ('ref', 'mut') else ())
++                carriers = (borrowed_targets(replace(subject, candidates=subject.candidates.difference(projections)))
++                            if isinstance(subject, Value) and subject.mode in ('ref', 'mut') else ())
+                 origins = frozenset(
+                     BorrowTarget('field_parameter' if mutable else 'shared_field_parameter',
+                                  origin.parameter, f'{arm}.{field}')
+                     if origin.kind == 'parameter' else BorrowTarget('local')
+                     for origin in carriers
+                 )
++                origins |= frozenset(
++                    BorrowTarget('field_parameter' if mutable else 'shared_field_parameter',
++                                 candidate.parameter,
++                                 (candidate.field_path if candidate.kind == 'owned_projection'
++                                  else candidate.source.name) + '/' + f'{arm}.{field}')
++                    for candidate in projections)
+                 mode = 'mut' if mutable and capability[0] == 'mut' else 'ref'
+                 if field_type.startswith('&') and not field_type.startswith('&mut ') and isinstance(subject, Value):
+                     # A shared field points outside its carrier. Its target

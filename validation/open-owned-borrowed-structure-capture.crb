@@ -1,0 +1,16 @@
+struct View { data: &Int }
+async fn read(view: -> View) -> Int {
+    yield;
+    return *view.data;
+}
+fn main() {
+    let mut numbers = pool<Int>(1);
+    let number = numbers.new(7);
+    let view = View { data: &number };
+    let execution = runtime::spawn(->read(->view));
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(99); }
+    }
+    drop(->number);
+}

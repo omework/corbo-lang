@@ -1,0 +1,84 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -953,6 +953,21 @@
+     reference_sync_types = {('ref', 'Int'): 'int *', ('mut', 'Int'): 'int *', ('mut', 'u8'): 'uint8_t *'}
+     reference_structs = {typ: fields for typ, fields in struct_layouts.items()
+                      if all(field_type in ('Int', '&Int', '&mut Int') for _, field_type in fields)}
++    # Whole owned captures use the existing Cell graph and its destructor.
++    # Admit finite structures without borrowed leaves; their nested allocation
++    # sources are retained by the caller's task contract. Borrowed graphs need
++    # a separate capture-loan summary and must not pass this capability check.
++    owned_structure_types = set()
++    owned_leaves = {'Int', 'String', 'Vector<Int>', 'Vector<u8>'}
++    while True:
++        available = owned_leaves | owned_structure_types
++        additions = {typ for typ, fields in struct_layouts.items()
++                     if all(declared == 'Int' or declared.startswith('A<')
++                            and declared[2:-1] in available for _, declared in fields)}
++        if additions <= owned_structure_types:
++            break
++        owned_structure_types.update(additions)
++    owned_structures = {typ: struct_layouts[typ] for typ in owned_structure_types}
+     reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+@@ -1447,12 +1462,14 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>'))
+            and (mode, typ) not in pool_sync_types
++           and not (mode == 'owned' and typ in owned_structures)
+            and not (mode in ('ref', 'mut') and typ in reference_structs)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+            for _, mode, typ in parameters):
+         fail(node.line, 'prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis')
+     references = {name: mode for name, mode, _ in parameters if mode in ('ref', 'mut', 'owned')}
+-    reference_types = {name: typ for name, mode, typ in parameters if mode in ('ref', 'mut')}
++    reference_types = {name: typ for name, mode, typ in parameters if mode in ('ref', 'mut')
++                       or mode == 'owned' and typ in owned_structures}
+     pool_types = {name: typ for name, mode, typ in parameters if (mode, typ) in pool_sync_types}
+     local_pools = {}
+     pool_alias_origins = {}
+@@ -1483,7 +1500,8 @@
+     result_ctype = array_result_ctype or (capture_ctype(*result) if returns_value else 'int')
+     parameter_modes = {name: mode for name, mode, _ in parameters}
+     collection_types = {name: typ for name, mode, typ in parameters
+-                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>')}
++                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>')
++                         or mode == 'owned' and typ in owned_structures}
+     boolean_bindings = {name for name, mode, typ in parameters if (mode, typ) == ('scalar', 'Bool')}
+     byte_bindings = {name for name, mode, _ in parameters if mode == 'byte'}
+     builtin_error_bindings = {name: mode for name, mode, _ in parameters if mode in ERROR_VALUE_TYPES}
+@@ -4905,7 +4923,8 @@
+     def value_place(name):
+         if name in pool_types:
+             fail(node.line, 'un pool ne fournit pas de valeur scalaire ou de pointeur vers un élément')
+-        if reference_types.get(name) in reference_structs:
++        typ = reference_types.get(name, collection_types.get(name))
++        if typ in reference_structs or typ in owned_structures:
+             fail(node.line, 'une structure ne fournit pas une valeur Int ; sélectionner un champ')
+         member = f'frame->{fields[name]}'
+         mode = references.get(name)
+@@ -4917,11 +4936,11 @@
+ 
+     def struct_field(place, line, *, write=False):
+         _, name, path = place
+-        typ = reference_types.get(name)
+-        layout = reference_structs.get(typ)
++        typ = reference_types.get(name, collection_types.get(name))
++        layout = reference_structs.get(typ, owned_structures.get(typ))
+         if layout is None:
+             fail(line, 'projection async : référence de structure à champs Int ou références Int requise')
+-        if write and references.get(name) != 'mut':
++        if write and not (references.get(name) == 'mut' or references.get(name) == 'owned' and name in mutable):
+             fail(line, 'écriture de champ : une référence mutable est requise')
+         for index, (field, field_type) in enumerate(layout):
+             if field == path:
+@@ -5472,6 +5491,8 @@
+         op = expr[0]
+         if op in ('field', 'field_deref'):
+             name, cell, offset, path, typ = struct_field(expr[1] if op == 'field_deref' else expr, line)
++            if typ not in ('Int', '&Int', '&mut Int', 'A<Int>'):
++                fail(line, 'lecture Int : champ du type déclaré incompatible')
+             if (op == 'field') != (typ == 'Int'):
+                 fail(line, 'lecture Int : déréférencer explicitement un champ référence')
+             check_access(name, line, path=path)

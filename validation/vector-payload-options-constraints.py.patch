@@ -1,0 +1,58 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -749,6 +749,15 @@
+             vector = no.environment.get(name)
+             if isinstance(vector, Value):
+                 no.environment[name] = replace(vector, handle_items=())
++
++    @staticmethod
++    def absent_option_success(condition, state):
++        if (condition[0:2] != ('compare', '==') or condition[3] != ('int', 0)
++                or condition[2][0] != 'array_handle_option_status'):
++            return False
++        operand = condition[2][1]
++        value = state.environment.get(operand[1]) if operand[0] == 'name' else None
++        return isinstance(value, Value) and value.mode == 'handle_option' and value.absent_owned_payload
+ 
+     @staticmethod
+     def invalidate_handle_items(state):
+@@ -1119,7 +1128,7 @@
+                 items = vector.handle_items if isinstance(vector, Value) else None
+                 index = len(items) - 1 if isinstance(items, tuple) and items else None
+                 value = self.extract_vector_item(current, expr[1], index, line)
+-                return paths, replace(value, mode='handle_option') if op == 'array_handle_option_pop' else value
++                return paths, replace(value, mode='handle_option', absent_owned_payload=not value.assets) if op == 'array_handle_option_pop' else value
+             if op == 'array_handle_vequals':
+                 self.touch(values[0], paths['next'], line)
+                 return paths, Value('bool', 'bool')
+@@ -1516,6 +1525,10 @@
+             if 'next' not in paths:
+                 return paths, UNKNOWN
+             entry = paths.pop('next')
++            if self.absent_option_success(condition, entry):
++                branch, value = (self.expression(no, entry, line, expected_array) if isinstance(no, tuple)
++                                 else self.block(no, entry, valued=True, expected_array=expected_array))
++                return merge_paths(paths, branch), value
+             yes_entry, no_entry = entry.clone(), entry.clone()
+             self.refine_handle_branches(condition, yes_entry, no_entry)
+             left, a = (self.expression(yes, yes_entry, line, expected_array) if isinstance(yes, tuple)
+@@ -2171,7 +2184,7 @@
+             return paths, Value(result.mode, result.typ, assets, tuple(fields), frozenset(reservations),
+                                 exchange_payloads=tuple(resolve_assets(arm) for arm in result.exchange_payloads),
+                                 variants=variants, handle_items=item_sets,
+-                                absent_owned_payload=not assets and (result.absent_owned_payload or
++                                absent_owned_payload=not assets and (result.mode == 'handle_option' or result.absent_owned_payload or
+                                     bool(result.candidates) and all(candidate.kind == 'parameter'
+                                         and actuals[candidate.parameter].absent_owned_payload
+                                         for candidate in result.candidates)))
+@@ -2370,6 +2383,10 @@
+                 following = self.condition(args[0], current, line)
+                 if 'next' in following:
+                     entry = following.pop('next')
++                    if self.absent_option_success(args[0], entry):
++                        no, _ = self.block(args[2], entry)
++                        paths = merge_paths(paths, following, no)
++                        continue
+                     yes_entry, no_entry = entry.clone(), entry.clone()
+                     self.refine_handle_branches(args[0], yes_entry, no_entry)
+                     yes, _ = self.block(args[1], yes_entry)

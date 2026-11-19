@@ -1,0 +1,26 @@
+let mut memory = allocator();
+{
+    let mut first = new(memory) Int(1);
+
+    let mut result = {
+        let mut temporary = new(memory) Int(99);
+        let mut data = new(memory) Int(42);
+        print(temporary);
+        <- data
+    };
+
+    let mut view = &result;
+    print(view);
+    // L'emprunt view est terminé après sa dernière utilisation.
+    let mut edit = &mut result;
+    edit.set(43);
+    print(edit);
+
+    {
+        -> first;
+        first.set(2);
+        <- first;
+    }
+    print(first);
+    print(result);
+}

@@ -1,0 +1,126 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Task descriptors preserve separate state, storage, result and cleanup responsibilities.
+/// Saves the current thread-local fixed-stack/region context in out and installs next for a resumed task.
+fn swap_classic(out:usize,next:usize) {
+    s_ClassicStack_base(copy(out),get_base());
+    s_ClassicStack_cursor(copy(out),get_cursor());
+    s_ClassicStack_limit(copy(out),get_limit());
+    s_ClassicStack_committed(copy(out),get_committed());
+    s_ClassicStack_page_size(copy(out),get_page_size());
+    s_ClassicStack_mapped_size(copy(out),get_mapped_size());
+    s_ClassicStack_band(copy(out),get_current_band());
+    set_base(g_ClassicStack_base(copy(next)));
+    set_cursor(g_ClassicStack_cursor(copy(next)));
+    set_limit(g_ClassicStack_limit(copy(next)));
+    set_committed(g_ClassicStack_committed(copy(next)));
+    set_page_size(g_ClassicStack_page_size(copy(next)));
+    set_mapped_size(g_ClassicStack_mapped_size(copy(next)));
+    set_current_band(g_ClassicStack_band(copy(next)));
+}
+/// Places inactive task state in a region and fills out with its state, storage and typed poll callback; caller holds the lock.
+fn make_task_in(out:usize,region:usize,size:usize,poll:usize,dedicated:bool) {
+    region_new(copy(region),copy(size),0,copy(dedicated));
+    let state=region_add(copy(region));
+    memory_zero(copy(state),size_TaskState());
+    s_TaskState_region(copy(state),copy(region));
+    s_TaskValue_state(copy(out),copy(state));
+    s_TaskValue_storage(copy(out),copy(region));
+    s_TaskValue_poll(copy(out),copy(poll));
+    s_TaskValue_native(copy(out),false);
+}
+/// Maps separate runtime metadata of the requested byte size; terminates if the OS cannot provide it.
+fn task_metadata(bytes:usize)->usize {
+    let pointer=os_metadata(copy(bytes));
+    if copy(pointer)==0 {
+        region_error();
+    }
+    copy(pointer)
+}
+/// Unmaps a metadata address with the original mapping byte count after its users finish.
+fn task_unmap(pointer:usize,bytes:usize) {
+    os_unmap(copy(pointer),copy(bytes));
+}
+/// Creates inactive future storage under the runtime lock and records ownership of its separate region descriptor.
+fn make_task(out:usize,size:usize,poll:usize) {
+    let region=task_metadata(size_Region());
+    lock();
+    make_task_in(copy(out),copy(region),copy(size),copy(poll),get_current_band()==0 && get_global_budget()==0);
+    unlock();
+    s_TaskState_own_region(g_TaskValue_state(copy(out)),true);
+}
+/// Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata.
+fn release_future(state:usize,completed:bool,taken:bool) {
+    let region=g_TaskState_region(copy(state));
+    let owned=g_TaskState_own_region(copy(state));
+    let dispose=g_TaskState_dispose(copy(state));
+    if copy(dispose)!=0 && !copy(taken) {
+        call_dispose(copy(dispose),copy(state),copy(completed));
+    }
+    lock();
+    region_drop(copy(region));
+    unlock();
+    if copy(owned) {
+        task_unmap(copy(region),size_Region());
+    }
+}
+/// Releases a completed abandoned task, including its untaken result.
+fn task_abandoned(task:usize) {
+    release_future(copy(task),true,false);
+}
+/// Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
+fn start_task(value:usize) {
+    task_spawn_with(g_TaskValue_state(copy(value)),g_TaskValue_poll(copy(value)),pointer_task_abandoned());
+}
+/// Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
+fn discard_handle(value:usize) {
+    if g_TaskValue_storage(copy(value))==0 {
+        return;
+    }
+    if g_TaskValue_native(copy(value)) {
+        abandon_native(copy(value));
+        return;
+    }
+    let state=g_TaskValue_state(copy(value));
+    lock();
+    let done=g_Task_done(copy(state));
+    if !copy(done) {
+        s_Task_abandoned(copy(state),true);
+    }
+    unlock();
+    if copy(done) {
+        release_future(copy(state),true,g_Task_failed(copy(state)));
+    }
+}
+/// Waits for completion, writes a scalar completion descriptor to out and releases the consumed handle's storage.
+fn join_task(out:usize,value:usize) {
+    let state=g_TaskValue_state(copy(value));
+    task_join(copy(state));
+    s_TaskCompletion_ok(copy(out),!g_Task_failed(copy(state)));
+    memory_copy(a_TaskCompletion_value(copy(out)),a_TaskState_value(copy(state)),size_TaskResult());
+    if g_TaskValue_native(copy(value)) {
+        release_native(copy(value),true);
+    } else {
+        release_future(copy(state),true,true);
+    }
+}
+/// Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
+fn join_task_into(value:usize,out:usize,bytes:usize)->bool {
+    let state=g_TaskValue_state(copy(value));
+    task_join(copy(state));
+    let ok=!g_Task_failed(copy(state));
+    if copy(ok) {
+        memory_copy(copy(out),g_TaskState_payload(copy(state)),copy(bytes));
+    }
+    if g_TaskValue_native(copy(value)) {
+        release_native(copy(value),copy(ok));
+    } else {
+        release_future(copy(state),true,true);
+    }
+    copy(ok)
+}
+/// Destroys captures and storage of a nonempty inactive future descriptor.
+fn discard_future(value:usize) {
+    if g_TaskValue_storage(copy(value))!=0 {
+        release_future(g_TaskValue_state(copy(value)),false,false);
+    }
+}

@@ -1,0 +1,52 @@
+test_conditional_results_and_early_return (test_async_local_parent.AsyncLocalParentTests.test_conditional_results_and_early_return) ... ok
+test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) ... ok
+test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) ... ok
+test_loop_model_reuses_parent_slot (test_async_local_parent.AsyncLocalParentTests.test_loop_model_reuses_parent_slot) ... ok
+test_loop_result_with_continue (test_async_local_parent.AsyncLocalParentTests.test_loop_result_with_continue) ... ok
+test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) ... 
+  test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=True) ... FAIL
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... ok
+test_replacement_keeps_old_until_new_is_evaluated (test_async_local_parent.AsyncLocalParentTests.test_replacement_keeps_old_until_new_is_evaluated) ... ok
+test_result_borrow_reserves_value (test_async_local_parent.AsyncLocalParentTests.test_result_borrow_reserves_value) ... ok
+
+======================================================================
+FAIL: test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 104, in test_parent_identity_survives_child_reclamation
+                    run=self.storage_probe(source,'''
+                        ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+        CrustTask *task=crust_async_work_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        assert(observed_close_count==2 && observed_closed[1]==parent);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 95, in storage_probe
+    return self.run_c_oracle(code+'\n#include <assert.h>\nint main(void){crust_task_context_init();'+body+
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             'crust_task_context_close();return 0;}')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12416, in run_c_oracle
+    self.assertEqual(build.returncode, 0, build.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmptbs1epjz/task.c:2638:44: error: redefinition of 'result' with a different type: 'int' vs 'Cell *' (aka 'struct Cell *')
+ 2638 | assert(task_poll(task)==TASK_COMPLETE);int result;assert(task_take(task,&result));assert(result==7);
+      |                                            ^
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmptbs1epjz/task.c:2631:11: note: previous definition is here
+ 2631 |     Cell *result=observed_cells[1];Source *parent=result->source;Source *child=observed_cells[0]->source;
+      |           ^
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmptbs1epjz/task.c:2638:96: error: comparison between pointer and integer ('Cell *' (aka 'struct Cell *') and 'int') [-Werror,-Wpointer-integer-compare]
+ 2638 | assert(task_poll(task)==TASK_COMPLETE);int result;assert(task_take(task,&result));assert(result==7);
+      |                                                                                          ~~~~~~^ ~
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h:72:25: note: expanded from macro 'assert'
+   72 |     (__builtin_expect(!(e), 0) ? __assert_rtn(__func__, __ASSERT_FILE_NAME, __LINE__, #e) : (void)0)
+      |                         ^
+2 errors generated.
+
+
+----------------------------------------------------------------------
+Ran 9 tests in 5.977s
+
+FAILED (failures=1)

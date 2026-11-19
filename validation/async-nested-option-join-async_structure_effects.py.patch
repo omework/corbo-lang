@@ -1,0 +1,68 @@
+--- /tmp/crust-before-nested-option-joins/async_structure_effects.py
++++ async_structure_effects.py
+@@ -6,6 +6,9 @@
+ the effects through handles and enforce the corresponding lifetimes.
+ """
+ 
++from option_join_types import (
++    OPTION_JOIN_TYPES, option_join_mode,
++)
+ from exchange_join_types import (
+     EXCHANGE_JOIN_TYPES, exchange_join_mode,
+ )
+@@ -18,8 +21,8 @@
+ from utf8_syntax import UTF8_BORROW_MODES, VALUE_MODES, PLAIN_RETURN_JOINS, PLAIN_JOIN_TYPES
+ 
+ 
+-FIELD_RESULT_MODES = ChainMap(EXCHANGE_JOIN_TYPES, dict.fromkeys(('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut',
+-                                           'owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange', 'array')), VALUE_MODES)
++FIELD_RESULT_MODES = ChainMap(OPTION_JOIN_TYPES, EXCHANGE_JOIN_TYPES, dict.fromkeys(('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut',
++                                           'owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange', 'array')), VALUE_MODES)
+ 
+ 
+ class IncompleteStructureEffects(Exception):
+@@ -99,7 +102,7 @@
+         parameters = tuple(node.args[1])
+         for _, mode, typ in parameters:
+             layout = self.results.enums.get(typ, {}).get('')
+-            owned_graph = mode in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, 'handle_option') and typ in self.owned_structures
++            owned_graph = mode in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option') and typ in self.owned_structures
+             if layout is not None and not owned_graph and (
+                     mode not in ('ref', 'mut') or typ not in self.reference_structures):
+                 summary = AsyncStructureEffects(parameters, None,
+@@ -143,7 +146,7 @@
+         # Result checking belongs to the existing checker. This pass collects
+         # the states of injected structures at each continuing/returning exit.
+         declared = node.args[2] if node.args[2][0] in (
+-            'ref', 'mut', 'owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange', *UTF8_BORROW_MODES) else ('void', 'Void')
++            'ref', 'mut', 'owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange', *UTF8_BORROW_MODES) else ('void', 'Void')
+         super().__init__(effects.results, replace(node, args=(
+             node.args[0], node.args[1], declared, node.args[3])))
+         self.effects = effects
+@@ -323,7 +326,7 @@
+             value = Value(mode, typ,
+                 reference_targets=frozenset(target for value in values for target in value.reference_targets),
+                 payload_reference=any(value.payload_reference for value in values))
+-        elif mode in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange', *UTF8_BORROW_MODES):
++        elif mode in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange', *UTF8_BORROW_MODES):
+             if (not values and not joined) or any((value.mode, value.typ) != (mode, typ) for value in values):
+                 raise IncompleteStructureEffects('résultat async sans contrat de provenance compatible')
+             # All complete child summaries can prove that no successful poll
+@@ -340,6 +343,8 @@
+             return value
+         if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+             return replace(value, mode=exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]), typ='Int')
++        if mode in OPTION_JOIN_TYPES:
++            return replace(value, mode=option_join_mode(OPTION_JOIN_TYPES[mode]))
+         if mode in ('owned', 'join_owned', 'handle_option'):
+             return replace(value, mode={'owned': 'join_owned', 'join_owned': 'join_nested', 'handle_option': 'join_option'}[mode])
+         if mode in ('ref', 'mut', *UTF8_BORROW_MODES):
+@@ -348,7 +353,7 @@
+             return replace(value, mode='join_array')
+         if (plain := PLAIN_RETURN_JOINS.get((mode, typ))) is not None:
+             return Value(plain, PLAIN_JOIN_TYPES[plain])
+-        if mode in ('join_nested', 'join_option', *EXCHANGE_JOIN_TYPES):
++        if mode in ('join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES):
+             raise IncompleteStructureEffects('troisième enveloppe propriétaire non raccordée')
+         return Value({'Int': 'join_int', 'Bool': 'join_bool', 'bool': 'join_bool',
+                       'u8': 'join_byte', 'char': 'join_char'}.get(typ, 'join_void'), typ)

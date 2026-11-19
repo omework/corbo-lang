@@ -1,0 +1,12 @@
+--- array_syntax.py (before)
++++ array_syntax.py
+@@ -113,6 +113,9 @@
+ def owned_reference_paths(enums, typ, prefix='', visited=frozenset()):
+     """Borrowed fields reachable through owned edges, preserving each path."""
+     if typ in visited:
++        return
++    if (element := handle_vector_element(typ)) is not None:
++        yield from owned_reference_paths(enums, element, prefix + '[]/', visited | {typ})
+         return
+     for arm, fields in enums.get(typ, {}).items():
+         for field, declared in fields:

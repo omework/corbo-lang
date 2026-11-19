@@ -1,0 +1,61 @@
+--- before/results.py
++++ after/results.py
+@@ -710,6 +710,12 @@
+                                 frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
+                                for position, (_, capture, _) in enumerate(definition.args[1])
+                                if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES))
++                fields += tuple((f'{access}.{position}', frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
++                    for position, (_, capture, capture_type) in enumerate(definition.args[1])
++                    if capture in ('owned', 'join_owned', 'join_nested')
++                    for access in sorted({reference_type(declared)[0]
++                        for members in self.analyzer.enums.get(capture_type, {}).values()
++                        for _, declared in members if reference_type(declared)}))
+                 from handle_types import is_public_handle
+                 if is_public_handle(typ):
+                     fields = tuple(('mut.' + key[4:] if key in ('ref.3', 'ref.5') else key, targets)
+@@ -1051,6 +1057,8 @@
+                         and self.params[target.parameter][1] in ('array_ref', 'array_mut')
+                         or target.kind == 'detached_field_parameter'
+                         and self.params[target.parameter][1] in ('ref', 'mut', 'owned')
++                        or target.kind == 'owned_capture_field'
++                        and self.params[target.parameter][1] in ('owned', 'join_owned', 'join_nested')
+                         or target.kind == 'task_capture_parameter'
+                         and self.params[target.parameter][1] in ('task', 'execution')
+                         or target.kind == 'utf8_parameter'
+@@ -2311,6 +2319,12 @@
+                                 access = 'mut' if capture_mode in SHARED_VECTOR_SLICE_MODES else 'ref'
+                                 captures.append((f'{access}.{index}', origins))
+                         elif capture_mode in ('owned', 'join_owned', 'join_nested'):
++                            borrowed_fields = ((f'{arm}.{field}', reference_type(declared)[0])
++                                for arm, fields in self.analyzer.enums.get(value.typ, {}).items()
++                                for field, declared in fields if reference_type(declared))
++                            for field, access in borrowed_fields:
++                                origins = self.owned_capture_field_targets(value, field)
++                                captures.append((f'{access}.{index}', origins))
+                             sources = {candidate.storage() for candidate in value.candidates}
+                             task_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
+                             for field, _ in aggregate_owned_paths(self.analyzer.enums, value.typ):
+@@ -2523,6 +2537,8 @@
+                             for actual_key, actual_origins in capture_fields(actual.fields, target.field):
+                                 exclusive |= actual_key.startswith('mut.')
+                                 origins.update(actual_origins)
++                        elif target.kind == 'owned_capture_field':
++                            origins.update(self.owned_capture_field_targets(actual, target.field))
+                         elif target.kind in ('utf8_parameter', 'string_parameter', 'vector_parameter'):
+                             origins.update(text_origins(actual))
+                         elif target.kind == 'detached_field_parameter':
+@@ -3161,6 +3177,14 @@
+             else BorrowTarget('local') for candidate in carrier.candidates)
+ 
+     @staticmethod
++    def owned_capture_field_targets(carrier, key):
++        parameters = {candidate.parameter for candidate in carrier.candidates if candidate.kind == 'parameter'}
++        return frozenset(
++            BorrowTarget('owned_capture_field', target.parameter, key)
++            if target.kind == 'field_parameter' and target.parameter in parameters and target.field == key
++            else target for target in dict(carrier.fields).get(key, ())) or frozenset({BorrowTarget('local')})
++
++    @staticmethod
+     def detached_field_targets(carrier, key):
+         if not isinstance(carrier, Value):
+             return frozenset({BorrowTarget('local')})

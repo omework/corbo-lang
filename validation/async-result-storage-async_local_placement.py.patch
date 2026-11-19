@@ -1,0 +1,31 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -5,8 +5,9 @@
+ """
+ 
+ 
+-def result_constructors(expression, contracts, known_locals, *, assigned_to=None):
++def result_constructors(expression, contracts, known_locals, *, assigned_to=None, returns=False):
+     assignments = {name: [] for name in assigned_to or ()}
++    returned = []
+     def merge(values):
+         if not values or any(value is None for value in values):
+             return None
+@@ -120,6 +121,8 @@
+                     loop_back.append(env.copy())
+                 return None, results
+             elif op == 'return':
++                if returns:
++                    returned.append(evaluate(args[0], env))
+                 return None, results
+             elif op == 'while_check':
+                 if loop_exits is not None:
+@@ -139,6 +142,8 @@
+         return env, results
+ 
+     result = evaluate(expression, {name: (typ, {}) for name, typ in known_locals.items()})
++    if returns:
++        result = merge([*returned, *([result] if result is not None else [])])
+     if assigned_to is not None:
+         return {name: tuple(merged[1].values()) if (merged := merge(values)) is not None else ()
+                 for name, values in assignments.items()}

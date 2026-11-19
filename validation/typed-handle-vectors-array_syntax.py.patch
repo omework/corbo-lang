@@ -1,0 +1,46 @@
+--- /tmp/crust-before-typed-handle-vectors/array_syntax.py
++++ /Users/jabarkarim/sources/crust/array_syntax.py
+@@ -11,7 +11,24 @@
+ SHARED_REF_VECTOR = 'Vector<&Int>'
+ MUT_REF_VECTOR = 'Vector<&mut Int>'
+ REFERENCE_VECTORS = (SHARED_REF_VECTOR, MUT_REF_VECTOR)
+-VECTOR_TYPES = (*VECTOR_ELEMENTS, HANDLE_VECTOR, *REFERENCE_VECTORS)
++HANDLE_VECTORS = {HANDLE_VECTOR: 'Int'}
++VECTOR_TYPES = dict.fromkeys((*VECTOR_ELEMENTS, HANDLE_VECTOR, *REFERENCE_VECTORS))
++
++
++def is_handle_vector(typ):
++    return isinstance(typ, str) and typ.startswith('Vector<A<') and typ.endswith('>>')
++
++
++def handle_vector_element(typ):
++    return typ[len('Vector<A<'):-2] if is_handle_vector(typ) else None
++
++
++def register_handle_vector(typ):
++    if is_handle_vector(typ):
++        HANDLE_VECTORS[typ] = handle_vector_element(typ)
++        VECTOR_TYPES[typ] = None
++    return typ
++
+ VECTOR_METHODS = {
+     'len': ('array_vector_len', 0),
+     'try_push': ('array_vector_try_push', 1),
+@@ -26,7 +43,7 @@
+ 
+ 
+ def vector_method(typ, method):
+-    if typ in (HANDLE_VECTOR, MUT_REF_VECTOR):
++    if typ in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+         return VECTOR_METHODS.get(method) if method in ('len', 'push', 'remove') else None
+     if typ == SHARED_REF_VECTOR:
+         return VECTOR_METHODS.get(method) if method in ('len', 'push', 'remove', 'pop', 'replace', 'try_push') else None
+@@ -37,7 +54,7 @@
+ 
+ def consumed_result_expression(expr, nominal):
+     """Resolve the explicit -> inside drop without adding moves to ordinary calls."""
+-    if expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in (HANDLE_VECTOR, MUT_REF_VECTOR):
++    if expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+         if expr[2] == 'remove':
+             return ('array_transfer', expr)
+         operation = {('pop', 0): 'array_handle_option_pop',

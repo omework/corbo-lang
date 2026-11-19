@@ -1,0 +1,381 @@
+BASELINE PASS
+test_alias_and_parameter_return_relay (test_async_local_parent.AsyncLocalParentTests.test_alias_and_parameter_return_relay) ... ok
+test_conditional_results_and_early_return (test_async_local_parent.AsyncLocalParentTests.test_conditional_results_and_early_return) ... ok
+test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) ... ok
+test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) ... ok
+test_loop_model_reuses_parent_slot (test_async_local_parent.AsyncLocalParentTests.test_loop_model_reuses_parent_slot) ... ok
+test_loop_result_with_continue (test_async_local_parent.AsyncLocalParentTests.test_loop_result_with_continue) ... ok
+test_match_result_and_branch_assignment (test_async_local_parent.AsyncLocalParentTests.test_match_result_and_branch_assignment) ... ok
+test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) ... ok
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... ok
+test_replacement_keeps_old_until_new_is_evaluated (test_async_local_parent.AsyncLocalParentTests.test_replacement_keeps_old_until_new_is_evaluated) ... ok
+test_result_borrow_reserves_value (test_async_local_parent.AsyncLocalParentTests.test_result_borrow_reserves_value) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 12.691s
+
+OK
+
+omit_parent_destination DETECTED
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... FAIL
+
+======================================================================
+FAIL: test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 6374, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 2688, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 3930, in emit_computed_transfer
+    return emit_region_block(body, expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 4294, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 4614, in emit_branches
+    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 4727, in export_async_value
+    require_durable_storage(result, depth, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 1012, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1b2ixyu8/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 28, in test_recorded_parent_and_successive_transfers
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.079s
+
+FAILED (failures=1)
+
+overwrite_outer_destination DETECTED
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... FAIL
+
+======================================================================
+FAIL: test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 6374, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 2688, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 3930, in emit_computed_transfer
+    return emit_region_block(body, expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 4294, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 4614, in emit_branches
+    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 4727, in export_async_value
+    require_durable_storage(result, depth, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 1012, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-z_t1bvr0/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 30, in test_recorded_parent_and_successive_transfers
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.576s
+
+FAILED (failures=1)
+
+omit_owned_field_sources DETECTED
+test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) ... 
+  test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) (checker='verify_program') ... FAIL
+  test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) (checker='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.809s
+
+FAILED (failures=2)
+
+omit_scope_stack_close DETECTED
+test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) ... 
+  test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=False) ... FAIL
+  test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=True) ... FAIL
+
+======================================================================
+FAIL: test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 124, in test_parent_identity_survives_child_reclamation
+                    run=self.storage_probe(source,'''
+                        ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+        CrustTask *task=crust_async_work_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        assert(observed_close_count==2 && observed_closed[1]==parent);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 115, in storage_probe
+    return self.run_c_oracle(code+'\n#include <assert.h>\nint main(void){crust_task_context_init();'+body+
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             'crust_task_context_close();return 0;}')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12419, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : destroy p=Point
+reclaim p
+Assertion failed: (observed_close_count==1 && observed_closed[0]==child), function main, file task.c, line 2633.
+
+
+======================================================================
+FAIL: test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 124, in test_parent_identity_survives_child_reclamation
+                    run=self.storage_probe(source,'''
+                        ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+        CrustTask *task=crust_async_work_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        assert(observed_close_count==2 && observed_closed[1]==parent);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 115, in storage_probe
+    return self.run_c_oracle(code+'\n#include <assert.h>\nint main(void){crust_task_context_init();'+body+
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             'crust_task_context_close();return 0;}')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12419, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : destroy p=Point
+reclaim p
+Assertion failed: (observed_close_count==1 && observed_closed[0]==child), function main, file task.c, line 2633.
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.437s
+
+FAILED (failures=2)
+
+retain_copied_input_stack DETECTED
+test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) ... 
+  test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) (parameter='->Point') ... FAIL
+
+======================================================================
+FAIL: test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) (parameter='->Point')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 6372, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 2686, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 3928, in emit_computed_transfer
+    return emit_region_block(body, expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 4292, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 4612, in emit_branches
+    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 4725, in export_async_value
+    require_durable_storage(result, depth, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 1012, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-1451kgc_/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 81, in test_copies_do_not_retain_original_child_stack
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.801s
+
+FAILED (failures=1)
+
+lose_final_transfer_use DETECTED
+test_match_result_and_branch_assignment (test_async_local_parent.AsyncLocalParentTests.test_match_result_and_branch_assignment) ... FAIL
+
+======================================================================
+FAIL: test_match_result_and_branch_assignment (test_async_local_parent.AsyncLocalParentTests.test_match_result_and_branch_assignment)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 6374, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 2688, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 3930, in emit_computed_transfer
+    return emit_region_block(body[:-1], expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 4294, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 4491, in emit_branches
+    returned_in_branch = conditional(*statement.args, statement.line, valued=False,
+                                     following=body[position + 1:])
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 3902, in conditional
+    return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+                         boolean=boolean)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 4494, in emit_branches
+    assign(*statement.args, statement.line, following=body[position + 1:])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 5508, in assign
+    fail(line, f"résultat propriétaire '{receiver}' sans usage explicite")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-parent-placement-umzifdtm/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: résultat propriétaire 'p' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 68, in test_match_result_and_branch_assignment
+    self.assertEqual(self.run_source(source).stdout,'1\n'+('7\n' if flag=='true' else '1\n'))
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: résultat propriétaire 'p' sans usage explicite
+
+----------------------------------------------------------------------
+Ran 1 test in 1.448s
+
+FAILED (failures=1)
+

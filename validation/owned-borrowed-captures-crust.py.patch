@@ -1,0 +1,92 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2845,6 +2845,16 @@
+                                 result_origins.add(origin)
+                             if is_pool_capture:
+                                 dependencies.append((f'{capture}.{position}', (check.pool_capture_target(source),)))
++                            if capture in ('owned', *JOIN_RESULT_TYPES):
++                                for field, access in check.field_modes(capture_type).items():
++                                    borrowed_source = MemorySource(check.uid(), root.id, 'symbolic', pname + field,
++                                                                  f'symbolic_borrow_{check.uid()}', element_type='Int')
++                                    root.sources.append(borrowed_source)
++                                    borrowed_target = Allocation(check.uid(), root.id, pname + field, (borrowed_source,))
++                                    check.origin_sources[borrowed_target.id] = borrowed_source
++                                    root.allocations.append(borrowed_target)
++                                    check.allocations.append(borrowed_target)
++                                    dependencies.append((f'{access}.{position}', (borrowed_target,)))
+                             continue
+                         target = Allocation(check.uid(), root.id, pname, (source,), typ=capture_type)
+                         root.allocations.append(target)
+@@ -10202,6 +10212,10 @@
+                     if kind != mode or target.typ != typ or target.scope != scope.id:
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
++                    for carrier in self.dependency_carriers(target, ownership_only=True):
++                        for borrowed in self.dependency_targets(carrier):
++                            access = self.dependency_mode(carrier, borrowed)
++                            dependencies.append((f'{access}.{index}', (borrowed,)))
+                     field_bindings[parameters[index][0]] = Binding(parameters[index][0], 'owned', value, target)
+                     if index in result_indexes:
+                         result_targets.append(target)
+@@ -10405,14 +10419,15 @@
+             pool_result_sources = list(root_sources)
+             pool_origins = set(root_origins)
+         allocation = Allocation(uid, scope.id, label, (), c=c, typ=f'Task<{name}>',
+-                                dependencies=tuple(dependencies),
++                                dependencies=self.merge_dependencies(tuple(dependencies)),
+                                 item_sources=source_union(tuple(pool_sources), *(source_union(target.sources, self.owned_sources(target)) for target in transferred)),
+                                 item_origins=frozenset(origin for target in transferred
+                                     for child in self.dependency_carriers(target, ownership_only=True) for origin in child.origins),
+                                 task_result_sources=source_union(tuple(pool_result_sources), *(target.sources for target in result_targets)),
+                                 task_result_origins=frozenset(pool_origins) | frozenset(origin for target in result_targets for origin in target.origins),
+                                 task_result_fields=result_fields,
+-                                borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents))
++                                borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents) +
++                                               tuple(parent for target in transferred for parent in self.retained_borrow_parents(target)))
+         if field_updates:
+             allocation.async_field_updates = tuple(self.prepare_structure_updates(
+                 field_summary.completion_result, parameters, field_bindings).values())
+@@ -10633,6 +10648,12 @@
+                     exclusive |= any(parent.kind == 'mut'
+                                      or any(self.retains_exclusive_field(parent, root, join_only=True)
+                                             for root in captured) for parent in chain)
++                elif origin.kind == 'owned_capture_field':
++                    captured = dict(binding.alloc.dependencies).get(origin.field, ())
++                    if not captured:
++                        self.fail('contrat de capture propriétaire : cible de champ absente')
++                    roots.update((root.id, root) for root in captured)
++                    chain = self.retained_borrow_parents(binding.alloc)
+                 elif origin.kind == 'indirect_field_parameter':
+                     projection = FunctionResult('mut' if exclusive else 'ref', 'Int',
+                                                 reference_targets=frozenset({origin}))
+@@ -14235,7 +14256,22 @@
+             """Describe the live graph without relocating or separately owning children."""
+             members = check.enums.get(allocation.typ, {}).get('', ())
+             fields = []
++            borrowed = []
+             for field_index, (name, declared) in enumerate(members):
++                if declared in ('&Int', '&mut Int'):
++                    target_pointer = f'bridge_borrowed_field_{check.uid()}'
++                    offset = check.field_offset(members, field_index)
++                    check.lines.append(f'Cell *{target_pointer} = {pointer} ? cell_load_ref({pointer}, {offset}) : NULL;')
++                    check.lines.append(f'(void){target_pointer};')
++                    source = MemorySource(check.uid(), external.id, 'symbolic', name,
++                                          f'({target_pointer} ? {target_pointer}->source : NULL)', element_type='Int')
++                    external.sources.append(source)
++                    target = Allocation(check.uid(), external.id, name, (source,), c=target_pointer)
++                    check.origin_sources[target.id] = source
++                    check.allocations.append(target)
++                    external.allocations.append(target)
++                    borrowed.append(('.' + name, (target,)))
++                    continue
+                 if not declared.startswith('A<'):
+                     continue
+                 child_pointer = f'bridge_owned_field_{check.uid()}'
+@@ -14253,6 +14289,7 @@
+                 owned_bridge_fields(child, child_pointer)
+                 fields.append(('.' + name, (child,)))
+             allocation.owned_fields = tuple(fields)
++            allocation.dependencies = tuple(borrowed)
+             allocation.item_sources = check.owned_field_sources(fields)
+             allocation.variants = frozenset(check.enums.get(allocation.typ, {}))
+ 

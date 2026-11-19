@@ -1,0 +1,7 @@
+struct Point{x:Int}
+async fn pop(v:&mut Vector<A<Point>>)-><-Option<A<Point>>{yield;return <-v.pop();}
+fn main(){let mut points=pool<Point>(1);let mut vectors=pool<Vector<A<Point>>>(1);
+    let mut v=vectors.new();v.push(->points.new(x:7));
+    let h=runtime::spawn(->pop(&mut v));
+    match h.join(){Ok(result)=>{match (->result){Some(item)=>{print(item.x);drop(->item);},None=>{print(0);}}},Err(_)=>{print(99);}}
+    drop(->v);let reused=points.new(x:9);print(reused.x);}

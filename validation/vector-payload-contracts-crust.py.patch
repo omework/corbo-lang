@@ -1,0 +1,179 @@
+--- before/crust.py
++++ after/crust.py
+@@ -3040,11 +3040,17 @@
+                 allocation.item_sources = (item_source,)
+                 allocation.item_origins = frozenset({origin})
+                 allocation.item_positions = allocation.item_position_origins = None
+-
+-            def add_owned_fields(allocation, index):
++                payload = Allocation(check.uid(), root.id, allocation.label + '[]', (item_source,),
++                                     typ=element, origins=frozenset({origin}),
++                                     variants=frozenset(check.enums.get(element, {})))
++                add_field_dependencies(payload, index, prefix='[]/')
++                add_owned_fields(payload, index, prefix='[]/')
++                allocation.item_payloads = (payload,)
++
++            def add_owned_fields(allocation, index, prefix=''):
+                 holders = {'': allocation}
+                 for path, typ in aggregate_owned_paths(self.enums, allocation.typ):
+-                    group = find(('allocation_field_parameter', index, path))
++                    group = find(('allocation_field_parameter', index, prefix + path))
+                     if group not in sources:
+                         sid = check.uid()
+                         sources[group] = MemorySource(sid, root.id, 'symbolic', path, f'symbolic_source_{sid}',
+@@ -3057,7 +3063,7 @@
+                     parent, _, key = path.rpartition('/')
+                     holders[parent].owned_fields += ((key, (child,)),)
+                     holders[path] = child
+-                    add_field_dependencies(child, index, prefix=path + '/')
++                    add_field_dependencies(child, index, prefix=prefix + path + '/')
+                 if not self.supports_owned_signature(allocation.typ):
+                     opaque_sources = []
+                     for typ in sorted({holder.typ for holder in holders.values()}):
+@@ -5633,7 +5639,8 @@
+         targets = (carrier,)
+         for key in path.split('/'):
+             targets = tuple(target for holder in targets
+-                            for target in (dict(holder.dependencies).get(key, ()) or
++                            for target in (Compiler.vector_payloads(holder) if key == '[]' else
++                                           dict(holder.dependencies).get(key, ()) or
+                                            dict(holder.owned_fields).get(key, ())))
+         return targets
+ 
+@@ -10339,7 +10346,9 @@
+                 fresh_sources.extend(self.parameter_storage(candidate.source, params, bindings))
+         target = (bindings[params[summary.same_parameter][0]].alloc
+                   if summary.same_parameter is not None and params[summary.same_parameter][1] not in JOIN_RESULT_TYPES else None)
+-        dependencies, variants, parents = self.resolve_borrowed_result(summary, params, bindings) if summary.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
++        payload_summary = (replace(summary, mode='owned', typ=exchange_element(summary.typ))
++                           if summary.mode == 'buffered_handle_exchange' else summary)
++        dependencies, variants, parents = self.resolve_borrowed_result(payload_summary, params, bindings) if payload_summary.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+         item_sources, item_positions, item_origins, item_position_origins, fresh_positions = self.handle_result_metadata(summary, params, bindings)
+         if target is not None and self.has_owned_fields(summary.typ):
+             item_sources = self.owned_sources(target)
+@@ -10389,7 +10398,7 @@
+             for key in candidate.field_path.split('/'):
+                 children = []
+                 for holder in targets:
+-                    known = dict(holder.owned_fields).get(key, ())
++                    known = self.vector_payloads(holder) if key == '[]' else dict(holder.owned_fields).get(key, ())
+                     children.extend(known)
+                     if holder.recursive_projection_sources:
+                         arm, field = key.split('.', 1)
+@@ -10425,6 +10434,12 @@
+                 if candidate.kind == 'parameter':
+                     original = bindings[params[candidate.parameter][0]].alloc
+                     alternatives.append(self.copy_owned_tree(original, scope.id))
++                elif candidate.kind == 'vector_element':
++                    vector = bindings[params[candidate.parameter][0]].alloc
++                    _, selected = self.vector_candidate_storage(vector, candidate)
++                    prototype = self.extracted_payload(vector, selected)
++                    if prototype is not None:
++                        alternatives.append(self.copy_owned_tree(prototype, scope.id))
+                 elif candidate.kind == 'fresh':
+                     if candidate.source.kind == 'task_result_field_parameter':
+                         metadata = self.inherited_async_storage((candidate.source,), params, bindings)
+@@ -12732,6 +12747,15 @@
+                 proposed.item_origins = vector.item_origins | frozenset().union(*origins, *replacement_origins)
+             if removals or not exact:
+                 proposed.item_removal_epoch += 1
++            payloads = dict(result.vector_write_payloads).get(parameter, ())
++            for slot, slot_origins in zip((*slots, *(slot for _, slot in replacements)), (*origins, *replacement_origins)):
++                for payload in payloads:
++                    if not payload.candidates.intersection(slot):
++                        continue
++                    resolved = self.resolve_owned_fields((('[]', payload),), params, bindings, owner)
++                    for prototype in dict(resolved).get('[]', ()):
++                        prototype.origins = slot_origins
++                        proposed.item_payloads = self.merge_item_payloads(proposed.item_payloads, (prototype,))
+             self.check_borrow_destination(proposed, owner)
+             updates.append((vector, proposed))
+         return updates
+@@ -12739,6 +12763,7 @@
+     def apply_vector_writes(self, result, params, bindings):
+         for vector, proposed in self.prepare_vector_writes(result, params, bindings):
+             vector.item_sources = proposed.item_sources
++            vector.item_payloads = proposed.item_payloads
+             vector.item_origins = proposed.item_origins
+             vector.item_positions = proposed.item_positions
+             vector.item_position_origins = proposed.item_position_origins
+@@ -12864,6 +12889,10 @@
+                 if owner.alive and owner.owned_fields:
+                     owner.item_sources = self.owned_sources(owner)
+         self.apply_handle_writes(handle_writes)
++        # Resolve the extracted graph while the input vector still contains it.
++        # Publishing removals first would erase the descendant paths in the contract.
++        result_owned_fields = (self.resolve_fresh_owned_fields(result, params, bindings, caller)
++                               if result.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ())
+         self.apply_vector_writes(result, params, bindings)
+         c = f'contract_result_{self.uid()}'
+         borrowed_result = None
+@@ -12890,7 +12919,7 @@
+         if result.mode == 'array':
+             return 'array', c, self.declared_array_type(result.typ)
+         if result.mode in JOIN_RESULT_TYPES:
+-            fields = self.resolve_fresh_owned_fields(result, params, bindings, caller)
++            fields = result_owned_fields
+             if result.same_parameter is not None:
+                 fields = bindings[params[result.same_parameter][0]].alloc.owned_fields
+             return self.join_allocation_result(c, sources, caller, f'retour {name}',
+@@ -12922,7 +12951,7 @@
+         if not sources or not origins:
+             self.fail('invariant interne : résultat alloué sans provenance dans le contrat')
+         if target is None:
+-            owned_fields = self.resolve_fresh_owned_fields(result, params, bindings, caller)
++            owned_fields = result_owned_fields
+             owned_fields = self.merge_dependencies(owned_fields, *(a.owned_fields for a in projected))
+             if owned_fields:
+                 item_sources = self.owned_field_sources(owned_fields)
+@@ -12935,7 +12964,7 @@
+             target.alive = target.definite = True
+             target.scope, target.c, target.guard = caller.id, c, None
+             if self.has_owned_fields(result.typ):
+-                target.owned_fields = self.resolve_fresh_owned_fields(result, params, bindings, caller)
++                target.owned_fields = result_owned_fields
+                 item_sources = self.owned_field_sources(target.owned_fields)
+         target.dependencies, target.variants = dependencies, variants
+         if result.typ in REFERENCE_VECTORS:
+@@ -14892,6 +14921,13 @@
+                        declared[2:-1], visited | {typ}, allow_cycles=allow_cycles)
+                    for fields in self.enums[typ].values() for _, declared in fields)
+ 
++    @staticmethod
++    def vector_payload_candidate(candidate, params):
++        return (candidate.kind == 'vector_element' or
++                candidate.kind == 'owned_projection' and candidate.field_path.startswith('[]/')) and (
++                    params[candidate.parameter][1] in ('owned', 'mut') and
++                    is_handle_vector(params[candidate.parameter][2]))
++
+     def supports_fresh_owned_result(self, value, params):
+         if value.candidates and all(candidate.kind == 'task_capture'
+                 and params[candidate.parameter][1] in ('task', 'execution') for candidate in value.candidates):
+@@ -14902,7 +14938,8 @@
+         actual = dict(value.owned_fields)
+         return declared.keys() == actual.keys() and all(
+             declared[field] == f'A<{child.typ}>' and child.candidates
+-            and all(candidate.kind in ('parameter', 'owned_projection')
++            and all(self.vector_payload_candidate(candidate, params) or
++                    candidate.kind in ('parameter', 'owned_projection')
+                     and params[candidate.parameter][1] == 'owned'
+                     or candidate.kind == 'fresh' and (candidate.source.kind == 'source_parameter'
+                         or candidate.source.kind == 'allocation_field_parameter' and params[candidate.source.index][1] == 'owned'
+@@ -15083,7 +15120,7 @@
+                 if typ.startswith('A<') and is_handle_vector(typ[2:-1]):
+                     self.check_handle_vector_payload(typ[2:-1])
+                 if is_handle_vector(typ) and mode in ('ref', 'mut', 'owned'):
+-                    self.check_handle_vector_payload(typ)
++                    self.check_handle_vector_payload(typ, local=True)
+                     continue
+                 if (mode, typ) in (('mut', 'u8'), ('ref', 'A<Int>'), ('mut', 'A<Int>'), ('ref', MUT_REF_VECTOR), ('mut', MUT_REF_VECTOR), ('owned', MUT_REF_VECTOR), ('ref', SHARED_REF_VECTOR), ('mut', SHARED_REF_VECTOR), ('owned', SHARED_REF_VECTOR), ('ref', HANDLE_VECTOR), ('mut', HANDLE_VECTOR), ('owned', HANDLE_VECTOR), ('handle_option', 'Int')):
+                     continue
+@@ -15179,7 +15216,7 @@
+                 continue
+             index = summary.same_parameter
+             if index is None or params[index][1] not in ('owned', *JOIN_RESULT_TYPES) or params[index][2] != summary.typ:
+-                fresh = all(candidate.kind == 'fresh' or (candidate.kind == 'task_capture'
++                fresh = all(self.vector_payload_candidate(candidate, params) or candidate.kind == 'fresh' or (candidate.kind == 'task_capture'
+                             and params[candidate.parameter][1] in ('task', 'execution')) or (candidate.kind == 'owned_projection'
+                             and params[candidate.parameter][1] == 'owned') for candidate in summary.candidates)
+                 if fresh and self.supports_fresh_owned_result(summary, params):

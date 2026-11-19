@@ -1,0 +1,40 @@
+--- constraints.py
++++ constraints.py
+@@ -486,8 +486,12 @@
+         for name, value in tuple(environment.items()):
+             if isinstance(value, Value) and value.mode == 'execution':
+                 environment[name] = self.start_execution(value, ('parameter', name), initial)
+-        self.nodes(self.node.args[3], initial,
+-                   valued=self.node.args[2][0] == 'owned')
++        paths, tail = self.nodes(self.node.args[3], initial,
++                                 valued=self.node.args[2][0] == 'owned')
++        mode, typ = self.node.args[2]
++        if mode == 'owned' and 'next' in paths and (
++                hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
++            hook(self, tail, f'A<{typ}>' if self.node.handle_result else typ, self.node.line)
+         reserved = frozenset(c for c in self.requirements
+                              if 'reservation_parameter' in (c.left.kind, c.right.kind))
+         return FunctionConstraints(frozenset(self.requirements) - reserved, reserved, frozenset(self.copy_writes))
+@@ -2313,8 +2317,8 @@
+             elif op == 'return':
+                 mode, typ = self.node.args[2]
+                 following, value = self.expression(args[0], current, line, typ if mode in ('array', 'array_refs') else None)
+-                if self.node.handle_result and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
+-                    hook(self, value, f'A<{typ}>', line)
++                if mode == 'owned' and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
++                    hook(self, value, f'A<{typ}>' if self.node.handle_result else typ, line)
+                 if mode == 'execution' and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
+                     hook(self, value, typ, line)
+                 if 'next' in following:
+@@ -2411,6 +2415,11 @@
+         return paths, tail
+ 
+     def update_structure(self, state, name, carrier, changes, line):
++        if (carrier.mode == 'mut' and carrier.storage_owner and carrier.assets
++                and not carrier.inline_path and not carrier.owned_path):
++            owner = state.environment.get(carrier.storage_owner)
++            if not carrier.assets & getattr(owner, 'assets', frozenset()):
++                carrier = replace(carrier, storage_owner=None)
+         if carrier.inline_path and not carrier.structure_choices:
+             owner = self.lookup(carrier.storage_owner, state, line)
+             from structure_views import prefix_fields, project_fields

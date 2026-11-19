@@ -1,0 +1,115 @@
+--- /tmp/crust-before-typed-handle-vectors/constraints.py
++++ /Users/jabarkarim/sources/crust/constraints.py
+@@ -18,6 +18,7 @@
+ from dataclasses import dataclass, field, replace
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+ 
++from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression, aggregate_owned_paths, aggregate_reference_paths, nested_reference_fields, replace_shared_vector_item, shared_vector_field_items, update_shared_vector_items, MUT_REF_VECTOR, REFERENCE_VECTORS, merge_exchange_payloads, UNKNOWN_VECTOR_REMOVALS, replace_handle_positions, remaining_handle_items, VECTOR_LAST_ITEM, last_handle_index, merge_handle_items, handle_items_at, handle_items_after_exchange, handle_items_after_removal, possible_handle_items, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, borrowed_array_name, update_array_aliases, update_structure_parameters, update_local_structure_locations, restore_array_binding, reference_array_path, reference_array_projection, replace_reference_fields, swap_reference_fields, reference_array_variable, project_reference_array, merge_container_positions, reference_type, reference_array_element, reference_tree_fields, reference_tree_slot, reference_tree_targets, merge_reference_values, merge_reference_rows, unflatten_reference_value, reference_value_place, replace_reference_rows, swapped_reference_rows, target_row_templates, rebuild_reference_tree, reference_tree_type
+ 
+ 
+@@ -465,8 +466,8 @@
+                     key = f'\0handle:{index}'
+                     environment[name] = replace(environment[name], storage_owner=key)
+                     environment[key] = Value('owned', content, frozenset({asset}), tuple(fields))
+-                if content == HANDLE_VECTOR and mode in ('owned', 'mut'):
+-                    source = Source('vector_element_parameter', index, element='Int')
++                if is_handle_vector(content) and mode in ('owned', 'mut'):
++                    source = Source('vector_element_parameter', index, element=handle_vector_element(content))
+                     item = Asset(('vector_element', index), source)
+                     history[item] = frozenset()
+                     contained_sources.add(source)
+@@ -671,7 +672,8 @@
+                 self.invalidate_handle_items(state)
+                 return Value('owned', 'Int')
+         items = vector.handle_items if isinstance(vector, Value) else None
+-        result = Value('owned', 'Int', handle_items_at(items, index) or frozenset())
++        typ = handle_vector_element(vector.typ) if isinstance(vector, Value) else 'Int'
++        result = Value('owned', typ, handle_items_at(items, index) or frozenset())
+         self.touch(result, state, line)
+         if isinstance(items, tuple) and items:
+             items = handle_items_after_removal(items, index)
+@@ -698,7 +700,7 @@
+     def invalidate_handle_items(state):
+         for environment in (state.environment, *state.shadows):
+             for name, value in environment.items():
+-                if isinstance(value, Value) and value.typ == HANDLE_VECTOR and value.handle_items is not None:
++                if isinstance(value, Value) and is_handle_vector(value.typ) and value.handle_items is not None:
+                     environment[name] = replace(value, handle_items=None)
+ 
+     @staticmethod
+@@ -717,12 +719,12 @@
+             self.invalidate_handle_items(state)
+             return
+         origins, index = target.handle_slot
+-        if any(isinstance(value, Value) and value.typ == HANDLE_VECTOR and value.assets & origins
++        if any(isinstance(value, Value) and is_handle_vector(value.typ) and value.assets & origins
+                for shadow in state.shadows for value in shadow.values()):
+             self.invalidate_handle_items(state)
+             return
+         roots = [(name, value) for name, value in state.environment.items()
+-                 if isinstance(value, Value) and value.typ == HANDLE_VECTOR and value.assets & origins]
++                 if isinstance(value, Value) and is_handle_vector(value.typ) and value.assets & origins]
+         if not roots:
+             self.invalidate_handle_items(state)
+             return
+@@ -982,7 +984,7 @@
+                 append = op not in ('array_handle_exchange', 'array_buffered_replace')
+                 index = expr[2][1] if not append and expr[2][0] == 'int' else None
+                 exchange = (receiver, index, incoming, append)
+-                if isinstance(vector, Value) and vector.typ == HANDLE_VECTOR:
++                if isinstance(vector, Value) and is_handle_vector(vector.typ):
+                     self.retain_handle_origin(item, current, vector)
+                 if op == 'array_vector_push':
+                     self.publish_handle_exchange(current, exchange)
+@@ -1135,12 +1137,12 @@
+                     return paths, Value('bool', 'Bool')
+                 if values[0].mode in ('byte_option', 'byte_replace', 'byte_try_push', 'join_byte'):
+                     return paths, Value('byte', 'u8')
+-            if op == 'array_index' and isinstance(values[0], Value) and values[0].typ == HANDLE_VECTOR:
++            if op == 'array_index' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 vector = values[0]
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+                 return paths, Value('handle_slot', 'A<Int>', vector.all_assets,
+                                     handle_slot=(vector.assets, index) if vector.assets else None)
+-            if op == 'array_vector_remove' and isinstance(values[0], Value) and values[0].typ == HANDLE_VECTOR:
++            if op == 'array_vector_remove' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+                 return paths, self.extract_vector_item(paths['next'], expr[1], index, line)
+             if op in ('array_index', 'array_vector_remove') and values and isinstance(values[0], Value) and values[0].typ in VECTOR_ELEMENTS:
+@@ -1356,7 +1358,7 @@
+                 if value.mode in ('ref', 'mut'):
+                     self.fail(line, 'emprunt imbriqué non pris en charge : & sur un emprunt ajoute un niveau ; utiliser son nom')
+                 value = replace(value, mode=op, storage_owner=expr[1]
+-                                if op == 'mut' and (value.typ == HANDLE_VECTOR or '' in self.analyzer.enums.get(value.typ, {})) else None)
++                                if op == 'mut' and (is_handle_vector(value.typ) or '' in self.analyzer.enums.get(value.typ, {})) else None)
+             return {'next': state}, value
+         if op in ('ref_expr', 'mut_expr') and expr[1][0] == 'array_deref_slot':
+             paths, value = self.expression(expr[1][1], state, line)
+@@ -1517,7 +1519,7 @@
+                                 frozenset(a for v in evaluated if isinstance(v, Value)
+                                           for a in v.reservations) if op == 'new_enum' else frozenset(),
+                                 variants=frozenset({arm}) if arm is not None else frozenset(),
+-                                handle_items=() if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) else None)
++                                handle_items=() if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) else None)
+         if op == 'call':
+             return self.call(expr, state, line)
+         return {'next': state}, UNKNOWN
+@@ -2066,7 +2068,7 @@
+                             else result.fresh_variants for candidate in result.candidates]
+             variants = frozenset().union(*variant_sets) if all(variant_sets) else frozenset()
+             item_sets = None
+-            if result.typ == HANDLE_VECTOR:
++            if is_handle_vector(result.typ):
+                 item_sets = self.apply_vector_result_candidates(result.candidates, actuals, current, id(expr))
+             elif result.typ in REFERENCE_VECTORS:
+                 item_sets = dict(fields).get('.items', frozenset())
+@@ -2257,7 +2259,7 @@
+                 self.touch(value, current, line)
+                 if op == '->':
+                     current.shadow(args[0])
+-                if (op == 'drop_value' and isinstance(value, Value) and value.typ == HANDLE_VECTOR
++                if (op == 'drop_value' and isinstance(value, Value) and is_handle_vector(value.typ)
+                         and value.mode == 'owned' and len(value.assets) == 1):
+                     asset = next(iter(value.assets))
+                     aliases = [other for name, other in current.environment.items() if name != args[0]]

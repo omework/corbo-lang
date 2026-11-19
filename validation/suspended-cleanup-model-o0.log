@@ -1,0 +1,103 @@
+test_direct_await_tree_cleans_child_before_parent_storage (test_suspended_cleanup.SuspendedCleanupTests.test_direct_await_tree_cleans_child_before_parent_storage) ... ok
+test_inactive_children_transfers_and_resumed_loop (test_suspended_cleanup.SuspendedCleanupTests.test_inactive_children_transfers_and_resumed_loop) ... ok
+test_independent_scope_and_replacement_model (test_suspended_cleanup.SuspendedCleanupTests.test_independent_scope_and_replacement_model) ... ERROR
+test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) ... 
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=3) ... FAIL
+  test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=3) ... FAIL
+test_outstanding_handle_preflight_preserves_normal_execution (test_suspended_cleanup.SuspendedCleanupTests.test_outstanding_handle_preflight_preserves_normal_execution) ... ok
+test_prepared_moves_during_later_argument_await (test_suspended_cleanup.SuspendedCleanupTests.test_prepared_moves_during_later_argument_await) ... ok
+test_replacement_wait_keeps_old_allocation_until_new_value_exists (test_suspended_cleanup.SuspendedCleanupTests.test_replacement_wait_keeps_old_allocation_until_new_value_exists) ... ok
+test_result_allocation_cleaned_after_success_or_launch_failure (test_suspended_cleanup.SuspendedCleanupTests.test_result_allocation_cleaned_after_success_or_launch_failure) ... ok
+test_select_uses_generated_suspended_destructor (test_suspended_cleanup.SuspendedCleanupTests.test_select_uses_generated_suspended_destructor) ... ok
+
+======================================================================
+ERROR: test_independent_scope_and_replacement_model (test_suspended_cleanup.SuspendedCleanupTests.test_independent_scope_and_replacement_model)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 259, in test_independent_scope_and_replacement_model
+    run = self.native(source, body)
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 18, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15409, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15402, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13903, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13711, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 912, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5947, in _lower_async_function
+    returned = emit_loop(args[0], line, following=body[index + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3665, in emit_loop
+    emit_branches('1', body, [], line, valued=False, construct='boucle')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4101, in emit_branches
+    returned_in_branch = conditional(*statement.args, statement.line, valued=False,
+                                     following=body[position + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3545, in conditional
+    return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+                         boolean=boolean)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4104, in emit_branches
+    assign(*statement.args, statement.line, following=body[position + 1:])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5068, in assign
+    fail(line, f"résultat propriétaire '{receiver}' sans usage explicite")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 940, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: résultat propriétaire 'current' sans usage explicite
+
+======================================================================
+FAIL: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=0, polls=3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 70, in test_locals_replacements_and_conditional_suspension_points
+    self.assertEqual(destroyed, expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['incoming=7', 'b=20', 'a=10', 'async allocation=40', 'reused=8'] != ['incoming=7', 'b=20', 'a=10', 'a=40', 'reused=8']
+
+First differing element 3:
+'async allocation=40'
+'a=40'
+
+- ['incoming=7', 'b=20', 'a=10', 'async allocation=40', 'reused=8']
+?                                  ---------------
+
++ ['incoming=7', 'b=20', 'a=10', 'a=40', 'reused=8']
+
+======================================================================
+FAIL: test_locals_replacements_and_conditional_suspension_points (test_suspended_cleanup.SuspendedCleanupTests.test_locals_replacements_and_conditional_suspension_points) (pick=1, polls=3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_suspended_cleanup.py", line 70, in test_locals_replacements_and_conditional_suspension_points
+    self.assertEqual(destroyed, expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['incoming=7', 'c=30', 'a=10', 'async allocation=40', 'reused=8'] != ['incoming=7', 'c=30', 'a=10', 'a=40', 'reused=8']
+
+First differing element 3:
+'async allocation=40'
+'a=40'
+
+- ['incoming=7', 'c=30', 'a=10', 'async allocation=40', 'reused=8']
+?                                  ---------------
+
++ ['incoming=7', 'c=30', 'a=10', 'a=40', 'reused=8']
+
+----------------------------------------------------------------------
+Ran 9 tests in 7.844s
+
+FAILED (failures=2, errors=1)

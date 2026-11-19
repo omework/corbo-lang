@@ -1,0 +1,5 @@
+struct View{data:&Int}
+async fn work(v:&View)->&Int{yield;return v.data;}
+fn main(){let mut memory=pool<Int>(1);let data=memory.new(7);
+let v=View{data:&data};let h=runtime::spawn(->work(&v));
+match h.join(){Ok(r)=>{drop(->v);print(r);},Err(_)=>{}}print(data);}

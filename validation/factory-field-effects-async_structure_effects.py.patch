@@ -1,0 +1,19 @@
+--- /tmp/crust-before-factory-field-effects/async_structure_effects.py	2026-11-08 03:55:15
++++ async_structure_effects.py	2026-11-08 03:55:15
+@@ -136,6 +136,16 @@
+             flow, task = self.expression(operand, environment, line)
+             if 'next' not in flow:
+                 return flow, VOID
++            if isinstance(task, Value) and task.mode == 'execution' and task.deferred_field_updates:
++                # A synchronous factory already mapped the deferred contract
++                # onto these captured inputs. No synchronous body is available.
++                temporary = '\0factory_execution'
++                environment[temporary] = task
++                try:
++                    part, completed = super().expression(('task_join', temporary), environment, line)
++                finally:
++                    environment.pop(temporary)
++                return (flow - {'next'}) | part, completed
+             if not isinstance(task, Value) or task.mode not in ('task', 'execution') or not task.pending_structure_calls:
+                 raise IncompleteStructureEffects('attente sans captures de champs identifiables')
+             branches = []

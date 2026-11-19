@@ -1,0 +1,35 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -16,8 +16,9 @@
+     OPTION_JOIN_TYPES, option_type_mode, option_payload_type,
+ )
+ from exchange_join_types import (
+-    EXCHANGE_JOIN_TYPES, EXCHANGE_LEAVES, exchange_type_mode,
++    EXCHANGE_JOIN_TYPES, exchange_type_mode, exchange_payload_type,
+ )
++from handle_exchange_types import exchange_element
+ from capture_paths import capture_index
+ from types import SimpleNamespace
+ 
+@@ -42,10 +43,10 @@
+         content = payload[2:-1]
+         if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures:
+             return ('owned', content)
+-    if payload in EXCHANGE_LEAVES:
++    if exchange_element(payload) is not None:
+         return ('buffered_handle_exchange', payload)
+     if (mode := exchange_type_mode(payload)) is not None:
+-        return mode, 'Int'
++        return mode, exchange_payload_type(mode)
+     if (mode := option_type_mode(payload)) is not None:
+         return mode, option_payload_type(mode)
+     from handle_option_types import option_element
+@@ -160,7 +161,7 @@
+                 parameters.append(('opaque_result_capability', 'ref', signature[1]))
+         if signature[0] in ('owned', 'join_owned', 'handle_option', 'buffered_handle_exchange', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES):
+             result_storage = len(parameters)
+-            parameters.append(('opaque_result_storage', 'owned', 'Int' if signature[0] == 'buffered_handle_exchange' else signature[1]))
++            parameters.append(('opaque_result_storage', 'owned', exchange_element(signature[1]) if signature[0] == 'buffered_handle_exchange' else signature[1]))
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),
+                                       public_result_storage=result_storage,
+                                       public_result_borrows=result_borrows, public_result_views=result_views, native_block=False, line=0)

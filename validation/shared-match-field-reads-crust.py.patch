@@ -1,0 +1,22 @@
+--- before/crust.py
++++ after/crust.py
+@@ -12327,7 +12327,7 @@
+                     projections[statement.args[0]] = '&str'
+                     general_branches = True
+                     continue
+-                if statement.op == 'var' and statement.args[1][0] in ('int', 'name', 'deref'):
++                if statement.op == 'var' and self.match_read_expression(statement.args[1]):
+                     projections[statement.args[0]] = 'Int'
+                     continue
+                 if statement.op == 'var' and statement.args[1][0] == 'field':
+@@ -12517,7 +12517,9 @@
+     def match_read_expression(expression):
+         if expression[0] == 'arithmetic':
+             return all(Compiler.match_read_expression(value) for value in expression[2:])
+-        return expression[0] in ('int', 'name', 'deref')
++        # A field dereference reads the referenced value, exactly as *name.
++        # The ordinary expression checker validates its type and provenance.
++        return expression[0] in ('int', 'name', 'deref', 'field_deref')
+ 
+     @staticmethod
+     def match_local_value(expression):

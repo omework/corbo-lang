@@ -1,0 +1,27 @@
+--- before/crust.py
++++ after/crust.py
+@@ -14393,13 +14393,13 @@
+ 
+         for index, (_, mode, typ) in enumerate(contract.parameters):
+             parameter = f'bridge_input_{index}'
+-            if mode == 'task':
++            if mode in ('task', 'execution'):
+                 allocation = check.symbolic_task_input(parameter, mode, typ, parameter, index, root,
+                     {}, {}, lambda group: group, task_bridge_fields, storage_scope=external,
+                     local_storage=task_bridge_local_storage,
+                     result_storage_kind='local' if index in local_parameters else None)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+-                ctype = 'CrustTask *'
++                ctype = 'CrustTask *' if mode == 'task' else 'CrustExecution'
+             elif mode == 'owned':
+                 source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+@@ -14480,7 +14480,7 @@
+                 root.bindings[parameter] = Binding(parameter, mode, parameter)
+                 ctype = COPY_VALUE_TYPES[mode]
+             parameters.append(f'{ctype} {parameter}')
+-            arguments.append(('down' if mode in ('owned', 'task') or mode in JOIN_RESULT_TYPES else 'name', parameter))
++            arguments.append(('down' if mode in ('owned', 'task', 'execution') or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
+         from async_result_storage import needs_task_output
+         if needs_task_output(contract.result.task_result_sources, lambda index: index in local_parameters):

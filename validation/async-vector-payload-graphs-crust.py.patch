@@ -1,0 +1,23 @@
+--- crust.py (before)
++++ crust.py
+@@ -2049,6 +2049,8 @@
+         for field, children in allocation.owned_fields:
+             for child in children:
+                 yield from self.owned_dependency_fields(child, prefix + field + '/', visited | {id(allocation)})
++        for child in self.vector_payloads(allocation):
++            yield from self.owned_dependency_fields(child, prefix + '[]/', visited | {id(allocation)})
+ 
+     def dependency_carriers(self, allocation, updates=None, *, ownership_only=False):
+         updates = updates or {}
+@@ -8375,6 +8377,11 @@
+     def owned_path_possible(self, allocation, path):
+         """Exclude only a path whose arm is proven absent on every owned route."""
+         field, separator, rest = path.partition('/')
++        if field == '[]' and is_handle_vector(allocation.typ):
++            if allocation.item_position_origins == ():
++                return False
++            children = self.vector_payloads(allocation)
++            return not children or not separator or any(self.owned_path_possible(child, rest) for child in children)
+         arm = field.partition('.')[0]
+         if allocation.variants and arm not in allocation.variants:
+             return False

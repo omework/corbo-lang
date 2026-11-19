@@ -1,0 +1,5 @@
+struct View{data:&Int}fn wrap(n:&Int)-><-View{let v=View{data:n};return <-v;}
+async fn leaf(n:&Int)-><-View{let v=wrap(n);yield;return <-v;}
+fn finish(h:->Execution<leaf>)-><-Result<View,runtime::Error>{let r=h.join();return <-r;}
+fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let h=runtime::spawn(->leaf(&n));
+let v=match finish(->h){Ok(v)=>{<-v},Err(_)=>{return;}};print(*v.data);drop(->v);drop(->n);}

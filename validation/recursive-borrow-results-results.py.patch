@@ -1,0 +1,29 @@
+--- before/results.py
++++ results.py
+@@ -3426,6 +3426,10 @@
+                         bindings[name] = replace(child, mode='mut', storage_owner=subject.storage_owner,
+                                                  owned_path=(*subject.owned_path, key))
+                         continue
++                if field_type.startswith('A<') and isinstance(subject, Value):
++                    child = self.project_owned_value(subject, f'{arm}.{field}', field_type[2:-1])
++                    bindings[name] = replace(child, mode='mut' if mutable else 'ref')
++                    continue
+                 capability = reference_type(field_type)
+                 if not capability:
+                     bindings[name] = SCALAR
+@@ -3444,6 +3448,15 @@
+                     origins = frozenset(replace(target, kind='detached_field_parameter')
+                         if target.kind in ('field_parameter', 'shared_field_parameter') else target
+                         for target in dict(subject.fields).get(f'{arm}.{field}', ()))
++                    if not origins:
++                        for candidate in subject.candidates:
++                            if candidate.kind == 'owned_projection':
++                                path = candidate.field_path + '/' + f'{arm}.{field}'
++                            elif candidate.kind == 'owned_field_input':
++                                path = candidate.source.name + '/' + f'{arm}.{field}'
++                            else:
++                                continue
++                            origins |= frozenset({BorrowTarget('detached_field_parameter', candidate.parameter, path)})
+                 fields = nested_reference_fields(subject.fields, f'{arm}.{field}') if isinstance(subject, Value) else ()
+                 bindings[name] = Value(mode, capability[1], fields=fields,
+                                        reference_targets=origins or frozenset({BorrowTarget('local')}))

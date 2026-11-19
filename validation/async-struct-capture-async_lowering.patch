@@ -1,0 +1,190 @@
+--- async_lowering.py (before struct captures)
++++ async_lowering.py
+@@ -57,7 +57,7 @@
+         return 'int'
+     if mode in PLAIN_JOIN_TYPES:
+         return PLAIN_JOIN_C_TYPES[mode]
+-    if mode in ('ref', 'mut') and typ in ('String', 'Vector<Int>', 'Vector<u8>'):
++    if mode in ('ref', 'mut') and typ is not None and typ not in ('Int', 'u8'):
+         return 'Cell *'
+     if mode in VECTOR_SLICE_ELEMENTS or mode in SHARED_VECTOR_SLICE_MODES:
+         return 'VectorSlice'
+@@ -821,7 +821,7 @@
+ 
+ 
+ def lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type, frame_slots=None,
+-                         *, sync_contracts=None, sync_bridge=None):
++                         *, sync_contracts=None, sync_bridge=None, struct_layouts=None):
+     # Each retry starts with fresh lowering state. Only finite sets of source
+     # names survive, so no emitted frame member or cleanup is duplicated.
+     node = expand_reference_return_branches(node)
+@@ -832,7 +832,7 @@
+         try:
+             result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                            enable_threads, result_parameters_cache, array_c_type, hints, slots,
+-                                           sync_contracts or {}, sync_bridge)
++                                           sync_contracts or {}, sync_bridge, struct_layouts or {})
+         except _WidenUtf8Loop as request:
+             entry = hints.setdefault(request.key, {})
+             changed = False
+@@ -852,7 +852,7 @@
+ 
+ 
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+-                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge):
++                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts):
+     name, parameters, result, body = node.args
+ 
+     def fail(line, message):
+@@ -861,6 +861,9 @@
+     scalar_sync_types = {('scalar', 'Int'): 'int', ('bool', 'bool'): 'int', ('byte', 'u8'): 'uint8_t',
+                          ('char', 'char'): 'CrustChar'}
+     reference_sync_types = {('ref', 'Int'): 'int *', ('mut', 'Int'): 'int *', ('mut', 'u8'): 'uint8_t *'}
++    plain_structs = {typ: fields for typ, fields in struct_layouts.items()
++                     if all(field_type == 'Int' for _, field_type in fields)}
++    reference_sync_types.update({(mode, typ): 'Cell *' for typ in plain_structs for mode in ('ref', 'mut')})
+     view_sync_types = {('byte_ref', 'u8'): 'const unsigned char *'}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+@@ -895,7 +898,18 @@
+         if storage_of(value) & leaving:
+             fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+ 
++    def sync_method_call(expr):
++        if expr[0] == 'method_call' and expr[1][0] == 'name':
++            receiver = expr[1][1]
++            typ = reference_types.get(receiver)
++            if typ in plain_structs:
++                symbol = typ + '.' + expr[2]
++                if symbol in sync_contracts:
++                    return ('call', symbol, [expr[1], *expr[3]])
++        return expr
++
+     def sync_signature(expr):
++        expr = sync_method_call(expr)
+         if expr[0] == 'call' and expr[1] in sync_contracts:
+             return sync_contracts[expr[1]].result_type
+         return None
+@@ -980,6 +994,7 @@
+         return cell
+ 
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
++        expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+@@ -1089,6 +1104,7 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>'))
+            and (mode, typ) not in pool_sync_types
++           and not (mode in ('ref', 'mut') and typ in plain_structs)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+            for _, mode, typ in parameters):
+         fail(node.line, 'prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis')
+@@ -1867,7 +1883,7 @@
+             pointer, loans, mode = await_task(expr, line, returns_value=True, borrow=True)
+             return pointer, loans, (mode, awaited_reference_types[pointer])
+         shape = reference_shape(expr)
+-        if shape is None or shape not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
++        if shape is None or shape not in reference_sync_types:
+             fail(line, 'expression empruntée Int ou mutable u8 requise')
+         mode, typ = shape
+         if expr[0] in ('ref_expr', 'mut_expr'):
+@@ -1942,7 +1958,7 @@
+             bind_transferred_value(name, 'owned', value, statement)
+             return True
+         if (operator != 'name' and push_new_receiver(initializer) is None
+-                and reference_shape(initializer) in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'))):
++                and reference_shape(initializer) in reference_sync_types):
+             if statement.compact_transfer:
+                 fail(statement.line, 'une référence ne transfère pas une allocation')
+             check_new_name(name, statement.line)
+@@ -3665,6 +3681,8 @@
+                                                          following=body[position + 1:])
+                     elif statement.op == 'assign':
+                         assign(*statement.args, statement.line, following=body[position + 1:])
++                    elif statement.op == 'field_store':
++                        store_struct_field(*statement.args, statement.line, following=body[position + 1:])
+                     elif statement.op in ('array_store', 'array_deref_store'):
+                         store_array(*statement.args, statement.line, following=body[position + 1:])
+                     elif statement.op == 'array_statement' and statement.args[0][0] == 'array_swap':
+@@ -3898,6 +3916,8 @@
+                 local_names.update(attached.keys() - returning)
+                 moving.update(returning)
+         departing = (mutable_slices | pool_alias_origins.keys()).intersection(local_names)
++        departing.update(name for name in local_names if name in received_refs
++                         and reference_types.get(name) in plain_structs)
+         task, returns_int, loans, nominal, returned_loans = value
+         if any(loan_root(target) in local_names and loan_root(target) not in departing for target, _ in loans):
+             fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')
+@@ -4124,6 +4144,8 @@
+     def value_place(name):
+         if name in pool_types:
+             fail(node.line, 'un pool ne fournit pas de valeur scalaire ou de pointeur vers un élément')
++        if reference_types.get(name) in plain_structs:
++            fail(node.line, 'une structure ne fournit pas une valeur Int ; sélectionner un champ')
+         member = f'frame->{fields[name]}'
+         mode = references.get(name)
+         if mode == 'owned':
+@@ -4131,6 +4153,28 @@
+         if mode in ('ref', 'mut'):
+             return f'*{member}'
+         return member
++
++    def struct_field(place, line, *, write=False):
++        _, name, path = place
++        typ = reference_types.get(name)
++        layout = plain_structs.get(typ)
++        if layout is None:
++            fail(line, 'projection async : référence de structure à champs Int requise')
++        if write and (references.get(name) != 'mut' or name in received_refs and name not in mutable):
++            fail(line, 'écriture de champ : une référence mutable est requise (let mut pour une liaison locale)')
++        for index, (field, _) in enumerate(layout):
++            if field == path:
++                return name, f'frame->{fields[name]}', f'{index} * sizeof(int)', tuple(path.split('.'))
++        fail(line, f"champ inconnu '{path}' dans {typ}")
++
++    def store_struct_field(place, rhs, line, *, following):
++        name, cell, offset, path = struct_field(place, line, write=True)
++        value = expression(rhs, line, following=following)
++        saved = temporary('int')
++        steps.append(f'{saved} = {value};')
++        release_statement_loans(following)
++        check_access(name, line, write=True, path=path)
++        steps.append(f'cell_store_int({cell}, {offset}, {saved});')
+ 
+     def layout_array(item, context, line, expected_element=None):
+         if item[0] == 'array_repeat':
+@@ -4568,6 +4612,12 @@
+         if sync_signature(expr) is not None:
+             return sync_call(expr, line, ('scalar', 'Int'), following=following)[0]
+         op = expr[0]
++        if op == 'field':
++            name, cell, offset, path = struct_field(expr, line)
++            check_access(name, line, path=path)
++            value = temporary('int')
++            steps.append(f'{value} = cell_load_int({cell}, {offset});')
++            return value
+         if (typ := vector_remove_type(expr)) is not None:
+             if typ != 'Int':
+                 fail(line, 'une valeur Int est requise, reçu u8')
+@@ -5200,7 +5250,9 @@
+         return True
+ 
+     def set_reference(statement, following):
+-        if statement.op == 'call' and sync_signature(statement.args[0]) is not None:
++        if statement.op in ('call', 'array_statement') and sync_signature(statement.args[0]) is not None:
++            if statement.args[0][0] == 'method_call' and sync_signature(statement.args[0]) != ('void', 'Void'):
++                fail(statement.line, 'résultat de méthode sans receveur explicitement utilisé')
+             sync_call(statement.args[0], statement.line, following=following)
+             return True
+         if statement.op in ('call', 'array_statement'):
+@@ -5357,6 +5409,8 @@
+                 pass
+             elif op == 'assign':
+                 assign(*args, line, following=body[index + 1:])
++            elif op == 'field_store':
++                store_struct_field(*args, line, following=body[index + 1:])
+             elif op in ('array_store', 'array_deref_store'):
+                 store_array(*args, line, following=body[index + 1:])
+             elif op == 'array_statement' and args[0][0] == 'array_swap':

@@ -1,0 +1,19 @@
+// A result expression should preserve the reference provenance of each arm.
+async fn append(v: &mut Vector<u8>) -> &mut u8 {
+    yield;
+    return v.push_new();
+}
+fn relay(v: &mut Vector<u8>) -> &mut u8 {
+    let h = runtime::spawn(-> append(v));
+    return match h.join() {
+        Ok(cell) => { &mut *cell },
+        Err(_) => { v.push_new() }
+    };
+}
+fn main() {
+    let mut p = pool<Vector<u8>>(1);
+    let mut v = p.new();
+    let mut cell = relay(&mut v);
+    *cell = 255;
+    print(v[0] as Int);
+}

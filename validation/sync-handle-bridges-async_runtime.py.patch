@@ -1,0 +1,22 @@
+--- before/async_runtime.py
++++ after/async_runtime.py
+@@ -801,6 +801,19 @@
+     int error;
+ } CrustAsyncExecution;
+ 
++/* Consume a synchronous handle without waiting for its worker. The worker
++   publishes completion through the task slot, so the async waiter uses the
++   same notification protocol as a handle created directly in an async body. */
++static void task_async_adopt(CrustAsyncExecution *target, CrustExecution *source) {
++    if (atomic_exchange(&source->joined, 1)) abort();
++    if (!source->error && !source->pooled &&
++            (!source->detach || source->detach(source->thread))) abort();
++    target->task = source->task;
++    target->error = source->error;
++    source->task = NULL;
++    source->error = 0;
++}
++
+ static void task_start_detached(CrustAsyncExecution *execution, CrustTask *task,
+         int (*launch)(pthread_t *, int, void *(*)(void *), void *), void *(*run)(void *)) {
+     CrustTaskState inactive = TASK_INACTIVE;

@@ -1,0 +1,31 @@
+--- /tmp/crust-before-async-handle-exchange-results/results.py
++++ results.py
+@@ -821,6 +821,10 @@
+ 
+     def async_owned_result_value(self, mode, typ, sources, fields, prefix='', shapes=()):
+         storage = dict(fields)
++        if mode == 'buffered_handle_exchange':
++            return Value(mode, typ, async_owned_candidates(sources),
++                         exchange_payloads=tuple(async_owned_candidates(storage.get(arm, ()))
++                                                 for arm in ('ok', 'err')))
+         children = []
+         for arm, members in self.analyzer.enums.get(typ, {}).items():
+             for name, declared in members:
+@@ -846,6 +850,8 @@
+         Parameter fields can remain symbolic until an actual call. Constructed
+         fields instead retain their individual sources, including local pools.
+         """
++        if value.mode == 'buffered_handle_exchange' and path in ('ok', 'err'):
++            return {candidate.storage() for candidate in value.exchange_payloads[('ok', 'err').index(path)]}
+         if value.owned_alternatives:
+             return set().union(*(self.owned_capture_storage(item, path) for item in value.owned_alternatives))
+         if path:
+@@ -2692,7 +2698,7 @@
+                             if origins:
+                                 access = 'mut' if capture_mode in SHARED_VECTOR_SLICE_MODES else 'ref'
+                                 captures.append((f'{access}.{index}', origins))
+-                        elif capture_mode in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option'):
++                        elif capture_mode in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option', 'buffered_handle_exchange'):
+                             owned_paths, reference_paths = self.owned_capture_paths(value)
+                             for field, (access, _) in reference_paths.items():
+                                 origins = self.owned_capture_field_targets(value, field)

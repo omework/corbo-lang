@@ -1,0 +1,43 @@
+--- before/crust.py
++++ after/crust.py
+@@ -11660,6 +11660,40 @@
+             holders = binding.referents or (binding.alloc,)
+             summary = FunctionResult('void', binding.alloc.typ, borrowed_fields=fields)
+             dependencies, _, parents = self.resolve_borrowed_result(summary, params, bindings)
++            if any('/' in path for path, _ in fields):
++                for path, target_symbols in fields:
++                    leaves = holders
++                    while '/' in path:
++                        key, tail = path.split('/', 1)
++                        children = []
++                        for holder in leaves:
++                            arm, _, member = key.partition('.')
++                            declared = dict(self.enums.get(holder.typ, {}).get(arm, ())).get(member, '')
++                            if not declared.startswith('A<'):
++                                break
++                            owned = dict(holder.owned_fields).get(key, ())
++                            if not owned and holder.recursive_projection_sources:
++                                owned = self.symbolic_owned_projection(holder, key, declared[2:-1])
++                                holder.owned_fields += ((key, owned),)
++                            if not owned:
++                                self.fail('mise à jour de champ : descendant propriétaire sans provenance')
++                            children.extend(owned)
++                        else:
++                            leaves = tuple({id(child): child for child in children}.values())
++                            path = tail
++                            continue
++                        break
++                    if '/' in path:
++                        self.fail('mise à jour de champ : chemin indirect non propriétaire non raccordé')
++                    for leaf in leaves:
++                        leaf_summary = FunctionResult('void', leaf.typ,
++                            borrowed_fields=((path, target_symbols),))
++                        changes, _, leaf_parents = self.resolve_borrowed_result(leaf_summary, params, bindings)
++                        previous = updates.get(leaf.id, (leaf, leaf))[1]
++                        proposed = self.propose_field_update(previous, changes, leaf_parents,
++                                                             len(holders) > 1 or len(leaves) > 1)
++                        updates[leaf.id] = leaf, proposed
++                continue
+             for allocation in holders:
+                 proposed = self.propose_field_update(allocation, dependencies, parents, len(holders) > 1)
+                 if allocation.typ in REFERENCE_VECTORS:

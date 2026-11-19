@@ -1,0 +1,27 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -363,9 +363,12 @@
+                 returned = utf8_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions,
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
+                 borrowed = getattr(self.analyzer.async_functions[typ], 'public_result_borrows', ())
+-                for position, (_, capture, _) in enumerate(self.analyzer.async_functions[typ].args[1]):
+-                    if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES) or position in returned:
+-                        kind = 'task_borrow_parameter' if capture in ('ref', 'mut', 'array_ref', 'array_mut') else 'task_utf8_parameter'
++                for position, (_, capture, capture_type) in enumerate(self.analyzer.async_functions[typ].args[1]):
++                    owned_borrows = capture in ('owned', 'join_owned', 'join_nested') and any(
++                        reference_type(declared) for members in self.analyzer.enums.get(capture_type, {}).values()
++                        for _, declared in members)
++                    if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES) or position in returned or owned_borrows:
++                        kind = 'task_borrow_parameter' if capture in ('ref', 'mut', 'array_ref', 'array_mut') or owned_borrows else 'task_utf8_parameter'
+                         asset = Asset((kind, index, position), Source(kind, index, str(position)))
+                         history[asset] = frozenset()
+                         captures.append((str(position), frozenset({asset})))
+@@ -1838,7 +1841,7 @@
+                             captured.update(actual.assets | actual.reservations)
+                         elif target.kind == 'indirect_field_parameter':
+                             captured.update(array_contract_assets(target, actual))
+-                        elif target.kind == 'detached_field_parameter':
++                        elif target.kind in ('detached_field_parameter', 'owned_capture_field'):
+                             captured.update(self.projected_assets(actual, target.field, current))
+                         elif target.kind == 'task_capture_parameter':
+                             captured.update(dict(actual.fields).get(target.field, ()))

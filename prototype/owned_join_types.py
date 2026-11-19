@@ -1,0 +1,79 @@
+"""Runtime envelopes around a typed owned payload, local or pool allocated.
+
+The payload type and storage stay in the signature. The runtime layout depends
+only on envelope depth: the innermost CrustJoinResult carries the Cell pointer.
+"""
+import re
+
+OWNED_JOIN_TYPES = {}
+OWNED_JOIN_CTYPES = {}
+OWNED_JOIN_CELLS = {}
+OWNED_JOIN_PAYLOADS = {}
+OWNED_PAYLOAD_MODES = {}
+OWNED_NESTED_PAYLOAD_MODES = {}
+OWNED_JOIN_DEPTHS = {}
+
+
+def owned_mode_at_depth(depth):
+    for level in range(1, depth + 1):
+        mode = 'join_owned' if level == 1 else 'join_nested' if level == 2 else f'join_owned_{level}'
+        if mode in OWNED_JOIN_DEPTHS:
+            continue
+        OWNED_JOIN_DEPTHS[mode] = level
+        OWNED_JOIN_TYPES[mode] = owned_result_type(mode, 'Int')
+        OWNED_JOIN_CTYPES[mode] = 'CrustJoinResult' if level == 1 else 'CrustNestedJoinResult' if level == 2 else f'CrustOwnedJoinResult{level}'
+        OWNED_JOIN_CELLS[mode] = 'value.' * (level - 1) + 'allocation'
+        payload = 'allocation' if level == 1 else 'nested' if level == 2 else f'nested{level}'
+        OWNED_JOIN_PAYLOADS[mode] = payload
+        OWNED_PAYLOAD_MODES[payload] = mode
+        if level > 1:
+            OWNED_NESTED_PAYLOAD_MODES[payload] = mode
+    return mode
+
+
+def owned_result_type(mode, typ, storage='pool'):
+    value = typ if storage == 'local' else f'A<{typ}>'
+    for _ in range(OWNED_JOIN_DEPTHS[mode]):
+        value = f'Result<{value},runtime::Error>'
+    return value
+
+
+def owned_join_signature(typ):
+    depth = 0
+    while typ.startswith('Result<') and typ.endswith(',runtime::Error>'):
+        typ = typ[len('Result<'):-len(',runtime::Error>')]
+        depth += 1
+    if not depth:
+        return None
+    storage = 'pool' if typ.startswith('A<') and typ.endswith('>') else 'local'
+    payload = typ[2:-1] if storage == 'pool' else typ
+    if storage == 'local' and payload in ('Int', 'Bool', 'bool', 'u8', 'char', 'Void', 'runtime::Error'):
+        return None
+    from array_syntax import is_handle_vector, INLINE_VECTOR_ELEMENTS
+    if (payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *INLINE_VECTOR_ELEMENTS)
+            or is_handle_vector(payload) or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload)):
+        return owned_mode_at_depth(depth), payload, storage
+    return None
+
+
+def owned_join_mode(inner):
+    return owned_mode_at_depth(1 if inner == 'owned' else OWNED_JOIN_DEPTHS[inner] + 1)
+
+
+def owned_inner_mode(mode):
+    depth = OWNED_JOIN_DEPTHS[mode]
+    return 'owned' if depth == 1 else owned_mode_at_depth(depth - 1)
+
+
+def owned_cleanup(value, mode):
+    return f'{value}.{OWNED_JOIN_CELLS[mode]}', ' && '.join(
+        f'{value}.' + 'value.' * level + 'status == 0' for level in range(OWNED_JOIN_DEPTHS[mode]))
+
+
+def owned_join_layouts(depth):
+    return '\n'.join('typedef struct { int status; ' +
+        ('CrustNestedJoinResult' if level == 3 else f'CrustOwnedJoinResult{level - 1}') +
+        f' value; }} CrustOwnedJoinResult{level};' for level in range(3, depth + 1))
+
+
+owned_mode_at_depth(2)

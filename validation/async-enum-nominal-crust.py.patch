@@ -1,0 +1,16 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10355,10 +10355,10 @@
+                         declared = dict(self.enums[target.typ].get(path[0], ())).get('.'.join(path[1:]))
+                         field = '.'.join(path)
+                         roots = dict(target.dependencies).get(field, ())
+-                        if declared not in ('&Int', '&mut Int') or not roots:
++                        if not declared or not declared.startswith('&') or not roots:
+                             self.fail('projection du retour async : cible de champ enum absente ou incompatible')
+-                        cell_dependencies.append((f'{"ref" if declared == "&Int" else mode}.{capture_index(key.partition(".")[2])}', roots))
+-                        if declared == '&mut Int':
++                        cell_dependencies.append((f'{mode if declared.startswith("&mut ") else "ref"}.{capture_index(key.partition(".")[2])}', roots))
++                        if declared.startswith('&mut '):
+                             reservation = Binding(target.label, mode, '', target, borrow_parents=(binding,),
+                                                   match_reservation=True, reserved_field=field)
+                             cell_parents[id(reservation)] = reservation

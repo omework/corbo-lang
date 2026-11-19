@@ -1,0 +1,14 @@
+// VE6 / AS9: a newly initialized case may be mutably borrowed across yield.
+async fn append(v:&mut Vector<Int>)->Int {
+    let mut cell=v.push_new();
+    print(*cell);
+    yield;
+    cell.set(23);
+    return *cell;
+}
+fn main(){
+    let mut p=pool<Vector<Int>>(1);let mut v=p.new();
+    let h=runtime::spawn(->append(&mut v));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+    print(v.len());print(v[0]);
+}

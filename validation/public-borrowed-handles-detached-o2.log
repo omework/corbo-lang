@@ -1,0 +1,48 @@
+E
+======================================================================
+ERROR: test_detached_field_and_retained_mutable_ancestor (test_public_borrowed_handles.PublicBorrowedHandleTests.test_detached_field_and_retained_mutable_ancestor) (source='struct Writer{data:&mut Int,spare:Int}\n          struct View{data:&Int}\n          \n          async fn work(v:&View)->&Int{yield;return v.data;}\n          fn launch(v:&View)-><-runtime::Handle<&Int>{let h=runtime::spawn(->work(v));return <-h;}\n                fn relay(h:->runtime::Handle<&Int>)-><-runtime::Handle<&Int>{return <-h;}fn main(){let mut memory=pool<Int>(1);let mut data=memory.new(7);\n            let mut writers=pool<Writer>(1);let mut writer=writers.new(data:&mut data,spare:3);\n            let mut views=pool<View>(1);let v=views.new(data:&*writer.data);\n            let initial=launch(&v);let h=relay(->initial);let r=match h.join(){Ok(n)=>{n},Err(_)=>{return;}};drop(->v);print(*v.data); print(r);drop(->writer);print(data);}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_public_borrowed_handles.py", line 158, in test_detached_field_and_retained_mutable_ancestor
+    self.assertEqual(self.run_c_oracle(compile_source(source)).stdout,'7\n7\n')
+                                       ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15207, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15200, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13701, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13546, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2983, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9634, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10819, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12119, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12361, in statements
+    kind, value, _ = self.expression(args[0], scope, 'print')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8568, in expression
+    binding, offset, typ = self.struct_place(expr[1])
+                           ~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5129, in struct_place
+    binding = self.lookup(name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3172, in lookup
+    self.fail(f"'{name}' n'est plus utilisable (déplacée ou allocation libérée)")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 9: 'v' n'est plus utilisable (déplacée ou allocation libérée)
+
+----------------------------------------------------------------------
+Ran 1 test in 0.535s
+
+FAILED (errors=1)

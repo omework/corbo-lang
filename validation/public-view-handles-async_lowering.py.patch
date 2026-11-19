@@ -1,0 +1,11 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -86,6 +86,8 @@
+ 
+ 
+ def utf8_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_contracts=None):
++    if getattr(node, "public_result_views", ()):
++        return frozenset(node.public_result_views)
+     function_name, parameters, result, body = node.args
+     if result[0] not in ASYNC_CAPTURE_VIEW_MODES:
+         return frozenset()

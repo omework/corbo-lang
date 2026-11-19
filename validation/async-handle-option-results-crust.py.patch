@@ -1,0 +1,44 @@
+--- /tmp/crust-before-async-handle-option-results/crust.py
++++ crust.py
+@@ -10795,7 +10795,7 @@
+                     if view.kind not in VECTOR_MUT_VIEW_KINDS:
+                         self.fail(f'capture async : une tranche mutable &mut {typ} est requise')
+                     kind, value, target = self.vector_slice_reborrow(view, write=True)
+-                elif mode in ('owned', *JOIN_RESULT_TYPES):
++                elif mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES):
+                     if argument[0] == 'down':
+                         self.expression_clock(argument)
+                         binding = self.lookup(argument[1])
+@@ -10807,7 +10807,13 @@
+                         kind, value, target = self.expression(argument[1], scope, label)
+                     else:
+                         self.fail('capture par transfert : utiliser ->')
+-                    if kind != mode or target.typ != typ or target.scope != scope.id:
++                    if mode == 'handle_option' and kind == mode and target is None:
++                        temporary = f'capture{self.uid()}'
++                        self.lines.append(f'VectorHandleResult {temporary} = {value};')
++                        captures.append(temporary)
++                        field_bindings[parameters[index][0]] = Binding(parameters[index][0], mode, value)
++                        continue
++                    if kind != mode or target is None or target.typ != typ or target.scope != scope.id:
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
+                     from array_syntax import owned_reference_paths
+@@ -10848,7 +10854,7 @@
+                                 for source in target.sources)):
+                     self.fail('copie implicite de sous-structure : racine locale ou pool de destination explicite requis')
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
+-                if not array_capture and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
++                if not array_capture and mode in ('owned', 'handle_option', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
+                     targets_by_parameter[index] = target
+                 if (not array_capture and mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES)
+                         and typ in self.struct_fields and target is not None
+@@ -11111,6 +11117,8 @@
+         c = f'joined{uid}'
+         node, _ = self.async_definitions[task_name]
+         mode, typ = node.args[2]
++        if mode == 'handle_option':
++            self.fail('prototype : enveloppe Result<Option<A<Int>>,runtime::Error> de join non raccordée')
+         effects = getattr(node, 'field_effect_summary', None)
+         absent_payload = bool(effects is not None and effects.complete and
+                               (effects.may_complete is False or effects.completion_result.absent_owned_payload))

@@ -1,0 +1,61 @@
+--- before/crust.py
++++ crust.py
+@@ -10243,4 +10243,7 @@
+             original = bindings[params[summary.same_parameter][0]].alloc
+             replacements = self.resolve_owned_fields(summary.owned_fields, params, bindings, scope)
++            if original is None and summary.mode == 'handle_option':
++                # A statically empty option has no allocation or owned fields.
++                return replacements
+             return tuple((dict(original.owned_fields) | dict(replacements)).items())
+         return self.resolve_owned_fields(summary.owned_fields, params, bindings, scope)
+@@ -14543,4 +14546,5 @@
+                         self.fail('prototype : transférer avec -> à l’entrée avant de détruire depuis un enfant')
+                     if binding.alloc is None:
++                        self.lines.append(f'(void){binding.c};')
+                         binding.valid = False
+                         continue
+@@ -15261,4 +15265,16 @@
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
++            elif mode == 'handle_option':
++                pointer = f'{parameter}.value'
++                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                                      f'({pointer} ? {pointer}->source : NULL)', element_type=typ)
++                external.sources.append(source)
++                origin = check.uid()
++                check.origin_sources[origin] = source
++                kind, _, allocation = check.buffered_handle_result(parameter, (source,), root, parameter,
++                                                                  frozenset({origin}))
++                check.lines.append(f'(void)*({allocation.guard});')
++                root.bindings[parameter] = Binding(parameter, kind, parameter, allocation)
++                ctype = 'VectorHandleResult'
+             elif mode in JOIN_RESULT_TYPES:
+                 field = JOIN_RESULT_CELLS[mode]
+@@ -15355,5 +15371,5 @@
+                 ctype = COPY_VALUE_TYPES[mode]
+             parameters.append(f'{ctype} {parameter}')
+-            arguments.append(('down' if mode in ('owned', 'task', 'execution') or mode in JOIN_RESULT_TYPES else 'name', parameter))
++            arguments.append(('down' if mode in ('owned', 'task', 'execution', 'handle_option') or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
+         from async_result_storage import needs_task_output
+@@ -15382,5 +15398,5 @@
+         try:
+             result = check.invoke(call, root)
+-            if result is not None and result[0] in ('owned', 'task', 'execution', *JOIN_RESULT_TYPES):
++            if result is not None and result[2] is not None and result[0] in ('owned', 'task', 'execution', 'handle_option', *JOIN_RESULT_TYPES):
+                 root.exports.append(result[2])
+             check.finish_scope(root)
+@@ -15390,5 +15406,5 @@
+         symbol, _ = self.async_sync_bridges[key]
+         mode = contract.result_type[0]
+-        ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('VectorHandleResult' if mode == 'handle_option' else 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         qualifier = '_Noreturn ' if not contract.effects.may_return else ''
+@@ -15399,5 +15415,5 @@
+         if result is not None and mode != 'void':
+             value = result[1]
+-            if mode in JOIN_RESULT_TYPES and result[2] is not None and result[2].guard is not None:
++            if mode in (*JOIN_RESULT_TYPES, 'handle_option') and result[2] is not None and result[2].guard is not None:
+                 lines.append(f'(void)*({result[2].guard});')
+             if result[0] in ('ref', 'mut') and contract.result_type[1] == 'Int':

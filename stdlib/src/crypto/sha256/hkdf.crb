@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! HKDF extract and expand using HMAC-SHA-256.
+
+/// Reports an oversized HKDF result, a short pseudorandom key, or an input length limit.
+pub enum KdfError {
+    /// Requested output exceeds the derivation's algorithmic limit.
+    OutputTooLong,
+    /// The pseudorandom key length does not meet this HKDF API's requirement.
+    InvalidPrkLength,
+    /// Input length exceeds the algorithm's supported counter or encoding limit.
+    InputTooLong
+}
+
+/// Derives a pseudorandom key from salt and input key material using HMAC.
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 32], HashError> {
+    // An empty HMAC key and RFC 5869's default all-zero salt both
+    // produce the same zero-padded SHA-256 key block.
+    hmac(salt, input_key_material)
+}
+
+/// Fills the output with derived key material using the pseudorandom key and context.
+/// The pseudorandom key needs at least 32 bytes and the output can hold up to 8160 bytes.
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError> {
+    let length = output.len();
+    if length > 8160 { return Err(KdfError.OutputTooLong); }
+    let key_len = prk.len();
+    if key_len < 32 { return Err(KdfError.InvalidPrkLength); }
+    if (key_len as u64) > SHA256_MAX_INPUT_BYTES { return Err(KdfError.InputTooLong); }
+    if length == 0 { return Ok(()); }
+
+    let info_len = info.len();
+    // Preflight the longest HMAC input before writing output. It contains
+    // the 64-byte pad, the optional previous digest and the counter byte.
+    let overhead: u64 = if length > 32 { 97 } else { 65 };
+    if (info_len as u64) > SHA256_MAX_INPUT_BYTES - overhead { return Err(KdfError.InputTooLong); }
+
+    let mut previous: [u8; 32] = [0; 32];
+    let mut prefix_len: usize = 0;
+    let mut counter: u8 = 1;
+    let mut written: usize = 0;
+    while written < length {
+        let suffix: [u8; 1] = [copy(counter)];
+        match hmac_parts(&prk[0..key_len], &previous[..prefix_len], &info[0..info_len], &suffix[..]) {
+            Err(error) => { drop(error); return Err(KdfError.InputTooLong); },
+            Ok(block) => {
+                let mut i: usize = 0;
+                while i < 32 {
+                    let byte = block[i];
+                    previous[i] = copy(byte);
+                    if written < length {
+                        output[written] = byte;
+                        written = written + 1;
+                    }
+                    i = i + 1;
+                }
+            },
+        };
+        prefix_len = 32;
+        if written < length { counter = counter + 1; }
+    }
+    Ok(())
+}

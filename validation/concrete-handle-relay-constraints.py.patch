@@ -1,0 +1,347 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -77,10 +77,12 @@
+     exchange_payloads: tuple = ()
+     handle_slot: tuple[frozenset[Asset], int | None] | None = None
+     task_result_assets: frozenset[Asset] = frozenset()
++    task_reference_assets: frozenset[Asset] = frozenset()
++    execution_tokens: frozenset[tuple] = frozenset()
+ 
+     @property
+     def all_assets(self):
+-        return self.assets | self.reservations | self.task_result_assets | frozenset(
++        return self.assets | self.reservations | self.task_result_assets | self.task_reference_assets | frozenset(
+             a for _, assets in self.fields for a in assets)
+ 
+ 
+@@ -105,10 +107,12 @@
+     shadows: tuple[dict, ...] = ()
+     inserted_sources: frozenset[Source] = frozenset()
+     vector_sources: dict[Asset, frozenset[Source]] = field(default_factory=dict)
++    pending_executions: dict[tuple, frozenset[Asset]] = field(default_factory=dict)
+ 
+     def clone(self):
+         return State(self.environment.copy(), self.history.copy(), self.break_values,
+-                     tuple(scope.copy() for scope in self.shadows), self.inserted_sources, self.vector_sources.copy())
++                     tuple(scope.copy() for scope in self.shadows), self.inserted_sources,
++                     self.vector_sources.copy(), self.pending_executions.copy())
+ 
+     def shadow(self, name):
+         if self.shadows and name in self.environment:
+@@ -129,7 +133,9 @@
+                      exchange_payloads=merge_exchange_payloads(values),
+                      handle_exchange=first.handle_exchange if all(value.handle_exchange == first.handle_exchange for value in values) else None,
+                      handle_slot=first.handle_slot if all(value.handle_slot == first.handle_slot for value in values) else None,
+-                     task_result_assets=frozenset(a for value in values for a in value.task_result_assets))
++                     task_result_assets=frozenset(a for value in values for a in value.task_result_assets),
++                     task_reference_assets=frozenset(a for value in values for a in value.task_reference_assets),
++                     execution_tokens=frozenset(token for value in values for token in value.execution_tokens))
+     return replace(first, variants=frozenset()) if isinstance(first, Value) else first
+ 
+ 
+@@ -161,6 +167,8 @@
+             scope[name] = join_values([state.shadows[index].get(name, state.environment.get(name))
+                                        for state in states])
+     for state in states[1:]:
++        for token, assets in state.pending_executions.items():
++            result.pending_executions[token] = result.pending_executions.get(token, frozenset()) | assets
+         result.break_values |= state.break_values
+         result.inserted_sources |= state.inserted_sources
+         for asset, sources in state.vector_sources.items():
+@@ -215,12 +223,82 @@
+ 
+ 
+ class Context:
++    @staticmethod
++    def start_execution(value, token, state):
++        state.pending_executions[token] = value.all_assets
++        return replace(value, mode='execution', execution_tokens=frozenset({token}))
++
++    def public_handle_value(self, value, public):
++        if value.typ == public:
++            return value
++        from handle_types import canonical_captures
++        from async_lowering import utf8_result_parameters
++        definition = self.analyzer.async_functions[value.typ]
++        parameters = definition.args[1]
++        captures = tuple((f'{"mut" if parameters[int(key)][1] in ("mut", "array_mut", *SHARED_VECTOR_SLICE_MODES) else "ref"}.{key}', targets)
++                         for key, targets in value.fields)
++        fields = tuple((key.partition('.')[2], frozenset(targets))
++                       for key, targets in canonical_captures(captures, parameters))
++        if definition.args[2][0] in ('ref', 'mut'):
++            fields += (('4', value.task_reference_assets),)
++        if definition.args[2][0] in ASYNC_CAPTURE_VIEW_MODES:
++            indexes = utf8_result_parameters(definition, self.analyzer.async_functions,
++                                            sync_result_contract=self.analyzer.sync_result_contract)
++            returned = frozenset(asset for key, assets in value.fields if int(key) in indexes for asset in assets)
++            fields += (('4', returned),)
++        return replace(value, typ=public, fields=fields)
++
++    def reference_projection_assets(self, actual, path):
++        if not isinstance(actual, Value):
++            return frozenset()
++        field = '.'.join(map(str, path))
++        declared = dict(self.analyzer.enums.get(actual.typ, {}).get('', ())).get(field)
++        if declared in ('&Int', '&mut Int'):
++            targets = dict(actual.fields).get('.' + field, frozenset())
++            return targets | (actual.assets | actual.reservations if declared == '&mut Int' else frozenset())
++        if reference_array_shape(actual.typ):
++            def select(row, typ, coordinates, offset=0):
++                if not coordinates:
++                    return row.all_assets
++                element, length = fixed_array_shape(typ)
++                nested = reference_array_shape(element)
++                stride = nested[1] if nested else 1
++                selected = range(length) if coordinates[0] is None else (coordinates[0],)
++                targets = set()
++                for index in selected:
++                    slot = offset + index * stride
++                    fields = dict(row.fields)
++                    if len(coordinates) == 1:
++                        targets.update(fields.get(str(slot), ()))
++                    elif (capability := reference_type(element)) is not None:
++                        child = dict(row.rows).get(str(slot))
++                        if child is not None:
++                            targets.update(select(child, capability[1], coordinates[1:]))
++                        if capability[0] == 'mut':
++                            targets.update(fields.get(str(slot), ()))
++                    else:
++                        targets.update(select(row, element, coordinates[1:], slot))
++                return frozenset(targets)
++            return select(actual, actual.typ, path) | actual.reservations
++        return actual.assets | actual.reservations
++
++    def async_reference_assets(self, definition, actuals, line):
++        if definition.args[2][0] not in ('ref', 'mut'):
++            return frozenset()
++        from async_lowering import borrowed_result_paths
++        paths = borrowed_result_paths(definition, self.analyzer.async_functions, self.fail, {},
++                                      sync_result_contract=self.analyzer.sync_result_contract)
++        assets = set()
++        for index, path in paths:
++            assets.update(self.reference_projection_assets(actuals[index], path))
++        return frozenset(assets)
++
+     def unify_handle_values(self, values):
+         from handle_types import common_public_handle
+         if values and all(isinstance(value, Value) and value.mode == 'execution' for value in values):
+             public = common_public_handle((value.typ for value in values), self.analyzer.async_functions)
+             if public is not None:
+-                return [replace(value, typ=public) for value in values]
++                return [self.public_handle_value(value, public) for value in values]
+         return values
+ 
+     def __init__(self, analyzer, node):
+@@ -283,14 +361,22 @@
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
+                 borrowed = getattr(self.analyzer.async_functions[typ], 'public_result_borrows', ())
+                 for position, (_, capture, _) in enumerate(self.analyzer.async_functions[typ].args[1]):
+-                    if capture in ASYNC_CAPTURE_VIEW_MODES or position in returned or position in borrowed:
+-                        kind = 'task_borrow_parameter' if position in borrowed else 'task_utf8_parameter'
++                    if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES) or position in returned:
++                        kind = 'task_borrow_parameter' if capture in ('ref', 'mut', 'array_ref', 'array_mut') else 'task_utf8_parameter'
+                         asset = Asset((kind, index, position), Source(kind, index, str(position)))
+                         history[asset] = frozenset()
+                         captures.append((str(position), frozenset({asset})))
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
++                reference_assets = frozenset(asset for position, targets in captures
++                                             if int(position) in borrowed for asset in targets)
++                definition = self.analyzer.async_functions[typ]
++                if definition.args[2][0] in ('ref', 'mut') and not borrowed:
++                    asset = Asset(('task_reference_result_parameter', index),
++                                  Source('task_reference_result_parameter', index))
++                    history[asset] = frozenset()
++                    reference_assets = frozenset({asset})
+                 environment[name] = Value(mode, typ, assets, tuple(captures), reservations=reservations,
+-                                          task_result_assets=result_assets)
++                                          task_result_assets=result_assets, task_reference_assets=reference_assets)
+             elif mode in ASYNC_CAPTURE_VIEW_MODES:
+                 asset = Asset(('utf8_parameter', index), Source('allocation_parameter', index))
+                 history[asset] = frozenset()
+@@ -345,7 +431,11 @@
+         for index, (name, mode, typ) in enumerate(self.params):
+             if mode in ('array_ref', 'array_mut') and reference_array_shape(typ):
+                 environment[name] = replace(environment[name], container_borrow=True, container_mode=mode[6:])
+-        self.nodes(self.node.args[3], State(environment, history, inserted_sources=frozenset(contained_sources)),
++        initial = State(environment, history, inserted_sources=frozenset(contained_sources))
++        for name, value in tuple(environment.items()):
++            if isinstance(value, Value) and value.mode == 'execution':
++                environment[name] = self.start_execution(value, ('parameter', name), initial)
++        self.nodes(self.node.args[3], initial,
+                    valued=self.node.args[2][0] == 'owned')
+         reserved = frozenset(c for c in self.requirements
+                              if 'reservation_parameter' in (c.left.kind, c.right.kind))
+@@ -430,6 +520,11 @@
+ 
+     def reset(self, source, state, line):
+         self.use_source(source, True, line)
++        # A launched task can access its captures even on a path which never
++        # reaches a later join. Their protection is not ordinary last-use.
++        for assets in state.pending_executions.values():
++            for asset in assets:
++                self.require('distinct', asset.source, source, line)
+         for origin in state.inserted_sources.union(*state.vector_sources.values()):
+             self.require('distinct', origin, source, line)
+         for asset in state.history:
+@@ -638,7 +733,9 @@
+             return {'next': state}, Value(mode, expected_array)
+         if op == 'task_spawn':
+             paths, task = self.expression(expr[1], state, line)
+-            return paths, replace(task, mode='execution') if isinstance(task, Value) else UNKNOWN
++            if isinstance(task, Value) and 'next' in paths:
++                return paths, self.start_execution(task, ('spawn', id(expr)), paths['next'])
++            return paths, UNKNOWN
+         if op in ('task_join', 'task_join_value'):
+             if op == 'task_join':
+                 paths, execution = {'next': state}, self.lookup(expr[1], state, line)
+@@ -646,7 +743,9 @@
+                 paths, execution = self.expression(expr[1], state, line)
+             if isinstance(execution, Value) and execution.mode == 'execution':
+                 if 'next' in paths:
+-                    self.touch_assets(execution.reservations, paths['next'], line)
++                    self.touch_assets(execution.all_assets, paths['next'], line)
++                    for token in execution.execution_tokens:
++                        paths['next'].pending_executions.pop(token, None)
+                 definition = self.analyzer.async_functions[execution.typ]
+                 mode = definition.args[2][0]
+                 if mode in ('owned', 'join_owned'):
+@@ -661,10 +760,8 @@
+                                                           sync_result_contract=self.analyzer.sync_result_contract)
+                                          for asset in captures.get(str(position), ()))
+                     return paths, Value('join_' + mode, definition.args[2][1], retained)
+-                if mode in ('ref', 'mut') and (returned := getattr(definition, 'public_result_borrows', ())):
+-                    retained = frozenset(asset for position, assets in execution.fields
+-                                         if int(position) in returned for asset in assets)
+-                    return paths, Value('join_' + mode, definition.args[2][1], retained)
++                if mode in ('ref', 'mut'):
++                    return paths, Value('join_' + mode, definition.args[2][1], execution.task_reference_assets)
+                 if mode in UTF8_VALUE_RESULT_FAMILIES:
+                     return paths, Value('join_' + mode, VALUE_MODES[mode])
+             return paths, UNKNOWN
+@@ -1358,16 +1455,7 @@
+                     actual_type = public_handle_type(self.analyzer.async_functions[value.typ].args[2])
+                     if actual_type != typ:
+                         self.fail(line, f'handle {typ} attendu, reçu {actual_type}')
+-                    if value.typ != typ:
+-                        from async_lowering import utf8_result_parameters
+-                        definition = self.analyzer.async_functions[value.typ]
+-                        if definition.args[2][0] in ASYNC_CAPTURE_VIEW_MODES:
+-                            indexes = utf8_result_parameters(definition, self.analyzer.async_functions,
+-                                                          sync_result_contract=self.analyzer.sync_result_contract)
+-                            returned = frozenset(asset for key, assets in value.fields
+-                                                 if int(key) in indexes for asset in assets)
+-                            value = replace(value, fields=(('4', returned),))
+-                    value = replace(value, typ=typ)
++                    value = self.public_handle_value(value, typ)
+                 actuals.append(value)
+                 if 'next' in paths and isinstance(value, Source):
+                     self.use_source(value, mode == 'mut', line)
+@@ -1382,7 +1470,8 @@
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
+                 captures = tuple((str(position), value.all_assets)
+                                  for position, ((_, mode, _), value) in enumerate(zip(params, actuals))
+-                                 if (mode in ASYNC_CAPTURE_VIEW_MODES or position in returned) and isinstance(value, Value))
++                                 if (mode in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES)
++                                     or position in returned) and isinstance(value, Value))
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+                 self.touch_assets(reservations, paths['next'], line)
+                 indexes = owned_result_parameters(catalog[name], catalog, sync_result=self.analyzer.results.get)
+@@ -1392,8 +1481,9 @@
+                                for index, value in enumerate(actuals) if isinstance(value, Source)}
+                 assets |= frozenset(pool_assets.values())
+                 result_assets |= frozenset(asset for index, asset in pool_assets.items() if index in indexes)
++                reference_assets = self.async_reference_assets(catalog[name], actuals, line)
+                 return paths, Value('task', name, assets, captures, reservations=reservations,
+-                                    task_result_assets=result_assets)
++                                    task_result_assets=result_assets, task_reference_assets=reference_assets)
+             current = paths['next']
+             for (pname, mode, typ), value in zip(params, actuals):
+                 if mode in ('task', 'execution'):
+@@ -1424,6 +1514,8 @@
+                 actual = actuals[symbol.index]
+                 if symbol.kind == 'task_result_parameter':
+                     return tuple(asset.source for asset in actual.task_result_assets)
++                if symbol.kind == 'task_reference_result_parameter':
++                    return tuple(asset.source for asset in actual.task_reference_assets)
+                 if symbol.kind in ('task_utf8_parameter', 'task_borrow_parameter'):
+                     return tuple(asset.source for asset in dict(actual.fields).get(symbol.name, ()))
+                 if symbol.kind == 'allocation_field_parameter':
+@@ -1448,6 +1540,10 @@
+                 for source in sources(symbol):
+                     self.copy_write(source, line)
+             effects = self.analyzer.effects[name]
++            for (_, mode, _), actual in zip(params, actuals):
++                if mode == 'execution' and isinstance(actual, Value):
++                    for token in actual.execution_tokens:
++                        current.pending_executions.pop(token, None)
+             for index in effects.resets:
+                 self.reset(actuals[index], current, line)
+             if not effects.may_return:
+@@ -1597,7 +1693,9 @@
+                                 if reachable_field(target, actuals[target.parameter]))
+                 assets = frozenset(a for target in targets
+                                    if target.kind != 'array_parameter'
+-                                   for a in (self.projected_assets(actuals[target.parameter], target.field, current)
++                                   for a in (actuals[target.parameter].task_reference_assets
++                                             if target.kind == 'task_capture_parameter'
++                                             else self.projected_assets(actuals[target.parameter], target.field, current)
+                                              if target.detached_prefix
+                                              else result_actual(target).all_assets
+                                              if (target.kind in ('field_parameter', 'shared_field_parameter')
+@@ -1612,7 +1710,7 @@
+                                              if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter')
+                                              else actuals[target.parameter].assets))
+                 reservations = frozenset(a for target in targets
+-                                         if target.kind not in ('array_parameter', 'detached_field_parameter')
++                                         if target.kind not in ('array_parameter', 'detached_field_parameter', 'task_capture_parameter')
+                                          for a in (self.projected_assets(actuals[target.parameter], target.detached_prefix, current)
+                                                    if target.detached_prefix
+                                                    else result_actual(target).all_assets
+@@ -1706,8 +1804,35 @@
+                     if captured:
+                         captures.append((key.partition('.')[2], frozenset(captured)))
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+-                return paths, Value(result.mode, result.typ, assets, tuple(captures), reservations=reservations,
+-                                    task_result_assets=result_assets)
++                definition = self.analyzer.async_functions[result.typ]
++                returned = getattr(definition, 'public_result_borrows', ())
++                reference_assets = frozenset(asset for position, targets in captures
++                                             if int(position) in returned for asset in targets)
++                if definition.args[2][0] in ('ref', 'mut') and not returned:
++                    from async_lowering import borrowed_result_paths
++                    paths_to_result = borrowed_result_paths(
++                        definition, self.analyzer.async_functions, self.fail, {},
++                        sync_result_contract=self.analyzer.sync_result_contract)
++                    retained = set()
++                    for index, path in paths_to_result:
++                        for key, targets in result.borrowed_fields:
++                            if int(key.partition('.')[2]) != index:
++                                continue
++                            for target in targets:
++                                actual = actuals[target.parameter]
++                                if target.kind == 'task_capture_parameter':
++                                    retained.update(actual.task_reference_assets)
++                                elif target.kind in ('parameter', 'array_parameter', 'inline_field_parameter'):
++                                    prefix = tuple(target.field.lstrip('.').split('.')) if target.field else ()
++                                    retained.update(self.reference_projection_assets(actual, prefix + path))
++                                else:
++                                    retained.update(array_contract_assets(target, actual))
++                    reference_assets = frozenset(retained)
++                value = Value(result.mode, result.typ, assets, tuple(captures), reservations=reservations,
++                              task_result_assets=result_assets, task_reference_assets=reference_assets)
++                if result.mode == 'execution':
++                    value = self.start_execution(value, ('call', id(expr)), current)
++                return paths, value
+             if result.mode in VALUE_MODES:
+                 return paths, Value(result.mode, result.typ)
+             if result.mode not in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested'):
+@@ -1902,7 +2027,8 @@
+             following = join_states([initial, *edges])
+             if (following.history == head.history and following.environment == head.environment
+                     and following.inserted_sources == head.inserted_sources
+-                    and following.vector_sources == head.vector_sources):
++                    and following.vector_sources == head.vector_sources
++                    and following.pending_executions == head.pending_executions):
+                 break
+             head = following
+         else:

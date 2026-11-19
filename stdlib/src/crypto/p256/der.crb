@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! DER encoding and validation of the integer pair in a P-256 ECDSA signature.
+
+// Convert a length or an octet already masked by the caller.
+/// Converts a size or offset to its low byte for DER serialization.
+fn der_byte(value: usize) -> u8 { p256_octet(value as u64, 0) }
+
+/// Encodes a minimally padded positive DER integer at the supplied output offset.
+fn encode_integer(value: &[u64], output: &mut [u8], start: usize) -> usize {
+    let mut bytes: [u8; 32] = [0; 32];
+    write_words(&value[0..8], &mut bytes[..], 0);
+    let mut offset: usize = 0;
+    while offset < 31 && bytes[offset] == 0 { offset = offset + 1; }
+    let padding: usize = if bytes[offset] >= 128 { 1 } else { 0 };
+    output[start] = 2;
+    output[start + 1] = der_byte(32 - offset + padding);
+    let mut dest = start + 2;
+    if padding == 1 {
+        output[dest] = 0;
+        dest = dest + 1;
+    }
+    while offset < 32 {
+        output[dest] = bytes[offset];
+        dest = dest + 1;
+        offset = offset + 1;
+    }
+    dest
+}
+
+/// Encodes the ECDSA scalars r and s as a DER sequence and returns its length.
+fn encode_signature(r: &[u64], s: &[u64], output: &mut [u8]) -> usize {
+    let first = encode_integer(&r[0..8], &mut output[0..72], 2);
+    let end = encode_integer(&s[0..8], &mut output[0..72], first);
+    output[0] = 48;
+    output[1] = der_byte(end - 2);
+    end
+}
+
+// A zero result denotes malformed DER. The value is decoded into a
+// 32-byte, big-endian buffer only after validating its framing.
+/// Validates a positive DER integer and copies its magnitude to the output.
+fn decode_integer(input: &[u8], start: usize, output: &mut [u8]) -> usize {
+    let size = input.len();
+    if start + 2 > size { return 0; }
+    if input[start] != 2 { return 0; }
+    let count = input[start + 1] as usize;
+    if count == 0 || count > 33 { return 0; }
+    let end = start + 2 + count;
+    if end > size { return 0; }
+    let mut source = start + 2;
+    if input[source] >= 128 { return 0; }
+    if input[source] == 0 && count > 1 {
+        if input[source + 1] < 128 { return 0; }
+        source = source + 1;
+    }
+    if end - source > 32 { return 0; }
+    let mut offset: usize = 32 - (end - source);
+    while source < end {
+        output[offset] = input[source];
+        offset = offset + 1;
+        source = source + 1;
+    }
+    end
+}

@@ -1,0 +1,247 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -76,7 +76,9 @@
+     return None
+ 
+ 
+-def capture_ctype(mode, typ=None):
++def capture_ctype(mode, typ=None, *, structures=()):
++    if mode in ('ref', 'mut') and typ in structures:
++        return 'CrustStructureView'
+     if mode in ('ref', 'mut') and typ and typ.startswith('Pool<'):
+         return 'Source *'
+     if (mode, typ) == ('mut', 'u8'):
+@@ -960,6 +962,8 @@
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+                           utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts, enum_layouts,
+                           local_parameters, variant_name, specialize):
++    from functools import partial
++    capture_type = partial(capture_ctype, structures=struct_layouts)
+     from handle_types import HandleDefinitions, public_signature
+     aggregate_layouts = struct_layouts | enum_layouts
+     functions = HandleDefinitions(functions, structures=aggregate_layouts)
+@@ -991,8 +995,8 @@
+     owned_aggregates = owned_structures.keys() | owned_enums.keys()
+     reference_aggregates = reference_structs.keys() | owned_enums.keys()
+     pool_structures = owned_structures | reference_structs
+-    reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_aggregates for mode in ('ref', 'mut')})
+-    view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
++    reference_sync_types.update({(mode, typ): capture_type(mode, typ) for typ in reference_aggregates for mode in ('ref', 'mut')})
++    view_sync_types = {(mode, VALUE_MODES[mode]): capture_type(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+     owned_join_sync_types = {(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                             for mode in ('join_owned', 'join_nested') for _, typ in owned_sync_types}
+@@ -1184,6 +1188,8 @@
+                     or argument[0] in ('reborrow', 'ref_expr', 'mut_expr') and shape[0] != mode):
+                 fail(line, 'argument emprunté : type ou mode incompatible')
+             active_loans.pop(id(loans), None)
++        if typ in struct_layouts:
++            pointer = f'structure_reference_for((CrustStructureView){{0}}, {pointer})'
+         return pointer, loans
+ 
+     def release_sync_argument_loans(following):
+@@ -1337,7 +1343,7 @@
+             source = '&' + local_pools[destination]
+             storage = frozenset({destination})
+         else:
+-            source = f'{original}->source'
++            source = f'structure_reference_for((CrustStructureView){{0}}, {original}).root->source'
+             for origin in storage:
+                 check_access(origin, line, write=True)
+         cell = temporary('Cell *')
+@@ -1348,7 +1354,7 @@
+             factory = (f'enum_new({source}, 0, "async copy")' if expr[0] == 'struct_copy'
+                        else f'cell_new({source}, 0, "async copy")')
+         steps.extend((f'{cell} = {factory};',
+-                      f'memcpy({cell}->fields, {original}->fields, {structure_offset(layout, len(layout))});'))
++                      f'memcpy({cell}->fields, structure_view_address(structure_reference_for((CrustStructureView){{0}}, {original}), 0, {structure_offset(layout, len(layout))}), {structure_offset(layout, len(layout))});'))
+         owned_result_types[cell] = typ
+         keep_storage(cell, storage)
+         for path, held in owned_capture_field_loans(original, typ).items():
+@@ -1791,7 +1797,8 @@
+                         value = stored_reference_cell(value, held, line)
+                         argument_ctype = 'Cell *'
+                     else:
+-                        value = f'({reference_sync_types[(mode, typ)]})({value})'
++                        value = (f'structure_reference_for((CrustStructureView){{0}}, {value})' if typ in struct_layouts
++                                 else f'({reference_sync_types[(mode, typ)]})({value})')
+                 else:
+                     # A literal receives u8 context; a named Int never narrows.
+                     if mode == 'byte' and argument[0] == 'int' and 0 <= argument[1] <= 255:
+@@ -2087,7 +2094,7 @@
+     join_return_mode = result[0] if result[0] in JOIN_PAYLOADS else None
+     returns_join = join_return_mode is not None
+     returns_value = result in SCALAR_RESULTS or returns_ref or returns_owned or returns_join or bool(returns_array)
+-    result_ctype = array_result_ctype or (capture_ctype(*result) if returns_value else 'int')
++    result_ctype = array_result_ctype or (capture_type(*result) if returns_value else 'int')
+     parameter_modes = {name: mode for name, mode, _ in parameters}
+     collection_types = {name: typ for name, mode, typ in parameters
+                          if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>')
+@@ -2410,7 +2417,9 @@
+                 if (mode, typ) in pool_sync_types:
+                     origins.update(pool_storage(argument[1]))
+                 capture_storage.append(frozenset(origins))
+-                captured = temporary(capture_ctype(mode, typ))
++                if mode in ('ref', 'mut') and typ in struct_layouts:
++                    value = f'structure_reference_for((CrustStructureView){{0}}, {value})'
++                captured = temporary(capture_type(mode, typ))
+                 if typ in struct_layouts and mode in ('ref', 'mut') and any(
+                         storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
+                         for target, _ in loans[argument_loan_start:]):
+@@ -2659,7 +2668,7 @@
+                 fail(line, f'.await exige un receveur {expected_type} pour un résultat {expected_type}' if expected_type else
+                      '.await d’une tâche Void ne fournit pas de valeur')
+         resume_point += 1
+-        ctype = capture_ctype(result_mode, result_type) if borrow or owned or joined or result_mode in SCALAR_TYPES else 'int'
++        ctype = capture_type(result_mode, result_type) if borrow or owned or joined or result_mode in SCALAR_TYPES else 'int'
+         result = temporary(array_element_type or ctype, array_dimensions(array_shape)) if returns_value else None
+         output = f'&{result}' if result else 'NULL'
+         if selection is not None:
+@@ -3143,6 +3152,8 @@
+             loans = [(name, reservation), *received_refs.get(name, ())]
+         else:
+             fail(line, 'expression empruntée non prise en charge')
++        if typ in struct_layouts:
++            pointer = f'structure_reference_for((CrustStructureView){{0}}, {pointer})'
+         active_loans[id(loans)] = loans
+         return pointer, loans, shape
+ 
+@@ -4919,7 +4930,7 @@
+             loop['reference_loans'].extend(surviving_reference_loans(loans, loop['depth'], line))
+             active_loans.pop(id(loans), None)
+             kind = 'reference'
+-            ctype = capture_ctype(returns_int, nominal)
++            ctype = capture_type(returns_int, nominal)
+         else:
+             result, typ = infer_scalar_value(value, line)
+             if typ in ASYNC_VIEW_TYPES:
+@@ -4927,7 +4938,7 @@
+                 loop['utf8_loans'].extend(surviving_view_loans(loans, loop['depth'], line))
+             kind = SCALAR_MODES[typ]
+             returns_int, nominal = None, None
+-            ctype = capture_ctype(kind)
++            ctype = capture_type(kind)
+         if loop['result'] is None:
+             suffix = array_dimensions(returns_int) if kind == 'array' else ''
+             loop['result'] = kind, temporary(ctype, suffix), returns_int, nominal
+@@ -5106,6 +5117,8 @@
+                     active_loans[id(loans)] = loans
+                     track_result(alias, loans, body, -1)
+                     pointer = f'cell_load_ref({enum_cell}, {offset})'
++                    if target_type in struct_layouts:
++                        pointer = f'structure_whole_view({pointer})'
+                     steps.append(f'frame->{member} = ' +
+                                  (f'&{pointer}->value' if target_type == 'Int' else pointer) + ';')
+                 if match.consuming:
+@@ -5397,7 +5410,7 @@
+                             if reference_signature is not None and signature != reference_signature:
+                                 fail(item_line, 'branches empruntées : même type et même mode requis')
+                             if reference_signature is None:
+-                                target = temporary(capture_ctype(*signature))
++                                target = temporary(capture_type(*signature))
+                             reference_signature = signature
+                         elif boolean is None:
+                             value, typ = infer_scalar_value(item, item_line, following=())
+@@ -5407,7 +5420,7 @@
+                             if scalar_type is not None and typ != scalar_type:
+                                 fail(item_line, f'branches de {construct} async : même type scalaire requis')
+                             if scalar_type is None:
+-                                target = temporary(capture_ctype(SCALAR_MODES[typ]))
++                                target = temporary(capture_type(SCALAR_MODES[typ]))
+                             scalar_type = typ
+                         else:
+                             evaluate = boolean_value if boolean else expression
+@@ -5435,7 +5448,7 @@
+             scopes.pop()
+             for name in locals_in_arm:
+                 # Frame members remain declared, but the names are arm-local.
+-                ctype = capture_ctype(references.pop(name, inline_scalar_mode(name)), reference_types.pop(name, collection_types.get(name)))
++                ctype = capture_type(references.pop(name, inline_scalar_mode(name)), reference_types.pop(name, collection_types.get(name)))
+                 member = fields.pop(name)
+                 shape = arrays.pop(name, ())
+                 ctype = array_elements.pop(name, ctype)
+@@ -5908,7 +5921,7 @@
+         else:
+             if typ != 'Int':
+                 fail(line, 'emprunt imbriqué non pris en charge ; utiliser &* ou &mut * pour la cible')
+-            pointer = f'(int *)((unsigned char *){cell}->fields + ({offset}))'
++            pointer = f'(int *)structure_view_address(structure_reference_for((CrustStructureView){{0}}, {cell}), ({offset}), sizeof(int))'
+         reservation = 'mut' if references.get(name) == 'mut' else mode
+         check_access(name, line, write=reservation == 'mut', path=path)
+         origins = [(name, reservation), *received_refs.get(name, ())]
+@@ -7241,6 +7254,8 @@
+             origin = '\0local-input-' + parameter
+             implicit_stacks.add(origin)
+             pointer = f'frame->{member}' + (f'.{JOIN_CELLS[mode]}' if mode in JOIN_CELLS else '')
++            if mode in ('ref', 'mut') and typ in struct_layouts:
++                pointer += '.root'
+             local_pools[origin] = f'(*({pointer}->source))'
+             storage_bindings[parameter] = frozenset({origin})
+         if mode in ('array', *ARRAY_BORROWS):
+@@ -7333,7 +7348,7 @@
+         discard_pending(node.line)
+         steps.append('return TASK_STEP_RETURN;')
+     member_types = {member: (array_elements[name] if name in arrays and parameter_modes.get(name) not in ARRAY_BORROWS
+-                             else capture_ctype(parameter_modes.get(
++                             else capture_type(parameter_modes.get(
+                                  name, references.get(name, inline_scalar_mode(name))), reference_types.get(name, collection_types.get(name))))
+                     for name, member in fields.items()}
+     array_members = {fields[name]: shape for name, shape in arrays.items() if parameter_modes.get(name) not in ARRAY_BORROWS}
+@@ -7359,7 +7374,7 @@
+         result_copy = (f'    {prefix}_state *frame = ({prefix}_state *)task;\n'
+                        '    memcpy(out, frame->result, sizeof frame->result);') if all(returns_array) else (
+                            '    (void)task;\n    (void)out;')
+-    arguments = ''.join(', ' + declaration for declaration in task_capture_declarations(node))
++    arguments = ''.join(', ' + declaration for declaration in task_capture_declarations(node, structures=struct_layouts))
+     initialize = ''
+     if node.result_storage:
+         initialize += '    frame->result_storage = result_storage;\n'
+@@ -7473,21 +7488,21 @@
+ """
+ 
+ 
+-def task_capture_declarations(node):
++def task_capture_declarations(node, *, structures=()):
+     for i, (_, mode, typ) in enumerate(node.args[1]):
+-        yield f'{capture_ctype(mode, typ)} capture_{i}'
++        yield f'{capture_ctype(mode, typ, structures=structures)} capture_{i}'
+         if i in node.cell_reference_parameters:
+             yield f'Cell * capture_cell_{i}'
+     if getattr(node, 'result_storage', False):
+         yield 'Source * result_storage'
+ 
+ 
+-def task_factory_signature(name, node):
+-    declarations = ', '.join(task_capture_declarations(node)) or 'void'
++def task_factory_signature(name, node, *, structures=()):
++    declarations = ', '.join(task_capture_declarations(node, structures=structures)) or 'void'
+     return f'static CrustTask *crust_async_{name}_create({declarations})'
+ 
+ 
+-def lower_task_context(definitions, *, capacities, threaded=False, async_threaded=False, variants=None):
++def lower_task_context(definitions, *, capacities, threaded=False, async_threaded=False, variants=None, structures=()):
+     variants = variants or {}
+     members, initialize, checks, factories = [], [], [], []
+     storage_types = []
+@@ -7530,10 +7545,10 @@
+             checks.append(f'    for (size_t i = 0; i < {capacity}; ++i) '
+                           f'task_queue_entry_destroy(&crust_task_context.queue_entries_{name}[i]);')
+         captures = ''.join(', ' + declaration.rsplit(' ', 1)[-1]
+-                           for declaration in task_capture_declarations(node))
++                           for declaration in task_capture_declarations(node, structures=structures))
+         reap = '    task_thread_reap(&crust_abandoned_tasks);\n' if threaded else ''
+         factories.append(
+-            f'{task_factory_signature(name, node)} {{\n'
++            f'{task_factory_signature(name, node, structures=structures)} {{\n'
+             f'{reap}    CrustTask *task = {prefix}_create_in_pool(&crust_task_context.pool_{name}{captures});\n'
+             + (f'    task->queue_entry = &crust_task_context.queue_entries_{name}'
+                f'[(({prefix}_state *)task)->slot.index];\n' if threaded else '')
+@@ -7542,7 +7557,7 @@
+         for symbol in specialized:
+             variant_prefix = f'crust_async_{symbol}'
+             factories.append(
+-                f'{task_factory_signature(symbol, node)} {{\n'
++                f'{task_factory_signature(symbol, node, structures=structures)} {{\n'
+                 f'{reap}    CrustTask *task = {variant_prefix}_create_in_pool(&crust_task_context.pool_{name}{captures});\n'
+                 + (f'    task->queue_entry = &crust_task_context.queue_entries_{name}'
+                    f'[(({variant_prefix}_state *)task)->slot.index];\n' if threaded else '')

@@ -1,0 +1,110 @@
+--- async_lowering.py (before)
++++ async_lowering.py
+@@ -1067,12 +1067,9 @@
+         element = handle_vector_element(typ)
+         if element is None:
+             return
+-        from array_syntax import aggregate_reference_paths, aggregate_owned_paths
+         layouts = {name: {'': layout} for name, layout in struct_layouts.items()} | enum_layouts
+         if element not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') and element not in layouts:
+             fail(line, f'type de charge inconnu dans {typ}')
+-        if any(aggregate_reference_paths(layouts, element)) or any(aggregate_owned_paths(layouts, element)):
+-            fail(line, 'prototype : métadonnées des champs propriétaires/empruntés dans un vecteur de handles non raccordées')
+ 
+     for _, _, typ in parameters:
+         check_handle_payload(typ[5:-1] if typ.startswith('Pool<') else typ, node.line)
+@@ -1150,6 +1147,10 @@
+ 
+     def concrete_borrow_field(typ, path):
+         """Resolve a finite stored path, even when its types repeat."""
++        element = handle_vector_element(typ)
++        if element is not None and path and path[0] == '[]':
++            child = concrete_borrow_field(element, path[1:])
++            return ('[]/' + child[0], child[1]) if child is not None else None
+         layouts = {name: {'': layout} for name, layout in struct_layouts.items()} | enum_layouts
+         for arm, members in layouts.get(typ, {}).items():
+             for name, declared in members:
+@@ -1191,6 +1192,18 @@
+                 else:
+                     fail(line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+             active_loans[('stored_field', holder, stored_field_path(field))] = list(dict.fromkeys(held))
++
++    def retain_vector_payload(receiver, incoming):
++        element = handle_vector_element(collection_types[receiver])
++        for field, held in owned_capture_field_loans(incoming, element).items():
++            key = ('stored_field', receiver, ('[]', *stored_field_path(field)))
++            install_field_change(key, list(dict.fromkeys((*active_loans.get(key, ()), *held))))
++
++    def extract_vector_payload(receiver, result):
++        for field, held in owned_capture_field_loans(receiver, collection_types[receiver]).items():
++            path = stored_field_path(field)
++            if path and path[0] == '[]':
++                active_loans[('stored_field', result, path[1:])] = list(held)
+ 
+     def clear_stored_fields(holder):
+         for key in list(active_loans):
+@@ -3420,6 +3433,9 @@
+                 origins = active_loans.get(('owned_storage', record[0], (arm,)))
+                 keep_storage(value, (origin for origin, _ in origins) if origins is not None else storage_of(record[0]))
+                 consume_owned_join(source, statement.line)
++                for key, held in list(active_loans.items()):
++                    if isinstance(key, tuple) and key[0] == 'stored_field' and key[1] == record[0] and key[2][:1] == (arm,):
++                        active_loans[('stored_field', value, key[2][1:])] = list(held)
+                 clear_stored_fields(record[0])
+                 steps.extend((f'{value} = {record[0]}.value;', f'{record[0]}.value = NULL;'))
+                 owned_result_types[value] = owned_result_types.get(record[0], 'Int')
+@@ -3438,6 +3454,7 @@
+                 source = initializer[1][1]
+                 record = handle_option_record(source, statement.line)
+                 value = temporary('Cell *')
++                move_stored_fields(record[0], value)
+                 keep_storage(value, storage_of(record[0]))
+                 consume_owned_join(source, statement.line)
+                 steps.extend((f'{value} = {record[0]}.value;', f'{record[0]}.value = NULL;'))
+@@ -4490,6 +4507,7 @@
+             steps.append(f'if (vector_pop(frame->{fields[receiver]}, &{result}) != CRUST_CHAR_OK) fail("pop de handle vide");')
+         keep_storage(result, storage_bindings.get(receiver, ()))
+         owned_result_types[result] = handle_vector_element(collection_types[receiver])
++        extract_vector_payload(receiver, result)
+         return result
+ 
+     def handle_exchange_record(name, line):
+@@ -4537,6 +4555,14 @@
+             release_statement_loans(following)
+         check_access(receiver, line, write=True)
+         result = temporary('VectorHandleResult')
++        if not appending:
++            for field, held in owned_capture_field_loans(receiver, collection_types[receiver]).items():
++                path = stored_field_path(field)
++                if path and path[0] == '[]':
++                    active_loans[('stored_field', result, ('ok', *path[1:]))] = list(held)
++        for field, held in owned_capture_field_loans(incoming, element).items():
++            active_loans[('stored_field', result, ('err', *stored_field_path(field)))] = list(held)
++        retain_vector_payload(receiver, incoming)
+         previous = frozenset() if appending else storage_bindings.get(receiver, frozenset())
+         added = storage_of(incoming)
+         keep_storage(result, previous | added)
+@@ -4588,6 +4614,7 @@
+         if owned:
+             owned_result_types[result] = handle_vector_element(collection_types[receiver])
+             keep_storage(result, storage_bindings.get(receiver, ()))
++            extract_vector_payload(receiver, result)
+         return result
+ 
+     def owned_vector_element(expr, line, *, write=False):
+@@ -7675,6 +7702,7 @@
+                 name = expr[1][1]
+                 record = handle_option_record(name, statement.line)
+                 consume_owned_join(name, statement.line)
++                clear_stored_fields(record[0])
+                 steps.append(f'{record[0]}.value = NULL;')
+                 return True
+             if vector_remove_type(expr) is not None:
+@@ -7765,6 +7793,7 @@
+             key = ('owned_storage', receiver, ('items',))
+             held = [*active_loans.get(key, ()), *((origin, 'storage') for origin in storage_of(incoming))]
+             install_field_change(key, list(dict.fromkeys(held)))
++            retain_vector_payload(receiver, incoming)
+             steps.extend((f'vector_push(frame->{fields[receiver]}, &{incoming});', f'{incoming} = NULL;'))
+             clear_stored_fields(incoming)
+             return True

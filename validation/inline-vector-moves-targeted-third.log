@@ -1,0 +1,49 @@
+test_async_owned_capture_and_injected_vector (test_inline_vector_moves.InlineVectorMoveTests.test_async_owned_capture_and_injected_vector) ... ok
+test_borrow_ends_before_move (test_inline_vector_moves.InlineVectorMoveTests.test_borrow_ends_before_move) ... ok
+test_child_scope_and_explicit_import (test_inline_vector_moves.InlineVectorMoveTests.test_child_scope_and_explicit_import) ... ok
+test_extract_move_between_vectors_and_loop_cleanup (test_inline_vector_moves.InlineVectorMoveTests.test_extract_move_between_vectors_and_loop_cleanup) ... ok
+test_function_parameter_and_relay (test_inline_vector_moves.InlineVectorMoveTests.test_function_parameter_and_relay) ... FAIL
+test_named_move_and_invalidation_sync_async (test_inline_vector_moves.InlineVectorMoveTests.test_named_move_and_invalidation_sync_async) ... ok
+test_nested_and_empty_named_values (test_inline_vector_moves.InlineVectorMoveTests.test_nested_and_empty_named_values) ... ok
+
+======================================================================
+FAIL: test_function_parameter_and_relay (test_inline_vector_moves.InlineVectorMoveTests.test_function_parameter_and_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17665, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17658, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16149, in compile
+    self.emit_async_sync_bridge(key)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16061, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10898, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12217, in invoke_arguments
+    self.fail(f"argument '{pname}' : mode attendu {mode} ; emprunt explicite requis")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2016, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: argument 'v' : mode attendu mut ; emprunt explicite requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_moves.py", line 51, in test_function_parameter_and_relay
+    self.assertEqual(self.run_source(source).stdout,'7\n'+('0\n' if asynchronous else ''))
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: argument 'v' : mode attendu mut ; emprunt explicite requis
+
+----------------------------------------------------------------------
+Ran 7 tests in 5.018s
+
+FAILED (failures=1)

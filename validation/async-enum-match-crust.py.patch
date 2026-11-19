@@ -1,0 +1,61 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2072,7 +2072,7 @@
+ 
+     def reserved_targets(self, binding):
+         if binding.reserved_field is not None:
+-            key = '.' + binding.reserved_field
++            key = ('.' if binding.alloc.typ in self.struct_fields else '') + binding.reserved_field
+             return dict(binding.alloc.dependencies).get(key, ()) or dict(binding.alloc.owned_fields).get(key, ())
+         return self.dependency_targets(binding.alloc)
+ 
+@@ -10079,7 +10079,7 @@
+             if parent.read_parent is not None:
+                 pending.append(parent.read_parent)
+         parents = tuple(ancestry.values())
+-        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', *self.struct_fields)
++        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', *self.enums)
+                or parent.array_root or parent.match_reservation and parent.reserved_field is None
+                for parent in parents):
+             self.fail('prototype : réemprunt async Int avec parent projeté non pris en charge')
+@@ -10116,12 +10116,30 @@
+             paths = result_paths.get(capture_index(key.partition('.')[2]), ())
+             field = key.partition('/')[2]
+             if field:
+-                paths = tuple(path for path in paths if not path or '.' + '.'.join(path) == field)
++                paths = tuple(path for path in paths if not path or '.'.join(path) == field.lstrip('.'))
+             if not paths:
+                 continue
+             projected = []
+             for target in candidates:
+                 loan = target.array_capture
++                if target.typ in self.enums and target.typ not in self.struct_fields and any(path for path in paths):
++                    mode = key.split('.')[0]
++                    binding = Binding(target.label, mode, '', target,
++                                      borrow_parents=(*ancestry, *target.borrow_parents))
++                    for path in paths:
++                        if not path or target.variants and path[0] not in target.variants:
++                            continue
++                        declared = dict(self.enums[target.typ].get(path[0], ())).get('.'.join(path[1:]))
++                        field = '.'.join(path)
++                        roots = dict(target.dependencies).get(field, ())
++                        if declared not in ('&Int', '&mut Int') or not roots:
++                            self.fail('projection du retour async : cible de champ enum absente ou incompatible')
++                        cell_dependencies.append((f'{"ref" if declared == "&Int" else mode}.{capture_index(key.partition(".")[2])}', roots))
++                        if declared == '&mut Int':
++                            reservation = Binding(target.label, mode, '', target, borrow_parents=(binding,),
++                                                  match_reservation=True, reserved_field=field)
++                            cell_parents[id(reservation)] = reservation
++                    continue
+                 if target.typ in self.struct_fields and any(path for path in paths):
+                     mode = key.split('.')[0]
+                     binding = Binding(target.label, mode, '', target,
+@@ -10426,7 +10444,7 @@
+                     self.fail('capture async : emprunt de tableau explicite requis')
+                 elif mode in ('ref', 'mut'):
+                     if (kind != mode or target is None or target.typ != typ
+-                            or self.dependency_targets(target) and typ not in self.struct_fields):
++                            or self.dependency_targets(target) and typ not in self.enums):
+                         self.fail('une capture async exige un emprunt du type et du mode déclarés')
+                     roots = target.reference_targets or (target,)
+                     field_bindings[parameters[index][0]] = Binding(

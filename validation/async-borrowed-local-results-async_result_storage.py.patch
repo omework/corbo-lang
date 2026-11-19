@@ -1,0 +1,14 @@
+--- /tmp/crust-before-async-borrowed-local-results/async_result_storage.py
++++ /Users/jabarkarim/sources/crust/async_result_storage.py
+@@ -130,3 +130,11 @@
+     for path, symbols in fields:
+         merged[path] = merged.get(path, frozenset()) | symbols
+     return frozenset(output_origin(candidate.source, summary.typ) for candidate in summary.candidates), tuple(sorted(merged.items()))
++
++
++def borrowed_result_fields(node):
++    """Completed stored-reference origins, distinct from captures kept while running."""
++    effect = getattr(node, 'field_effect_summary', None)
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested') or not effect or not effect.complete:
++        return ()
++    return effect.completion_result.borrowed_fields

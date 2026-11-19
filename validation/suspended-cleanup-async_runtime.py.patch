@@ -1,0 +1,47 @@
+--- /tmp/crust-before-suspended-cleanup/async_runtime.py	2026-11-08 04:23:10
++++ async_runtime.py	2026-11-08 04:23:10
+@@ -103,6 +103,8 @@
+     CrustQueueEntry *queue_entry; /* Stable scheduler storage, when generated. */
+     CrustWakeTicket wake_target; /* Root poll owning a chain of direct awaits. */
+     const CrustTaskOps *ops;
++    int (*can_discard_suspended)(CrustTask *);
++    void (*discard_suspended)(CrustTask *);
+ };
+ 
+ static void task_init(CrustTask *task, const CrustTaskOps *ops) {
+@@ -113,6 +115,8 @@
+     task->ready = 1;
+     task->queue_entry = NULL;
+     task->wake_target = (CrustWakeTicket){0};
++    task->can_discard_suspended = NULL;
++    task->discard_suspended = NULL;
+ }
+ 
+ /* Only short bookkeeping sections hold this gate, never user code. Callers
+@@ -200,6 +204,26 @@
+ static int task_drop_complete(CrustTask *task) {
+     if (!task_consume(task, TASK_COMPLETE)) return 0;
+     task->ops->release(task);
++    return 1;
++}
++
++/* Private owned-state destruction used by Select cleanup. The caller has
++   exclusive ownership of the whole direct-await tree, has revoked external
++   wake routes, and never uses this on a scheduled execution handle. Preflight
++   the tree before consuming anything, including captures of inactive children. */
++static int task_owned_discardable(CrustTask *task) {
++    CrustTaskState state = atomic_load(&task->state);
++    if (state == TASK_INACTIVE || state == TASK_COMPLETE) return 1;
++    return state == TASK_SUSPENDED && task->can_discard_suspended &&
++        task->discard_suspended && task->can_discard_suspended(task);
++}
++
++static int task_drop_owned(CrustTask *task) {
++    if (!task_owned_discardable(task)) return 0;
++    CrustTaskState state = atomic_load(&task->state);
++    if (!task_consume(task, state)) return 0;
++    if (state == TASK_SUSPENDED) task->discard_suspended(task);
++    else task->ops->release(task);
+     return 1;
+ }
+ '''

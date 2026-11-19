@@ -1,0 +1,21 @@
+async fn leaf(v: &mut Int) -> &mut Int {
+    yield;
+    return v;
+}
+fn finish(h: -> runtime::Handle<&mut Int>) -> &mut Int {
+    return match h.join() {
+        Ok(v) => { v },
+        Err(_) => { loop {} }
+    };
+}
+fn relay(h: -> Execution<leaf>) -> &mut Int {
+    return finish(-> h);
+}
+fn main() {
+    let mut p = pool<Int>(1);
+    let mut data = p.new(7);
+    let h = runtime::spawn(-> leaf(&mut data));
+    let mut view = relay(-> h);
+    view.set(9);
+    print(*view);
+}

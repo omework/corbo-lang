@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows file ownership and translation of native file errors.
+
+#(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    /// Owns a Windows file HANDLE and closes it on destruction.
+    pub struct File {
+        // Win64 HANDLE is an opaque 64-bit value.
+        /// Owned Windows HANDLE value; drop closes it once after a move.
+        handle: u64,
+    }
+
+    /// Reports an invalid path or native Windows error code.
+    pub enum FileError {
+        /// The supplied path violates the platform path-input contract.
+        InvalidPath,
+        /// Preserves the native operating-system error code in code.
+        Os {
+            /// Native operating-system status code preserved by this error.
+            code: i64
+        },
+    }
+
+    impl File {
+        /// Opens or creates a Windows file with the supplied mode and permissions.
+        fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> Result<File, FileError> {
+            let (valid, error, handle) = std::sys::win::native::open(path, mode, create, perm);
+            if !valid {
+                return Err(FileError.InvalidPath);
+            }
+            if error != 0 {
+                return Err(FileError.Os { code: -error });
+            }
+            Ok(File { handle: handle })
+        }
+
+        /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
+            let handle = (*self).handle;
+            let (raw, count) = std::sys::win::native::read(handle, buffer);
+            if raw != 0 {
+                return Err(FileError.Os { code: -raw });
+            }
+            Ok(count)
+        }
+
+        /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+        fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError> {
+            let (raw, count) = std::sys::win::native::write((*self).handle, buffer);
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(count)
+        }
+
+        /// Seeks relative to the native origin and returns the resulting offset.
+        fn seek(&mut self, offset: i64, origin: i64) -> Result<u64, FileError> {
+            let (raw, position) = std::sys::win::native::seek((*self).handle, offset, origin);
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(position)
+        }
+
+        /// Queries the file size from the open HANDLE.
+        fn size(&self) -> Result<u64, FileError> {
+            let (raw, count) = std::sys::win::native::stats((*self).handle);
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(count)
+        }
+
+        /// Renames a filesystem entry using the Windows backend.
+        fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
+            let (valid, raw) = std::sys::win::native::rename(source, destination);
+            if !valid { return Err(FileError.InvalidPath); }
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(())
+        }
+
+        /// Removes the named file using the Windows backend.
+        fn delete(path: &[u8]) -> Result<(), FileError> {
+            let (valid, raw) = std::sys::win::native::delete(path);
+            if !valid { return Err(FileError.InvalidPath); }
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(())
+        }
+
+        /// Releases the native resource owned by the value.
+        fn drop(&mut self) {
+            std::sys::win::native::close((*self).handle);
+        }
+    }
+#(endif)

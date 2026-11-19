@@ -1,0 +1,60 @@
+test_argument_order_temporary_read_and_stored_loan (test_sync_owned_calls.SyncOwnedCallTests.test_argument_order_temporary_read_and_stored_loan) ... ERROR
+test_collections_keep_their_type_and_cleanup (test_sync_owned_calls.SyncOwnedCallTests.test_collections_keep_their_type_and_cleanup) ... ok
+test_conditional_return_uses_real_pool_and_cleans_other_parameter (test_sync_owned_calls.SyncOwnedCallTests.test_conditional_return_uses_real_pool_and_cleans_other_parameter) ... ok
+test_consume_and_named_result_cleanup_in_both_contexts (test_sync_owned_calls.SyncOwnedCallTests.test_consume_and_named_result_cleanup_in_both_contexts) ... ok
+test_nested_calls_and_loop_inside_later_argument (test_sync_owned_calls.SyncOwnedCallTests.test_nested_calls_and_loop_inside_later_argument) ... ok
+test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) ... ok
+test_prepared_owner_survives_suspension_or_is_dropped_on_return (test_sync_owned_calls.SyncOwnedCallTests.test_prepared_owner_survives_suspension_or_is_dropped_on_return) ... ok
+test_replacement_evaluates_new_before_destroying_old (test_sync_owned_calls.SyncOwnedCallTests.test_replacement_evaluates_new_before_destroying_old) ... ok
+test_transfers_and_usages_are_explicit (test_sync_owned_calls.SyncOwnedCallTests.test_transfers_and_usages_are_explicit) ... ok
+test_unreturned_pool_may_end_before_result (test_sync_owned_calls.SyncOwnedCallTests.test_unreturned_pool_may_end_before_result) ... ok
+test_verification_uses_contracts_and_failed_launch_cleans_input (test_sync_owned_calls.SyncOwnedCallTests.test_verification_uses_contracts_and_failed_launch_cleans_input) ... ok
+
+======================================================================
+ERROR: test_argument_order_temporary_read_and_stored_loan (test_sync_owned_calls.SyncOwnedCallTests.test_argument_order_temporary_read_and_stored_loan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 49, in test_argument_order_temporary_read_and_stored_loan
+    run=self.run_native(self.program(body.replace('AFTER',''),declarations))
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14924, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14917, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13418, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13295, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 819, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5120, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4629, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4563, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4461, in expression
+    fail(line, f'prototype async : expression {op} non prise en charge')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 845, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 6: prototype async : expression ref non prise en charge
+
+----------------------------------------------------------------------
+Ran 11 tests in 7.815s
+
+FAILED (errors=1)

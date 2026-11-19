@@ -1,0 +1,12 @@
+--- before/tests/test_async_local_parent.py
++++ after/tests/test_async_local_parent.py
+@@ -149,7 +149,8 @@
+         anchor='static void source_close(Source *source) {'
+         self.assertEqual(code.count(anchor),1)
+         code=code.replace(anchor,anchor+'\n    observed_closed[observed_close_count++]=source;')
+-        code='#define main original_main\n'+code+'\n#undef main\n'+TASK_SELECT_RUNTIME
++        extra_select = '' if TASK_SELECT_RUNTIME in code else TASK_SELECT_RUNTIME
++        code='#define main original_main\n'+code+'\n#undef main\n'+extra_select
+         return self.run_c_oracle(code+'\n#include <assert.h>\nint main(void){crust_task_context_init();'+body+
+                                  'crust_task_context_close();return 0;}')
+ 

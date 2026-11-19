@@ -1,0 +1,103 @@
+test_async_caller_transfers_field_loans (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_async_caller_transfers_field_loans) ... FAIL
+test_direct_launch_failure_and_inactive_cleanup (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_direct_launch_failure_and_inactive_cleanup) ... ok
+test_factory_and_relay_keep_field_contract (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_factory_and_relay_keep_field_contract) ... FAIL
+test_mutable_field_exclusive_until_join (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_mutable_field_exclusive_until_join) ... ok
+
+======================================================================
+FAIL: test_async_caller_transfers_field_loans (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_async_caller_transfers_field_loans)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15977, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14146, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 932, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6768, in _lower_async_function
+    elif drop_async_binding(statement):
+         ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2438, in drop_async_binding
+    drop_owned(name, statement.line)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5268, in drop_owned
+    check_access(name, line, write=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5265, in check_access
+    fail(line, f"accès à '{name}' incompatible avec un emprunt actif")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 965, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: accès à 'n' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_borrowed_captures.py", line 70, in test_async_caller_transfers_field_loans
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: accès à 'n' incompatible avec un emprunt actif
+
+======================================================================
+FAIL: test_factory_and_relay_keep_field_contract (test_async_owned_borrowed_captures.OwnedBorrowedCaptureTests.test_factory_and_relay_keep_field_contract)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15977, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14077, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 498, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 541, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 810, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 3018, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 1063, in collect
+    self.fail(line, 'retour de tâche refusé : cible empruntée non durable dans le scope parent')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 587, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 6: retour de tâche refusé : cible empruntée non durable dans le scope parent
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_borrowed_captures.py", line 41, in test_factory_and_relay_keep_field_contract
+    self.assertEqual(self.run_source(program).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: retour de tâche refusé : cible empruntée non durable dans le scope parent
+
+----------------------------------------------------------------------
+Ran 4 tests in 3.334s
+
+FAILED (failures=2)

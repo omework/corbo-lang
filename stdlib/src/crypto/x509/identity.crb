@@ -1,0 +1,145 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! X.509 DNS identity matching and certificate validity time parsing.
+
+use std::encoding::der::{Der, der, invalid_der};
+/// Converts an uppercase ASCII letter to lowercase.
+fn ascii_lower(byte: u8) -> u8 {
+    if byte >= 65 && byte <= 90 { return byte + 32; }
+    byte
+}
+
+/// Checks the syntax and size bounds of a reference DNS name.
+pub fn valid_dns_name(name: &[u8]) -> bool {
+    let end = name.len();
+    if end == 0 || end > 253 { return false; }
+    let mut size: usize = 0;
+    let mut i: usize = 0;
+    let mut digit_only = true;
+    while i < end {
+        let byte = ascii_lower(name[i]);
+        if byte == 46 {
+            if size == 0 || name[i - 1] == 45 { return false; }
+            size = 0;
+        } else {
+            let number = byte >= 48 && byte <= 57;
+            let letter = byte >= 97 && byte <= 122;
+            if !number && !letter && byte != 45 { return false; }
+            if byte == 45 && size == 0 { return false; }
+            if !number { digit_only = false; }
+            size = size + 1;
+            if size > 63 { return false; }
+        }
+        i = i + 1;
+    }
+    size != 0 && name[end - 1] != 45 && !digit_only
+}
+
+/// Compares DNS names with ASCII case folding.
+fn dns_equal(a: &[u8], b: &[u8]) -> bool {
+    let end = a.len();
+    if end != b.len() { return false; }
+    let mut i: usize = 0;
+    while i < end {
+        if ascii_lower(a[i]) != ascii_lower(b[i]) { return false; }
+        i = i + 1;
+    }
+    true
+}
+
+/// Matches a presented DNS name, allowing a wildcard only for an entire leftmost label.
+fn dns_match(presented: &[u8], expected: &[u8]) -> bool {
+    let end = presented.len();
+    let size = expected.len();
+    if end > 2 && presented[0] == 42 && presented[1] == 46 {
+        if !valid_dns_name(&presented[2..end]) { return false; }
+        let mut dot: usize = 0;
+        while dot < size && expected[dot] != 46 { dot = dot + 1; }
+        if dot == size { return false; }
+        // The wildcard consumes the entire first label and no other label.
+        return dns_equal(&presented[2..end], &expected[dot + 1..size]);
+    }
+    if !valid_dns_name(&presented[0..end]) { return false; }
+    dns_equal(&presented[0..end], &expected[0..size])
+}
+
+/// Sentinel used when DER time parsing fails.
+const INVALID_DATE: i64 = -9223372036854775808;
+
+/// Reads two decimal digits at an offset or reports an invalid pair.
+fn digits2(input: &[u8], at: u64) -> i64 {
+    let a = input[at];
+    let b = input[at + 1];
+    if a < 48 || a > 57 || b < 48 || b > 57 { return -1; }
+    return ((a as i64) - 48) * 10 + (b as i64) - 48;
+}
+
+/// Checks whether the Gregorian calendar year contains February 29.
+fn leap_year(year: i64) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+/// Returns the number of days in a month for the given year.
+fn month_days(year: i64, month: i64) -> i64 {
+    if month == 2 {
+        if leap_year(year) { return 29; }
+        return 28;
+    }
+    if month == 4 || month == 6 || month == 9 || month == 11 { return 30; }
+    31
+}
+
+/// Parses the supported DER UTC or generalized time as Unix seconds.
+fn timestamp(input: &[u8], start: u64, end: u64, tag: u8) -> i64 {
+    let size = end - start;
+    if (tag == 23 && size != 13) || (tag == 24 && size != 15) { return INVALID_DATE; }
+    if input[end - 1] != 90 { return INVALID_DATE; }
+    let first = digits2(&input[0..end], copy(start));
+    if first < 0 { return INVALID_DATE; }
+    let mut year = copy(first);
+    let mut at = start + 2;
+    if tag == 23 {
+        year = if first < 50 { 2000 + first } else { 1900 + first };
+    } else {
+        let last = digits2(&input[0..end], copy(at));
+        if last < 0 { return INVALID_DATE; }
+        year = first * 100 + last;
+        if year < 2050 { return INVALID_DATE; }
+        at = at + 2;
+    }
+    let month = digits2(&input[0..end], copy(at));
+    let day = digits2(&input[0..end], at + 2);
+    let hour = digits2(&input[0..end], at + 4);
+    let minute = digits2(&input[0..end], at + 6);
+    let second = digits2(&input[0..end], at + 8);
+    if month < 1 || month > 12 || day < 1 || day > month_days(copy(year), copy(month))
+       || hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 {
+        return INVALID_DATE;
+    }
+    let prev = year - 1;
+    let mut days = prev * 365 + prev / 4 - prev / 100 + prev / 400 - 719162 + day - 1;
+    let mut current: i64 = 1;
+    while current < month {
+        days = days + month_days(copy(year), copy(current));
+        current = current + 1;
+    }
+    days * 86400 + hour * 3600 + minute * 60 + second
+}
+
+/// Reads a supported DER time element within the given bounds.
+fn time_at(input: &[u8], at: u64, limit: u64) -> Der {
+    if at >= limit { return invalid_der(); }
+    let tag = input[at];
+    if tag != 23 && tag != 24 { return invalid_der(); }
+    der(&input[0..limit], at, limit, tag)
+}
+
+/// Checks whether the supplied Unix time is inside the certificate's validity interval.
+fn certificate_current(input: &[u8], start: u64, end: u64, now: i64) -> bool {
+    let first = time_at(&input[0..end], copy(start), copy(end));
+    if first.end == 0 { return false; }
+    let last = time_at(&input[0..end], first.end, copy(end));
+    if last.end != end { return false; }
+    let before = timestamp(&input[0..end], first.body, first.end, input[start]);
+    let after = timestamp(&input[0..end], last.body, last.end, input[first.end]);
+    before != INVALID_DATE && after != INVALID_DATE && now >= before && now <= after
+}

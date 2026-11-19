@@ -1,0 +1,305 @@
+--- before/results.py
++++ results.py
+@@ -129,6 +129,25 @@
+     return tuple(sorted(fields.items()))
+ 
+ 
++def merge_task_result_shapes(values):
++    maps = [dict(value.task_result_shapes) for value in values]
++
++    def absent(fields, path):
++        prefix = ''
++        for component in path.split('/') if path else ():
++            variants = fields.get(prefix)
++            if variants and component.partition('.')[0] not in variants:
++                return True
++            prefix += ('/' if prefix else '') + component
++        return False
++
++    output = []
++    for path in sorted({path for fields in maps for path in fields}):
++        groups = [fields.get(path, frozenset()) for fields in maps if not absent(fields, path)]
++        output.append((path, frozenset().union(*groups) if all(groups) else frozenset()))
++    return tuple(output)
++
++
+ @dataclass(frozen=True)
+ class FunctionResult:
+     mode: str
+@@ -155,6 +174,7 @@
+     task_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_fields: tuple = ()
++    task_result_shapes: tuple = ()
+     # Includes temporary stores restored before return. Final field deltas
+     # alone cannot describe the reference representation needed by a bridge.
+     stored_reference_parameters: frozenset[int] = frozenset()
+@@ -220,6 +240,8 @@
+             description['task_result_fields'] = [
+                 {'field': path, 'sources': [source.describe(params) for source in sorted(sources)]}
+                 for path, sources in self.task_result_fields]
++        if self.task_result_shapes:
++            description['task_result_shapes'] = {path: sorted(variants) for path, variants in self.task_result_shapes}
+         if self.task_sources:
+             description['task_sources'] = [source.describe(params) for source in sorted(self.task_sources)]
+         if self.reference_appends:
+@@ -461,6 +483,7 @@
+     task_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_fields: tuple = ()
++    task_result_shapes: tuple = ()
+     # Deferred field-effect analysis keeps capture snapshots until await/join.
+     # This is separate from storage identities of ordinary structures.
+     pending_structure_calls: frozenset = frozenset()
+@@ -653,6 +676,7 @@
+         self.returned_task_sources = set()
+         self.returned_task_result_sources = set()
+         self.returned_task_result_fields = {}
++        self.returned_task_shape_values = []
+         self.task_wait_parameters = set()
+         self.task_forward_parameters = set()
+         self.task_forward_only = True
+@@ -775,7 +799,7 @@
+         return Value('array_refs', typ, fields=targets, rows=rows,
+                      container_origins=frozenset({('parameter', index, prefix)}))
+ 
+-    def async_owned_result_value(self, mode, typ, sources, fields, prefix=''):
++    def async_owned_result_value(self, mode, typ, sources, fields, prefix='', shapes=()):
+         storage = dict(fields)
+         children = []
+         for arm, members in self.analyzer.enums.get(typ, {}).items():
+@@ -785,13 +809,14 @@
+                     path = prefix + key
+                     if path in storage:
+                         children.append((key, self.async_owned_result_value(
+-                            'owned', declared[2:-1], storage[path], fields, path + '/')))
++                            'owned', declared[2:-1], storage[path], fields, path + '/', shapes)))
+         inherited_root = bool(sources) and all(source.kind in ('task_result_parameter', 'allocation_parameter')
+                                               for source in sources)
+         opaque_field = not children and any(source.kind == 'task_result_field_parameter' for source in sources)
+         # Input variants are instantiated at the call; they are not freshly
+         # constructed alternatives of this helper's result.
+         variants = frozenset() if inherited_root or opaque_field else frozenset(self.analyzer.enums.get(typ, {}))
++        variants = dict(shapes).get(prefix.rstrip('/'), variants)
+         return Value(mode, typ, async_owned_candidates(sources), owned_fields=tuple(children),
+                      fresh_variants=variants)
+ 
+@@ -819,6 +844,100 @@
+             elif not path:
+                 sources.add(candidate.storage())
+         return sources or {SourceOrigin('local', -1, 'capture')}
++
++    @staticmethod
++    def owned_value_shapes(value, prefix=''):
++        if value.owned_alternatives:
++            return merge_task_result_shapes([
++                replace(item, task_result_shapes=ResultContext.owned_value_shapes(item, prefix))
++                for item in value.owned_alternatives])
++        shapes = [(prefix, value.fresh_variants)]
++        for key, child in value.owned_fields:
++            shapes.extend(ResultContext.owned_value_shapes(child, prefix + ('/' if prefix else '') + key))
++        return tuple(shapes)
++
++    def resolved_owned_shapes(self, value, actuals):
++        alternatives = []
++        for candidate in value.candidates:
++            if candidate.kind == 'parameter':
++                actual = actuals[candidate.parameter]
++                shapes = self.owned_value_shapes(actual)
++            elif candidate.kind == 'owned_projection':
++                actual = self.project_owned_value(actuals[candidate.parameter], candidate.field_path, value.typ)
++                shapes = self.owned_value_shapes(actual)
++            elif candidate.kind == 'fresh':
++                shapes = (('', value.fresh_variants),)
++            else:
++                shapes = (('', frozenset()),)
++            alternatives.append(Value('owned', value.typ, task_result_shapes=shapes))
++        shapes = dict(merge_task_result_shapes(alternatives))
++        for key, child in value.owned_fields:
++            # Explicit final fields replace inherited descendants in the contract.
++            shapes = {path: variants for path, variants in shapes.items()
++                      if path != key and not path.startswith(key + '/')}
++            for path, variants in self.resolved_owned_shapes(child, actuals):
++                shapes[key + ('/' + path if path else '')] = variants
++        return tuple(sorted(shapes.items()))
++
++    def instantiate_task_shapes(self, summary, actuals):
++        shapes = dict(summary.task_result_shapes)
++        for path, sources in (('', summary.task_result_sources), *summary.task_result_fields):
++            inherited = []
++            complete = True
++            for source in sources:
++                if source.kind in ('task_result_parameter', 'task_result_field_parameter'):
++                    actual = actuals[source.index]
++                    prefix = source.name if source.kind == 'task_result_field_parameter' else ''
++                    fields = tuple((key[len(prefix):].lstrip('/'), variants)
++                                   for key, variants in actual.task_result_shapes
++                                   if not prefix or key == prefix or key.startswith(prefix + '/'))
++                    inherited.append(replace(actual, task_result_shapes=fields))
++                elif source.kind in ('allocation_parameter', 'allocation_field_parameter'):
++                    actual = actuals[source.index]
++                    if source.kind == 'allocation_field_parameter':
++                        for key in source.name.split('/'):
++                            actual = dict(actual.owned_fields).get(key)
++                            if actual is None:
++                                break
++                        if actual is None:
++                            complete = False
++                            continue
++                    inherited.append(replace(actual, task_result_shapes=self.owned_value_shapes(actual)))
++                else:
++                    complete = False
++            if inherited and complete:
++                for key, variants in merge_task_result_shapes(inherited):
++                    shapes[path + ('/' if path and key else '') + key] = variants
++        return tuple(sorted(shapes.items()))
++
++    @staticmethod
++    def owned_capture_path_absent(current, path):
++        if current.owned_alternatives:
++            return all(ResultContext.owned_capture_path_absent(item, path) for item in current.owned_alternatives)
++        key, _, tail = path.partition('/')
++        if current.fresh_variants and key.partition('.')[0] not in current.fresh_variants:
++            return True
++        child = dict(current.owned_fields).get(key)
++        return bool(tail and child is not None and ResultContext.owned_capture_path_absent(child, tail))
++
++    def owned_capture_paths(self, value):
++        """Combine the finite type prefix with the actually constructed graph."""
++        from array_syntax import owned_reference_paths
++
++        owned = {path: typ for path, typ in aggregate_owned_paths(self.analyzer.enums, value.typ)
++                 if not self.owned_capture_path_absent(value, path)}
++        references = {path: (mode, typ)
++                      for path, mode, typ in owned_reference_paths(self.analyzer.enums, value.typ)}
++        for alternative in value.owned_alternatives:
++            children, fields = self.owned_capture_paths(alternative)
++            owned.update(children)
++            references.update(fields)
++        for key, child in value.owned_fields:
++            owned[key] = child.typ
++            children, fields = self.owned_capture_paths(child)
++            owned.update((key + '/' + path, typ) for path, typ in children.items())
++            references.update((key + '/' + path, capability) for path, capability in fields.items())
++        return owned, references
+ 
+     def infer(self):
+         environment = {}
+@@ -984,6 +1103,7 @@
+                               task_sources=frozenset(self.returned_task_sources),
+                               task_result_sources=frozenset(self.returned_task_result_sources),
+                               task_result_fields=tuple(sorted(self.returned_task_result_fields.items())),
++                              task_result_shapes=merge_task_result_shapes(self.returned_task_shape_values),
+                               stored_reference_parameters=frozenset(self.stored_reference_parameters),
+                               task_wait_parameters=frozenset(self.task_wait_parameters),
+                               task_forward_parameters=frozenset(self.task_forward_parameters),
+@@ -1176,6 +1296,7 @@
+                 self.fail(line, 'retour de tâche refusé : le pool de capture ne survit pas au retour')
+             self.returned_task_sources.update(value.task_sources)
+             self.returned_task_result_sources.update(value.task_result_sources)
++            self.returned_task_shape_values.append(value)
+             for path, sources in value.task_result_fields:
+                 self.returned_task_result_fields[path] = self.returned_task_result_fields.get(path, frozenset()) | sources
+             self.task_forward_parameters.update(value.task_parameters)
+@@ -1533,6 +1654,7 @@
+                     task_sources=frozenset(source for value in values for source in value.task_sources),
+                     task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+                     task_result_fields=merge_task_result_fields(values),
++                    task_result_shapes=merge_task_result_shapes(values),
+                     pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+                     task_forward_only=all(value.task_forward_only for value in values),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+@@ -1735,7 +1857,7 @@
+                         # Only a completed analysis proves that Ok carries no
+                         # allocation. An empty/unknown source set is not proof.
+                         return flow, Value(kind, typ, absent_owned_payload=True)
+-                    result = self.async_owned_result_value(kind, typ, execution.task_result_sources, execution.task_result_fields)
++                    result = self.async_owned_result_value(kind, typ, execution.task_result_sources, execution.task_result_fields, shapes=execution.task_result_shapes)
+                     from async_result_storage import borrowed_result_fields
+                     fields = []
+                     for field, targets in borrowed_result_fields(declaration):
+@@ -2427,6 +2549,7 @@
+                           task_sources=frozenset(source for value in returning for source in value.task_sources),
+                           task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
+                     task_result_fields=merge_task_result_fields(returning),
++                    task_result_shapes=merge_task_result_shapes(returning),
+                           pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls),
+                     task_forward_only=all(value.task_forward_only for value in returning),
+                     task_parameters=frozenset(index for value in returning for index in value.task_parameters),
+@@ -2498,6 +2621,7 @@
+                                                        sync_result=self.analyzer.sync_summary)
+                 task_result_sources = set()
+                 task_result_fields = {}
++                result_shapes = []
+                 result_mode = declaration.args[2][0]
+                 targets, captures, task_sources = set(), [], set()
+                 captured_actuals = []
+@@ -2535,17 +2659,17 @@
+                                 access = 'mut' if capture_mode in SHARED_VECTOR_SLICE_MODES else 'ref'
+                                 captures.append((f'{access}.{index}', origins))
+                         elif capture_mode in ('owned', 'join_owned', 'join_nested'):
+-                            from array_syntax import owned_reference_paths
+-                            for field, access, _ in owned_reference_paths(self.analyzer.enums, value.typ):
++                            owned_paths, reference_paths = self.owned_capture_paths(value)
++                            for field, (access, _) in reference_paths.items():
+                                 origins = self.owned_capture_field_targets(value, field)
+                                 captures.append((f'{access}.{index}/{field}', origins))
+                             sources = {candidate.storage() for candidate in value.candidates}
+                             task_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
+-                            for field, _ in aggregate_owned_paths(self.analyzer.enums, value.typ):
++                            for field in owned_paths:
+                                 task_sources.update(self.owned_capture_storage(value, field))
+                             if index in owned_indexes:
+                                 task_result_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
+-                                for path, _ in aggregate_owned_paths(self.analyzer.enums, value.typ):
++                                for path in owned_paths:
+                                     task_result_fields[path] = task_result_fields.get(path, frozenset()) | frozenset(self.owned_capture_storage(value, path))
+                     if index in result_paths:
+                         origins = borrowed_targets(value) if isinstance(value, Value) else ()
+@@ -2587,6 +2711,9 @@
+                     task_result_sources = set(resolve_graph_sources(graph[0]))
+                     task_sources.update(task_result_sources)
+                     task_result_fields = {path: resolve_graph_sources(symbols) for path, symbols in graph[1]}
++                if field_summary and field_summary.complete and result_mode in ('owned', 'join_owned', 'join_nested'):
++                    result_shapes = [Value('owned', declaration.args[2][1],
++                        task_result_shapes=self.resolved_owned_shapes(field_summary.completion_result, captured_actuals))]
+                 pending = self.instantiate_deferred_fields(field_summary.structure_fields, captured_actuals) if (
+                     field_summary and field_summary.complete) else frozenset()
+                 suspended = getattr(field_summary, 'suspension_result', None)
+@@ -2602,7 +2729,8 @@
+                                    task_may_suspend=field_summary.may_suspend if suspension_known else None,
+                                    deferred_field_updates=pending,
+                                    task_sources=frozenset(task_sources), task_result_sources=frozenset(task_result_sources),
+-                                   task_result_fields=tuple(sorted(task_result_fields.items())))
++                                   task_result_fields=tuple(sorted(task_result_fields.items())),
++                                   task_result_shapes=merge_task_result_shapes(result_shapes))
+             if name not in self.analyzer.functions:
+                 self.fail(line, f"fonction inconnue '{name}'")
+             params = self.analyzer.functions[name].args[1]
+@@ -2874,7 +3002,8 @@
+                                    task_parameters=frozenset(origin for index in summary.task_forward_parameters
+                                                              for origin in actuals[index].task_parameters),
+                                    task_result_sources=resolve_sources(summary.task_result_sources),
+-                                   task_result_fields=tuple((path, resolve_sources(sources)) for path, sources in summary.task_result_fields))
++                                   task_result_fields=tuple((path, resolve_sources(sources)) for path, sources in summary.task_result_fields),
++                                   task_result_shapes=self.instantiate_task_shapes(summary, actuals))
+             if summary.mode in ('ref', 'mut'):
+                 targets = set()
+                 for target in summary.reference_targets:
+@@ -3202,6 +3331,7 @@
+             task_sources=frozenset(source for value in values for source in value.task_sources),
+             task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+                     task_result_fields=merge_task_result_fields(values),
++                    task_result_shapes=merge_task_result_shapes(values),
+             pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+                     task_forward_only=all(value.task_forward_only for value in values),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+@@ -3497,6 +3627,8 @@
+ 
+     @staticmethod
+     def owned_capture_field_targets(carrier, key):
++        if ResultContext.owned_capture_path_absent(carrier, key):
++            return frozenset()
+         parameters = {candidate.parameter for candidate in carrier.candidates if candidate.kind == 'parameter'}
+         return frozenset(
+             BorrowTarget('owned_capture_field', target.parameter, key)

@@ -1,0 +1,24 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2618,6 +2618,21 @@
+                         binding, target.field, allow_empty_vector=summary.typ in REFERENCE_VECTORS,
+                         allow_mutable_vector=summary.typ == MUT_REF_VECTOR, skip_unreachable=True)
+                     resolved.extend(projected)
++                    parents.update((id(parent), parent) for parent in ancestry)
++                    continue
++                if target.kind == 'field_parameter' and '/' in target.field:
++                    prefix, _, field = target.field.rpartition('/')
++                    children = tuple({child.id: child
++                        for holder in binding.referents or (binding.alloc,)
++                        for child in self.aggregate_field_targets(holder, prefix)}.values())
++                    if not children:
++                        self.fail('contrat de champ : provenance du descendant introuvable')
++                    projected = Binding(binding.name, binding.kind, binding.c, children[0],
++                                        referents=children, borrow_parents=binding.borrow_parents)
++                    leaf = replace(summary, borrowed_fields=((name, frozenset({replace(target, field=field)})),))
++                    dependencies, _, ancestry = self.resolve_borrowed_result(
++                        leaf, params, bindings | {params[target.parameter][0]: projected})
++                    resolved.extend(root for _, roots in dependencies for root in roots)
+                     parents.update((id(parent), parent) for parent in ancestry)
+                     continue
+                 if target.kind in ('shared_field_parameter', 'reserved_field_parameter') and '/' in target.field:

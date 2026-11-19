@@ -1,0 +1,106 @@
+--- before/results.py
++++ after/results.py
+@@ -2295,6 +2295,7 @@
+                 return {'next'}, Value('mut' if op == 'mut_expr' else 'ref', projection.typ,
+                                        copy_candidates=carrier.copy_candidates or carrier.candidates,
+                                        reference_targets=targets, fields=project_fields(carrier.fields, path),
++                                       owned_fields=project_fields(carrier.owned_fields, path),
+                                        storage_owner=carrier.storage_owner or name,
+                                        structure_origins=carrier.structure_origins,
+                                        inline_path=(carrier.inline_path + '.' if carrier.inline_path else '') + path)
+@@ -2330,13 +2331,16 @@
+                         return {'next'}, replace(child, mode=mode, candidates=frozenset(),
+                                                  reference_targets=targets,
+                                                  storage_owner=carrier.storage_owner,
+-                                                 owned_path=(*carrier.owned_path, '.' + path))
++                                                 owned_path=(*carrier.owned_path,
++                                                     ('.' + carrier.inline_path if carrier.inline_path else '') + '.' + path))
+                 if declared.startswith('A<') and declared[2:-1] in self.analyzer.enums:
+                     key = '.' + path
+                     return {'next'}, Value(mode, declared[2:-1], carrier.candidates,
+                         fields=nested_reference_fields(carrier.fields, key),
+                         reference_targets=self.inline_field_targets(carrier, path, 'indirect_field_parameter'),
+-                        owned_path=(*carrier.owned_path, key))
++                        storage_owner=carrier.storage_owner or name,
++                        owned_path=(*carrier.owned_path,
++                            ('.' + carrier.inline_path if carrier.inline_path else '') + key))
+                 capability = reference_type(declared)
+                 if capability and capability[0] == 'ref' and mode == 'ref':
+                     return self.expression(expr[1][1], environment, line)
+@@ -2627,15 +2631,21 @@
+                     self.task_wait_parameters.update(actuals[index].task_parameters)
+                     self.apply_deferred_field_updates(actuals[index], environment, line)
+             for index, field, child in reversed(summary.owned_field_writes):
+-                if args[index][0] not in ('name', 'mut'):
++                projected_receiver = args[index][0] not in ('name', 'mut')
++                if projected_receiver and not (isinstance(actuals[index], Value) and
++                        (actuals[index].inline_path or actuals[index].owned_path)):
+                     continue
+-                receiver = args[index][1]
++                receiver = '\0owned_write_receiver' if projected_receiver else args[index][1]
++                if projected_receiver:
++                    environment[receiver] = actuals[index]
+                 owner = environment.get(receiver)
+                 if not isinstance(owner, Value):
+                     continue
+                 previous = self.owned_field_at(environment, owner, field)
+                 updated = self.resolve_owned_child(child, actuals, previous)
+                 self.update_owned_field(environment, receiver, owner, field, updated)
++                if projected_receiver:
++                    environment.pop(receiver)
+             if summary.handle_writes:
+                 write_fields = dict(summary.handle_write_fields)
+                 inputs = [
+@@ -2941,6 +2951,7 @@
+                                 if args[target.parameter][0] in ('ref', 'mut', 'name', 'reborrow') else None)
+                             projected.append(replace(actual, typ=summary.typ, mode=summary.mode,
+                                 fields=project_fields(actual.fields, target.field), storage_owner=name,
++                                owned_fields=project_fields(actual.owned_fields, target.field),
+                                 inline_path=(actual.inline_path + '.' if actual.inline_path else '') + target.field))
+                         elif target.kind in ('detached_field_parameter', 'shared_field_parameter',
+                                              'moved_field_parameter', 'field_parameter'):
+@@ -2960,6 +2971,7 @@
+                     if target.kind in ('parameter', 'inline_field_parameter') and not target.carrier_kind
+                     for candidate in (actuals[target.parameter].copy_candidates or actuals[target.parameter].candidates)) if summary.typ in self.analyzer.enums else frozenset()
+                 return flow, Value(summary.mode, summary.typ, copy_candidates=candidates, fields=fields, reference_targets=frozenset(targets),
++                                   owned_fields=merge_owned_values(projected).owned_fields if projected else (),
+                                    storage_owner=projected[0].storage_owner if len(projected) == 1 else None,
+                                    inline_path=projected[0].inline_path if len(projected) == 1 else '',
+                                    structure_choices=merge_structure_choices(projected) if len(projected) > 1 else (),
+@@ -3465,6 +3477,10 @@
+             return frozenset({BorrowTarget('local')})
+         parameters = {candidate.parameter for candidate in (*carrier.candidates, *carrier.copy_candidates)
+                       if candidate.kind == 'parameter'}
++        if carrier.owned_path:
++            parameters.update(target.parameter for target in carrier.reference_targets
++                              if target.kind in ('field_parameter', 'shared_field_parameter',
++                                                 'indirect_field_parameter'))
+         projected_key = '/'.join((*carrier.owned_path, key))
+         inline_key = '.' + carrier.inline_path + key if carrier.inline_path else key
+         targets = shared_vector_field_items(carrier, key)
+@@ -3716,6 +3732,9 @@
+                 environment[owner.storage_owner] = replace(original, fields=tuple(fields.items()))
+ 
+     def owned_field_at(self, environment, carrier, field):
++        if carrier.inline_path:
++            return self.owned_field_at(environment, replace(carrier, inline_path=''),
++                                       '.' + carrier.inline_path + field)
+         root = environment.get(carrier.storage_owner, carrier)
+         path = (*carrier.owned_path, *field.split('/'))
+         prefix = '\0structure:'
+@@ -3770,6 +3789,15 @@
+         return root
+ 
+     def update_owned_field(self, environment, name, carrier, field, value):
++        if carrier.inline_path:
++            from structure_views import project_fields
++            owner = environment[carrier.storage_owner]
++            self.update_owned_field(environment, carrier.storage_owner, owner,
++                                    '.' + carrier.inline_path + field, value)
++            updated = environment[carrier.storage_owner]
++            environment[name] = replace(carrier, fields=project_fields(updated.fields, carrier.inline_path),
++                owned_fields=project_fields(updated.owned_fields, carrier.inline_path))
++            return
+         def update(parent, path):
+             if parent.owned_alternatives:
+                 return merge_owned_values([update(alternative, path) for alternative in parent.owned_alternatives])

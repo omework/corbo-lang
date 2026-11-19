@@ -1,0 +1,23 @@
+fn create(memory: &mut Pool<Int>) -> <- Int {
+    let mut data = new(memory) Int(42);
+    return <- data;
+}
+
+fn clear(memory: &mut Pool<Int>) {
+    memory.reset(); // Détruit aussi les allocations vivantes de l'appelant.
+}
+
+fn main() {
+    let mut memory = pool<Int>(2);
+    let mut result = create(&mut memory);
+    let mut other = new(memory) Int(99);
+    let mut view = &result;
+    print(view); // Dernière utilisation de l'emprunt.
+    address(result);
+
+    clear(&mut memory); // Destruction de other, puis de result ; reset ensuite.
+
+    let mut fresh = new(memory) Int(43);
+    address(fresh); // Réutilise le premier slot ; result reste inaccessible.
+    print(fresh);
+}

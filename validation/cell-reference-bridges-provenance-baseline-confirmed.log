@@ -1,0 +1,47 @@
+crust /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py
+results /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/results.py
+async_lowering /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/async_lowering.py
+test_loop_reanalysis_discards_provisional_multi_source_returns (test_provenances.ProvenanceTests.test_loop_reanalysis_discards_provisional_multi_source_returns) ... ERROR
+
+======================================================================
+ERROR: test_loop_reanalysis_discards_provisional_multi_source_returns (test_provenances.ProvenanceTests.test_loop_reanalysis_discards_provisional_multi_source_returns)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_provenances.py", line 254, in test_loop_reanalysis_discards_provisional_multi_source_returns
+    result = self.execute(MAKE + 'fn work(a: &mut Allocator, b: &mut Allocator, state: &mut Int) -> <- Int { '
+        'loop { a.reset(); if *state == 1 { let mut value = make(a, b, *state); return <- value; } '
+    ...<2 lines>...
+        'let mut controls = allocator(); let mut state = new(controls) Int(0); '
+        'let mut result = work(&mut memory, &mut other, &mut state); print(result); memory.reset(); other.reset();')
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 15306, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 15299, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 13800, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 13645, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 3006, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 12189, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 13062, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-cell-bridge-baseline-5kvyqux1/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'old' sans usage explicite
+
+----------------------------------------------------------------------
+Ran 1 test in 0.009s
+
+FAILED (errors=1)
+
+baseline exit: 1

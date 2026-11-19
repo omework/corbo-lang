@@ -1,0 +1,224 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1001,9 +1001,13 @@
+     output_types = sync_types | owned_output_types | output_join_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+-                         and public_signature(contract.result_type[1]) is not None}
++                         and (public_signature(contract.result_type[1]) is not None
++                              or contract.result_type[1] in functions)}
+     task_sync_types = {contract.result_type: 'CrustTask *' for contract in sync_contracts.values()
+                        if contract.result_type[0] == 'task' and contract.result_type[1] in functions}
++    task_argument_types = {('task', typ): 'CrustTask *' for contract in sync_contracts.values()
++                           for _, mode, typ in contract.parameters if mode == 'task' and typ in functions}
++    sync_types.update(task_argument_types)
+ 
+     def pool_argument(argument, mode, typ, line):
+         local = argument[1] in local_pools if argument[0] in ('name', 'ref', 'mut') else False
+@@ -1532,6 +1536,7 @@
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+         prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
+         argument_fields = {}
++        argument_tasks = {}
+         local_parameters = set()
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, prepared_owners, loans))
+@@ -1541,7 +1546,27 @@
+                 argument_tails.append((len(scopes) - 1, expr[2][index + 1:]))
+                 held = []
+                 argument_ctype = sync_types[(mode, typ)]
+-                if mode == 'owned':
++                if mode == 'task':
++                    if argument[0] == 'down':
++                        require_local_async_value(argument[1], line)
++                        record = consume_task(argument[1], line)
++                    elif argument[0] == 'transfer':
++                        operand = argument[1]
++                        if operand[0] == 'call':
++                            record = create_task(operand, line)
++                        else:
++                            kind, record = emit_computed_transfer(operand, line)
++                            if kind != 'task':
++                                fail(line, 'argument de tâche : tâche inactive requise')
++                    else:
++                        fail(line, 'argument de tâche : transfert -> explicite requis')
++                    if record[3] != typ:
++                        fail(line, f'argument de tâche : type {typ} attendu')
++                    argument_tasks[index] = record
++                    value, held = record[0], list(record[2])
++                    active_loans.pop(id(record[2]), None)
++                    loans.extend(held)
++                elif mode == 'owned':
+                     if argument[0] not in ('down', 'transfer'):
+                         fail(line, 'argument propriétaire : transfert -> explicite requis')
+                     operand = argument if argument[0] == 'down' else argument[1]
+@@ -1604,7 +1629,10 @@
+                         fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
+                 snapshot = temporary(argument_ctype)
+                 steps.append(f'{snapshot} = {value};')
+-                if mode == 'owned':
++                if mode == 'task':
++                    prepared_owners.append(('task', snapshot))
++                    steps.append(f'{value} = NULL;')
++                elif mode == 'owned':
+                     prepared_owners.append(snapshot)
+                     steps.append(f'{value} = NULL;')
+                     clear_stored_fields(value)
+@@ -1617,7 +1645,8 @@
+                     prepared_owners.append(pending)
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
+-                argument_storage.append((pool_storage(argument[1]) if (mode, typ) in pool_sync_types
++                argument_storage.append((frozenset(target for target, access in held if access == 'storage') if mode == 'task'
++                                         else pool_storage(argument[1]) if (mode, typ) in pool_sync_types
+                                          else storage_of(value) if mode == 'owned' or (mode, typ) in owned_join_sync_types
+                                          else frozenset(origin for target, _ in held
+                                              for origin in storage_bindings.get(loan_root(target), ()))))
+@@ -1650,6 +1679,8 @@
+         call = symbol + '(' + ', '.join(prepared) + ')'
+         if signature == ('void', 'Void') or diverges:
+             steps.append(call + ';')
++            for record in argument_tasks.values():
++                clear_stored_fields(record[0])
+             if diverges:
+                 raise NoAsyncContinuation()
+             return '', 'Void'
+@@ -1669,20 +1700,28 @@
+         steps.append(f'{value} = {call};')
+         if signature in handle_sync_types or signature in task_sync_types:
+             retained, returned = [], []
++            forwarded = [argument_tasks[index] for index in contract.result.task_forward_parameters
++                         if index in argument_tasks]
+             capture_loans = {}
+             capture_field_loans = {}
+-            result_capture_paths = (borrowed_result_paths(functions[signature[1]], functions, fail, {},
+-                                    sync_contracts=sync_contracts) if signature in task_sync_types else ())
++            concrete_definition = functions.get(signature[1])
++            result_capture_paths = (borrowed_result_paths(concrete_definition, functions, fail, {},
++                                    sync_contracts=sync_contracts) if concrete_definition is not None else ())
+             result_captures = (borrowed_result_parameters(functions[signature[1]], functions, fail, {},
+                               sync_contracts=sync_contracts)
+-                               if signature in task_sync_types else {4, 5})
+-            if signature in task_sync_types:
++                               if concrete_definition is not None else {4, 5})
++            if concrete_definition is not None:
+                 result_captures |= utf8_result_parameters(functions[signature[1]], functions,
+                                                           sync_contracts=sync_contracts)
+             for field, targets in contract.result.borrowed_fields:
+                 held = []
+                 for target in targets:
+-                    if target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
++                    if target.kind == 'task_capture_parameter' and target.parameter in argument_tasks:
++                        # The opaque task can only be forwarded or consumed.
++                        # Its record already separates live captures from loans
++                        # retained by its completion result.
++                        continue
++                    elif target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
+                         held.extend(projected_argument_loans(target))
+                     elif target.kind == 'owned_capture_field':
+                         held.extend(argument_fields[(target.parameter, target.field)])
+@@ -1691,6 +1730,8 @@
+                     else:
+                         fail(line, 'prototype : capture du handle synchrone sans paramètre direct')
+                 retained.extend(held)
++                if not held:
++                    continue
+                 position = capture_index(field.partition('.')[2])
+                 capture_loans.setdefault(position, []).extend(held)
+                 if '/' in field:
+@@ -1703,6 +1744,8 @@
+             for sources, output in ((contract.result.task_sources, retained),
+                                     (contract.result.task_result_sources, returned)):
+                 for source in sources:
++                    if source.kind in ('task_parameter', 'task_result_parameter', 'task_result_field_parameter') and source.index in argument_tasks:
++                        continue
+                     if source.kind == 'task_output' or source.kind == 'task_output_parameter' and source.index in local_parameters:
+                         output.append((local_source, 'storage'))
+                         continue
+@@ -1713,6 +1756,9 @@
+                     # A field-origin contract must retain those pools too;
+                     # retaining the aggregate union is conservative here.
+                     output.extend((origin, 'storage') for origin in argument_storage[source.index])
++            for record in forwarded:
++                retained.extend(record[2])
++                returned.extend(record[4])
+             retained.extend(returned)
+             active_loans[id(retained)] = retained
+             pending = prepare_field_changes(
+@@ -1721,14 +1767,36 @@
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]
+                 from async_result_storage import borrowed_result_fields
+-                retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line, capture_field_loans)
+-                task_prefix_changes[value] = ((definition.field_effect_summary, definition.args[1],
+-                    tuple(tuple(capture_loans.get(index, ())) for index in range(len(definition.args[1])))),)
+-                return value, definition.args[2] == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
++                if capture_loans or not forwarded:
++                    retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line, capture_field_loans)
++                prefixes = tuple(prefix for record in forwarded for prefix in task_prefix_changes.get(record[0], ()))
++                if capture_loans or not forwarded:
++                    prefixes += ((definition.field_effect_summary, definition.args[1],
++                        tuple(tuple(capture_loans.get(index, ())) for index in range(len(definition.args[1])))),)
++                task_prefix_changes[value] = prefixes
++                for record in forwarded:
++                    move_stored_fields(record[0], value)
++                for index, record in argument_tasks.items():
++                    if index not in contract.result.task_forward_parameters:
++                        clear_stored_fields(record[0])
++                changes = (pending, *(change for record in forwarded for change in record[5]))
++                return value, definition.args[2] == ('scalar', 'Int'), retained, signature[1], returned, changes
+             enable_threads()
+             handle = temporary('CrustAsyncExecution')
+             steps.append(f'task_async_adopt(&{handle}, &{value});')
+-            return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
++            if concrete_definition is not None and (capture_loans or not forwarded):
++                from async_result_storage import borrowed_result_fields
++                retain_result_fields(value, borrowed_result_fields(concrete_definition), capture_loans, line, capture_field_loans)
++                move_stored_fields(value, f'&{handle}')
++            for index, record in argument_tasks.items():
++                if index in contract.result.task_forward_parameters:
++                    move_stored_fields(record[0], f'&{handle}')
++                else:
++                    clear_stored_fields(record[0])
++            changes = (pending, *(change for record in forwarded for change in record[5]))
++            returns_int = (concrete_definition.args[2] if concrete_definition is not None
++                           else public_signature(signature[1])) == ('scalar', 'Int')
++            return f'&{handle}', returns_int, retained, signature[1], returned, changes
+         if signature in owned_output_types | output_join_types:
+             owned_result_types[value] = signature[1]
+             if local_source is not None:
+@@ -2304,6 +2372,8 @@
+                     fail(line, 'prototype : contrat de suspension de la branche Select non raccordé')
+                 candidates = task_prefix_changes[record[0]]
+                 for effects, _, _ in candidates:
++                    if effects is not None and effects.suspension_reason == 'effets suspendus de tâches lancées non raccordés':
++                        fail(line, 'Select : branche pouvant perdre avec un handle lancé non attendu interdite (SL2)')
+                     if effects is None or not effects.complete or not effects.suspension_complete:
+                         fail(line, 'prototype : effets suspendus de la branche Select non raccordés')
+                 reachable.append((record, candidates))
+@@ -3113,7 +3183,10 @@
+             owned_child(child)
+         for _, cells, _ in reversed(pending_capture_groups):
+             for cell in reversed(cells):
+-                cleanup.extend((f'if ({cell}) cell_drop({cell});', f'{cell} = NULL;'))
++                if isinstance(cell, tuple):
++                    owned_child(cell[1])
++                else:
++                    cleanup.extend((f'if ({cell}) cell_drop({cell});', f'{cell} = NULL;'))
+         for names, *_ in reversed(scopes):
+             for name in reversed(names):
+                 if name in seen:
+@@ -4506,8 +4579,11 @@
+                 continue
+             active_loans.pop(id(loans), None)
+             for cell in reversed(cells):
+-                steps.append(f'if ({cell}) cell_drop({cell});')
+-                steps.append(f'{cell} = NULL;')
++                if isinstance(cell, tuple):
++                    steps.extend((f'task_discard({cell[1]});', f'{cell[1]} = NULL;'))
++                else:
++                    steps.append(f'if ({cell}) cell_drop({cell});')
++                    steps.append(f'{cell} = NULL;')
+ 
+     def loop_exit(op, value, line):
+         if not loops:

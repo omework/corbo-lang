@@ -1,0 +1,8 @@
+struct View{data:&Int}
+  fn change(v:&mut View,n:&Int){v.data=&*n;}
+  fn read(n:&Int)->Int{let local=View{data:&*n};return *local.data;}
+  async fn update(v:&mut View,n:&Int)->Int{change(v,n);yield;return *v.data;}
+fn prepare(v:&mut View,n:&Int)-><-update{let t=update(v,n);return <-t;}
+async fn outer(v:&mut View,n:&Int)->Int{let t=prepare(v,n);return t.await;}fn main(){let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(9);let mut v=View{data:&a};
+let h=runtime::spawn(->outer(&mut v,&b));match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}
+print(*v.data);}

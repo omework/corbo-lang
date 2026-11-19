@@ -1,0 +1,95 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2713,6 +2713,8 @@
+                     children = tuple({child.id: child
+                         for holder in binding.referents or (binding.alloc,)
+                         for child in self.aggregate_field_targets(holder, prefix)}.values())
++                    if not children and prefix == '[]' and is_handle_vector(binding.alloc.typ) and binding.alloc.item_positions == ():
++                        continue  # A statically empty vector contributes no optional payload.
+                     if not children:
+                         self.fail('contrat de champ : provenance du descendant introuvable')
+                     projected = Binding(binding.name, binding.kind, binding.c, children[0],
+@@ -3230,7 +3232,7 @@
+                     root.bindings[actual] = Binding(actual, kind, parameter_c, allocation, mutable=True)
+                     arguments.append(('down' if mode == 'owned' or transferred_result else mode, actual))
+                     add_field_dependencies(allocation, index)
+-                    if mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
++                    if mode in ('ref', 'mut', 'owned', 'handle_option', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
+                         add_owned_fields(allocation, index)
+                     if is_handle_vector(typ) and mode in ('owned', 'mut'):
+                         add_vector_items(allocation, index)
+@@ -8270,6 +8272,8 @@
+                                              origins=origins, typ=handle_vector_element(vector.typ), prototype=prototype)
+ 
+     def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int', prototype=None):
++        if not sources:
++            prototype = None
+         _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ, prototype=prototype)
+         allocation.absent_owned_payload = not sources
+         allocation.payload_storage = 'pool'
+@@ -12472,8 +12476,11 @@
+                                                borrowed_fields=result_contract['dependencies'],
+                                                borrow_parents=result_contract['borrow_parents'], variants=result_contract['variants'])
+         if result[0] == 'handle_option':
++            prototype = Allocation(-1, caller.id, '', (), typ=declared[1],
++                dependencies=result_contract['dependencies'], variants=result_contract['variants'],
++                owned_fields=result_contract['owned_fields'], borrow_parents=result_contract['borrow_parents'])
+             return self.buffered_handle_result(c, result_contract['sources'], caller,
+-                                               f'retour {name}', conditional_origins, typ=declared[1])
++                                               f'retour {name}', conditional_origins, typ=declared[1], prototype=prototype)
+         if result[0] == 'buffered_handle_exchange':
+             return self.join_buffered_exchange(c, exchange_states, caller, f'retour {name}')
+         if conditional_sources is not None:
+@@ -12932,7 +12939,10 @@
+                                                owned_fields=self.owned_field_storage(fields),
+                                                borrowed_fields=dependencies, borrow_parents=parents, variants=variants)
+         if result.mode == 'handle_option':
+-            return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins), typ=result.typ)
++            prototype = Allocation(-1, caller.id, '', (), typ=result.typ, dependencies=dependencies,
++                variants=variants, owned_fields=result_owned_fields, borrow_parents=parents)
++            self.check_borrow_destination(prototype, caller)
++            return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins), typ=result.typ, prototype=prototype)
+         if result.mode == 'buffered_handle_exchange':
+             payloads = []
+             for arm in exchange_contracts:
+@@ -15090,7 +15100,7 @@
+                 if recursive:
+                     recursive_inputs.add(name)
+                 if self.has_owned_fields(content) and not (
+-                        recursive or mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES) and typ == content
++                        recursive or mode in ('ref', 'mut', 'owned', 'handle_option', *JOIN_RESULT_TYPES) and typ == content
+                         and self.supports_owned_signature(content)):
+                     self.fail('prototype : contrat de champ propriétaire non pris en charge')
+                 if self.has_typed_reference_fields(content) and not (
+@@ -15127,7 +15137,7 @@
+                 if mode in ('handle_option', 'buffered_handle_exchange', *JOIN_RESULT_TYPES):
+                     if mode in ('handle_option', 'buffered_handle_exchange'):
+                         element = typ if mode == 'handle_option' else exchange_element(typ)
+-                        self.check_handle_vector_payload(f'Vector<A<{element}>>')
++                        self.check_handle_vector_payload(f'Vector<A<{element}>>', local=mode == 'handle_option')
+                     continue
+                 if mode in ('ref', 'mut') and typ.startswith('A<') and typ[2:-1] in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                     continue
+@@ -15158,11 +15168,11 @@
+                 self.check_handle_vector_payload(content)
+             if result[0] in ('handle_option', 'buffered_handle_exchange'):
+                 element = result[1] if result[0] == 'handle_option' else exchange_element(result[1])
+-                self.check_handle_vector_payload(f'Vector<A<{element}>>')
++                self.check_handle_vector_payload(f'Vector<A<{element}>>', local=result[0] == 'handle_option')
+             if result[0] in JOIN_RESULT_TYPES and result[1] not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                 self.fail('type de charge propriétaire inconnu dans Result')
+             if self.has_owned_fields(content) and not (
+-                    result[0] in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and result[1] == content
++                    result[0] in ('owned', 'ref', 'mut', 'handle_option', *JOIN_RESULT_TYPES) and result[1] == content
+                     and self.supports_owned_signature(content, allow_cycles=True)):
+                 self.fail('prototype : contrat de champ propriétaire non pris en charge')
+             if self.has_typed_reference_fields(content) and not (
+@@ -15215,7 +15225,7 @@
+             if not self.has_owned_fields(summary.typ) or not self.function_effects[name].may_return:
+                 continue
+             index = summary.same_parameter
+-            if index is None or params[index][1] not in ('owned', *JOIN_RESULT_TYPES) or params[index][2] != summary.typ:
++            if index is None or params[index][1] not in ('owned', 'handle_option', *JOIN_RESULT_TYPES) or params[index][2] != summary.typ:
+                 fresh = all(self.vector_payload_candidate(candidate, params) or candidate.kind == 'fresh' or (candidate.kind == 'task_capture'
+                             and params[candidate.parameter][1] in ('task', 'execution')) or (candidate.kind == 'owned_projection'
+                             and params[candidate.parameter][1] == 'owned') for candidate in summary.candidates)

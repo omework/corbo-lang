@@ -1,0 +1,27 @@
+--- before/structure_shapes.py
++++ after/structure_shapes.py
+@@ -0,0 +1,24 @@
++"""Finite layouts currently represented by owned async structure graphs."""
++
++
++def async_structure_shapes(layouts):
++    plain = set()
++    leaves = {'Int', 'String', 'Vector<Int>', 'Vector<u8>'}
++    while True:
++        available = leaves | plain
++        additions = {typ for typ, fields in layouts.items() if all(
++            declared == 'Int' or declared.startswith('A<') and declared[2:-1] in available
++            for _, declared in fields)}
++        if additions <= plain:
++            break
++        plain.update(additions)
++    # Borrowed fields are tracked separately from owned descendants. A mixed
++    # graph whose borrowed fields live inside an owned child still needs
++    # recursive target projections; do not publish an incomplete loan layout.
++    references = {typ for typ, fields in layouts.items() if all(
++        declared in ('Int', '&Int', '&mut Int')
++        or declared.startswith('A<') and declared[2:-1] in leaves | plain
++        for _, declared in fields) and any(declared.startswith('&') for _, declared in fields)}
++    references.update(typ for typ, fields in layouts.items() if all(
++        declared == 'Int' for _, declared in fields))
++    return plain | references, references

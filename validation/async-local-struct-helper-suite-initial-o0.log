@@ -1,0 +1,117 @@
+test_borrow_and_drop_follow_last_use (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_borrow_and_drop_follow_last_use) ... ok
+test_branches_loops_and_early_return (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_branches_loops_and_early_return) ... ok
+test_copy_owned_and_borrowed_local_values (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_copy_owned_and_borrowed_local_values) ... 
+  test_copy_owned_and_borrowed_local_values (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_copy_owned_and_borrowed_local_values) (parameter='&Point') ... FAIL
+test_local_value_is_not_a_pool_allocation (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_local_value_is_not_a_pool_allocation) ... ok
+test_multiple_live_results_and_replacement (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_multiple_live_results_and_replacement) ... ok
+test_recorded_owned_child_and_suspension (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_recorded_owned_child_and_suspension) ... ok
+test_same_helper_has_pool_and_local_variants (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_same_helper_has_pool_and_local_variants) ... FAIL
+test_suspended_cleanup_releases_receiver_stack (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_suspended_cleanup_releases_receiver_stack) ... ok
+
+======================================================================
+FAIL: test_copy_owned_and_borrowed_local_values (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_copy_owned_and_borrowed_local_values) (parameter='&Point')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6332, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2569, in bind_special
+    sync_owned_value(initializer, statement.line, following=body[position + 1:]))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1067, in sync_owned_value
+    return sync_call(expr, line, following=following, owned=True)[0]
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1349, in sync_call
+    value, held = sync_borrow_argument(argument, mode, typ, line)
+                  ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1040, in sync_borrow_argument
+    pointer, loans = f'&({value_place(name)})', [(name, mode)]
+                          ~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4965, in value_place
+    fail(node.line, 'une structure ne fournit pas une valeur Int ; sélectionner un champ')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: une structure ne fournit pas une valeur Int ; sélectionner un champ
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_struct_helpers.py", line 39, in test_copy_owned_and_borrowed_local_values
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: une structure ne fournit pas une valeur Int ; sélectionner un champ
+
+======================================================================
+FAIL: test_same_helper_has_pool_and_local_variants (test_async_local_struct_helpers.AsyncLocalStructHelperTests.test_same_helper_has_pool_and_local_variants)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6332, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2538, in bind_special
+    fail(statement.line, 'prototype async : pool local Int/String/Vector<Int/u8> requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: prototype async : pool local Int/String/Vector<Int/u8> requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_struct_helpers.py", line 52, in test_same_helper_has_pool_and_local_variants
+    self.assertEqual(self.run_source(source).stdout,'7\n9\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: prototype async : pool local Int/String/Vector<Int/u8> requis
+
+----------------------------------------------------------------------
+Ran 8 tests in 5.017s
+
+FAILED (failures=2)

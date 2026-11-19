@@ -1,0 +1,45 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -16,13 +16,21 @@
+     if not is_public_handle(typ):
+         return None
+     payload = typ[len('runtime::Handle<'):-1]
+-    # Borrowed/owned results need separate result-provenance projections.
+-    # Their public local annotations already work; generic contracts follow.
++    # Borrowed results need separate result-provenance projections.
+     from async_lowering import SCALAR_RESULTS, ASYNC_CAPTURE_VIEW_MODES, scalar_array_layout
+     if payload == 'Void':
+         return ('void', 'Void')
+     if scalar_array_layout(payload)[1] is not None:
+         return ('array', payload)
++    if payload.startswith('A<') and payload.endswith('>'):
++        content = payload[2:-1]
++        if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
++            return ('owned', content)
++    if payload.startswith('Result<') and payload.endswith(',runtime::Error>'):
++        inner = payload[len('Result<'):-len(',runtime::Error>')]
++        signature = public_signature(f'runtime::Handle<{inner}>')
++        if signature is not None and signature[0] == 'owned':
++            return ('join_owned', signature[1])
+     return next((signature for signature, name in SCALAR_RESULTS.items()
+                  if name == payload and signature[0] not in ASYNC_CAPTURE_VIEW_MODES), None)
+ 
+@@ -73,10 +81,16 @@
+         signature = public_signature(key)
+         if signature is None:
+             raise KeyError(key)
+-        declaration = SimpleNamespace(args=(key, [
++        parameters = [
+             ('opaque_storage', 'owned', 'Int'),
+             ('opaque_shared', 'ref', 'Int'),
+             ('opaque_exclusive', 'mut', 'Int'),
+             ('opaque_shared_capability', 'ref', 'Int'),
+-        ], signature, []), native_block=False, line=0)
++        ]
++        result_storage = None
++        if signature[0] in ('owned', 'join_owned'):
++            result_storage = len(parameters)
++            parameters.append(('opaque_result_storage', 'owned', signature[1]))
++        declaration = SimpleNamespace(args=(key, parameters, signature, []),
++                                      public_result_storage=result_storage, native_block=False, line=0)
+         return (declaration, None) if self.compiled else declaration

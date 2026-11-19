@@ -1,0 +1,16 @@
+async fn twice(value: i64) -> i64 {
+    yield;
+    value * 2
+}
+
+async fn calculate() -> i64 {
+    twice(21).await
+}
+
+fn main() {
+    let execution = runtime::spawn(calculate());
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(error) => { drop(error); print(0); },
+    }
+}

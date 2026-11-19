@@ -1,0 +1,108 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -11,8 +11,9 @@
+ )
+ from exchange_join_types import (
+     EXCHANGE_JOIN_TYPES, exchange_join_mode, EXCHANGE_JOIN_CTYPES, EXCHANGE_JOIN_CELLS,
+-    EXCHANGE_JOIN_PAYLOADS, EXCHANGE_PAYLOAD_MODES, exchange_inner_signature, exchange_cleanup,
++    EXCHANGE_JOIN_PAYLOADS, EXCHANGE_PAYLOAD_MODES, exchange_inner_signature, exchange_cleanup, exchange_payload_type,
+ )
++from handle_exchange_types import exchange_element, exchange_optional, exchange_type
+ from capture_paths import capture_index
+ from structure_views import field_kind, field_size
+ 
+@@ -75,16 +76,13 @@
+     return cell, condition
+ 
+ 
+-EXCHANGE_RESULT_TYPES = ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')
+-
+-
+ def wrapper_content_type(mode, typ):
+-    return 'Int' if mode == 'buffered_handle_exchange' else typ
++    return exchange_element(typ) if mode == 'buffered_handle_exchange' else typ
+ 
+ 
+ def owned_wrapper_kind(mode, typ):
+     return ('buffered_handle_try_push' if mode == 'buffered_handle_exchange'
+-            and typ == 'Result<(),A<Int>>' else mode)
++            and exchange_optional(typ) else mode)
+ 
+ 
+ def owned_wrapper_payload(mode, typ):
+@@ -1091,9 +1089,10 @@
+     owned_join_sync_types.update({('handle_option', typ): 'VectorHandleResult'
+                                  for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *owned_aggregates)})
+     owned_join_sync_types.update({('buffered_handle_exchange', typ): 'VectorHandleResult'
+-        for typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')})
++        for element in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *owned_aggregates)
++        for typ in (exchange_type(element), exchange_type(element, True))})
+     owned_join_sync_types.update({(mode, option_payload_type(mode)): ctype for mode, ctype in OPTION_JOIN_CTYPES.items()})
+-    owned_join_sync_types.update({(mode, 'Int'): ctype for mode, ctype in EXCHANGE_JOIN_CTYPES.items()})
++    owned_join_sync_types.update({(mode, exchange_payload_type(mode)): ctype for mode, ctype in EXCHANGE_JOIN_CTYPES.items()})
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+                             for mode in ('ref', 'mut') for typ in (*pool_structures, *owned_enums)})
+     owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
+@@ -1929,7 +1928,7 @@
+                         fail(line, 'argument Result propriétaire : transfert -> explicite requis')
+                     value, payload, _ = owned_join_value(
+                         argument if argument[0] == 'down' else argument[1], line)
+-                    content = 'Int' if mode == 'buffered_handle_exchange' else typ
++                    content = wrapper_content_type(mode, typ)
+                     if payload != owned_wrapper_payload(mode, typ) or owned_result_types.get(value, 'Int') != content:
+                         fail(line, 'argument de résultat propriétaire : type incompatible')
+                     if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+@@ -1994,7 +1993,7 @@
+                     field = 'value' if mode == 'buffered_handle_exchange' else JOIN_CELLS[mode]
+                     success = f'{snapshot}.status == 0' + (f' && {snapshot}.value.status == 0' if mode in ('join_nested', 'join_option') else '')
+                     if mode == 'buffered_handle_exchange':
+-                        success = f'{snapshot}.status != 0' if typ == 'Result<(),A<Int>>' else '1'
++                        success = f'{snapshot}.status != 0' if exchange_optional(typ) else '1'
+                     elif mode in EXCHANGE_JOIN_TYPES or mode in OPTION_JOIN_TYPES or mode in OWNED_JOIN_TYPES:
+                         _, success = wrapper_cleanup(snapshot, JOIN_PAYLOADS[mode])
+                     pending = temporary('Cell *')
+@@ -2189,7 +2188,7 @@
+                            else public_signature(signature[1], aggregate_layouts)) == ('scalar', 'Int')
+             return f'&{handle}', returns_int, retained, signature[1], returned, changes
+         if signature in owned_output_types | output_join_types:
+-            owned_result_types[value] = 'Int' if signature[0] == 'buffered_handle_exchange' else signature[1]
++            owned_result_types[value] = wrapper_content_type(*signature)
+             if local_source is not None:
+                 keep_storage(value, (local_source,))
+             def storage_candidates(summary):
+@@ -2245,7 +2244,7 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', *HANDLE_VECTORS))
+            and (mode, typ) not in pool_sync_types
+-           and not (mode == 'buffered_handle_exchange' and typ in EXCHANGE_RESULT_TYPES)
++           and not (mode == 'buffered_handle_exchange' and (mode, typ) in owned_join_sync_types)
+            and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_aggregates)
+            and not (mode in ('ref', 'mut') and typ in reference_aggregates)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+@@ -2267,7 +2266,7 @@
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
+             and not ((result[0] in EXCHANGE_JOIN_TYPES or result[0] in OPTION_JOIN_TYPES or result[0] in OWNED_JOIN_TYPES) and result[1] == 'Int')
+-            and not (result[0] == 'buffered_handle_exchange' and result[1] in EXCHANGE_RESULT_TYPES)
++            and not (result[0] == 'buffered_handle_exchange' and result in owned_join_sync_types)
+             and not (result[0] in ('ref', 'mut') and result[1] in reference_structs)
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_aggregates)
+@@ -2653,7 +2652,7 @@
+                     if index in owner_indexes:
+                         returned_loans.extend(held_storage)
+                 steps.append(f'{captured} = {value};')
+-                if mode == 'buffered_handle_exchange' and typ == 'Result<(),A<Int>>':
++                if mode == 'buffered_handle_exchange' and exchange_optional(typ):
+                     steps.append(f'if ({captured}.status == 0) {captured}.value = NULL;')
+                 captures.append(captured)
+                 if index in declaration.cell_reference_parameters:
+@@ -7968,7 +7967,7 @@
+         elif mode != 'owned':
+             continue
+         present = (f'frame->{fields[name]}.status != 0 && ' if mode == 'buffered_handle_exchange'
+-                   and typ == 'Result<(),A<Int>>' else '')
++                   and exchange_optional(typ) else '')
+         inactive_cleanup.append(f'if ({present}{cell}) cell_drop({cell});')
+     members += '    size_t cleanup_path;\n'
+     initialize += '    frame->cleanup_path = 0;\n'

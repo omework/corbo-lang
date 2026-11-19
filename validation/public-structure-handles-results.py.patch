@@ -1,0 +1,52 @@
+--- before/results.py
++++ after/results.py
+@@ -486,7 +486,7 @@
+     """Nominal result flow; the concrete verifier still checks moves/loans."""
+     def __init__(self, functions, effects, error, enums=None, async_functions=None):
+         from handle_types import HandleDefinitions
+-        self.async_functions = HandleDefinitions(async_functions or {})
++        self.async_functions = HandleDefinitions(async_functions or {}, structures={name: arms for name, arms in (enums or {}).items() if "" in arms})
+         self.functions = functions
+         self.effects = effects
+         self.error = error
+@@ -635,8 +635,8 @@
+         from handle_types import is_public_handle, canonical_captures
+         if not is_public_handle(typ) or not isinstance(value, Value) or value.mode != 'execution':
+             return value
+-        from async_lowering import public_handle_type
+-        actual = public_handle_type(self.analyzer.async_functions[value.typ].args[2])
++        from handle_types import contextual_public_type
++        actual = contextual_public_type(value.typ, typ, self.analyzer.async_functions)
+         if actual != typ:
+             self.fail(line, f'handle {typ} attendu, reçu {actual}')
+         if value.typ == typ:
+@@ -644,6 +644,18 @@
+         fields = tuple((key, frozenset(targets)) for key, targets in canonical_captures(
+             value.fields, self.analyzer.async_functions[value.typ].args[1]))
+         result_mode = self.analyzer.async_functions[value.typ].args[2][0]
++        if result_mode in ('owned', 'join_owned'):
++            from async_result_storage import borrowed_result_fields
++            projected = {}
++            for field, targets in borrowed_result_fields(self.analyzer.async_functions[value.typ]):
++                for target in targets:
++                    selector = result_capture_selector(target)
++                    if selector is None:
++                        self.fail(line, 'résultat struct public : origine de champ non représentée')
++                    for key, origins in capture_fields(value.fields, selector):
++                        result_key = ('mut.' if key.startswith('mut.') else 'ref.') + '4/' + field
++                        projected.setdefault(result_key, set()).update(origins)
++            fields += tuple((key, frozenset(targets)) for key, targets in projected.items())
+         if result_mode in ('ref', 'mut'):
+             result_fields = {}
+             for target in value.reference_targets:
+@@ -671,7 +683,9 @@
+     def unify_handle_values(self, values, line):
+         from handle_types import common_public_handle
+         if values and all(isinstance(value, Value) and value.mode == 'execution' for value in values):
+-            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions)
++            from handle_types import is_public_handle
++            expected = self.declared[1] if self.declared[0] == 'execution' and is_public_handle(self.declared[1]) else None
++            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions, expected=expected)
+             if public is not None:
+                 return [self.public_handle_value(value, public, line) for value in values]
+         return values

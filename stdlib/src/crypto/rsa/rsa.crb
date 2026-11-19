@@ -1,0 +1,219 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! RSA key container conversion with caller-owned PKCS#1 DER and output buffers.
+
+use std::encoding::der::{Der, der, invalid_der, uint_valid, bytes_equal, der_header_size,
+                        write_der_header, copy_der};
+use std::encoding::pem::{decode as decode_pem, encode as encode_pem, Error as PemError};
+
+/// Reports invalid RSA key syntax or insufficient output or PEM scratch storage.
+pub enum Error {
+    /// The key container or required integer components are invalid.
+    InvalidKey,
+    /// The caller-provided output buffer cannot hold the result.
+    BufferTooSmall
+}
+
+/// Returns the rsaEncryption AlgorithmIdentifier, including the required NULL parameters.
+fn rsa_algorithm() -> [u8; 15] {
+    let encoded: [u8; 15] = [48,13,6,9,42,134,72,134,247,13,1,1,1,5,0];
+    encoded
+}
+
+/// Checks a canonical two-prime PKCS#1 private key or an RSA public key.
+fn valid_pkcs1(input: &[u8], private: bool) -> bool {
+    let size = input.len() as u64;
+    let sequence = der(&input[0..size], 0, copy(size), 48);
+    if sequence.end == 0 || sequence.end != size { return false; }
+    let mut at = sequence.body;
+    let count: u64 = if private { 8 } else { 2 };
+    if private {
+        let version = der(&input[0..size], copy(at), copy(size), 2);
+        if version.end == 0 || version.end - version.body != 1 || input[version.body] != 0 { return false; }
+        at = version.end;
+    }
+    let mut item: u64 = 0;
+    while item < count {
+        let field = der(&input[0..size], at, copy(size), 2);
+        if !uint_valid(&input[0..size], field.body, field.end) { return false; }
+        if field.end - field.body == 1 && input[field.body] == 0 { return false; }
+        if item < 2 && (input[field.end - 1] & 1) == 0 { return false; }
+        if item < 2 && field.end - field.body == 1 && input[field.body] == 1 { return false; }
+        at = field.end;
+        item = item + 1;
+    }
+    at == size
+}
+
+/// Finds PKCS#1 bytes in an RSA SubjectPublicKeyInfo or unencrypted PrivateKeyInfo.
+fn wrapped_key(input: &[u8], private: bool) -> Der {
+    let size = input.len() as u64;
+    let outer = der(&input[0..size], 0, copy(size), 48);
+    if outer.end == 0 || outer.end != size { return invalid_der(); }
+    let mut at = outer.body;
+    if private {
+        let version = der(&input[0..size], copy(at), copy(size), 2);
+        if version.end == 0 || version.end - version.body != 1 || input[version.body] != 0 { return invalid_der(); }
+        at = version.end;
+    }
+    let alg = der(&input[0..size], copy(at), copy(size), 48);
+    let expected = rsa_algorithm();
+    if alg.end == 0 || !bytes_equal(&input[at..alg.end], &expected[..]) { return invalid_der(); }
+    let tag: u8 = if private { 4 } else { 3 };
+    let mut inner = der(&input[0..size], alg.end, copy(size), tag);
+    if inner.end != size || inner.body == inner.end { return invalid_der(); }
+    if !private {
+        if input[inner.body] != 0 { return invalid_der(); }
+        let body = &mut inner.body;
+        *body = *body + 1;
+    }
+    inner
+}
+
+/// Copies a syntactically valid raw or wrapped RSA key to the caller's PKCS#1 buffer.
+fn read_key(input: &[u8], private: bool, raw_allowed: bool, wrapped_allowed: bool,
+            output: &mut [u8]) -> Result<usize, Error> {
+    let size = input.len();
+    if raw_allowed && valid_pkcs1(&input[0..size], copy(private)) {
+        if size > output.len() { return Err(Error.BufferTooSmall); }
+        return Ok(copy_der(&input[0..size], output));
+    }
+    if !wrapped_allowed { return Err(Error.InvalidKey); }
+    let inner = wrapped_key(&input[0..size], copy(private));
+    if inner.end == 0 || !valid_pkcs1(&input[inner.body..inner.end], private) { return Err(Error.InvalidKey); }
+    if inner.end - inner.body > output.len() as u64 { return Err(Error.BufferTooSmall); }
+    Ok(copy_der(&input[inner.body..inner.end], output))
+}
+
+/// Imports a PKCS#1 or SPKI RSA public key and writes canonical PKCS#1 DER.
+pub fn public_from_der(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    read_key(input, false, true, true, output)
+}
+
+/// Imports a PKCS#1 or unencrypted PKCS#8 RSA private key and writes canonical PKCS#1 DER.
+pub fn private_from_der(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    read_key(input, true, true, true, output)
+}
+
+/// Writes canonical DER around a validated RSA PKCS#1 key.
+fn write_key(input: &[u8], private: bool, output: &mut [u8]) -> Result<usize, Error> {
+    let size = input.len() as u64;
+    if size > 4294967264 || !valid_pkcs1(&input[0..size], copy(private)) { return Err(Error.InvalidKey); }
+    let prefix: u64 = if private { 18 } else { 15 };
+    let extra: u64 = if private { 0 } else { 1 };
+    let payload = size + extra;
+    let body = prefix + der_header_size(copy(payload)) + payload;
+    let total = der_header_size(copy(body)) + body;
+    if total > output.len() as u64 { return Err(Error.BufferTooSmall); }
+    let at = write_der_header(48, body, &mut output[0..total]);
+    let mut cursor = at;
+    if private {
+        output[cursor] = 2;
+        output[cursor + 1] = 1;
+        output[cursor + 2] = 0;
+        cursor = cursor + 3;
+    }
+    let algorithm = rsa_algorithm();
+    drop(copy_der(&algorithm[..], &mut output[cursor..cursor + 15]));
+    cursor = cursor + 15;
+    let tag: u8 = if private { 4 } else { 3 };
+    cursor = cursor + write_der_header(tag, payload, &mut output[cursor..total]);
+    if !private {
+        output[cursor] = 0;
+        cursor = cursor + 1;
+    }
+    drop(copy_der(&input[0..size], &mut output[cursor..total]));
+    Ok(total as usize)
+}
+
+/// Wraps a PKCS#1 RSA public key in DER SubjectPublicKeyInfo.
+pub fn public_to_der(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    write_key(pkcs1, false, output)
+}
+
+/// Wraps a PKCS#1 RSA private key in unencrypted DER PrivateKeyInfo.
+pub fn private_to_der(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    write_key(pkcs1, true, output)
+}
+
+/// Decodes one of the two RSA PEM labels and enforces its corresponding DER shape.
+fn read_pem(input: &[u8], standard: &[u8], traditional: &[u8], private: bool,
+            scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+    let size = input.len();
+    let capacity = scratch.len();
+    match decode_pem(&input[0..size], standard, &mut scratch[0..capacity]) {
+        Ok(used) => { return read_key(&scratch[0..used], private, false, true, output); },
+        Err(error) => {
+            match error {
+                PemError.BufferTooSmall => { return Err(Error.BufferTooSmall); },
+                PemError.InvalidBase64 => { return Err(Error.InvalidKey); },
+                PemError.InvalidEnvelope => {},
+            };
+        },
+    };
+    match decode_pem(&input[0..size], traditional, &mut scratch[0..capacity]) {
+        Ok(used) => { read_key(&scratch[0..used], private, true, false, output) },
+        Err(error) => {
+            match error {
+                PemError.BufferTooSmall => { Err(Error.BufferTooSmall) },
+                PemError.InvalidEnvelope => { Err(Error.InvalidKey) },
+                PemError.InvalidBase64 => { Err(Error.InvalidKey) },
+            }
+        },
+    }
+}
+
+/// Reads PUBLIC KEY or RSA PUBLIC KEY PEM and writes canonical PKCS#1 DER.
+pub fn public_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+    let label: [u8; 10] = [80,85,66,76,73,67,32,75,69,89];
+    let raw: [u8; 14] = [82,83,65,32,80,85,66,76,73,67,32,75,69,89];
+    read_pem(input, &label[..], &raw[..], false, scratch, output)
+}
+
+/// Reads PRIVATE KEY or RSA PRIVATE KEY PEM and writes canonical PKCS#1 DER.
+pub fn private_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+    let label: [u8; 11] = [80,82,73,86,65,84,69,32,75,69,89];
+    let raw: [u8; 15] = [82,83,65,32,80,82,73,86,65,84,69,32,75,69,89];
+    read_pem(input, &label[..], &raw[..], true, scratch, output)
+}
+
+/// Wraps validated DER using a label chosen by an RSA serializer.
+fn wrap_pem(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    match encode_pem(input, label, output) {
+        Ok(used) => { Ok(used) },
+        Err(error) => { drop(error); Err(Error.BufferTooSmall) },
+    }
+}
+
+/// Writes a PUBLIC KEY PEM block using caller-owned DER scratch.
+pub fn public_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+    let size = match public_to_der(pkcs1, &mut scratch[0..scratch.len()]) {
+        Ok(used) => { used }, Err(error) => { return Err(error); },
+    };
+    let label: [u8; 10] = [80,85,66,76,73,67,32,75,69,89];
+    wrap_pem(&scratch[0..size], &label[..], output)
+}
+
+/// Writes an unencrypted PRIVATE KEY PEM block using caller-owned DER scratch.
+pub fn private_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+    let size = match private_to_der(pkcs1, &mut scratch[0..scratch.len()]) {
+        Ok(used) => { used }, Err(error) => { return Err(error); },
+    };
+    let label: [u8; 11] = [80,82,73,86,65,84,69,32,75,69,89];
+    wrap_pem(&scratch[0..size], &label[..], output)
+}
+
+/// Writes an RSA PUBLIC KEY PEM block containing the supplied PKCS#1 key.
+pub fn public_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    let size = pkcs1.len();
+    if !valid_pkcs1(&pkcs1[0..size], false) { return Err(Error.InvalidKey); }
+    let label: [u8; 14] = [82,83,65,32,80,85,66,76,73,67,32,75,69,89];
+    wrap_pem(&pkcs1[0..size], &label[..], output)
+}
+
+/// Writes an unencrypted RSA PRIVATE KEY PEM block containing the supplied PKCS#1 key.
+pub fn private_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    let size = pkcs1.len();
+    if !valid_pkcs1(&pkcs1[0..size], true) { return Err(Error.InvalidKey); }
+    let label: [u8; 15] = [82,83,65,32,80,82,73,86,65,84,69,32,75,69,89];
+    wrap_pem(&pkcs1[0..size], &label[..], output)
+}

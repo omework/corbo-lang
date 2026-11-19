@@ -1,0 +1,48 @@
+--- before/results.py
++++ results.py
+@@ -901,6 +901,13 @@
+ 
+     def async_owned_result_value(self, mode, typ, sources, fields, prefix='', shapes=()):
+         storage = dict(fields)
++        if is_handle_vector(typ):
++            path = prefix + '[]'
++            items = async_owned_candidates(storage.get(path, ()))
++            child = self.async_owned_result_value('owned', handle_vector_element(typ),
++                storage.get(path, ()), fields, path + '/', shapes)
++            return Value(mode, typ, async_owned_candidates(sources),
++                         handle_items=items, handle_payloads=(child,) if items else ())
+         if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+             return Value(mode, typ, async_owned_candidates(sources),
+                          exchange_payloads=tuple(async_owned_candidates(storage.get(arm, ()))
+@@ -1094,11 +1101,16 @@
+                     definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary)) else frozenset()
+                 if getattr(definition, 'result_storage', False):
+                     sources |= frozenset({SourceOrigin('task_parameter', index)})
++                owned_paths = tuple(aggregate_owned_paths(self.analyzer.enums, definition.args[2][1]))
++                if is_handle_vector(definition.args[2][1]):
++                    element = handle_vector_element(definition.args[2][1])
++                    owned_paths = (('[]', element), *(( '[]/' + path, child_type)
++                        for path, child_type in aggregate_owned_paths(self.analyzer.enums, element)))
+                 environment[name] = Value(mode, typ, fields=fields, reference_targets=targets, task_sources=sources,
+                                           task_result_sources=result_sources, task_parameters=frozenset({index}), task_forward_only=True,
+                                           task_result_fields=tuple((path, frozenset({SourceOrigin(
+                                               'task_result_field_parameter', index, path)}))
+-                                              for path, _ in aggregate_owned_paths(self.analyzer.enums, definition.args[2][1])))
++                                              for path, _ in owned_paths))
+             elif typ == 'Allocator' or typ.startswith('Pool<'):
+                 environment[name] = SourceOrigin('source_parameter', index,
+                                                  element=typ[5:-1] if typ.startswith('Pool<') else None)
+@@ -2069,6 +2081,13 @@
+                                 for _, capture in capture_fields(execution.fields, selector):
+                                     origins.update(capture)
+                         fields.append((field, frozenset(origins)))
++                    if is_handle_vector(typ):
++                        def attach(value, prefix):
++                            children = tuple((key, attach(child, prefix + key + '/')) for key, child in value.owned_fields)
++                            return replace(value, fields=tuple((path[len(prefix):], targets)
++                                for path, targets in fields if path.startswith(prefix)), owned_fields=children)
++                        return flow, replace(result, handle_payloads=tuple(
++                            attach(child, '[]/') for child in result.handle_payloads))
+                     return flow, replace(result, fields=tuple(fields))
+                 if (plain := PLAIN_RETURN_JOINS.get((mode, typ))) is not None:
+                     return flow, Value(plain, PLAIN_JOIN_TYPES[plain])

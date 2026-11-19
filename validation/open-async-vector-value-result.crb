@@ -1,0 +1,16 @@
+// Ancien écart, exécuté depuis par test_async_vector_results ; log historique conservé.
+// AS2/RT5/RT6: an existing independent vector result should cross a task capture and return.
+async fn pass(value:Result<(),u8>)->Result<(),u8>{
+    yield;
+    return value;
+}
+fn main(){
+    let mut p=pool<Vector<u8>>(1);
+    let mut v=p.new();
+    let r=v.try_push(42);
+    let h=runtime::spawn(->pass(r));
+    match h.join(){
+        Ok(result)=>{match result{Ok(())=>{print(1);},Err(byte)=>{print(byte as Int);}}},
+        Err(_)=>{print(99);}
+    }
+}

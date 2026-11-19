@@ -1,0 +1,70 @@
+test_control_result_contracts_need_no_task_bodies_at_call_site (test_public_handle_control.PublicHandleControlTests.test_control_result_contracts_need_no_task_bodies_at_call_site) ... ok
+test_control_results_union_captures_and_keep_permissions (test_public_handle_control.PublicHandleControlTests.test_control_results_union_captures_and_keep_permissions) ... ok
+test_distinct_result_types_remain_incompatible (test_public_handle_control.PublicHandleControlTests.test_distinct_result_types_remain_incompatible) ... ok
+test_if_handles_return_fixed_arrays_from_distinct_frames (test_public_handle_control.PublicHandleControlTests.test_if_handles_return_fixed_arrays_from_distinct_frames) ... ok
+test_owned_capture_sources_survive_control_and_opaque_relay (test_public_handle_control.PublicHandleControlTests.test_owned_capture_sources_survive_control_and_opaque_relay) ... ERROR
+
+======================================================================
+ERROR: test_owned_capture_sources_survive_control_and_opaque_relay (test_public_handle_control.PublicHandleControlTests.test_owned_capture_sources_survive_control_and_opaque_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_public_handle_control.py", line 96, in test_owned_capture_sources_survive_control_and_opaque_relay
+    interface = verify_program(declarations)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15193, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13525, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2981, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9615, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10798, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12098, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12602, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6134, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8779, in expression
+    return self.conditional(expr, source_name)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4618, in conditional
+    result = self.block('branche if', body, returns='if', expected_array=expected_array,
+                        prove_static_utf8=True)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12098, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12602, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6134, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8931, in expression
+    return self.execution_expression(expr, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10050, in execution_expression
+    kind, value, allocation = self.expression(operand[1], scope, label)
+                              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 8928, in expression
+    return self.create_task(expr, scope, source_name)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9873, in create_task
+    self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: capture par transfert : valeur allouée du type déclaré et du scope courant requise
+
+----------------------------------------------------------------------
+Ran 5 tests in 5.988s
+
+FAILED (errors=1)

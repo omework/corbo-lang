@@ -1,0 +1,405 @@
+--- before/crust.py
++++ after/crust.py
+@@ -1674,6 +1674,7 @@
+     borrow_parents: tuple = ()
+     reference_targets: tuple = ()
+     item_sources: tuple = ()
++    item_payloads: tuple = ()
+     task_result_sources: tuple = ()
+     task_result_origins: frozenset = frozenset()
+     task_result_fields: tuple = ()
+@@ -1688,6 +1689,7 @@
+     absent_owned_payload: bool = False
+     payload_storage: str | None = None
+     exchange_payloads: tuple = ()
++    exchange_prototypes: tuple = ()
+     reference_positions: tuple | None = None
+     optional_reference_targets: tuple = ()
+     reference_outcome: int | None = None
+@@ -1726,6 +1728,7 @@
+     item_position_origins: tuple | None = ()
+     fresh_item_sources: tuple = ()
+     fresh_item_positions: tuple | None = ()
++    item_payloads: tuple = ()
+ 
+ 
+ def source_union(*groups):
+@@ -2057,6 +2060,7 @@
+             seen.add(id(carrier))
+             yield carrier
+             pending.extend(child for _, children in carrier.owned_fields for child in children)
++            pending.extend(self.vector_payloads(carrier))
+             if not ownership_only:
+                 pending.extend(self.dependency_targets(carrier))
+ 
+@@ -2070,7 +2074,8 @@
+ 
+     def embedded_allocations(self):
+         pending = [child for owner in self.allocations if owner.alive
+-                   for _, children in owner.owned_fields for child in children]
++                   for child in (*self.vector_payloads(owner),
++                                 *(child for _, children in owner.owned_fields for child in children))]
+         seen = set()
+         while pending:
+             child = pending.pop()
+@@ -2079,6 +2084,7 @@
+             seen.add(id(child))
+             yield child
+             pending.extend(nested for _, children in child.owned_fields for nested in children)
++            pending.extend(self.vector_payloads(child))
+ 
+     def owned_sources(self, allocation):
+         return source_union(*(source_union(child.sources, () if child.owned_fields else child.item_sources)
+@@ -2187,7 +2193,7 @@
+         while destination is not None:
+             scopes.add(destination.id)
+             destination = destination.parent
+-        stored_sources = self.owned_sources(allocation) if allocation.owned_fields else allocation.item_sources
++        stored_sources = self.owned_sources(allocation) if allocation.owned_fields or allocation.item_payloads else allocation.item_sources
+         if any(source.scope not in scopes for source in stored_sources):
+             if allocation.typ.startswith(('Task<', 'Execution<')):
+                 self.fail('transfert refusé : un pool de capture ne survit pas à la tâche')
+@@ -4261,7 +4267,8 @@
+             payloads = [allocation for allocation in values if allocation is not None]
+             return self.buffered_handle_result(c, source_union(*(a.sources for a in payloads)),
+                                                frame['destination'], name,
+-                                               frozenset(o for a in payloads for o in a.origins), typ=typ)
++                                               frozenset(o for a in payloads for o in a.origins), typ=typ,
++                                               prototype=self.merge_payload_prototypes(payloads))
+         parents = {id(p): p for a in values for p in a.borrow_parents}
+         if kind in ('ref', 'mut'):
+             return kind, c, self.reference_descriptor(
+@@ -4273,6 +4280,7 @@
+             dependencies=self.merge_dependencies(*(a.dependencies for a in values)),
+             owned_fields=self.merge_dependencies(*(a.owned_fields for a in values)),
+             item_sources=source_union(*(a.item_sources for a in values)),
++            item_payloads=self.merge_item_payloads(*(a.item_payloads for a in values)),
+             task_result_sources=source_union(*(a.task_result_sources for a in values)),
+             task_result_origins=frozenset(o for a in values for o in a.task_result_origins),
+             task_result_fields=self.merge_async_result_fields(*(a.task_result_fields for a in values)),
+@@ -4294,7 +4302,7 @@
+         pending = [b for scope in self.scopes for b in scope.bindings.values()]
+         pending.extend(binding for scope in self.scopes for binding, _ in scope.imports.values())
+         pending += [b for frame in self.argument_frames for b in frame]
+-        pending += [b for allocation in self.allocations for b in allocation.borrow_parents]
++        pending += [b for allocation in (*self.allocations, *self.embedded_allocations()) for b in allocation.borrow_parents]
+         pending.extend(extra)
+         found = {}
+         while pending:
+@@ -4399,6 +4407,7 @@
+                     dependencies=self.merge_dependencies(*(state['dependencies'] for state in states)),
+                     owned_fields=self.merge_dependencies(*(state['owned_fields'] for state in states)),
+                     item_sources=source_union(*(state['item_sources'] for state in states)),
++                    item_payloads=self.merge_item_payloads(*(state['item_payloads'] for state in states)),
+                     item_positions=self.merge_handle_positions(states),
+                     item_position_origins=self.merge_handle_positions(states, origins=True),
+                     item_origins=frozenset(o for state in states for o in state['item_origins']),
+@@ -4436,7 +4445,9 @@
+             # Reanalysis creates new IDs for allocations made inside the loop.
+             # Compare each field's possible contents without counting those IDs.
+             return frozenset((field, frozenset(child_metadata(embedded[id(child)]) for child in children))
+-                             for field, children in attrs['owned_fields'])
++                             for field, children in attrs['owned_fields']) | frozenset(
++                ('[]', child_metadata(embedded.get(id(child), vars(child))))
++                for child in attrs['item_payloads'] if child.origins & attrs['item_origins'])
+ 
+         def child_metadata(attrs):
+             return (attrs['origins'] & entry_origins, tuple(source.id for source in attrs['sources']),
+@@ -4474,7 +4485,7 @@
+         static_utf8 = frozenset(key for key, (_, attrs) in state['bindings'].items()
+                                 if key in visible and attrs['static_utf8_capture'])
+         owned = tuple((allocation.id, owned_metadata(attrs)) for allocation, attrs in state['allocations']
+-                      if attrs['alive'] and attrs['owned_fields'])
++                      if attrs['alive'] and (attrs['owned_fields'] or attrs['item_payloads']))
+         return self.state_key(state), metadata, array_metadata, static_utf8, owned
+ 
+     @staticmethod
+@@ -4499,6 +4510,7 @@
+             vars(child).update(states[0])
+             child.owned_fields = self.merge_dependencies(*(state['owned_fields'] for state in states))
+             child.item_sources = source_union(*(state['item_sources'] for state in states))
++            child.item_payloads = self.merge_item_payloads(*(state['item_payloads'] for state in states))
+             child.item_positions = self.merge_handle_positions(states)
+             child.item_position_origins = self.merge_handle_positions(states, origins=True)
+             child.item_origins = frozenset(origin for state in states for origin in state['item_origins'])
+@@ -4517,6 +4529,7 @@
+             allocation.sources = source_union(*(s['sources'] for s in live)) if live else original['sources']
+             allocation.definite = all(s['alive'] and s['definite'] for s in states)
+             allocation.item_sources = source_union(*(s['item_sources'] for s in live))
++            allocation.item_payloads = self.merge_item_payloads(*(s['item_payloads'] for s in live))
+             allocation.task_result_sources = source_union(*(s['task_result_sources'] for s in live))
+             allocation.task_result_origins = frozenset(o for state in live for o in state['task_result_origins'])
+             allocation.task_result_fields = self.merge_async_result_fields(*(state['task_result_fields'] for state in live))
+@@ -5192,7 +5205,8 @@
+                                                        for state in selected_item_states)))
+             if selected_kind == 'handle_option':
+                 return self.buffered_handle_result(result_c, selected_sources, self.scopes[-1],
+-                                                   source_name, selected_origins, typ=selected_type)
++                                                   source_name, selected_origins, typ=selected_type,
++                                                   prototype=self.merge_payload_prototypes(Allocation(**state) for state in selected_item_states))
+             if selected_kind == 'buffered_handle_exchange':
+                 return self.join_buffered_exchange(result_c, selected_item_states, self.scopes[-1], source_name)
+             allocation = Allocation(self.uid(), self.scopes[-1].id, source_name, selected_sources,
+@@ -5200,6 +5214,7 @@
+                                     dependencies=selected_dependencies, variants=selected_variants,
+                                     owned_fields=self.merge_dependencies(*(state['owned_fields'] for state in selected_item_states)),
+                                     item_sources=source_union(*(state['item_sources'] for state in selected_item_states)),
++                                    item_payloads=self.merge_item_payloads(*(state['item_payloads'] for state in selected_item_states)),
+                                     task_result_sources=source_union(*(state['task_result_sources'] for state in selected_item_states)),
+                                     task_result_origins=frozenset(o for state in selected_item_states
+                                                                   for o in state['task_result_origins']),
+@@ -5264,7 +5279,7 @@
+                     and any(source.id in reset_ids for source in source_union(
+                         allocation.item_sources, *(target.sources for target in self.retained_dependencies(allocation))))):
+                 self.fail('reset interdit : une allocation est capturée par une tâche')
+-            sources = self.owned_sources(allocation) if allocation.owned_fields else allocation.item_sources
++            sources = self.owned_sources(allocation) if allocation.owned_fields or allocation.item_payloads else allocation.item_sources
+             if any(source.id in reset_ids for source in sources):
+                 destination = 'un vecteur' if is_handle_vector(allocation.typ) else 'un agrégat'
+                 self.fail(f'reset interdit : le pool fournit des handles encore stockés dans {destination}')
+@@ -7913,7 +7928,8 @@
+                                                   item_sources=incoming.item_sources,
+                                                   item_positions=incoming.item_positions,
+                                                   item_origins=incoming.item_origins,
+-                                                  item_position_origins=incoming.item_position_origins)])
++                                                  item_position_origins=incoming.item_position_origins,
++                                                  item_payloads=incoming.item_payloads)])
+             return
+         self.destroy(target)
+         self.lines.append(f'*{loan.c} = {replacement};')
+@@ -7923,17 +7939,46 @@
+             link.array_root = new_root
+             link.array_alternatives = ()
+ 
+-    def check_handle_vector_payload(self, typ):
++    @staticmethod
++    def vector_payloads(vector, origins=None):
++        origins = vector.item_origins if origins is None else origins
++        return tuple(item for item in vector.item_payloads if item.origins & origins)
++
++    @staticmethod
++    def merge_item_payloads(*groups):
++        return tuple({id(item): item for group in groups for item in group}.values())
++
++    def remember_vector_payload(self, vector, incoming):
++        if not (incoming.dependencies or incoming.owned_fields or incoming.item_payloads):
++            return
++        item = self.copy_owned_tree(incoming, vector.scope)
++        vector.item_payloads = self.merge_item_payloads(vector.item_payloads, (item,))
++
++    def extracted_payload(self, vector, origins):
++        return self.merge_payload_prototypes(self.vector_payloads(vector, origins or frozenset()))
++
++    def merge_payload_prototypes(self, items):
++        items = tuple(item for item in items if item is not None)
++        if not items:
++            return None
++        return replace(items[0],
++            dependencies=self.merge_dependencies(*(item.dependencies for item in items)),
++            owned_fields=self.merge_dependencies(*(item.owned_fields for item in items)),
++            item_payloads=self.merge_item_payloads(*(item.item_payloads for item in items)),
++            variants=frozenset(arm for item in items for arm in item.variants),
++            borrow_parents=tuple({id(parent): parent for item in items for parent in item.borrow_parents}.values()))
++
++    def check_handle_vector_payload(self, typ, *, local=False):
+         element = handle_vector_element(typ)
+         if element is None:
+             return
+         if element not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') and element not in self.enums:
+             self.fail(f'type de charge inconnu dans {typ}')
+-        if self.has_owned_fields(element) or any(aggregate_reference_paths(self.enums, element)):
++        if not local and (self.has_owned_fields(element) or any(aggregate_reference_paths(self.enums, element))):
+             self.fail('prototype : métadonnées des champs propriétaires/empruntés dans un vecteur de handles non raccordées')
+ 
+     def check_vector_handle_destination(self, vector, incoming, scope, *, borrowed_write=False):
+-        self.check_handle_vector_payload(vector.typ)
++        self.check_handle_vector_payload(vector.typ, local=True)
+         if vector.scope == self.scopes[0].id and any(source.kind == 'symbolic' for source in vector.sources):
+             allowed = self.exit_frames and vector.id in self.exit_frames[-1]['borrowed_vector_writes']
+             if not borrowed_write or not allowed:
+@@ -7944,6 +7989,7 @@
+         durable = {active.id for active in self.scopes[:self.scopes.index(owner_scope) + 1]}
+         if any(source.scope not in durable for source in incoming.sources):
+             self.fail('le pool de l’élément doit survivre au vecteur')
++        self.check_borrow_destination(incoming, owner_scope)
+ 
+     def replace_borrowed_vector_handle(self, loan, rhs, scope, roots):
+         if rhs[0] not in ('move', 'new_transfer', 'array_transfer'):
+@@ -7959,6 +8005,7 @@
+             vector = root.alloc
+             self.check_allocation_handle_type(f'A<{handle_vector_element(vector.typ)}>', kind, incoming)
+             self.check_vector_handle_destination(vector, incoming, scope, borrowed_write=True)
++            self.remember_vector_payload(vector, incoming)
+             ancestors = self.array_ancestors(loan, root)
+             index = next((part.handle_slot_index for key, part in self.array_lineage(loan).items()
+                           if key in ancestors and part.handle_slot_index is not None), None)
+@@ -7999,6 +8046,7 @@
+             self.expression_clock(argument)
+         self.check_allocation_handle_type(f'A<{handle_vector_element(vector.typ)}>', kind, incoming)
+         self.check_vector_handle_destination(vector, incoming, scope, borrowed_write=True)
++        self.remember_vector_payload(vector, incoming)
+         return value, incoming
+ 
+     def push_int_handle(self, expr, binding, argument, scope, label):
+@@ -8070,7 +8118,12 @@
+                             for i, origins in enumerate(vector.item_position_origins))
+             sources = source_union(incoming.sources, () if append else old_sources)
+             origins = incoming.origins | (frozenset() if append else old_origins or frozenset())
+-            _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=handle_vector_element(vector.typ))
++            prototypes = (None if append else self.extracted_payload(vector, old_origins),
++                          self.extracted_payload(vector, incoming.origins))
++            _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label,
++                origins=origins, typ=handle_vector_element(vector.typ),
++                prototype=self.merge_payload_prototypes(prototypes))
++            allocation.exchange_prototypes = prototypes
+             allocation.exchange_payloads = (((), frozenset()) if append else (old_sources, old_origins),
+                                             (incoming.sources, incoming.origins))
+             if append:
+@@ -8115,12 +8168,13 @@
+                                               for left, right in zip(positions, positions[1:]))
+             vector.item_sources = source_union(*vector.item_positions)
+         origins = self.handle_origins_for_sources(vector, sources, literal)
++        prototype = self.extracted_payload(vector, origins)
+         self.remove_handle_position(vector, literal)
+         name = f'element_handle{self.uid()}'
+         self.lines.append(f'Cell *{name};')
+         self.lines.append(f'vector_remove({binding.c}, {index}, &{name});')
+         return self.receive_extracted_handle(name, sources, scope, label,
+-                                             origins=origins, typ=handle_vector_element(vector.typ))
++                                             origins=origins, typ=handle_vector_element(vector.typ), prototype=prototype)
+ 
+     @staticmethod
+     def update_handle_positions(vector, index, origins, *, append=False, weak=False):
+@@ -8170,6 +8224,7 @@
+                                            for key, children in prototype.owned_fields)
+             allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+             allocation.variants = prototype.variants
++            allocation.item_payloads = tuple(self.copy_owned_tree(item, scope.id) for item in prototype.item_payloads)
+         self.allocations.append(allocation)
+         scope.allocations.append(allocation)
+         return 'owned', name, allocation
+@@ -8192,6 +8247,7 @@
+             vector.item_positions = vector.item_positions[:-1]
+             vector.item_sources = source_union(*vector.item_positions)
+         origins = self.handle_origins_for_sources(vector, sources, position)
++        prototype = self.extracted_payload(vector, origins)
+         if sources:
+             self.remove_handle_position(vector, position)
+         name = f'element_handle{self.uid()}'
+@@ -8200,14 +8256,14 @@
+             self.lines.append(f'{name}.status = vector_pop({binding.c}, &{name}.value);')
+             if not sources:
+                 self.lines.append(f'if ({name}.status == CRUST_CHAR_OK) fail("pop de handle : provenance absente");')
+-            return self.buffered_handle_result(name, sources, scope, label, origins, typ=handle_vector_element(vector.typ))
++            return self.buffered_handle_result(name, sources, scope, label, origins, typ=handle_vector_element(vector.typ), prototype=prototype)
+         self.lines.append(f'Cell *{name};')
+         self.lines.append(f'if (vector_pop({binding.c}, &{name}) != CRUST_CHAR_OK) fail("pop de handle vide");')
+         return self.receive_extracted_handle(name, sources, scope, label,
+-                                             origins=origins, typ=handle_vector_element(vector.typ))
+-
+-    def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int'):
+-        _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ)
++                                             origins=origins, typ=handle_vector_element(vector.typ), prototype=prototype)
++
++    def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int', prototype=None):
++        _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ, prototype=prototype)
+         allocation.absent_owned_payload = not sources
+         allocation.payload_storage = 'pool'
+         if not sources:
+@@ -8397,10 +8453,15 @@
+         payloads = tuple((source_union(*(sources for sources, _ in arm)),
+                           frozenset().union(*(origins or frozenset() for _, origins in arm)))
+                          for arm in zip(*(state['exchange_payloads'] for state in states)))
++        prototypes = tuple(self.merge_payload_prototypes(
++            state['exchange_prototypes'][arm] for state in states if state.get('exchange_prototypes'))
++            for arm in range(2))
+         _, _, allocation = self.receive_extracted_handle(
+             f'{name}.value', source_union(*(sources for sources, _ in payloads)), scope, label,
+-            origins=frozenset().union(*(origins for _, origins in payloads)), typ=states[0]['typ'])
++            origins=frozenset().union(*(origins for _, origins in payloads)), typ=states[0]['typ'],
++            prototype=self.merge_payload_prototypes(prototypes))
+         allocation.exchange_payloads = payloads
++        allocation.exchange_prototypes = prototypes
+         if states[0]['optional_payload']:
+             self.guard_buffered_handle(name, allocation, '!=')
+         return 'buffered_handle_exchange', name, allocation
+@@ -9474,7 +9535,8 @@
+                 self.lines.append('fail("replace de handle : aucun élément possible");')
+                 raise PathsReturned()
+             return self.receive_extracted_handle(f'{binding.c}.value', sources, scope, source_name,
+-                                                 origins=old_origins if success else incoming_origins, typ=handle_vector_element(vector.typ))
++                                                 origins=old_origins if success else incoming_origins, typ=handle_vector_element(vector.typ),
++                                                 prototype=self.extracted_payload(vector, old_origins if success else incoming_origins))
+         if op in ('array_buffered_exchange_status', 'array_buffered_exchange_take'):
+             binding = self.lookup(expr[1][1])
+             if binding.kind not in ('buffered_handle_exchange', 'mutable_ref_replace', 'mutable_ref_try_push'):
+@@ -9506,7 +9568,8 @@
+             if not sources:
+                 self.lines.append('fail("replace de handle : aucun élément possible");')
+                 raise PathsReturned()
+-            return self.receive_extracted_handle(f'{binding.c}.value', sources, scope, source_name, origins=origins, typ=allocation.typ)
++            return self.receive_extracted_handle(f'{binding.c}.value', sources, scope, source_name, origins=origins, typ=allocation.typ,
++                prototype=allocation.exchange_prototypes[arm == 5] if allocation.exchange_prototypes else None)
+         if op in ('array_handle_option_status', 'array_handle_option_value', 'array_handle_option_empty'):
+             binding = self.lookup(expr[1][1])
+             if binding.kind not in ('handle_option', 'mutable_ref_option'):
+@@ -9538,7 +9601,7 @@
+                 self.lines.append('fail("pop de handle : aucun élément possible");')
+                 raise PathsReturned()
+             return self.receive_extracted_handle(f'{binding.c}.value', allocation.sources, scope, source_name,
+-                                                 origins=allocation.origins, typ=allocation.typ)
++                                                 origins=allocation.origins, typ=allocation.typ, prototype=allocation)
+         if op in ('array_handle_len', 'array_pop_handle', 'array_handle_option_pop'):
+             binding = self.lookup(expr[1][1])
+             if binding.alloc is None or binding.alloc.typ not in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+@@ -10196,6 +10259,7 @@
+             target.dependencies = write.dependencies
+             target.borrow_parents = write.borrow_parents
+             target.item_sources = write.item_sources
++            target.item_payloads = write.item_payloads
+             target.item_positions = write.item_positions
+             target.item_origins = write.item_origins
+             target.item_position_origins = write.item_position_origins
+@@ -10396,6 +10460,7 @@
+                          for field, targets in original.owned_fields)
+         sources = self.owned_field_sources(children) if children else original.item_sources
+         return replace(original, scope=scope_id, owned_fields=children, item_sources=sources,
++                       item_payloads=tuple(self.copy_owned_tree(item, scope_id) for item in original.item_payloads),
+                        guard=None, alive=True, definite=True)
+ 
+     def check_fresh_owned_fields(self, contract, state, path):
+@@ -13565,6 +13630,7 @@
+             dependencies=self.merge_dependencies(*(item.dependencies for item in items)),
+             owned_fields=self.merge_dependencies(*(item.owned_fields for item in items)),
+             item_sources=source_union(*(item.item_sources for item in items)),
++            item_payloads=self.merge_item_payloads(*(item.item_payloads for item in items)),
+             task_result_sources=source_union(*(item.task_result_sources for item in items)),
+             task_result_origins=frozenset(o for item in items for o in item.task_result_origins),
+             task_result_fields=self.merge_async_result_fields(*(item.task_result_fields for item in items)),
+@@ -14106,7 +14172,7 @@
+                     element = expr[3] if expr[1] == 'pool' else None
+                     if element is not None and element not in ('Int', 'String', *VECTOR_TYPES) and element not in self.enums:
+                         self.fail(f"prototype : type de pool non pris en charge '{element}'")
+-                    self.check_handle_vector_payload(element)
++                    self.check_handle_vector_payload(element, local=True)
+                     source = MemorySource(sid, scope.id, expr[1], name, f'&s{sid}', element)
+                     scope.sources.append(source)
+                     if element == 'String' or element in VECTOR_TYPES:
+@@ -15014,6 +15080,8 @@
+                 if mode in ('array', 'array_ref', 'array_mut'):
+                     self.declared_array_type(typ)
+                     continue
++                if typ.startswith('A<') and is_handle_vector(typ[2:-1]):
++                    self.check_handle_vector_payload(typ[2:-1])
+                 if is_handle_vector(typ) and mode in ('ref', 'mut', 'owned'):
+                     self.check_handle_vector_payload(typ)
+                     continue
+@@ -15049,6 +15117,8 @@
+                 result = ('execution', definition)
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             content = result[1][2:-1] if result[1].startswith('A<') else result[1]
++            if is_handle_vector(content):
++                self.check_handle_vector_payload(content)
+             if result[0] in ('handle_option', 'buffered_handle_exchange'):
+                 element = result[1] if result[0] == 'handle_option' else exchange_element(result[1])
+                 self.check_handle_vector_payload(f'Vector<A<{element}>>')

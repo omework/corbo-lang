@@ -1,0 +1,200 @@
+[
+  {
+    "name": "budget",
+    "title": "An explicit growth budget in Corbo",
+    "description": "Collect integers within an explicitly bounded 64 KiB growing-data region; the pool has one vector slot.",
+    "stdout": "1000\n"
+  },
+  {
+    "name": "hello",
+    "title": "A synchronous entry point",
+    "description": "`main` is synchronous. Build a package with `package.toml` and `src/main.crb`.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "numbers",
+    "title": "Primitives and checked operators",
+    "description": "Integers default to `i64`, decimal floating-point literals to `f64`. Variables in arithmetic must have compatible types. `as` permits conversions that are exact for every source value; `try_from` is fallible. Integer arithmetic, shifts and indexing retain their checks.",
+    "stdout": "42\n8\ntrue\n"
+  },
+  {
+    "name": "control",
+    "title": "Expressions and control flow",
+    "description": "Blocks, `if`, `match` and `loop` can produce values. Semicolons distinguish statements from trailing values. `continue` and `break` clean up the scopes they leave.",
+    "stdout": "8\n42\n"
+  },
+  {
+    "name": "tuples",
+    "title": "Functions, tuples and destructuring",
+    "description": "Functions can return tuples of two or more values. Types are inferred by position when no binding annotation is supplied.",
+    "stdout": "22\n42\ntrue\n"
+  },
+  {
+    "name": "methods",
+    "title": "Structs, constants and receiver modes",
+    "description": "Receiver signatures determine whether a method borrows, mutably borrows or consumes its receiver. Associated constants use `Type::NAME`.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "enums",
+    "title": "Enums and pattern matching",
+    "description": "Variants can carry named or positional payloads. A value match transfers the selected payload according to its ordinary ownership rules.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "errors",
+    "title": "Result, Option and early propagation",
+    "description": "`?` returns the failure/absence from the enclosing function. Result errors of different types require a statically resolved `Outer::from(Inner) -> Outer`; there is no implicit arbitrary conversion.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "moves",
+    "title": "Moves and explicit copies",
+    "description": "Assignment transfers a value. Call `copy` explicitly when retaining a primitive source. A move transfers cleanup responsibility; it does not request that an allocation be relocated.",
+    "stdout": "42\n7\n"
+  },
+  {
+    "name": "borrows",
+    "title": "Shared borrows and mutable reborrows",
+    "description": "References do not transfer cleanup responsibility. Their targets must remain valid, and mutable loans exclude incompatible access until their last use.",
+    "stdout": "42\n43\n"
+  },
+  {
+    "name": "arrays",
+    "title": "Fixed arrays, structural repetition and slices",
+    "description": "An array carries its element count in its type. A borrowed slice carries an address and length. Repetition evaluates the initializer once and requires a structurally replicable value; slices retain bounds and lifetime checks.",
+    "stdout": "43\n7\n"
+  },
+  {
+    "name": "pools",
+    "title": "Fixed-capacity pools and allocation handles",
+    "description": "`pool<T>(n)` reserves fixed slots. `new` returns `A<T>`; the pool must outlive that allocation. Dropping a live allocation releases its slot after cleanup.",
+    "stdout": "10\n20\n30\n"
+  },
+  {
+    "name": "placement",
+    "title": "Receivers and placement across scopes",
+    "description": "A block result has an explicit receiver. The post-AST placement plan follows transfers to their final destination while keeping allocation addresses stable.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "destruction",
+    "title": "Destruction before storage release",
+    "description": "`drop(value)` and scope exit call `drop(&mut self)` once, before field cleanup. Moving the value changes who performs that cleanup. Types without a custom destructor use the default empty destructor.",
+    "stdout": "1\n7\n9\n"
+  },
+  {
+    "name": "regions",
+    "title": "Datastack budgets, local regions and page reclamation",
+    "description": "The global datastack annotation and its properties are optional. `stack_region` supplies a local growing-data budget. `free_pages` requests OS reclamation of complete unused pages after cleanup, distinct from moving a cursor.",
+    "stdout": "3\n"
+  },
+  {
+    "name": "vector",
+    "title": "Vectors and extraction",
+    "description": "The vector descriptor has fixed size; its contiguous payload grows within its region budget. Insertion moves an item into the vector. Extraction transfers it to the receiver.",
+    "stdout": "10\n20\n1\n"
+  },
+  {
+    "name": "map",
+    "title": "HashMap lookup, replacement and removal",
+    "description": "Maps accept integer and boolean keys. Insertion moves its key and value; lookup borrows its key. Remaining values are destroyed with the map, while an extracted value belongs to its receiver.",
+    "stdout": "42\n42\n"
+  },
+  {
+    "name": "text",
+    "title": "UTF-8 text and caller-owned bytes",
+    "description": "`String` owns region-backed UTF-8 bytes; a literal provides a static `&str` view. Byte length differs from character count. Convert to a byte slice explicitly with `as_bytes()`. Both `String` and `&str` provide `split(separator)`: its iterator yields borrowed `&str` pieces, preserving empty pieces without allocating strings.",
+    "stdout": "13\n2\n5\n6\n0\n"
+  },
+  {
+    "name": "closures",
+    "title": "Closures and explicit callable passing",
+    "description": "A closure is a concrete captured object. Parameters are typed and braces are required. `fn(...) -> R`, `&fn(...) -> R` and `&mut fn(...) -> R` distinguish value passing from borrowing. Without `move`, primitive/shared-reference captures copy at creation. Explicit `move` transfers captured bindings; references retain their target dependencies.",
+    "stdout": "42\n10\n20\n2\n1\n2\n"
+  },
+  {
+    "name": "iter",
+    "title": "STD iterator pipelines",
+    "description": "Only `Iter` borrows the source. Each adapter owns the preceding stage. `collect(&mut destination)` consumes the chain and moves its outputs into caller-selected storage.",
+    "stdout": "1\n120\n7\n"
+  },
+  {
+    "name": "generic",
+    "title": "Contracts on generic structs",
+    "description": "Type parameters and their constraints also apply to structs. Concrete instantiation retains the ordinary ownership and borrowing obligations of its fields.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "contracts",
+    "title": "Static structural type contracts",
+    "description": "A `with` contract requires the listed methods and permits additional ones. The compiler resolves the concrete implementation statically; no trait object or dynamic dispatch is introduced.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "modules",
+    "title": "Packages, modules, visibility and aliases",
+    "description": "A package is named in `package.toml`. Files under `src` provide components. `pub`, grouped `use` and `as` control access and local names; dependencies can be pinned through package metadata.",
+    "stdout": "42\n42\n"
+  },
+  {
+    "name": "target",
+    "title": "Conditional compilation",
+    "description": "Target selection happens before import resolution. Excluded branches cannot introduce unavailable imports or collisions. The paired `endif` ends selection; it does not create a runtime scope.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "async",
+    "title": "Futures, suspension and execution branches",
+    "description": "Calling an async function creates an inactive Future and captures its arguments immediately. `yield;` suspends cooperatively; `.await` waits without blocking a poll worker. Synchronous `main` starts an execution and waits through its handle.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "threads",
+    "title": "Native threads and captured loans",
+    "description": "A native execution receives its block captures. The target of a captured reference must remain valid through its use; this example joins before accessing the target again.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "blocking",
+    "title": "Blocking work from an async context",
+    "description": "`spawn_blocking` returns an `AsyncHandle`, awaited inside async code. Blocking `join()` belongs in a synchronous context. The blocking operation runs on a dedicated worker.",
+    "stdout": "42\n"
+  },
+  {
+    "name": "file",
+    "title": "Files, errors and caller-provided buffers",
+    "description": "The caller chooses open mode, permissions and buffer size. Paths in this API are NUL-terminated byte slices. This program creates a file in its working directory, performs I/O and deletes it. Moving or dropping `File` closes its native handle once.",
+    "stdout": "2\n"
+  },
+  {
+    "name": "buffered",
+    "title": "Buffered I/O through structural contracts",
+    "description": "Buffered wrappers borrow the stream and scratch buffer explicitly. Call `flush()` to send pending bytes; destruction discards pending output. This example creates a local file and deletes it after closing it.",
+    "stdout": "2\n2\n"
+  },
+  {
+    "name": "network",
+    "title": "Typed network endpoints and datagrams",
+    "description": "IPv4 address objects are passed to bind/connect. Port zero asks the OS for a local port. This loopback UDP exchange uses caller-provided buffers and no external server; TCP and async APIs are linked below.",
+    "stdout": "42\n1\n"
+  },
+  {
+    "name": "encoding",
+    "title": "Hashes and encodings with bounded output",
+    "description": "The STD has native hashing, crypto, TLS, codecs and platform I/O. APIs that produce variable-length bytes take caller-owned buffers. This example hashes two bytes and hex-encodes the fixed digest without an unbounded allocation.",
+    "stdout": "64\n"
+  },
+  {
+    "name": "compression",
+    "title": "Compression with an explicit workspace",
+    "description": "Compression APIs borrow caller-owned input, output and workspace. The example provides the documented Gzip level-1–9 workspace, round-trips a frame and checks its decoded size through the returned count.",
+    "stdout": "3\n65\n"
+  },
+  {
+    "name": "foreign",
+    "title": "Unchecked C, typed operands and native assembly",
+    "description": "Foreign code belongs inside `@unchecked`. `${name}` binds an existing Corbo operand. Header paths are explicit. `addr` is restricted to the unchecked block, and its address must not escape it. ABI, lifetime and memory correctness inside foreign code remain the developer’s responsibility.",
+    "stdout": "42\n"
+  }
+]

@@ -1,0 +1,34 @@
+--- before/async_result_storage.py
++++ async_result_storage.py
+@@ -127,6 +127,31 @@
+     if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange'):
+         return None
+     summary = effect.completion_result
++    from array_syntax import is_handle_vector
++    if is_handle_vector(summary.typ):
++        from results import SourceOrigin
++        roots = frozenset(candidate.storage() if candidate.kind == 'parameter'
++            else output_origin(candidate.source, summary.typ) for candidate in summary.candidates
++            if candidate.kind == 'parameter' or candidate.kind == 'fresh')
++        fields = {}
++        def visit(value, path):
++            fields[path] = fields.get(path, frozenset()) | frozenset(candidate.storage() for candidate in value.candidates)
++            for key, child in value.owned_fields:
++                visit(child, path + '/' + key)
++        for value in summary.vector_values:
++            visit(value, '[]')
++        # Scalar payloads have no field graph. Their storage still belongs to
++        # the returned vector and must survive the async state.
++        items = set(fields.get('[]', ()))
++        for candidate in summary.candidates:
++            if candidate.kind == 'parameter':
++                items.add(SourceOrigin('vector_element_parameter', candidate.parameter))
++            for slot in candidate.vector_layout:
++                items.update(item.storage() for item in slot)
++            items.update(SourceOrigin('allocation_parameter', index) for index in candidate.vector_added_parameters)
++            items.update(SourceOrigin('source_parameter', index) for index in candidate.vector_added_pools)
++        fields['[]'] = frozenset(items)
++        return roots, tuple(sorted(fields.items()))
+     if (summary.mode == 'buffered_handle_exchange' or summary.mode in EXCHANGE_JOIN_TYPES) and len(summary.exchange_payloads) == 2:
+         from results import SourceOrigin
+         def storage(candidate):

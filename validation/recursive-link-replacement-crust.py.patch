@@ -1,0 +1,26 @@
+--- before/crust.py
++++ crust.py
+@@ -12881,6 +12881,23 @@
+                     projections[statement.args[0]] = '&str'
+                     general_branches = True
+                     continue
++                if statement.op == 'var' and statement.args[1][0] in ('ref_expr', 'mut_expr'):
++                    initializer = statement.args[1]
++                    place = initializer[1]
++                    if place[0] == 'field_deref' and place[1][0] == 'field':
++                        _, receiver, field = place[1]
++                        reference = reference_type(projections.get(receiver, ''))
++                        declared = (dict(self.struct_fields.get(reference[1], ())).get(field, '')
++                                    if reference else '')
++                        if reference and reference[1] in self.struct_fields and not declared:
++                            self.fail(f"champ inconnu '{field}' dans {reference[1]}")
++                        if declared.startswith('A<'):
++                            # The normal checker establishes the field's target,
++                            # mode and lifetime; this filter only forwards its type.
++                            mode = '&mut ' if initializer[0] == 'mut_expr' else '&'
++                            projections[statement.args[0]] = mode + declared[2:-1]
++                            general_branches = True
++                            continue
+                 if statement.op == 'var' and self.match_read_expression(statement.args[1]):
+                     projections[statement.args[0]] = 'Int'
+                     continue

@@ -1,0 +1,23 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1533,8 +1533,8 @@
+         output = f'&{result}' if result else 'NULL'
+         steps.extend((
+             f'frame->pc = {resume_point};', f'resume_{resume_point}: ;',
+-            f'CrustTaskState child_{resume_point} = task_poll({task});',
+-            f'if (child_{resume_point} == TASK_SUSPENDED) return TASK_STEP_YIELD;',
++            f'CrustTaskState child_{resume_point} = task_poll_child(&frame->task, {task});',
++            f'if (child_{resume_point} == TASK_SUSPENDED) return task_child_suspension({task});',
+             f'if (child_{resume_point} != TASK_COMPLETE || !task_take({task}, {output})) fail("invalid async await");',
+             f'{task} = NULL;',
+         ))
+@@ -1671,7 +1671,8 @@
+             resume_point += 1
+             steps.extend((
+                 f'frame->pc = {resume_point};', f'resume_{resume_point}: ;',
+-                f'if (!{take}) return TASK_STEP_YIELD;',
++                f'CrustTaskStep wait_{resume_point} = task_async_subscribe({handle}, &frame->task);',
++                f'if (!{take}) return wait_{resume_point};',
+             ))
+         if status_result is not None:
+             steps.append(f'{result}.status = {status_result}.status;')

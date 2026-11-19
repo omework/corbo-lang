@@ -1,0 +1,227 @@
+BASELINE PASS
+test_argument_order_temporary_read_and_stored_loan (test_sync_owned_calls.SyncOwnedCallTests.test_argument_order_temporary_read_and_stored_loan) ... ok
+test_collections_keep_their_type_and_cleanup (test_sync_owned_calls.SyncOwnedCallTests.test_collections_keep_their_type_and_cleanup) ... ok
+test_conditional_return_uses_real_pool_and_cleans_other_parameter (test_sync_owned_calls.SyncOwnedCallTests.test_conditional_return_uses_real_pool_and_cleans_other_parameter) ... ok
+test_consume_and_named_result_cleanup_in_both_contexts (test_sync_owned_calls.SyncOwnedCallTests.test_consume_and_named_result_cleanup_in_both_contexts) ... ok
+test_multiple_prepared_owners_clean_in_reverse_order (test_sync_owned_calls.SyncOwnedCallTests.test_multiple_prepared_owners_clean_in_reverse_order) ... ok
+test_nested_calls_and_loop_inside_later_argument (test_sync_owned_calls.SyncOwnedCallTests.test_nested_calls_and_loop_inside_later_argument) ... ok
+test_owned_result_annotation_and_direct_mutable_loan (test_sync_owned_calls.SyncOwnedCallTests.test_owned_result_annotation_and_direct_mutable_loan) ... ok
+test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) ... ok
+test_prepared_owner_survives_suspension_or_is_dropped_on_return (test_sync_owned_calls.SyncOwnedCallTests.test_prepared_owner_survives_suspension_or_is_dropped_on_return) ... ok
+test_replacement_evaluates_new_before_destroying_old (test_sync_owned_calls.SyncOwnedCallTests.test_replacement_evaluates_new_before_destroying_old) ... ok
+test_transfers_and_usages_are_explicit (test_sync_owned_calls.SyncOwnedCallTests.test_transfers_and_usages_are_explicit) ... ok
+test_unreturned_pool_may_end_before_result (test_sync_owned_calls.SyncOwnedCallTests.test_unreturned_pool_may_end_before_result) ... ok
+test_verification_uses_contracts_and_failed_launch_cleans_input (test_sync_owned_calls.SyncOwnedCallTests.test_verification_uses_contracts_and_failed_launch_cleans_input) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 19.722s
+
+OK
+
+moved_slot_not_cleared SURVIVED
+test_consume_and_named_result_cleanup_in_both_contexts (test_sync_owned_calls.SyncOwnedCallTests.test_consume_and_named_result_cleanup_in_both_contexts) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.458s
+
+OK
+
+prepared_owner_not_registered DETECTED
+test_prepared_owner_survives_suspension_or_is_dropped_on_return (test_sync_owned_calls.SyncOwnedCallTests.test_prepared_owner_survives_suspension_or_is_dropped_on_return) ... FAIL
+
+======================================================================
+FAIL: test_prepared_owner_survives_suspension_or_is_dropped_on_return (test_sync_owned_calls.SyncOwnedCallTests.test_prepared_owner_survives_suspension_or_is_dropped_on_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 62, in test_prepared_owner_survives_suspension_or_is_dropped_on_return
+    run=self.run_native(self.program(f'take(->a,{argument});return 8;',declarations))
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 28, in run_native
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12484, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : pool capacity exceeded
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.652s
+
+FAILED (failures=1)
+
+prepared_owner_order_reversed DETECTED
+test_multiple_prepared_owners_clean_in_reverse_order (test_sync_owned_calls.SyncOwnedCallTests.test_multiple_prepared_owners_clean_in_reverse_order) ... FAIL
+
+======================================================================
+FAIL: test_multiple_prepared_owners_clean_in_reverse_order (test_sync_owned_calls.SyncOwnedCallTests.test_multiple_prepared_owners_clean_in_reverse_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 79, in test_multiple_prepared_owners_clean_in_reverse_order
+    run=self.run_native(source);self.assertEqual(run.stdout,'42\n');self.assert_destroyed(run,[8,7,9,10])
+                                                                    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 33, in assert_destroyed
+    self.assertEqual(trace,[str(value) for value in values])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['7', '8', '9', '10'] != ['8', '7', '9', '10']
+
+First differing element 0:
+'7'
+'8'
+
+- ['7', '8', '9', '10']
+?       -----
+
++ ['8', '7', '9', '10']
+?  +++++
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.824s
+
+FAILED (failures=1)
+
+bridge_result_destroyed DETECTED
+ ... 
+  test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) (body='let b=same(->a);return <-b;') ... FAIL
+  test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) (body='return <-same(->a);') ... FAIL
+  test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) (body='let task=child(->same(->a));let b=task.await;return <-b;') ... FAIL
+
+======================================================================
+FAIL: test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) (body='let b=same(->a);return <-b;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 100, in test_owned_return_identity_and_child_capture
+    run=self.run_native(source);lines=run.stdout.splitlines()
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 28, in run_native
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12484, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : destroy a=7
+reclaim a
+destroy a=7
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp4do8bgqy/task.c:548:27: runtime error: member access within null pointer of type 'Cell' (aka 'struct Cell')
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp4do8bgqy/task.c:548:27 
+
+
+======================================================================
+FAIL: test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) (body='return <-same(->a);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 100, in test_owned_return_identity_and_child_capture
+    run=self.run_native(source);lines=run.stdout.splitlines()
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 28, in run_native
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12484, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : destroy a=7
+reclaim a
+destroy a=7
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp3vno3e0n/task.c:548:27: runtime error: member access within null pointer of type 'Cell' (aka 'struct Cell')
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp3vno3e0n/task.c:548:27 
+
+
+======================================================================
+FAIL: test_owned_return_identity_and_child_capture (test_sync_owned_calls.SyncOwnedCallTests.test_owned_return_identity_and_child_capture) (body='let task=child(->same(->a));let b=task.await;return <-b;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 100, in test_owned_return_identity_and_child_capture
+    run=self.run_native(source);lines=run.stdout.splitlines()
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 28, in run_native
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12484, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : destroy a=7
+reclaim a
+destroy a=7
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpwmdmlr7k/task.c:548:27: runtime error: member access within null pointer of type 'Cell' (aka 'struct Cell')
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpwmdmlr7k/task.c:548:27 
+
+
+----------------------------------------------------------------------
+Ran 1 test in 2.591s
+
+FAILED (failures=3)
+
+owned_source_contract_ignored DETECTED
+test_unreturned_pool_may_end_before_result (test_sync_owned_calls.SyncOwnedCallTests.test_unreturned_pool_may_end_before_result) ... ERROR
+
+======================================================================
+ERROR: test_unreturned_pool_may_end_before_result (test_sync_owned_calls.SyncOwnedCallTests.test_unreturned_pool_may_end_before_result)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 125, in test_unreturned_pool_may_end_before_result
+    run=self.run_native(source);lines=run.stdout.splitlines()
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 14924, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 14917, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 13418, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 13299, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 2935, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 9517, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 10626, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 11922, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 12397, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 6036, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 8827, in expression
+    return self.block_expression(expr)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 8332, in block_expression
+    result = self.block(expr[1], expr[2], returns, region_limit=expr[3] if len(expr) > 3 else None,
+                        expected_array=expected_array)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 11922, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 12849, in statements
+    self.fail(f"transfert refusé : la source '{source.name}' ne survit pas à ce bloc")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-owned-mut-j9o019ek/crust.py", line 1915, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 8: transfert refusé : la source 'q' ne survit pas à ce bloc
+
+----------------------------------------------------------------------
+Ran 1 test in 0.060s
+
+FAILED (errors=1)
+
+owned_result_silently_discarded DETECTED
+test_transfers_and_usages_are_explicit (test_sync_owned_calls.SyncOwnedCallTests.test_transfers_and_usages_are_explicit) ... 
+  test_transfers_and_usages_are_explicit (test_sync_owned_calls.SyncOwnedCallTests.test_transfers_and_usages_are_explicit) (body='same(->a);return 8;') ... FAIL
+
+======================================================================
+FAIL: test_transfers_and_usages_are_explicit (test_sync_owned_calls.SyncOwnedCallTests.test_transfers_and_usages_are_explicit) (body='same(->a);return 8;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_owned_calls.py", line 39, in test_transfers_and_usages_are_explicit
+    with self.subTest(body=body),self.assertRaises(Error):
+                                 ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.743s
+
+FAILED (failures=1)
+

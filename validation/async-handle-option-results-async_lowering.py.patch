@@ -1,0 +1,62 @@
+--- /tmp/crust-before-async-handle-option-results/async_lowering.py
++++ async_lowering.py
+@@ -34,8 +34,8 @@
+     paths: tuple = ()
+ 
+ 
+-JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested'}
+-JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation'}
++JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested', 'handle_option': 'optional_allocation'}
++JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'handle_option': 'value'}
+ OWNED_WRAPPER_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult',
+                        'handle_option': 'VectorHandleResult'}
+ OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation'}
+@@ -63,6 +63,8 @@
+         payload = typ if storage == 'local' else f'A<{typ}>'
+     elif mode in ('ref', 'mut'):
+         payload = ('&mut ' if mode == 'mut' else '&') + typ
++    elif mode == 'handle_option':
++        payload = f'Option<A<{typ}>>'
+     elif mode in JOIN_PAYLOADS:
+         payload = f'Result<{typ if storage == "local" else "A<" + typ + ">"},runtime::Error>'
+         if mode == 'join_nested':
+@@ -99,7 +101,8 @@
+     return {'runtime_error': 'CrustRuntimeError', 'scalar': 'int', 'bool': 'int', 'byte': 'uint8_t', 'char': 'CrustChar', 'text': 'CrustText', 'byte_ref': 'const unsigned char *',
+             'ref': 'const int *', 'mut': 'int *', 'owned': 'Cell *',
+             'array': 'const void *', 'array_ref': 'const void *', 'array_mut': 'void *',
+-            'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult'}[mode]
++            'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult',
++            'handle_option': 'VectorHandleResult'}[mode]
+ 
+ 
+ def utf8_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_contracts=None, sync_result_contract=None):
+@@ -2158,7 +2161,7 @@
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_aggregates)
+             and result not in (
+             ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('owned', 'Int'),
+-            ('scalar', 'Void'), ('void', 'Void'), ('join_owned', 'Int'), ('join_nested', 'Int'))):
++            ('scalar', 'Void'), ('void', 'Void'), ('join_owned', 'Int'), ('join_nested', 'Int'), ('handle_option', 'Int'))):
+         fail(node.line, 'prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis')
+     if result[0] in ('owned', *JOIN_PAYLOADS) and owned_borrow_fields(result[1]):
+         completion = node.field_effect_summary
+@@ -2889,6 +2892,8 @@
+                   consume_execution(expr[1][1], line)) if prepared is None else prepared
+         handle, returns_int, loans, nominal, returned_loans, field_changes = record
+         mode, typ = functions[nominal].args[2]
++        if mode == 'handle_option':
++            fail(line, 'prototype : enveloppe Result<Option<A<Int>>,runtime::Error> de handle non raccordée')
+         outer = PLAIN_RETURN_JOINS.get((mode, typ)) if mode in PLAIN_JOIN_TYPES else None
+         result = temporary(PLAIN_JOIN_C_TYPES[outer] if outer else 'CrustNestedJoinResult' if mode == 'join_owned' else 'CrustJoinResult')
+         status_result = None
+@@ -5841,9 +5846,9 @@
+             else:
+                 fail(line, 'retour de tableau : transfert explicite <- requis')
+         elif returns_join:
+-            if value[0] in ('array_transfer', 'new_transfer', 'move'):
++            if value[0] in ('array_transfer', 'new_transfer', 'move', 'array_handle_option_pop'):
+                 joined, payload, _ = owned_join_value(
+-                    value if value[0] == 'move' else value[1], line, following=())
++                    value if value[0] in ('move', 'array_handle_option_pop') else value[1], line, following=())
+             else:
+                 fail(line, 'retour de Result alloué : <- explicite requis')
+             require_durable_storage(joined, 0, line)

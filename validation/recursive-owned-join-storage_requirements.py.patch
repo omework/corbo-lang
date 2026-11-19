@@ -1,0 +1,25 @@
+--- /tmp/crust-before-recursive-owned-joins/storage_requirements.py
++++ storage_requirements.py
+@@ -3,6 +3,7 @@
+ This supplements source equality/lifetime contracts; it never promotes storage.
+ Only root parameter obligations are materialized by current async variants.
+ """
++from owned_join_types import OWNED_JOIN_TYPES, owned_join_mode
+ from constraints import ConstraintAnalyzer, Context, Value, UNKNOWN, join_values
+ from dataclasses import replace
+ from handle_types import public_storage
+@@ -14,11 +15,11 @@
+             return UNKNOWN
+         mode, typ = self.analyzer.async_functions[task.typ].args[2]
+         if task.mode == 'execution':
+-            if mode in ('owned', 'join_owned'):
+-                return Value('join_owned' if mode == 'owned' else 'join_nested', typ,
++            if mode in ('owned', *OWNED_JOIN_TYPES):
++                return Value(owned_join_mode(mode), typ,
+                              task.task_result_assets, task.task_result_fields)
+             return UNKNOWN
+-        if mode in ('owned', 'join_owned', 'join_nested'):
++        if mode in ('owned', *OWNED_JOIN_TYPES):
+             return Value(mode, typ, task.task_result_assets, task.task_result_fields)
+         if mode in ('ref', 'mut'):
+             return Value(mode, typ, task.task_reference_assets)

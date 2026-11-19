@@ -1,0 +1,6 @@
+struct View{data:&Int}
+fn inspect(n:&Int)->Int{let view=View{data:&*n};return *view.data;}
+async fn leaf(n:&Int)->Int{yield;return inspect(n);}
+async fn relay(n:&Int)->Int{yield;return leaf(n).await;}
+fn main(){let mut p=pool<Int>(1);let n=p.new(7);
+ let h=runtime::spawn(->relay(&n));match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}

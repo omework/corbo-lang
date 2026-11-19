@@ -1,0 +1,88 @@
+--- before/crust.py
++++ crust.py
+@@ -1942,6 +1942,7 @@
+         self.array_allocation_roots = {}
+         self.struct_field_roots = {}
+         self.symbolic_owned_projections = {}
++        self.symbolic_borrow_projections = {}
+         self.struct_field_capabilities = {}
+         self.array_definitions = []
+         self.scopes = []
+@@ -3604,6 +3605,8 @@
+         if write and (binding.kind == 'owned' or binding.kind in COPY_VALUE_TYPES) and not binding.mutable:
+             self.fail(f"'{binding.name}' est immuable : déclarer let mut")
+         if binding.alloc:
++            for holder in binding.referents or (binding.alloc,):
++                self.prepare_recursive_reference_fields(holder)
+             if self.is_structure_view(binding):
+                 for field, _ in self.enums[binding.alloc.typ]['']:
+                     self.array_access(self.struct_int_view(('field', binding.name, field), binding), write=write, after=after)
+@@ -5657,6 +5660,49 @@
+         descriptor = self.reference_descriptor(c, targets, parents)
+         self.access(Binding(place[2], mode, c, descriptor), write=write)
+         return mode, c, descriptor
++
++    def prepare_recursive_reference_fields(self, holder):
++        """Materialize only declared loans of an opaque symbolic descendant."""
++        if not holder.recursive_projection_sources:
++            return
++        fields = dict(holder.dependencies)
++        for arm, members in self.enums.get(holder.typ, {}).items():
++            for name, declared in members:
++                capability = reference_type(declared)
++                key = arm + '.' + name
++                if capability is None or key in fields:
++                    continue
++                targets = []
++                for origin, _ in holder.recursive_projection_sources:
++                    cache_key = origin, key
++                    if cache_key not in self.symbolic_borrow_projections:
++                        typ = capability[1]
++                        source_scope = holder.sources[0].scope
++                        source = MemorySource(self.uid(), source_scope, 'symbolic', key, 'NULL', element_type=typ)
++                        target = Allocation(self.uid(), source_scope, key, (source,), typ=typ,
++                                            variants=frozenset(self.enums.get(typ, {})))
++                        if typ in self.struct_fields:
++                            # Stored nominal references may designate an interior
++                            # structure. Keep the descriptor ABI, not just its root.
++                            self.origin_sources[target.id] = source
++                            target = replace(target, id=self.uid(), inline_root=target, inline_path='')
++                        reachable, pending = {typ}, [typ]
++                        sources = {typ: source}
++                        while pending:
++                            current = pending.pop()
++                            for nested in self.enums.get(current, {}).values():
++                                for _, field_type in nested:
++                                    if field_type.startswith('A<') and field_type[2:-1] not in reachable:
++                                        child_type = field_type[2:-1]
++                                        reachable.add(child_type); pending.append(child_type)
++                                        sources[child_type] = MemorySource(self.uid(), source_scope, 'symbolic',
++                                            key, 'NULL', element_type=child_type)
++                        target.recursive_projection_sources = ((target.id, tuple(sources.items())),)
++                        self.origin_sources[target.id] = source
++                        self.symbolic_borrow_projections[cache_key] = target
++                    targets.append(self.symbolic_borrow_projections[cache_key])
++                fields[key] = tuple(targets)
++        holder.dependencies = tuple(fields.items())
+ 
+     def symbolic_owned_projection(self, holder, key, typ):
+         # Projections of an unexpanded symbolic input stay outside its cleanup
+@@ -10128,7 +10174,8 @@
+                       frozenset(o for _, origins in vectors for o in origins),
+             'entry': frozenset(o for _, state in (*base['allocations'], *base['embedded'])
+                                for o in state['origins'] | state['item_origins'] | state['task_result_origins']) |
+-                     frozenset(o for a in self.symbolic_owned_projections.values() for o in a.origins),
++                     frozenset(o for a in (*self.symbolic_owned_projections.values(),
++                                          *self.symbolic_borrow_projections.values()) for o in a.origins),
+             'fresh_sources': tuple(fresh_sources),
+             'item_sources': item_sources,
+             'item_positions': item_positions,
+@@ -13011,7 +13058,7 @@
+             return all(Compiler.match_read_expression(value) for value in expression[2:])
+         # A field dereference reads the referenced value, exactly as *name.
+         # The ordinary expression checker validates its type and provenance.
+-        return expression[0] in ('int', 'name', 'deref', 'field_deref')
++        return expression[0] in ('int', 'name', 'deref', 'field', 'field_deref')
+ 
+     @staticmethod
+     def match_local_value(expression):

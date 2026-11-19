@@ -1,0 +1,115 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -697,6 +697,11 @@
+     name, parameters, result, body = node.args
+     if result[0] not in ('owned', *JOIN_PAYLOADS):
+         return frozenset()
++    if getattr(node, 'result_storage', False):
++        from async_result_storage import result_storage
++        plan = result_storage(node)
++        if plan.parameters is not None:
++            return plan.parameters
+     # An opaque public handle describes this provenance in its contract;
+     # it has no task body from which to infer it.
+     if (position := getattr(node, 'public_result_storage', None)) is not None:
+@@ -948,9 +953,16 @@
+     from handle_types import HandleDefinitions, public_signature
+     functions = HandleDefinitions(functions)
+     name, parameters, result, body = node.args
++    from async_result_storage import result_storage
++    output_plan = result_storage(node, local_parameters) if node.result_storage else None
+ 
+     def fail(line, message):
+         raise error(f'ligne {line}: {message}')
++
++    if output_plan and output_plan.mixed:
++        fail(node.line, 'retours incompatibles : valeur locale T et allocation A<T>')
++    if output_plan and output_plan.destination and output_plan.owned_fields:
++        fail(node.line, 'prototype : destination du résultat local async avec champs propriétaires non raccordée')
+ 
+     scalar_sync_types = {('scalar', 'Int'): 'int', ('bool', 'bool'): 'int', ('byte', 'u8'): 'uint8_t',
+                          ('char', 'char'): 'CrustChar'}
+@@ -1676,6 +1688,7 @@
+             fail(line, f"'{callee}' attend {len(declaration.args[1])} argument(s), reçu {len(arguments)}")
+         captures, loans, returned_loans, argument_loans = [], [], [], []
+         local_captures = set()
++        capture_storage = []
+         owner_indexes = owned_result_parameters(declaration, functions,
+                                                 sync_result=lambda name: sync_contracts[name].result if name in sync_contracts else None)
+         result_paths = {}
+@@ -1895,6 +1908,12 @@
+                     # This reservation has no local slot. It keeps the parent's
+                     # caller-side loan alive by requiring the child to finish.
+                     loans.append(('\0utf8-capture', 'ref'))
++                origins = set(storage_of(value))
++                for target, _ in loans[argument_loan_start:]:
++                    origins.update(storage_bindings.get(loan_root(target), ()))
++                if (mode, typ) in pool_sync_types:
++                    origins.update(pool_storage(argument[1]))
++                capture_storage.append(frozenset(origins))
+                 captured = temporary(capture_ctype(mode, typ))
+                 if typ in struct_layouts and mode in ('ref', 'mut') and any(
+                         storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
+@@ -1930,6 +1949,19 @@
+                 argument_tails.pop()
+             task = temporary('CrustTask *')
+             target = specialize(callee, frozenset(local_captures)) if specialize else callee
++            if declaration.result_storage:
++                plan = result_storage(declaration, local_captures)
++                if plan.mixed:
++                    fail(line, 'retours incompatibles : valeur locale T et allocation A<T>')
++                if plan.parameters is not None:
++                    returned_loans[:] = [(target, mode) for target, mode in returned_loans if mode != 'storage']
++                    returned_loans.extend((origin, 'storage') for index in plan.parameters for origin in capture_storage[index])
++                destination = None
++                if plan.destination:
++                    destination = local_destinations.get(id(expr)) or implicit_stack()
++                    loans.append((destination, 'storage'))
++                    returned_loans.append((destination, 'storage'))
++                captures.append('&' + local_pools[destination] if destination else 'NULL')
+             steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
+                        if effects is not None and effects.complete else ())
+@@ -6394,6 +6426,15 @@
+             scopes[0][0][parameter] = None
+     captures = tuple(fields.values())
+     steps = []
++    if output_plan and output_plan.destination:
++        from async_local_placement import result_constructors
++        destination = '\0local-output'
++        implicit_stacks.add(destination)
++        local_pools[destination] = '(*frame->result_storage)'
++        local_inputs = {parameter: typ for index, (parameter, _, typ) in enumerate(parameters) if index in local_parameters}
++        constructors = result_constructors(('scope', None, body), sync_contracts, local_inputs, returns=True)
++        for constructor in constructors:
++            local_destinations[id(constructor)] = destination
+     resume_point = 0
+     returned = False
+     statements = iter(enumerate(body))
+@@ -6467,6 +6508,8 @@
+     )
+     frame_slots[node.args[0]] = task_holder_count
+     members += ''.join(internal_members)
++    if node.result_storage:
++        members += '    Source *result_storage;\n'
+     members += ''.join(f'    Cell *capture_cell_{index};\n'
+                        for index in sorted(node.cell_reference_parameters))
+     members += ''.join(f'    Cell *{member};\n' for member,_ in initial_field_cells.values())
+@@ -6483,6 +6526,8 @@
+                            '    (void)task;\n    (void)out;')
+     arguments = ''.join(', ' + declaration for declaration in task_capture_declarations(node))
+     initialize = ''
++    if node.result_storage:
++        initialize += '    frame->result_storage = result_storage;\n'
+     for i, ((parameter, mode, _), member) in enumerate(zip(parameters, captures)):
+         if mode == 'array':
+             if all(arrays[parameter]):
+@@ -6588,6 +6633,8 @@
+         yield f'{capture_ctype(mode, typ)} capture_{i}'
+         if i in node.cell_reference_parameters:
+             yield f'Cell * capture_cell_{i}'
++    if getattr(node, 'result_storage', False):
++        yield 'Source * result_storage'
+ 
+ 
+ def task_factory_signature(name, node):

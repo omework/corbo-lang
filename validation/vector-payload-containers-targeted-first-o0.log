@@ -1,0 +1,56 @@
+test_child_pool_cannot_escape_with_vector (test_vector_payload_containers.VectorPayloadContainerTests.test_child_pool_cannot_escape_with_vector) ... ok
+test_factory_and_factory_relay (test_vector_payload_containers.VectorPayloadContainerTests.test_factory_and_factory_relay) ... ok
+test_mutable_target_and_reuse (test_vector_payload_containers.VectorPayloadContainerTests.test_mutable_target_and_reuse) ... ok
+test_nested_owned_factory (test_vector_payload_containers.VectorPayloadContainerTests.test_nested_owned_factory) ... FAIL
+test_transferred_input_and_relay (test_vector_payload_containers.VectorPayloadContainerTests.test_transferred_input_and_relay) ... ok
+
+======================================================================
+FAIL: test_nested_owned_factory (test_vector_payload_containers.VectorPayloadContainerTests.test_nested_owned_factory)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17374, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15356, in verify
+    self.function_results, Error, self.enums, async_functions).infer_all()
+                                                               ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 268, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 280, in infer
+    result = context.infer()
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 555, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2514, in nodes
+    part, _ = self.expression(expr, following.pop('next'), line)
+              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1625, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1714, in call
+    self.fail(line, f"'{pname}' attend une allocation {typ}")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 389, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 8: 'i' attend une allocation Inner
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_vector_payload_containers.py", line 43, in test_nested_owned_factory
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 8: 'i' attend une allocation Inner
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.226s
+
+FAILED (failures=1)

@@ -1,0 +1,72 @@
+test_conditional_and_loop_receivers (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_conditional_and_loop_receivers) ... ok
+test_empty_and_failed_second_launch (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_empty_and_failed_second_launch) ... ok
+test_inactive_capture_cleanup (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_inactive_capture_cleanup) ... ok
+test_mutable_result (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_mutable_result) ... ok
+test_nested_owned_child (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_nested_owned_child) ... ok
+test_recorded_nested_reception (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_recorded_nested_reception) ... ok
+test_successive_async_envelopes (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_successive_async_envelopes) ... FAIL
+
+======================================================================
+FAIL: test_successive_async_envelopes (test_async_vector_result_captures.AsyncVectorResultCaptureTests.test_successive_async_envelopes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17494, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15463, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1006, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7930, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3694, in bind_special
+    executions[name] = spawn_task(initializer[1], statement.line,
+                       ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        blocking=len(initializer) > 2 and initializer[2] == 'blocking',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        native=len(initializer) > 2 and initializer[2] == 'native')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5090, in spawn_task
+    record = create_task(operand[1], line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2747, in create_task
+    retain_result_fields(task, borrowed_result_fields(declaration), argument_loans, line, argument_fields)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1199, in retain_result_fields
+    fail(line, 'résultat struct async : champ emprunté absent de la capture')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1042, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: résultat struct async : champ emprunté absent de la capture
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_result_captures.py", line 45, in test_successive_async_envelopes
+    self.check_return(source)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_result_captures.py", line 16, in check_return
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: résultat struct async : champ emprunté absent de la capture
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.275s
+
+FAILED (failures=1)

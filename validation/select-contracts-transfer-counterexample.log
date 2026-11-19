@@ -1,0 +1,36 @@
+test_conditional_selection_transfer_keeps_capture_alternatives (test_select_contracts.SelectContractTests.test_conditional_selection_transfer_keeps_capture_alternatives) ... 
+  test_conditional_selection_transfer_keeps_capture_alternatives (test_select_contracts.SelectContractTests.test_conditional_selection_transfer_keeps_capture_alternatives) (value='if flag{let s=runtime::select(->leaf(v,a),->ready());<-s}else{let s=runtime::select(->leaf(v,b),->ready());<-s}') ... FAIL
+  test_conditional_selection_transfer_keeps_capture_alternatives (test_select_contracts.SelectContractTests.test_conditional_selection_transfer_keeps_capture_alternatives) (value='loop{if flag{let s=runtime::select(->leaf(v,a),->ready());break <-s;}let s=runtime::select(->leaf(v,b),->ready());break <-s;}') ... FAIL
+
+======================================================================
+FAIL: test_conditional_selection_transfer_keeps_capture_alternatives (test_select_contracts.SelectContractTests.test_conditional_selection_transfer_keeps_capture_alternatives) (value='if flag{let s=runtime::select(->leaf(v,a),->ready());<-s}else{let s=runtime::select(->leaf(v,b),->ready());<-s}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_contracts.py", line 158, in test_conditional_selection_transfer_keeps_capture_alternatives
+    summary = self.infer('''async fn leaf(v:&mut View,n:&Int)->Int{change(v,n);loop{yield;}}
+    async fn ready()->Int{return 1;}
+    async fn work(v:&mut View,a:&Int,b:&Int,flag:Bool)->Int{
+        let first='''+value+''';let mut s=<-first;let r=s.await;drop(->s);return r;}''')
+  File "/Users/jabarkarim/sources/crust/tests/test_suspension_effects.py", line 25, in infer
+    self.assertTrue(summary.complete, summary.reason)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : ligne 4: une expression if exige une allocation transférée par <- ou une valeur copiable
+
+======================================================================
+FAIL: test_conditional_selection_transfer_keeps_capture_alternatives (test_select_contracts.SelectContractTests.test_conditional_selection_transfer_keeps_capture_alternatives) (value='loop{if flag{let s=runtime::select(->leaf(v,a),->ready());break <-s;}let s=runtime::select(->leaf(v,b),->ready());break <-s;}')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_contracts.py", line 158, in test_conditional_selection_transfer_keeps_capture_alternatives
+    summary = self.infer('''async fn leaf(v:&mut View,n:&Int)->Int{change(v,n);loop{yield;}}
+    async fn ready()->Int{return 1;}
+    async fn work(v:&mut View,a:&Int,b:&Int,flag:Bool)->Int{
+        let first='''+value+''';let mut s=<-first;let r=s.await;drop(->s);return r;}''')
+  File "/Users/jabarkarim/sources/crust/tests/test_suspension_effects.py", line 25, in infer
+    self.assertTrue(summary.complete, summary.reason)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : ligne 4: seule une allocation explicite est déplaçable
+
+----------------------------------------------------------------------
+Ran 1 test in 0.064s
+
+FAILED (failures=2)

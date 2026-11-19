@@ -1,0 +1,400 @@
+--- before/crust.py
++++ after/crust.py
+@@ -8952,8 +8952,8 @@
+         if element not in self.struct_fields:
+             self.fail(f'Vector<{element}> : type de structure inconnu')
+         fields = self.enums[element]['']
+-        if any(kind != 'Int' and not kind.startswith('&') for _, kind in fields):
+-            self.fail('prototype : champs propriétaires des structures en Vector à raccorder')
++        if any(kind != 'Int' and not kind.startswith(('&', 'A<')) for _, kind in fields):
++            self.fail('prototype : layout de structure en Vector non représenté')
+         return element, self.field_offset(fields, len(fields)) or '0'
+ 
+     def inline_vector_operation(self, expr, binding, method, args, scope, label):
+@@ -8993,24 +8993,32 @@
+         self.access(binding, write=True, after=True)
+         # Only the payload occupies the vector case, never a Cell pointer.
+         data = f'{value}->fields' if size != '0' else '&(int){0}'
+-        self.lines.append(f'vector_push({binding.c}, {data});')
++        if self.has_owned_fields(element):
++            self.lines.append(f'vector_push_owned_value({binding.c}, {value});')
++        else:
++            self.lines.append(f'vector_push({binding.c}, {data});')
+         vector = binding.alloc
+         # The inline value no longer depends on its former physical slot.
+         # Keep its identity only to select the stored loan graph by position.
+         for origin in incoming.origins:
+             self.origin_sources[origin] = vector.sources[0]
+-        if incoming.dependencies:
++        if incoming.dependencies or incoming.owned_fields or incoming.item_payloads:
+             item = replace(self.copy_owned_tree(incoming, vector.scope), sources=vector.sources)
+             vector.item_payloads = self.merge_item_payloads(vector.item_payloads, (item,))
+         vector.item_origins |= incoming.origins
+         self.update_handle_positions(vector, None, incoming.origins, append=True)
+-        self.destroy(incoming)
++        if self.has_owned_fields(element):
++            # The case now owns the fields. Release only the consumed carrier.
++            self.lines.append(f'cell_release_storage({value}, 0);')
++            incoming.alive = incoming.definite = False
++        else:
++            self.destroy(incoming)
+         return 'void', '', None
+ 
+     def receive_inline_vector_item(self, expr, binding, index_expr, scope, label, *, remove=False):
+         element, size = self.inline_vector_layout(binding.alloc.typ)
+-        if not remove and any(kind.startswith('&mut ') for _, kind in self.enums[element]['']):
+-            self.fail('structure non copiable : référence mutable')
++        if not remove and any(kind.startswith(('&mut ', 'A<')) for _, kind in self.enums[element]['']):
++            self.fail('structure non copiable : champ propriétaire ou référence mutable')
+         self.access(binding, write=remove)
+         reservation = Binding(binding.name, 'mut' if remove else 'ref', binding.c, binding.alloc,
+                               borrow_parents=(binding,))
+@@ -9047,6 +9055,8 @@
+             allocation.dependencies = prototype.dependencies
+             allocation.borrow_parents = prototype.borrow_parents
+             if remove:
++                allocation.owned_fields = self.copy_owned_tree(prototype, scope.id).owned_fields
++                allocation.item_sources = self.owned_sources(allocation)
+                 allocation.field_capability_id = prototype.field_capability_id or prototype.id
+         if remove:
+             self.remove_handle_position(vector, index)
+@@ -15328,7 +15338,7 @@
+         return (candidate.kind == 'vector_element' or
+                 candidate.kind == 'owned_projection' and candidate.field_path.startswith('[]/')) and (
+                     params[candidate.parameter][1] in ('owned', 'mut') and
+-                    is_handle_vector(params[candidate.parameter][2]))
++                    is_payload_vector(params[candidate.parameter][2]))
+ 
+     def supports_fresh_owned_result(self, value, params):
+         if value.candidates and all(candidate.kind == 'task_capture'
+@@ -16997,6 +17007,7 @@
+     GrowthRegionPlacement region;
+     size_t length, element_size;
+     int owns_handles;
++    const Source *element_layout;
+ } VectorItems;
+ 
+ _Static_assert(_Alignof(VectorItems) <= _Alignof(Cell),
+@@ -17408,6 +17419,12 @@
+     if (!vector_try_extend(vector_items(cell), value, 1)) fail("capacité de Vector dépassée");
+ }
+ 
++static void vector_push_owned_value(Cell *cell, Cell *value) {
++    vector_push(cell, value->fields);
++    /* Layouts are static; only field handles, never the carrier, are retained. */
++    vector_items(cell)->element_layout = value->layout;
++}
++
+ static void *vector_push_new(Cell *cell, const void *initial) {
+     vector_push(cell, initial);
+     VectorItems *items = vector_items(cell);
+@@ -17639,6 +17656,17 @@
+             memcpy(&element, vector_item_at(items, i - 1), sizeof element);
+             cell_drop(element);
+         }
++    }
++    if (items->element_layout) {
++        const Source *layout = items->element_layout;
++        for (size_t i = items->length; i > 0; --i)
++            for (size_t field = layout->field_count; field > 0; --field)
++                if (layout->field_kinds[field - 1] == 2) {
++                    Cell *child;
++                    memcpy(&child, (unsigned char *)vector_item_at(items, i - 1)
++                           + layout->field_offsets[field - 1], sizeof child);
++                    cell_drop(child);
++                }
+     }
+     growth_storage_lock();
+     if (items->region.region.slot) growth_region_unplace(&items->region);
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1068,8 +1068,8 @@
+         element = INLINE_VECTOR_ELEMENTS[typ]
+         layout = struct_layouts.get(element)
+         if layout is None or element not in owned_structures or any(
+-                kind != 'Int' and not kind.startswith('&') for _, kind in layout):
+-            fail(line, 'prototype async : Vector de structure exige des champs Int ou emprunts représentés')
++                kind != 'Int' and not kind.startswith(('&', 'A<')) for _, kind in layout):
++            fail(line, 'prototype async : Vector de structure exige des champs représentés')
+         return element, layout
+ 
+     def check_handle_payload(typ, line):
+@@ -1225,17 +1225,29 @@
+             previous = inline_vector_items.get(receiver)
+             if receiver not in inline_vector_items and not any(owned_capture_field_loans(receiver, collection_types[receiver]).values()):
+                 previous = ()
+-            payload = tuple((field, tuple(held)) for field, held in owned_capture_field_loans(incoming, element).items())
++            payload = tuple(('stored_field', stored_field_path(field), tuple(held))
++                            for field, held in owned_capture_field_loans(incoming, element).items())
++            payload += tuple(('owned_storage', path, tuple(held))
++                             for path, held in owned_storage_fields(incoming).items())
+             inline_vector_items[receiver] = (*previous, payload) if previous is not None else None
+         for field, held in owned_capture_field_loans(incoming, element).items():
+             key = ('stored_field', receiver, ('[]', *stored_field_path(field)))
+             install_field_change(key, list(dict.fromkeys((*active_loans.get(key, ()), *held))))
++        if collection_types[receiver] in INLINE_VECTOR_ELEMENTS:
++            for path, held in owned_storage_fields(incoming).items():
++                key = ('owned_storage', receiver, ('[]', *path))
++                install_field_change(key, list(dict.fromkeys((*active_loans.get(key, ()), *held))))
+ 
+     def extract_vector_payload(receiver, result):
+         for field, held in owned_capture_field_loans(receiver, collection_types[receiver]).items():
+             path = stored_field_path(field)
+             if path and path[0] == '[]':
+                 active_loans[('stored_field', result, path[1:])] = list(held)
++        if collection_types[receiver] in INLINE_VECTOR_ELEMENTS:
++            for path, held in owned_storage_fields(receiver).items():
++                if path and path[0] == '[]':
++                    active_loans[('owned_storage', result, path[1:])] = list(held)
++                    keep_storage(result, (origin for origin, _ in held))
+ 
+     def clear_stored_fields(holder):
+         inline_vector_items.pop(holder, None)
+@@ -1543,8 +1555,8 @@
+     def inline_vector_value(expr, line, *, following=None):
+         receiver, index_expr, remove = inline_vector_source(expr)
+         element, layout = inline_vector_layout(collection_types[receiver], line)
+-        if not remove and any(kind.startswith('&mut ') for _, kind in layout):
+-            fail(line, 'structure non copiable : référence mutable')
++        if not remove and any(kind.startswith(('&mut ', 'A<')) for _, kind in layout):
++            fail(line, 'structure non copiable : champ propriétaire ou référence mutable')
+         if remove and not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable):
+             fail(line, 'remove exige un Vector mutable')
+         if following is not None:
+@@ -1577,16 +1589,18 @@
+         if slots is not None:
+             literal = index_expr[1] if index_expr[0] == 'int' else None
+             if literal is not None and 0 <= literal < len(slots):
+-                for field, held in slots[literal]:
+-                    active_loans[('stored_field', cell, stored_field_path(field))] = list(held)
++                for category, path, held in slots[literal]:
++                    active_loans[(category, cell, path)] = list(held)
++                    if category == 'owned_storage':
++                        keep_storage(cell, (origin for origin, _ in held))
+                 if remove:
+                     remaining = slots[:literal] + slots[literal + 1:]
+                     inline_vector_items[receiver] = remaining
+                     for field, _ in owned_capture_field_loans(receiver, collection_types[receiver]).items():
+                         path = stored_field_path(field)
+                         if path and path[0] == '[]':
+-                            held = tuple(loan for slot in remaining for key, loans in slot
+-                                         if stored_field_path(key) == path[1:] for loan in loans)
++                            held = tuple(loan for slot in remaining for category, key, loans in slot
++                                         if category == 'stored_field' and key == path[1:] for loan in loans)
+                             install_field_change(('stored_field', receiver, path), list(dict.fromkeys(held)))
+             elif remove:
+                 inline_vector_items[receiver] = None
+@@ -1949,7 +1963,20 @@
+                 field_changes.append((key, [(origin, 'storage') for origin in origins]))
+         for index, slots, _, replacements, _ in summary.vector_writes:
+             if callee_parameters[index][2] in INLINE_VECTOR_ELEMENTS:
+-                # Inline cases retain field loans, not the former local slot.
++                # Inline storage belongs to the vector, but owned children
++                # keep their original pools across the call.
++                for holder, prefix in holders_for(index):
++                    depth = next((position for position in reversed(range(len(scopes))) if holder in scopes[position][0]), 0)
++                    leaving = {name for scope in scopes[depth + 1 if references.get(holder) == 'owned' else 0:]
++                               for name in scope[0] if name in local_pools}
++                    for payload in dict(summary.vector_write_payloads).get(index, ()):
++                        for field, child in payload.owned_fields:
++                            key = ('owned_storage', holder, (*prefix, '[]', *stored_field_path(field)))
++                            previous = frozenset(origin for origin, _ in active_loans.get(key, ()))
++                            origins = (replacement_storage(child, previous) - implicit_stacks) | previous
++                            if origins & leaving:
++                                fail(line, 'transfert refusé : le pool du champ propriétaire ne survit pas au vecteur')
++                            field_changes.append((key, [(origin, 'storage') for origin in origins]))
+                 continue
+             from results import Value
+             items = frozenset(item for slot in (*slots, *(slot for _, slot in replacements)) for item in slot)
+@@ -7976,9 +8003,20 @@
+             release_statement_loans(following)
+             check_access(receiver, line, write=True)
+             data = f'{incoming}->fields' if layout else '&(int){0}'
++            if any(kind.startswith('A<') for _, kind in layout):
++                depth = next((index for index in reversed(range(len(scopes))) if receiver in scopes[index][0]), 0)
++                leaving = {name for scope in scopes[depth + 1 if references.get(receiver) == 'owned' else 0:]
++                           for name in scope[0] if name in local_pools}
++                children = {origin for held in owned_storage_fields(incoming).values() for origin, _ in held}
++                if children & leaving:
++                    fail(line, 'transfert refusé : le pool du champ propriétaire ne survit pas au vecteur')
+             retain_vector_payload(receiver, incoming)
+-            steps.extend((f'vector_push(frame->{fields[receiver]}, {data});',
+-                          f'cell_drop({incoming});', f'{incoming} = NULL;'))
++            if any(kind.startswith('A<') for _, kind in layout):
++                steps.extend((f'vector_push_owned_value(frame->{fields[receiver]}, {incoming});',
++                              f'cell_release_storage({incoming}, 0);', f'{incoming} = NULL;'))
++            else:
++                steps.extend((f'vector_push(frame->{fields[receiver]}, {data});',
++                              f'cell_drop({incoming});', f'{incoming} = NULL;'))
+             clear_stored_fields(incoming)
+             return True
+         if is_handle_vector(collection) and method == 'push':
+--- before/results.py
++++ after/results.py
+@@ -1865,6 +1865,19 @@
+         vector = environment.get(receiver)
+         if not isinstance(vector, Value) or not is_payload_vector(vector.typ):
+             return
++        if vector.typ in INLINE_VECTOR_ELEMENTS:
++            def owned_tree(value, seen=frozenset()):
++                if value.typ in seen:
++                    return value
++                children = dict(value.owned_fields)
++                for arm, fields in self.analyzer.enums.get(value.typ, {}).items():
++                    for field, declared in fields:
++                        if declared.startswith('A<'):
++                            key = arm + '.' + field
++                            child = children.get(key) or self.project_owned_value(value, key, declared[2:-1])
++                            children[key] = owned_tree(child, seen | {value.typ})
++                return replace(value, owned_fields=tuple(children.items()))
++            item = owned_tree(item)
+         owner = vector.storage_owner or receiver
+         for name in (owner, receiver):
+             root = environment.get(name)
+--- before/tests/test_inline_vector_owned.py
++++ after/tests/test_inline_vector_owned.py
+@@ -0,0 +1,105 @@
++"""Inline vector cases own their children; extraction transfers cleanup once."""
++from pathlib import Path
++import unittest
++import test_select_source as harness
++import test_inline_vector_borrows as borrowed_vectors
++
++BASE=Path('validation/inline-vector-owned.crust').read_text()
++
++class InlineVectorOwnedTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_remove_and_reuse(self):
++        result=self.run_source(BASE)
++        self.assertEqual(result.stdout,'7\n9\n')
++        self.assertEqual(result.stderr.count('destroy number=7\n'),1)
++        self.refused(BASE.replace('let out=','print(*number);let out='),'utilisable|déplac|consomm|détruit')
++        self.refused(BASE.replace('<-v.remove(0)','copy(v[0])'),'non copiable|copie')
++
++    def test_drop_nonempty_vector_and_cross_pool_fields(self):
++        source='''struct Item{left:A<Int>,right:A<Int>}fn main(){
++            let mut p=pool<Int>(1);let mut q=pool<Int>(1);let a=p.new(3);let b=q.new(7);
++            let mut vs=pool<Vector<Item>>(1);let mut v=vs.new();
++            v.push(->Item{left:<-a,right:<-b});drop(->v);
++            let c=p.new(11);let d=q.new(13);print(*c);print(*d);}'''
++        run=self.run_source(source)
++        self.assertEqual(run.stdout,'11\n13\n')
++        for name,value in (('a',3),('b',7)):
++            self.assertEqual(run.stderr.count(f'destroy {name}={value}\n'),1)
++        self.assertLess(run.stderr.index('destroy b=7'),run.stderr.index('destroy a=3'))
++
++    def test_nested_owner_and_borrowed_descendant(self):
++        source='''struct Leaf{view:&Int}struct Item{leaf:A<Leaf>}
++            fn main(){let mut ns=pool<Int>(1);let mut n=ns.new(7);let mut leaves=pool<Leaf>(1);
++            let leaf=leaves.new(view:&n);let mut vs=pool<Vector<Item>>(1);let mut v=vs.new();
++            let item=Item{leaf:<-leaf};v.push(->item);let out=<-v.remove(0);drop(->v);
++            let loan=&*out.leaf;print(*loan.view);drop(->out);n=19;print(*n);}'''
++        run=self.run_source(source)
++        self.assertEqual(run.stdout,'7\n19\n')
++        self.assertEqual(run.stderr.count('=Leaf\n'),1)
++        for where in ('let out=', 'let loan='):
++            self.refused(source.replace(where,'n=20;'+where),'emprunt|réserv|référenc')
++
++    def test_contained_owner_layout_and_scope_exit(self):
++        source='struct Inner{value:A<Int>}struct Item{tag:Int,inner:Inner}\n            fn main(){let mut ns=pool<Int>(1);let mut vs=pool<Vector<Item>>(1);\n            {let n=ns.new(7);let mut v=vs.new();v.push(->Item{tag:3,inner:Inner{value:<-n}});\n              let out=<-v.remove(0);print(out.tag);print(*out.inner.value);}\n            let again=ns.new(9);print(*again);}'
++        run=self.run_source(source)
++        self.assertEqual(run.stdout,'3\n7\n9\n')
++        self.assertEqual(run.stderr.count('destroy n=7\n'),1)
++
++    def test_child_pool_cannot_escape_into_vector(self):
++        source='''struct Item{value:A<Int>}fn main(){let mut vs=pool<Vector<Item>>(1);let mut v=vs.new();
++            {let mut ns=pool<Int>(1);let n=ns.new(7);v.push(->Item{value:<-n});}
++            let out=<-v.remove(0);print(*out.value);}'''
++        self.refused(source,'pool|survit|durable')
++
++    def test_contract_insert_extract_and_relay(self):
++        helpers='''fn put(v:&mut Vector<Item>,item:->Item){v.push(->item);}
++            fn take(v:&mut Vector<Item>)-><-Item{return <-v.remove(0);}
++            fn relay(v:&mut Vector<Item>)-><-Item{return <-take(&mut *v);}'''
++        source=helpers+BASE.replace('v.push(->item);','put(&mut v,->item);').replace('<-v.remove(0)','relay(&mut v)')
++        result=self.run_source(source)
++        self.assertEqual(result.stdout,'7\n9\n')
++        self.assertEqual(result.stderr.count('destroy number=7\n'),1)
++
++    def test_injected_contract_rejects_short_pool(self):
++        source='struct Item{value:A<Int>}\n            fn put(v:&mut Vector<Item>,item:->Item){v.push(->item);}\n            fn main(){let mut vs=pool<Vector<Item>>(1);let mut v=vs.new();\n              {let mut ns=pool<Int>(1);let n=ns.new(7);let item=Item{value:<-n};put(&mut v,->item);}\n              let out=<-v.remove(0);print(*out.value);}'
++        self.refused(source,'pool|survit|durable|source')
++
++    def test_borrowed_descendant_through_contract(self):
++        source='struct Leaf{view:&Int}struct Item{leaf:A<Leaf>}\n            fn put(v:&mut Vector<Item>,item:->Item){v.push(->item);}\n            fn take(v:&mut Vector<Item>)-><-Item{return <-v.remove(0);}\n            fn main(){let mut ns=pool<Int>(1);let mut n=ns.new(7);let mut leaves=pool<Leaf>(1);\n              let leaf=leaves.new(view:&n);let mut vs=pool<Vector<Item>>(1);let mut v=vs.new();\n              let item=Item{leaf:<-leaf};put(&mut v,->item);let out=take(&mut v);drop(->v);\n              let loan=&*out.leaf;print(*loan.view);drop(->out);n=19;print(*n);}'
++        self.assertEqual(self.run_source(source).stdout,'7\n19\n')
++        self.refused(source.replace('let loan=','n=20;let loan='),'emprunt|réserv|référenc')
++
++    def test_move_between_vectors_and_scope_cleanup(self):
++        source='''struct Item{value:A<Int>}fn main(){let mut ns=pool<Int>(1);
++            let mut vs=pool<Vector<Item>>(2);let mut a=vs.new();let mut b=vs.new();
++            let mut i=0;while i<3{let n=ns.new(i);a.push(->Item{value:<-n});
++                let item=<-a.remove(0);b.push(->item);let out=<-b.remove(0);print(*out.value);
++                drop(->out);i=i+1;}drop(->a);drop(->b);let again=ns.new(9);print(*again);}'''
++        self.assertEqual(self.run_source(source).stdout,'0\n1\n2\n9\n')
++
++class InlineVectorAsyncOwnedTests(InlineVectorOwnedTests):
++    def run_source(self, source):
++        return harness.SelectSourceTests.run_source(self,borrowed_vectors.InlineVectorAsyncBorrowTests.async_source(source))
++    def refused(self, source, diagnostic):
++        return harness.SelectSourceTests.refused(self,borrowed_vectors.InlineVectorAsyncBorrowTests.async_source(source),diagnostic)
++
++class InlineVectorOwnedCaptureTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_capture_result_and_inactive_cleanup(self):
++        helper='async fn take(mut v:->A<Vector<Item>>)-><-Item{yield;let r=<-v.remove(0);return <-r;}'
++        source=helper+BASE.replace('let out=<-v.remove(0);drop(->v);print(*out.value);drop(->out);',
++            'let h=runtime::spawn(->take(->v));match h.join(){Ok(out)=>{print(*out.value);drop(->out);},Err(_)=>{print(99);}}')
++        self.assertEqual(self.run_source(source).stdout,'7\n9\n')
++        inactive=helper+BASE.replace('let out=<-v.remove(0);drop(->v);print(*out.value);drop(->out);',
++            'let task=take(->v);drop(->task);')
++        run=self.run_source(inactive)
++        self.assertEqual(run.stdout,'9\n')
++        self.assertEqual(run.stderr.count('destroy number=7\n'),1)
++
++if __name__=='__main__':unittest.main()
+--- before/tests/test_async_recursive_owned.py
++++ after/tests/test_async_recursive_owned.py
+@@ -16,7 +16,7 @@
+     program=staticmethod(harness.SelectSourceTests.program)
+ 
+     def test_return_graph_and_reuse_all_slots(self):
+-        helpers=TYPES+'async fn own(n:->Node)-><-Node{yield;return <-n;}'
++        helpers=TYPES+'async fn own(n:->A<Node>)-><-A<Node>{yield;return <-n;}'
+         source=helpers+'fn main(){'+SETUP+'''let h=runtime::spawn(->own(->top));
+ match h.join(){Ok(r)=>{drop(->r);},Err(_)=>{}}
+ let again=new(ends) Node.End{value:9};let a=new(links) Node.Link{next:<-again};
+@@ -41,7 +41,7 @@
+         self.refused(source.replace('match h.join()', 'drop(->top);match h.join()'),'emprunt|réserv|référenc')
+ 
+     def test_local_pools_and_inactive_task_cleanup(self):
+-        helpers=TYPES+'async fn own(n:->Node)-><-Node{yield;return <-n;}'
++        helpers=TYPES+'async fn own(n:->A<Node>)-><-A<Node>{yield;return <-n;}'
+         source=self.program(SETUP+'''let task=own(->top);drop(->task);
+ let again=new(ends) Node.End{value:9};print(again);return 1;''',helpers)
+         self.assertEqual(self.run_source(source).stdout,'Node.End(9)\n1\n')
+@@ -51,15 +51,15 @@
+ Node.End{value:v}=>{print(v);},Node.Link{next:a}=>{match &a{
+ Node.End{value:v}=>{print(v);},Node.Link{next:b}=>{match &b{
+ Node.End{value:v}=>{print(v);},Node.Link{next:_}=>{print(0);}}}}}}}
+-fn relay(n:->Node)-><-Node{return <-n;}
+-fn discard(n:->Node){drop(->n);}'''
++fn relay(n:->A<Node>)-><-A<Node>{return <-n;}
++fn discard(n:->A<Node>){drop(->n);}'''
+         source=self.program(SETUP+'''yield;peek(&top);let received=relay(->top);
+ discard(->received);let again=new(ends) Node.End{value:9};peek(&again);return 1;''',helpers)
+         self.assertEqual(self.run_source(source).stdout,'7\n9\n1\n')
+ 
+     def test_returned_descendant_keeps_stored_reference(self):
+         helpers='enum Node{End{value:&Int},Link{next:A<Node>}}'+'''
+-async fn own(n:->Node)-><-Node{yield;return <-n;}'''
++async fn own(n:->A<Node>)-><-A<Node>{yield;return <-n;}'''
+         setup=SETUP.replace('value:7','value:&number')
+         source=helpers+'fn main(){let mut numbers=pool<Int>(1);let mut number=numbers.new(7);'+setup+'''
+ let h=runtime::spawn(->own(->top));match h.join(){Ok(r)=>{CHECK print(r);drop(->r);},Err(_)=>{}}

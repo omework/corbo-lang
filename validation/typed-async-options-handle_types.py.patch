@@ -1,0 +1,25 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -13,7 +13,7 @@
+     OWNED_JOIN_TYPES, owned_join_mode,
+ )
+ from option_join_types import (
+-    OPTION_JOIN_TYPES, option_type_mode,
++    OPTION_JOIN_TYPES, option_type_mode, option_payload_type,
+ )
+ from exchange_join_types import (
+     EXCHANGE_JOIN_TYPES, EXCHANGE_LEAVES, exchange_type_mode,
+@@ -47,9 +47,10 @@
+     if (mode := exchange_type_mode(payload)) is not None:
+         return mode, 'Int'
+     if (mode := option_type_mode(payload)) is not None:
+-        return mode, 'Int'
+-    if payload == 'Option<A<Int>>':
+-        return ('handle_option', 'Int')
++        return mode, option_payload_type(mode)
++    from handle_option_types import option_element
++    if (element := option_element(payload)) is not None:
++        return ('handle_option', element)
+     if payload in structures:
+         return ('owned', payload)
+     if payload.startswith('Result<') and payload.endswith(',runtime::Error>'):

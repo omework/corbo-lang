@@ -1,0 +1,209 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows asynchronous TCP and UDP operations backed by overlapped I/O.
+
+#(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    use std::sys::win::native::socket as raw;
+    use std::sys::net::reactor::{attach, complete};
+    use std::sys::net::{PlatformSocket, make_socket, socket_error, socket_descriptor, datagram_result};
+    use std::net::{SocketError, Datagram};
+
+    // Request words 0..4 hold OVERLAPPED. The runtime owns 4..6.
+    // Words 6..15 hold the operation, WSABUF, outcome, flags and address.
+    // Words 15..25 hold the extra socket, the AcceptEx address buffer and
+    // the provider's extension function pointer.
+    /// Submits a socket operation to the completion reactor and returns its status.
+    async fn execute(socket: u64, request: &mut [u64]) -> i64 {
+        let length = request.len();
+        let status = complete(socket, &mut request[0..length]).await;
+        request[8] = 0;
+        status
+    }
+
+    /// Packs an IPv4 address and port into the Windows socket address representation.
+    fn address_bits(ip: u32, port: u16) -> u64 {
+        let a = ip as u64;
+        let p = port as u64;
+        2 | ((copy(p) & 255) << 24) | ((p >> 8) << 16)
+          | ((copy(a) & 255) << 56) | ((copy(a) & 65280) << 40)
+          | ((copy(a) & 16711680) << 24) | ((a & 4278190080) << 8)
+    }
+
+    /// Converts a received Windows socket address to the shared packed endpoint format.
+    fn peer_bits(address: u64) -> u64 {
+        let ip = ((copy(address) >> 56) & 255) | ((copy(address) >> 40) & 65280)
+          | ((copy(address) >> 24) & 16711680) | ((copy(address) >> 8) & 4278190080);
+        let port = ((copy(address) >> 24) & 255) | ((address >> 8) & 65280);
+        (ip << 16) | port
+    }
+
+    /// Converts a native completion status into the socket error convention.
+    fn status_code(status: u64) -> i64 {
+        // completion_next stores a positive error code in the request.
+        raw::completion_error(status)
+    }
+
+    /// Associates a socket with the Windows completion port.
+    pub fn prepare_async(socket: &PlatformSocket) -> Result<(), SocketError> {
+        let status = attach(socket_descriptor(socket));
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        Ok(())
+    }
+
+    /// Limits the length of a request to the size supported by Winsock.
+    fn length_limit(length: usize) -> u64 {
+        if copy(length) > 4294967295 { return 4294967295; }
+        length as u64
+    }
+
+    /// Awaits an overlapped socket read and returns the transferred byte count.
+    pub async fn read_nonblocking(socket: u64, buffer: &mut [u8]) -> Result<usize, SocketError> {
+        let length = buffer.len();
+        if copy(length) == 0 { return Ok(0); }
+        let mut request: [u64; 25] = [0; 25];
+        request[6] = 1;
+        request[7] = length_limit(copy(length));
+        set_request_buffer(&mut request[..], &buffer[0..length]);
+        let status = execute(socket, &mut request[..]).await;
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        let error = status_code(request[10]);
+        if copy(error) != 0 { return Err(socket_error(error)); }
+        Ok(request[9] as usize)
+    }
+
+    /// Awaits an overlapped socket write and returns the transferred byte count.
+    pub async fn write_nonblocking(socket: u64, buffer: &[u8]) -> Result<usize, SocketError> {
+        let length = buffer.len();
+        if copy(length) == 0 { return Ok(0); }
+        let mut request: [u64; 25] = [0; 25];
+        request[6] = 2;
+        request[7] = length_limit(copy(length));
+        set_request_buffer(&mut request[..], &buffer[0..length]);
+        let status = execute(socket, &mut request[..]).await;
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        let error = status_code(request[10]);
+        if copy(error) != 0 { return Err(socket_error(error)); }
+        Ok(request[9] as usize)
+    }
+
+    /// Awaits a datagram and returns its byte count and sender.
+    pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) -> Result<Datagram, SocketError> {
+        let length = buffer.len();
+        let mut dummy: [u8; 1] = [0];
+        let mut request: [u64; 25] = [0; 25];
+        request[6] = 3;
+        request[14] = 16;
+        if copy(length) == 0 {
+            request[7] = 1;
+            set_request_buffer(&mut request[..], &dummy[..]);
+        } else {
+            request[7] = length_limit(copy(length));
+            set_request_buffer(&mut request[..], &buffer[0..copy(length)]);
+        }
+        let status = execute(socket, &mut request[..]).await;
+        if copy(status) != 0 { return datagram_result(status, 0, 0); }
+        let error = status_code(request[10]);
+        if error == -234 || (request[11] & 32768) != 0 || (length == 0 && request[9] != 0) {
+            return Err(SocketError.DatagramTooLarge);
+        }
+        datagram_result(status_code(request[10]), request[9] as usize, peer_bits(request[12]))
+    }
+
+    /// Awaits transmission of a connected or addressed datagram.
+    pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) -> Result<usize, SocketError> {
+        let length = buffer.len();
+        if copy(length) > 65507 { return Err(SocketError.DatagramTooLarge); }
+        let dummy: [u8; 1] = [0];
+        let mut request: [u64; 25] = [0; 25];
+        request[6] = if direct { 2 } else { 4 };
+        request[7] = length_limit(copy(length));
+        request[12] = address_bits(ip, port);
+        if length == 0 { set_request_buffer(&mut request[..], &dummy[..]); }
+        else { set_request_buffer(&mut request[..], &buffer[0..length]); }
+        let status = execute(socket, &mut request[..]).await;
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        let error = status_code(request[10]);
+        if copy(error) != 0 { return Err(socket_error(error)); }
+        Ok(request[9] as usize)
+    }
+
+    /// Awaits an overlapped connect and adopts the completed connection.
+    pub async fn connect_nonblocking(ip: u32, port: u16) -> Result<PlatformSocket, SocketError> {
+        let socket = match make_socket(1) {
+            Ok(value) => { value }, Err(error) => { return Err(error); },
+        };
+        match prepare_async(&socket) {
+            Ok(()) => {}, Err(error) => { return Err(error); },
+        };
+        let descriptor = socket_descriptor(&socket);
+        let bound = raw::bind(copy(descriptor), 0, 0);
+        if copy(bound) != 0 { return Err(socket_error(bound)); }
+        let mut request: [u64; 25] = [0; 25];
+        request[6] = 5;
+        request[12] = address_bits(ip, port);
+        let status = execute(copy(descriptor), &mut request[..]).await;
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        let error = status_code(request[10]);
+        if error == -1225 { return Err(SocketError.ConnectionRefused); }
+        let error = status_code(request[10]);
+        if copy(error) != 0 { return Err(socket_error(error)); }
+        let updated = raw::update_context(descriptor, false, 0);
+        if copy(updated) != 0 { return Err(socket_error(updated)); }
+        Ok(socket)
+    }
+
+    /// Awaits an overlapped accept and adopts the resulting connection.
+    pub async fn accept_nonblocking(listener: &mut PlatformSocket) -> Result<PlatformSocket, SocketError> {
+        let descriptor = socket_descriptor(&*listener);
+        let socket = match make_socket(1) {
+            Ok(value) => { value }, Err(error) => { return Err(error); },
+        };
+        let accepted = socket_descriptor(&socket);
+        let mut request: [u64; 25] = [0; 25];
+        request[6] = 6;
+        request[15] = copy(accepted);
+        let status = execute(copy(descriptor), &mut request[..]).await;
+        if copy(status) != 0 { return Err(socket_error(status)); }
+        let error = status_code(request[10]);
+        if copy(error) != 0 { return Err(socket_error(error)); }
+        let updated = raw::update_context(accepted, true, descriptor);
+        if copy(updated) != 0 { return Err(socket_error(updated)); }
+        match prepare_async(&socket) {
+            Ok(()) => {}, Err(error) => { return Err(error); },
+        };
+        Ok(socket)
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Sets the opaque WSABUF pointer for a request kept alive until completion.
+    fn set_request_buffer(request: &mut [u64], buffer: &[u8]) {
+        @unchecked {
+            let slot = addr(&mut request[8]);
+            let pointer = addr(&buffer[0]);
+            @asm {
+                mov x9, ${slot}
+                mov x10, ${pointer}
+                str x10, [x9]
+            }
+        }
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Sets the opaque WSABUF pointer for a request kept alive until completion.
+    fn set_request_buffer(request: &mut [u64], buffer: &[u8]) {
+        @unchecked {
+            let slot = addr(&mut request[8]);
+            let pointer = addr(&buffer[0]);
+            @asm {
+                push rax
+                push rcx
+                mov rax, ${slot}
+                mov rcx, ${pointer}
+                mov QWORD PTR [rax], rcx
+                pop rcx
+                pop rax
+            }
+        }
+    }
+#(endif)

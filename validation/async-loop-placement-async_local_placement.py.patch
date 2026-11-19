@@ -1,0 +1,93 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -61,11 +61,29 @@
+                     results.extend(outputs)
+             return merge(results)
+         if op == 'loop_expr':
+-            _, results = block(expr[1].args[0], env, breaks=True)
++            _, results = loop(expr[1].args[0], env, valued=True)
+             return merge(results)
+         return None
+ 
+-    def block(nodes, incoming, *, breaks=False):
++    def join_states(states, names):
++        return {name: merge([state.get(name) for state in states]) for name in names}
++
++    def loop(nodes, incoming, *, valued=False):
++        # Constructors are AST identities: union reaches a finite fixed point.
++        # None is unknown, never an empty set of possible producers.
++        head = incoming.copy()
++        while True:
++            back, exits = [], []
++            state, results = block(nodes, head, breaks=valued,
++                                   loop_back=back, loop_exits=exits)
++            if state is not None:
++                back.append(state)
++            updated = join_states([incoming, head, *back], incoming)
++            if updated == head:
++                return (join_states(exits, incoming) if exits else None), results
++            head = updated
++
++    def block(nodes, incoming, *, breaks=False, loop_back=None, loop_exits=None):
+         env = incoming.copy()
+         results = []
+         for node in nodes:
+@@ -77,7 +95,8 @@
+             elif op == 'if':
+                 following = []
+                 for branch in args[1:]:
+-                    state, outputs = block(branch, env, breaks=breaks)
++                    state, outputs = block(branch, env, breaks=breaks,
++                                           loop_back=loop_back, loop_exits=loop_exits)
+                     results.extend(outputs)
+                     if state is not None:
+                         following.append(state)
+@@ -93,26 +112,30 @@
+             elif op == 'break':
+                 if breaks:
+                     results.append(evaluate(args[0], env))
++                if loop_exits is not None:
++                    loop_exits.append(env.copy())
+                 return None, results
+-            elif op in ('return', 'continue'):
++            elif op == 'continue':
++                if loop_back is not None:
++                    loop_back.append(env.copy())
+                 return None, results
+-            elif op in ('loop', 'while', 'scope'):
+-                nested = args[1] if op == 'scope' else args[0]
+-                if assignments:
+-                    block(nested, env)
+-                # General writes through nested statement loops need a fixed
+-                # point. Do not guess a constructor for an affected result.
+-                def assigned(value):
+-                    if hasattr(value, 'op'):
+-                        if value.op == 'assign':
+-                            yield value.args[0]
+-                        yield from assigned(value.args)
+-                    elif isinstance(value, (tuple, list)):
+-                        for item in value:
+-                            yield from assigned(item)
+-                for name in assigned(node):
+-                    if name in env:
+-                        env[name] = None
++            elif op == 'return':
++                return None, results
++            elif op == 'while_check':
++                if loop_exits is not None:
++                    loop_exits.append(env.copy())
++            elif op in ('loop', 'while'):
++                state, _ = loop(args[0], env)
++                if state is None:
++                    return None, results
++                env = state
++            elif op == 'scope':
++                state, outputs = block(args[1], env, breaks=breaks,
++                                       loop_back=loop_back, loop_exits=loop_exits)
++                results.extend(outputs)
++                if state is None:
++                    return None, results
++                env = {name: state.get(name) for name in env}
+         return env, results
+ 
+     result = evaluate(expression, {name: (typ, {}) for name, typ in known_locals.items()})

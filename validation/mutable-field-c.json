@@ -1,0 +1,111 @@
+{
+  "toolchains": [
+    {
+      "family": "clang",
+      "path": "/opt/homebrew/opt/llvm/bin/clang",
+      "version": "Homebrew clang version 20.1.3"
+    }
+  ],
+  "runs": [
+    {
+      "case": "mixed",
+      "compiler": "clang",
+      "settings": "O0",
+      "returncode": 0,
+      "stdout": "0x100ce0000\nMix.A(1, 10, 2, 20, 3)\n0x100ce0000\n10\n20\n30\n",
+      "stderr": "destroy w=Mix.A\nreclaim w\ndestroy y=20\nreclaim y\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "case": "mixed",
+      "compiler": "clang",
+      "settings": "O2",
+      "returncode": 0,
+      "stdout": "0x1025c4000\nMix.A(1, 10, 2, 20, 3)\n0x1025c4000\n10\n20\n30\n",
+      "stderr": "destroy w=Mix.A\nreclaim w\ndestroy y=20\nreclaim y\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "case": "mixed",
+      "compiler": "clang",
+      "settings": "Os",
+      "returncode": 0,
+      "stdout": "0x10223c000\nMix.A(1, 10, 2, 20, 3)\n0x10223c000\n10\n20\n30\n",
+      "stderr": "destroy w=Mix.A\nreclaim w\ndestroy y=20\nreclaim y\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "case": "mixed",
+      "compiler": "clang",
+      "settings": "O2-UBSan",
+      "returncode": 0,
+      "stdout": "0x104a8c000\nMix.A(1, 10, 2, 20, 3)\n0x104a8c000\n10\n20\n30\n",
+      "stderr": "destroy w=Mix.A\nreclaim w\ndestroy y=20\nreclaim y\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "case": "returned",
+      "compiler": "clang",
+      "settings": "O0",
+      "returncode": 0,
+      "stdout": "0x104bfc000\nW.Bound(10)\nW.Bound(10)\nW.Bound(30)\n0x104bfc000\n7\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\nreset\ndestroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\ndestroy next=7\nreclaim next\n"
+    },
+    {
+      "case": "returned",
+      "compiler": "clang",
+      "settings": "O2",
+      "returncode": 0,
+      "stdout": "0x1007d4000\nW.Bound(10)\nW.Bound(10)\nW.Bound(30)\n0x1007d4000\n7\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\nreset\ndestroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\ndestroy next=7\nreclaim next\n"
+    },
+    {
+      "case": "returned",
+      "compiler": "clang",
+      "settings": "Os",
+      "returncode": 0,
+      "stdout": "0x102cd8000\nW.Bound(10)\nW.Bound(10)\nW.Bound(30)\n0x102cd8000\n7\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\nreset\ndestroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\ndestroy next=7\nreclaim next\n"
+    },
+    {
+      "case": "returned",
+      "compiler": "clang",
+      "settings": "O2-UBSan",
+      "returncode": 0,
+      "stdout": "0x100188000\nW.Bound(10)\nW.Bound(10)\nW.Bound(30)\n0x100188000\n7\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\nreset\ndestroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\ndestroy next=7\nreclaim next\n"
+    },
+    {
+      "case": "exhaustion",
+      "compiler": "clang",
+      "settings": "O0",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "pool capacity exceeded\n"
+    },
+    {
+      "case": "exhaustion",
+      "compiler": "clang",
+      "settings": "O2",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "pool capacity exceeded\n"
+    },
+    {
+      "case": "exhaustion",
+      "compiler": "clang",
+      "settings": "Os",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "pool capacity exceeded\n"
+    },
+    {
+      "case": "exhaustion",
+      "compiler": "clang",
+      "settings": "O2-UBSan",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "pool capacity exceeded\n"
+    }
+  ],
+  "limitations": [
+    "three fixed programs, not all layouts",
+    "ASan not available on host"
+  ]
+}

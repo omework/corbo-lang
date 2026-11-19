@@ -1,0 +1,54 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1464,7 +1464,9 @@
+                                         dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) in ('&Int', '&mut Int'))
+                         local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == 'Int'
+                         local_holder = all(references.get(holder) == 'owned' for holder in holders)
+-                        if not (parameter_modes.get(root) in ('ref','mut') and durable_type or local_holder and local_target):
++                        captured_reference = parameter_modes.get(root) == 'owned' and source_path and durable_type
++                        if not (parameter_modes.get(root) in ('ref','mut') and durable_type
++                                or captured_reference or local_holder and local_target):
+                             fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
+                         retained.append((origin,mode))
+                 if not retained:
+@@ -1652,6 +1654,8 @@
+             retained, returned = [], []
+             capture_loans = {}
+             capture_field_loans = {}
++            result_capture_paths = (borrowed_result_paths(functions[signature[1]], functions, fail, {},
++                                    sync_contracts=sync_contracts) if signature in task_sync_types else ())
+             result_captures = (borrowed_result_parameters(functions[signature[1]], functions, fail, {},
+                               sync_contracts=sync_contracts)
+                                if signature in task_sync_types else {4, 5})
+@@ -1678,7 +1682,10 @@
+                 capture_loans.setdefault(position, []).extend(held)
+                 if '/' in field:
+                     capture_field_loans[(position, field.partition('/')[2])] = held
+-                if position in result_captures:
++                selected_field = field.partition('/')[2]
++                if position in result_captures and (not selected_field or any(
++                        index == position and selected_field == '.' + '.'.join(path)
++                        for index, path in result_capture_paths)):
+                     returned.extend(held)
+             for sources, output in ((contract.result.task_sources, retained),
+                                     (contract.result.task_result_sources, returned)):
+@@ -2145,6 +2152,10 @@
+                         field_loans = owned_capture_field_loans(value, typ)
+                         argument_fields.update(((index, path), group) for path, group in field_loans.items())
+                         loans.extend(loan for group in field_loans.values() for loan in group)
++                        for path in result_paths.get(index, ()):
++                            field = '.'.join(path)
++                            if dict(reference_structs.get(typ, ())).get(field) == '&Int':
++                                returned_loans.extend(field_loans['.' + field])
+                     if storage_of(value) & implicit_stacks:
+                         if declaration.args[1][index][0] in declaration.handle_parameters:
+                             fail(line, 'capture A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
+@@ -4235,6 +4246,8 @@
+         place_local_result(expr)
+         if expr[0] == 'task_select':
+             return 'selection', create_selection(expr, line)
++        if sync_signature(expr) in task_sync_types:
++            return 'task', create_task(expr, line)
+         if sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum'):
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':

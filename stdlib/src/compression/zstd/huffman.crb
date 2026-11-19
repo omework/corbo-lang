@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: (MIT OR Apache-2.0) AND BSD-3-Clause
+//! Native Zstandard Huffman weights and one/four-stream literal decoding.
+// Copyright 2023 The Go Authors. All rights reserved.
+// Entropy decoding adapted to Corbo from Go internal/zstd; RFC-defined tables cross-checked there.
+// Additional BSD-3-Clause terms: stdlib/THIRD_PARTY_NOTICES.txt.
+
+/// Reads an RFC 8878 Huffman tree, including FSE-compressed weights.
+fn read_huffman(input: &[u8], start: u64, table: &mut [u64]) -> u64 {
+    if start >= input.len() as u64 { return pack_pair(ZERO, ZERO); }
+    let header = input[start] as u64; let mut at = start + 1;
+    let mut weights: [u64; 256] = [0; 256]; let mut count: u64 = 0;
+    if header >= 128 {
+        count = header - 127;
+        if (count + 1) / 2 > input.len() as u64 - at { return pack_pair(ZERO, ZERO); }
+        let mut i: u64 = 0;
+        while i < count { weights[i] = (input[at + i / 2] as u64 >> (if i % 2 == 0 { 4 } else { 0 })) & 15; i = i + 1; }
+        at = at + (count + 1) / 2;
+    } else {
+        if header == 0 || header > input.len() as u64 - at { return pack_pair(ZERO, ZERO); }
+        let end = at + header;
+        let mut fse: [u64; 64] = [0; 64];
+        let decoded_fields_0 = read_fse(&input[0..end], copy(at), 255, 6, &mut fse[..]); let bits = decoded_fields_0 >> 32; let next = decoded_fields_0 & 0xffffffff;
+        if bits == 0 || next >= end { return pack_pair(ZERO, ZERO); }
+        let mut reader = reverse_reader(&input[0..input.len()], next, copy(end));
+        let mut a = backward(&input[0..input.len()], &mut reader, copy(bits));
+        let mut b = backward(&input[0..input.len()], &mut reader, bits);
+        let mut turn = false;
+        loop {
+            if a >= 64 || b >= 64 || reader.bad || count >= 255 { return pack_pair(ZERO, ZERO); }
+            let index = if turn { copy(b) } else { copy(a) };
+            let entry = fse[index]; let need = (entry >> 8) & 255;
+            if reader.bit - reader.low < need {
+                if count > 253 { return pack_pair(ZERO, ZERO); }
+                weights[count] = entry & 255;
+                let other = if turn { copy(a) } else { copy(b) };
+                weights[count + 1] = fse[other] & 255; count = count + 2; break;
+            }
+            let next_state = (entry >> 16) + backward(&input[0..input.len()], &mut reader, need);
+            weights[count] = entry & 255; count = count + 1;
+            if turn { b = next_state; } else { a = next_state; } turn = !turn;
+        }
+        at = end;
+    }
+    let mut marks: [u64; 13] = [0; 13]; let mut sum: u64 = 0; let mut i: u64 = 0;
+    while i < count {
+        let weight = weights[i]; if weight > 12 { return pack_pair(ZERO, ZERO); }
+        marks[weight] = marks[weight] + 1;
+        if weight != 0 { sum = sum + (1 << (weight - 1)); } i = i + 1;
+    }
+    if sum == 0 { return pack_pair(ZERO, ZERO); }
+    let bits = log2(copy(sum)) + 1;
+    if bits > 11 { return pack_pair(ZERO, ZERO); }
+    let left: u64 = (1 << bits) - sum;
+    let last = log2(copy(left)) + 1;
+    if left == 0 || (1 << (last - 1)) != left || count > 255 { return pack_pair(ZERO, ZERO); }
+    weights[count] = copy(last); marks[last] = marks[last] + 1; count = count + 1;
+    if marks[1] < 2 || marks[1] % 2 != 0 { return pack_pair(ZERO, ZERO); }
+    let mut next: u64 = 0; i = 1;
+    while i <= bits { let value = copy(next); next = next + (marks[i] << (i - 1)); marks[i] = value; i = i + 1; }
+    if (1 << bits) > table.len() as u64 { return pack_pair(ZERO, ZERO); }
+    i = 0;
+    while i < count {
+        let weight = weights[i];
+        if weight != 0 {
+            let length: u64 = 1 << (weight - 1); let mut j: u64 = 0;
+            while j < length { table[marks[weight] + j] = (i << 8) | (bits + 1 - weight); j = j + 1; }
+            marks[weight] = marks[weight] + length;
+        }
+        i = i + 1;
+    }
+    pack_pair(bits, at)
+}
+
+/// Decodes an exact number of literals and rejects leftover or missing entropy bits.
+fn huffman_stream(input: &[u8], start: u64, end: u64, output: &mut [u8], table: &[u64], bits: u64) -> bool {
+    let mut reader = reverse_reader(&input[0..input.len()], start, end);
+    if reader.bad { return false; }
+    let mut i: u64 = 0;
+    while i < output.len() as u64 {
+        let saved = reader.bit;
+        let available = reader.bit - reader.low;
+        let count = if available < bits { copy(available) } else { copy(bits) };
+        let index = backward(&input[0..input.len()], &mut reader, copy(count)) << (bits - count);
+        position(&mut reader, saved);
+        if index >= table.len() as u64 { return false; }
+        let entry = table[index]; let length = entry & 255;
+        if length == 0 || length > available { return false; }
+        drop(backward(&input[0..input.len()], &mut reader, length));
+        output[i] = byte(entry >> 8); i = i + 1;
+    }
+    !reader.bad && reader.bit == reader.low
+}
+
+/// Decodes a literal section into the caller's bounded workspace; returns byte end, literal count and tree log.
+fn literals(input: &[u8], output: &mut [u8], table: &mut [u64], previous_bits: u64) -> u64 {
+    if input.len() == 0 { return pack_literals(ZERO, ZERO, ZERO); }
+    let header = input[0] as u64; let kind = header & 3; let format = (header >> 2) & 3;
+    let mut at: u64 = 1; let mut regenerated: u64 = 0;
+    if kind < 2 {
+        if format == 0 || format == 2 { regenerated = header >> 3; }
+        else {
+            let width: u64 = if format == 1 { 1 } else { 2 };
+            if width > input.len() as u64 - at { return pack_literals(ZERO, ZERO, ZERO); }
+            regenerated = (header >> 4) | ((input[at] as u64) << 4); at = at + 1;
+            if width == 2 { regenerated = regenerated | ((input[at] as u64) << 12); at = at + 1; }
+        }
+        if regenerated > 131072 || regenerated > output.len() as u64 { return pack_literals(ZERO, ZERO, ZERO); }
+        if kind == 0 {
+            if regenerated > input.len() as u64 - at { return pack_literals(ZERO, ZERO, ZERO); }
+            let mut i: u64 = 0; while i < regenerated { output[i] = input[at + i]; i = i + 1; }
+            return pack_literals(at + regenerated, regenerated, previous_bits);
+        }
+        if at == input.len() as u64 { return pack_literals(ZERO, ZERO, ZERO); }
+        let mut i: u64 = 0; while i < regenerated { output[i] = input[at]; i = i + 1; }
+        return pack_literals(at + 1, regenerated, previous_bits);
+    }
+    let width: u64 = if format < 2 { 2 } else if format == 2 { 3 } else { 4 };
+    if width > input.len() as u64 - at { return pack_literals(ZERO, ZERO, ZERO); }
+    let mut encoded: u64 = 0; let mut streams: u64 = 4;
+    if format < 2 {
+        regenerated = (header >> 4) | (((input[1] as u64) & 63) << 4);
+        encoded = (input[1] as u64 >> 6) | ((input[2] as u64) << 2);
+        if format == 0 { streams = 1; }
+    } else if format == 2 {
+        regenerated = (header >> 4) | ((input[1] as u64) << 4) | (((input[2] as u64) & 3) << 12);
+        encoded = (input[2] as u64 >> 2) | ((input[3] as u64) << 6);
+    } else {
+        regenerated = (header >> 4) | ((input[1] as u64) << 4) | (((input[2] as u64) & 63) << 12);
+        encoded = (input[2] as u64 >> 6) | ((input[3] as u64) << 2) | ((input[4] as u64) << 10);
+    }
+    at = at + width;
+    if encoded > input.len() as u64 - at || regenerated > 131072 || regenerated > output.len() as u64 { return pack_literals(ZERO, ZERO, ZERO); }
+    let end = at + encoded; let mut bits = previous_bits;
+    if kind == 2 {
+        let decoded_fields_1 = read_huffman(&input[0..end], copy(at), &mut table[0..table.len()]); let log = decoded_fields_1 >> 32; let next = decoded_fields_1 & 0xffffffff;
+        if log == 0 || next > end { return pack_literals(ZERO, ZERO, ZERO); } bits = log; at = next;
+    } else if bits == 0 { return pack_literals(ZERO, ZERO, ZERO); }
+    if streams == 1 {
+        if !huffman_stream(&input[0..input.len()], at, copy(end), &mut output[0..regenerated], &table[0..table.len()], copy(bits)) { return pack_literals(ZERO, ZERO, ZERO); }
+    } else {
+        if end - at < 6 || regenerated < 6 { return pack_literals(ZERO, ZERO, ZERO); }
+        let a = input[at] as u64 | ((input[at + 1] as u64) << 8);
+        let b = input[at + 2] as u64 | ((input[at + 3] as u64) << 8);
+        let c = input[at + 4] as u64 | ((input[at + 5] as u64) << 8);
+        at = at + 6;
+        if a + b + c >= end - at { return pack_literals(ZERO, ZERO, ZERO); }
+        let each = (regenerated + 3) / 4;
+        if !huffman_stream(&input[0..input.len()], copy(at), at + a, &mut output[0..each], &table[0..table.len()], copy(bits)) { return pack_literals(ZERO, ZERO, ZERO); } at = at + a;
+        if !huffman_stream(&input[0..input.len()], copy(at), at + b, &mut output[each..each * 2], &table[0..table.len()], copy(bits)) { return pack_literals(ZERO, ZERO, ZERO); } at = at + b;
+        if !huffman_stream(&input[0..input.len()], copy(at), at + c, &mut output[each * 2..each * 3], &table[0..table.len()], copy(bits)) { return pack_literals(ZERO, ZERO, ZERO); } at = at + c;
+        if !huffman_stream(&input[0..input.len()], at, copy(end), &mut output[each * 3..regenerated], &table[0..table.len()], copy(bits)) { return pack_literals(ZERO, ZERO, ZERO); }
+    }
+    pack_literals(end, regenerated, bits)
+}

@@ -1,0 +1,557 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1,7 +1,7 @@
+ """Lower async bodies to the task ABI with static checks of memory transitions."""
+ 
+ from collections import ChainMap
+-from dataclasses import replace
++from dataclasses import dataclass, replace
+ from array_syntax import consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, ERROR_VALUE_MODES, ERROR_VALUE_TAGS, RESULT_ERROR_MODES
+@@ -20,6 +20,15 @@
+ 
+ class NoAsyncContinuation(Exception):
+     """An emitted expression has no path back to its enclosing instruction."""
++
++
++@dataclass(frozen=True)
++class SelectionState:
++    c: str
++    branches: tuple
++    loans: list
++    awaited: bool = False
++    paths: tuple = ()
+ 
+ 
+ JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested'}
+@@ -1443,6 +1452,9 @@
+     mutable = set(node.mutable_parameters)
+     consumed = set()
+     tasks = {}
++    selections = {}
++    selection_loan_sets = {}
++    task_prefix_changes = {}
+     executions = {}
+     join_results = {}
+     active_loans = {}
+@@ -1463,7 +1475,7 @@
+     field_count = 0
+ 
+     def check_new_name(variable, line):
+-        if variable in fields or variable in tasks or variable in executions or variable in join_results:
++        if variable in fields or variable in tasks or variable in selections or variable in executions or variable in join_results:
+             fail(line, f"variable '{variable}' déjà déclarée")
+ 
+     def declare(variable, line):
+@@ -1739,6 +1751,9 @@
+             steps.append(f'{task} = crust_async_{callee}_create({", ".join(captures)});')
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
+                        if effects is not None and effects.complete else ())
++            # Resolve only when Select needs it; ordinary awaits may use types
++            # whose suspended-field contract is still unknown.
++            task_prefix_changes[task] = ((effects, declaration.args[1], tuple(argument_loans)),)
+             return task, declaration.args[2] == ('scalar', 'Int'), loans, callee, returned_loans, (changes,)
+         except NoAsyncContinuation:
+             active_loans.pop(id(loans), None)
+@@ -1759,13 +1774,127 @@
+         steps.append(f'task_discard({task});')
+         del active_loans[id(loans)]
+ 
++    def create_selection(expr, line):
++        enable_threads()
++        records, hidden, signatures = [], [], set()
++        for argument in expr[1]:
++            if argument[0] == 'down':
++                require_local_async_value(argument[1], line)
++                record = consume_task(argument[1], line)
++            elif argument[0] == 'transfer' and argument[1][0] == 'call' and argument[1][1] in functions:
++                record = create_task(argument[1], line)
++            elif argument[0] == 'transfer':
++                kind, record = emit_computed_transfer(argument[1], line)
++                if kind != 'task':
++                    fail(line, 'Select exige des tâches inactives')
++            else:
++                fail(line, 'prototype : branche Select calculée non raccordée')
++            signatures.add(functions[record[3]].args[2])
++            if len(signatures) != 1:
++                fail(line, 'Select exige le même type de résultat dans chaque branche')
++            # Earlier constructed branches must also be destroyed if evaluating
++            # a later argument suspends or leaves the enclosing scope.
++            binding = '\0select_branch:' + record[0]
++            tasks[binding] = record
++            scopes[-1][0][binding] = None
++            hidden.append(binding)
++            records.append(record)
++        state = temporary('CrustSelect')
++        branches = temporary('CrustSelectBranch', f'[{len(records)}]')
++        loans = []
++        for index, (binding, record) in enumerate(zip(hidden, records)):
++            task, _, held, _, _, _ = consume_task(binding, line)
++            loans.extend(held)
++            active_loans.pop(id(held), None)
++            # Hidden construction owners cease to exist once the selection owns them.
++            del tasks[binding]
++            del scopes[-1][0][binding]
++            steps.append(f'{branches}[{index}] = (CrustSelectBranch){{{task}, {task}->discard_suspended}};')
++        loans = list(dict.fromkeys(loans))
++        active_loans[id(loans)] = loans
++        steps.append(f'task_select_init(&{state}, {branches}, {len(records)});')
++        return SelectionState(state, tuple(records), loans)
++
++    def discard_selection(name, line):
++        selection = selections[name]
++        if selection is None:
++            fail(line, f"Select '{name}' déjà consommé")
++        steps.append(f'if (!task_select_discardable(&{selection.c})) fail("unresolved Select cleanup");')
++        steps.append(f'task_select_drop(&{selection.c});')
++        active_loans.pop(id(selection.loans), None)
++        selections[name] = None
++
++    def selection_poll_paths(selection, line):
++        # A control-flow alternative chooses a whole selection, not extra
++        # branches after those of another alternative. Keep their orders apart.
++        paths = []
++        for path in selection.paths or (selection.branches,):
++            reachable = []
++            for record in path:
++                if record[0] not in task_prefix_changes:
++                    fail(line, 'prototype : contrat de suspension de la branche Select non raccordé')
++                candidates = task_prefix_changes[record[0]]
++                for effects, _, _ in candidates:
++                    if effects is None or not effects.complete or not effects.suspension_complete:
++                        fail(line, 'prototype : effets suspendus de la branche Select non raccordés')
++                reachable.append((record, candidates))
++                if all(not effects.may_suspend for effects, _, _ in candidates):
++                    # Ready, or a poll that never returns: neither can reach
++                    # the following branch. Its captures still belong to Select.
++                    break
++            paths.append(tuple(reachable))
++        return tuple(paths)
++
++    def selection_field_effects(paths, line):
++        # Preserve writes of reachable winners and suspended losers. Keeping
++        # the initial state in these unions is conservative across alternatives.
++        for path in paths:
++            for record, candidates in path:
++                prefixes = [prepare_field_changes(effects.suspension_result, parameters, argument_loans, line)
++                            for effects, parameters, argument_loans in candidates]
++                apply_child_field_changes((*record[5], *prefixes), line, launched=True)
++
++    def selection_loser_loans(selection, poll_paths):
++        needed = set()
++        for path, reachable in zip(selection.paths or (selection.branches,), poll_paths):
++            winners = [record[0] for record, candidates in reachable
++                       if any(effects.may_complete for effects, _, _ in candidates)]
++            certain = winners[0] if len(winners) == 1 else None
++            for record in path:
++                if record[0] != certain:
++                    needed.update(record[2])
++        # Export may have removed expired local aliases from the combined
++        # captures. Never restore them from a branch's construction record.
++        retained = [loan for loan in selection.loans if loan in needed]
++        if retained == selection.loans:
++            return selection.loans
++        # Equivalent waits in two control-flow arms must yield the same static
++        # reservation identity, not different Python list identities.
++        return selection_loan_sets.setdefault((selection.c, tuple(retained)), retained)
++
+     def await_task(expr, line, *, returns_value, borrow=False, owned=False, joined=False, array_shape=(),
+                    prepared=None, scalar_type='Int'):
+         nonlocal resume_point
+         if not returns_value and awaits_execution(expr):
+             fail(line, 'résultat faillible du handle sans usage explicite')
+         operand = expr[1]
+-        if prepared is not None:
++        selection_name = operand[1] if operand[0] == 'name' and operand[1] in selections else None
++        selection = None
++        if selection_name is not None:
++            selection = selections[selection_name]
++            if selection is None or selection.awaited:
++                fail(line, f"Select '{selection_name}' déjà attendu ou détruit")
++            if selection_name not in mutable:
++                fail(line, 'attendre Select exige une liaison let mut')
++            task, returns_int, _, nominal, _, _ = selection.branches[0]
++            loans = selection.loans
++            poll_paths = selection_poll_paths(selection, line)
++            returned_loans = list(dict.fromkeys(loan for path in poll_paths for record, candidates in path
++                if any(effects.may_complete for effects, _, _ in candidates) for loan in record[4]))
++            field_changes = ()
++            # Check all needed contracts before emitting any poll/cleanup path.
++            selection_field_effects(poll_paths, line)
++        elif prepared is not None:
+             task, returns_int, loans, nominal, returned_loans, field_changes = prepared
+         elif operand[0] == 'call':
+             task, returns_int, loans, nominal, returned_loans, field_changes = create_task(operand, line)
+@@ -1795,16 +1924,27 @@
+         ctype = capture_ctype(result_mode, result_type) if borrow or owned or joined or result_mode in SCALAR_TYPES else 'int'
+         result = temporary(array_element_type or ctype, array_dimensions(array_shape)) if returns_value else None
+         output = f'&{result}' if result else 'NULL'
+-        remember_suspended_cleanup(resume_point, child=task)
+-        steps.extend((
++        if selection is not None:
++            remember_suspended_cleanup(resume_point)
++            steps.extend((f'frame->pc = {resume_point};', f'resume_{resume_point}: ;',
++                f'CrustTaskStep selected_{resume_point} = task_select_poll(&{selection.c}, &frame->task);',
++                f'if (selected_{resume_point} != TASK_STEP_RETURN) return selected_{resume_point};',
++                f'if (!task_select_take(&{selection.c}, {output})) fail("invalid Select await");'))
++            retained = selection_loser_loans(selection, poll_paths)
++            active_loans.pop(id(loans), None)
++            active_loans[id(retained)] = retained
++            selections[selection_name] = replace(selection, awaited=True, loans=retained)
++        else:
++            remember_suspended_cleanup(resume_point, child=task)
++            steps.extend((
+             f'frame->pc = {resume_point};', f'resume_{resume_point}: ;',
+             f'CrustTaskState child_{resume_point} = task_poll_child(&frame->task, {task});',
+             f'if (child_{resume_point} == TASK_SUSPENDED) return task_child_suspension({task});',
+             f'if (child_{resume_point} != TASK_COMPLETE || !task_take({task}, {output})) fail("invalid async await");',
+             f'{task} = NULL;',
+-        ))
+-        del active_loans[id(loans)]
+-        apply_child_field_changes(field_changes, line, launched=False)
++            ))
++            del active_loans[id(loans)]
++            apply_child_field_changes(field_changes, line, launched=False)
+         if owned or joined:
+             owned_result_types[result] = result_type
+             keep_storage(result, (target for target, mode in returned_loans if mode == 'storage'))
+@@ -1854,7 +1994,9 @@
+             check_access(name, statement.line, write=True)
+             consumed.add(name)
+             return True
+-        if name in executions:
++        if name in selections:
++            destroy = discard_selection
++        elif name in executions:
+             destroy = abandon_execution
+         elif name in tasks:
+             destroy = discard_task
+@@ -2025,6 +2167,11 @@
+         elif kind in ('join_owned', 'join_nested'):
+             join_results[name] = value
+             storage_bindings[name] = storage_of(value[0])
++        elif kind == 'selection':
++            selections[name] = value
++            scopes[-1][0][name] = None
++            if statement.mutable:
++                mutable.add(name)
+         else:
+             (tasks if kind == 'task' else executions)[name] = value
+ 
+@@ -2212,6 +2359,33 @@
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
+         operator = initializer[0]
++        if operator == 'task_select' or operator == 'move' and initializer[1] in selections:
++            check_new_name(name, statement.line)
++            if statement.annotation is not None or statement.compact_transfer:
++                fail(statement.line, 'Select exige une liaison locale de type inféré')
++            if operator == 'task_select':
++                selection = create_selection(initializer, statement.line)
++            else:
++                original = initializer[1]
++                require_local_async_value(original, statement.line)
++                selection = selections[original]
++                if selection is None:
++                    fail(statement.line, f"Select '{original}' déjà consommé")
++                selections[original] = None
++            selections[name] = selection
++            names = scopes[-1][0]
++            if operator == 'move':
++                previous = tuple(names)
++                names.clear()
++                for existing in previous:
++                    names[existing] = None
++                    if existing == original:
++                        names[name] = None
++            else:
++                names[name] = None
++            if statement.mutable:
++                mutable.add(name)
++            return True
+         if operator in ('ref', 'mut', 'reborrow') and initializer[1] in pool_types:
+             source_name = initializer[1]
+             mode = initializer[2] if operator == 'reborrow' else operator
+@@ -2420,7 +2594,7 @@
+         Borrow descriptors themselves have no runtime destructor. This snapshot
+         does not invent an implicit join for an outstanding launched handle.
+         """
+-        cleanup, children, seen = [], [], set()
++        cleanup, children, select_checks, seen = [], [], [], set()
+         blocked = waiting_handle or any(value is not None for value in executions.values())
+ 
+         def owned_child(task):
+@@ -2461,11 +2635,16 @@
+                         cleanup.extend((f'if ({cell}) cell_drop({cell});', f'{cell} = NULL;'))
+                 elif name in tasks and tasks[name] is not None:
+                     owned_child(tasks[name][0])
+-        suspended_paths[point] = tuple(cleanup), tuple(children), blocked
++                elif name in selections and selections[name] is not None:
++                    selection = selections[name]
++                    select_checks.append(f'task_select_discardable(&{selection.c})')
++                    cleanup.append(f'task_select_drop(&{selection.c});')
++        suspended_paths[point] = tuple(cleanup), tuple(children), blocked, tuple(select_checks)
+ 
+     def control_state(depth=None):
+         orders = tuple(tuple(name for name in names
+                              if tasks.get(name) is not None or executions.get(name) is not None
++                             or selections.get(name) is not None
+                              or join_results.get(name) is not None
+                              or (references.get(name) == 'owned' and name not in consumed))
+                        for names, *_ in scopes[:depth])
+@@ -2474,10 +2653,10 @@
+         views = {name: loans for name, loans in utf8_view_loans.items() if name in visible}
+         storage = {name: origins for name, origins in storage_bindings.items()
+                    if name in set().union(*(scope[0].keys() for scope in scopes[:depth])) and name not in consumed}
+-        return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs, storage
++        return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs, storage, selections.copy()
+ 
+     def non_utf8_control_state(state, *, ignore_stored_fields=False):
+-        task_state, handles, active, dead, joins, orders, views, refs, storage = state
++        task_state, handles, active, dead, joins, orders, views, refs, storage, selects = state
+         mutable_ids = {id(loans) for local in refs for name, (loans, _) in local.items()
+                        if name in mutable_utf8_bindings}
+         return (task_state, handles, {key: value for key, value in active.items()
+@@ -2487,12 +2666,12 @@
+                 dead, joins, orders,
+                 {name: value for name, value in views.items() if name not in mutable_utf8_bindings},
+                 tuple({name: value for name, value in local.items() if name not in mutable_utf8_bindings}
+-                      for local in refs))
++                      for local in refs), selects)
+ 
+     def merge_utf8_control_states(left, right, line, message):
+         if non_utf8_control_state(left, ignore_stored_fields=True) != non_utf8_control_state(right, ignore_stored_fields=True):
+             fail(line, message)
+-        tasks_state, handles, active, dead, joins, orders, views, refs = non_utf8_control_state(left, ignore_stored_fields=True)
++        tasks_state, handles, active, dead, joins, orders, views, refs, selects = non_utf8_control_state(left, ignore_stored_fields=True)
+         active, views = active.copy(), views.copy()
+         # A conditional field store keeps every possible target. An untouched
+         # branch still contains the capture-time field, not an empty loan.
+@@ -2514,11 +2693,12 @@
+                     active[id(loans)] = loans
+         storage = {name: left[8].get(name, frozenset()) | right[8].get(name, frozenset())
+                    for name in left[8].keys() | right[8].keys()}
+-        return tasks_state, handles, active, dead, joins, orders, views, tuple(refs), storage
++        return tasks_state, handles, active, dead, joins, orders, views, tuple(refs), storage, selects
+ 
+     def restore_control_state(state):
+-        nonlocal tasks, executions, active_loans, consumed, join_results, utf8_view_loans, storage_bindings
+-        tasks, executions, active_loans, consumed, join_results, orders, utf8_view_loans, refs, storage = state
++        nonlocal tasks, selections, executions, active_loans, consumed, join_results, utf8_view_loans, storage_bindings
++        tasks, executions, active_loans, consumed, join_results, orders, utf8_view_loans, refs, storage, selections = state
++        selections = selections.copy()
+         storage_bindings = storage.copy()
+         tasks, executions, active_loans = tasks.copy(), executions.copy(), active_loans.copy()
+         consumed, join_results = consumed.copy(), join_results.copy()
+@@ -3554,6 +3734,8 @@
+                              transfer_result=True, following=following)
+ 
+     def emit_computed_transfer(expr, line, *, following=None):
++        if expr[0] == 'task_select':
++            return 'selection', create_selection(expr, line)
+         if sync_signature(expr) in owned_sync_types or expr[0] == 'new':
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+@@ -3649,6 +3831,7 @@
+         entry = control_state()
+         loop = {'entry': entry, 'depth': len(scopes), 'fields': set(fields),
+                 'valued': valued, 'result': None, 'loans': [], 'returned_loans': [], 'field_changes': [], 'exit': None,
++                'selection_branches': [], 'selection_paths': [], 'task_prefixes': [],
+                 'following': following, 'body': body, 'utf8_loans': [], 'reference_loans': [], 'key': id(body),
+                 'utf8_bindings': names, 'utf8_exit_live': exit_live, 'utf8_head_live': head_live}
+         steps.append('for (;;) {')
+@@ -3693,7 +3876,12 @@
+             return kind, (target, 'nested' if kind == 'join_nested' else 'allocation', None)
+         loans = list(dict.fromkeys(loop['loans']))
+         active_loans[id(loans)] = loans
++        if kind == 'selection':
++            return kind, SelectionState(f'(*{target})', tuple(loop['selection_branches']), loans, returns_int,
++                                        tuple(loop['selection_paths']))
+         record = (target, returns_int, loans, nominal)
++        if kind == 'task':
++            task_prefix_changes[target] = tuple(loop['task_prefixes'])
+         return kind, (*record, list(dict.fromkeys(loop['returned_loans'])), tuple(loop['field_changes']))
+ 
+     def cleanup_async_values(names, returned, line):
+@@ -3725,7 +3913,9 @@
+                 elif name not in consumed:
+                     drop_owned(name, line)
+                 continue
+-            if name in executions:
++            if name in selections:
++                value, destroy = selections[name], discard_selection
++            elif name in executions:
+                 value, destroy = executions[name], abandon_execution
+             else:
+                 value, destroy = tasks[name], discard_task
+@@ -3761,7 +3951,10 @@
+                     del parent_names[name]
+                     parent_names[name] = None
+         for name in names.keys() - imports:
+-            if name in executions:
++            if name in selections:
++                del selections[name]
++                mutable.discard(name)
++            elif name in executions:
+                 del executions[name]
+             elif name in tasks:
+                 del tasks[name]
+@@ -3800,6 +3993,7 @@
+                     if name in consumed:
+                         fail(line, f"'{name}' n’est plus utilisable après drop ou transfert")
+                 elif (executions.get(name) is None and tasks.get(name) is None
++                        and selections.get(name) is None
+                         and not (is_owned_join(name, nested=True) and join_results[name] is not None)):
+                     fail(line, f"tâche ou handle '{name}' inconnu ou déjà consommé")
+                 warn(line, 'transfert sans receveur', name)
+@@ -3831,7 +4025,7 @@
+         if value[0] == 'move':
+             name = value[1]
+             names = set().union(*(scope[0] for scope in scopes[loop['depth']:]))
+-            if name not in names or any(name in loop['entry'][slot] for slot in (0, 1, 4)):
++            if name not in names or any(name in loop['entry'][slot] for slot in (0, 1, 4, 9)):
+                 fail(line, 'break <- exige une tâche, un handle ou un Result créé dans la boucle async')
+             local_names = fields.keys() - loop['fields']
+             kind, record = export_async_value(name, local_names, line, names=names, depth=loop['depth'])
+@@ -3844,8 +4038,18 @@
+             elif kind in ('join_owned', 'join_nested'):
+                 result, returns_int, nominal = record[0], None, owned_result_types.get(record[0], 'Int')
+                 ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++            elif kind == 'selection':
++                result = f'&{record.c}'
++                returns_int, nominal = record.awaited, functions[record.branches[0][3]].args[2]
++                ctype = 'CrustSelect *'
++                loop['selection_branches'].extend(record.branches)
++                loop['selection_paths'].extend(record.paths or (record.branches,))
++                active_loans.pop(id(record.loans), None)
++                loop['loans'].extend(record.loans)
+             else:
+                 result, returns_int, loans, nominal = record[:4]
++                if kind == 'task':
++                    loop['task_prefixes'].extend(task_prefix_changes.get(result, ((None, (), ()),)))
+                 loop['returned_loans'].extend(record[4])
+                 loop['field_changes'].extend(record[5])
+                 del active_loans[id(loans)]
+@@ -3879,6 +4083,8 @@
+             steps.append(f'memcpy({target}, {result}, sizeof {target});')
+ 
+     def async_binding_values(name):
++        if name in selections:
++            return selections
+         if is_owned_join(name, nested=True):
+             return join_results
+         return executions if name in executions else tasks
+@@ -3912,6 +4118,7 @@
+         scalar_type = None
+         selected_signature = None
+         selected_loans, selected_returned_loans, selected_field_changes = [], [], []
++        selected_branches, selected_paths, selected_task_prefixes = [], [], []
+         selected_utf8_loans = []
+         selected_reference_loans = []
+         reference_signature = None
+@@ -4160,8 +4367,17 @@
+                             result, payload, _ = record
+                             signature = kind, payload, owned_result_types.get(result, 'Int')
+                             ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++                        elif kind == 'selection':
++                            result, ctype = f'&{record.c}', 'CrustSelect *'
++                            signature = kind, record.awaited, functions[record.branches[0][3]].args[2]
++                            active_loans.pop(id(record.loans), None)
++                            selected_loans.extend(record.loans)
++                            selected_branches.extend(record.branches)
++                            selected_paths.extend(record.paths or (record.branches,))
+                         else:
+                             result, child_returns_int, loans, nominal, returned_loans, field_changes = record
++                            if kind == 'task':
++                                selected_task_prefixes.extend(task_prefix_changes.get(result, ((None, (), ()),)))
+                             signature = kind, child_returns_int, nominal
+                             ctype = 'CrustTask *' if kind == 'task' else 'CrustAsyncExecution *'
+                             del active_loans[id(loans)]
+@@ -4291,6 +4507,11 @@
+             _, child_returns_int, nominal = selected_signature
+             loans = list(dict.fromkeys(selected_loans))
+             active_loans[id(loans)] = loans
++            if kind == 'selection':
++                return kind, SelectionState(f'(*{target})', tuple(selected_branches), loans, child_returns_int,
++                                            tuple(selected_paths))
++            if kind == 'task':
++                task_prefix_changes[target] = tuple(selected_task_prefixes)
+             return kind, (target, child_returns_int, loans, nominal, list(dict.fromkeys(selected_returned_loans)), tuple(selected_field_changes))
+         if reference_result:
+             loans = list(dict.fromkeys(selected_reference_loans))
+@@ -4329,6 +4550,11 @@
+             return ('join_nested' if record[1] == 'nested' else 'join_owned'), record
+         elif name in tasks and name in names:
+             kind, value = 'task', consume_task(name, line)
++        elif name in selections and name in names:
++            kind, value = 'selection', selections[name]
++            if value is None:
++                fail(line, f"Select '{name}' déjà consommé")
++            selections[name] = None
+         else:
+             fail(line, '<- exige une tâche ou un handle déclaré dans le bloc async')
+         moving = set()
+@@ -4339,7 +4565,10 @@
+                 moving.update(returning)
+         departing = (mutable_slices | pool_alias_origins.keys()).intersection(local_names)
+         departing.update(name for name in local_names if name in received_refs)
+-        task, returns_int, loans, nominal, returned_loans, field_changes = value
++        if kind == 'selection':
++            loans = value.loans
++        else:
++            task, returns_int, loans, nominal, returned_loans, field_changes = value
+         if any(loan_root(target) in local_names and loan_root(target) not in departing for target, _ in loans):
+             fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')
+         if any(loan_root(target) in moving for target, _ in loans):
+@@ -4348,8 +4577,16 @@
+             retained = [loan for loan in loans if loan_root(loan[0]) not in departing]
+             del active_loans[id(loans)]
+             active_loans[id(retained)] = retained
+-            returned_loans = [loan for loan in returned_loans if loan_root(loan[0]) not in departing]
+-            value = task, returns_int, retained, nominal, returned_loans, field_changes
++            if kind == 'selection':
++                def retain_targets(record):
++                    return (*record[:4],
++                        [loan for loan in record[4] if loan_root(loan[0]) not in departing], record[5])
++                branches = tuple(retain_targets(record) for record in value.branches)
++                paths = tuple(tuple(retain_targets(record) for record in path) for path in value.paths)
++                value = replace(value, loans=retained, branches=branches, paths=paths)
++            else:
++                returned_loans = [loan for loan in returned_loans if loan_root(loan[0]) not in departing]
++                value = task, returns_int, retained, nominal, returned_loans, field_changes
+         return kind, value
+ 
+     def match_statement(statement, statements, *, following=None):
+@@ -5495,6 +5732,8 @@
+             nominal = operand[1]
+         elif operand[0] == 'name' and tasks.get(operand[1]) is not None:
+             nominal = tasks[operand[1]][3]
++        elif operand[0] == 'name' and selections.get(operand[1]) is not None:
++            nominal = selections[operand[1]].branches[0][3]
+         else:
+             return None
+         return functions[nominal].args[2] if nominal in functions else None
+@@ -5714,7 +5953,8 @@
+         if mode == 'array':
+             operand = initializer[1]
+             nominal = prepared[3] if prepared is not None else (
+-                operand[1] if operand[0] == 'call' else tasks[operand[1]][3])
++                operand[1] if operand[0] == 'call' else selections[operand[1]].branches[0][3]
++                if operand[1] in selections else tasks[operand[1]][3])
+             shape, element = scalar_array_layout(functions[nominal].args[2][1])
+             if statement.compact_transfer:
+                 fail(line, 'un résultat de tableau async exige une liaison locale')
+@@ -6024,9 +6264,9 @@
+     cleanup = ('    switch (frame->cleanup_path) {\n' + ''.join(cases)
+                + '    default: fail("invalid async cleanup path");\n    }\n')
+     suspended_checks, suspended_cleanup = [], []
+-    for point, (path, children, blocked) in sorted(suspended_paths.items()):
+-        condition = '0' if blocked else ' && '.join(
+-            f'task_owned_discardable({child})' for child in children) or '1'
++    for point, (path, children, blocked, select_checks) in sorted(suspended_paths.items()):
++        child_checks = [f'task_owned_discardable({child})' for child in children]
++        condition = '0' if blocked else ' && '.join((*child_checks, *select_checks)) or '1'
+         suspended_checks.append(f'    case {point}: return {condition};\n')
+         suspended_cleanup.append(f'    case {point}:\n')
+         if blocked:

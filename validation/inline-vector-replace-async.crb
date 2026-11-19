@@ -1,0 +1,14 @@
+struct Point{x:Int}
+async fn work()->Int{
+    let mut p=pool<Vector<Point>>(1);
+    let mut v=p.new();
+    v.push(->Point{x:7});
+    yield;
+    let r=<-v.replace(0,->Point{x:9});
+    yield;
+    match(->r){
+        Ok(old)=>{let n=old.x;drop(->old);return n;},
+        Err(incoming)=>{let n=incoming.x;drop(->incoming);return n;}
+    }
+}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}}

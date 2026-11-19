@@ -1,0 +1,26 @@
+--- /tmp/crust-before-async-local-owned-result-graphs/results.py
++++ results.py
+@@ -2319,11 +2319,14 @@
+                     task_result_sources = set(output_sources)
+                     task_sources.update(output_sources)
+                 from async_result_storage import pool_result_graph
+-                graph = pool_result_graph(declaration)
++                graph = pool_result_graph(declaration, self.analyzer.enums)
+                 if graph is not None:
+                     def resolve_graph_sources(symbols):
+                         sources = set()
+                         for symbol in symbols:
++                            if symbol.kind == 'task_output':
++                                sources.add(symbol)
++                                continue
+                             actual = captured_actuals[symbol.index]
+                             if symbol.kind == 'source_parameter' and isinstance(actual, SourceOrigin):
+                                 sources.add(actual)
+@@ -2335,6 +2338,7 @@
+                                 sources.add(SourceOrigin('local', -1, 'capture'))
+                         return frozenset(sources)
+                     task_result_sources = set(resolve_graph_sources(graph[0]))
++                    task_sources.update(task_result_sources)
+                     task_result_fields = {path: resolve_graph_sources(symbols) for path, symbols in graph[1]}
+                 pending = self.instantiate_deferred_fields(field_summary.structure_fields, captured_actuals) if (
+                     field_summary and field_summary.complete) else frozenset()

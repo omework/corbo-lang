@@ -1,0 +1,538 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows ARM64 and x86-64 file operations with UTF-16 paths and native handles.
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    use std::sys::valid_file_path;
+
+    /// Converts a validated UTF-8 path to a zero-terminated UTF-16 path in native storage.
+    fn wide_path(path: &[u8], wide: &mut [u16]) -> bool {
+        let length = path.len();
+        if copy(length) > 32768 || !valid_file_path(&path[0..copy(length)]) { return false; }
+        let wide_capacity = wide.len();
+        let mut converted: i32 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            let wide_address = addr(&mut wide[0]);
+            @asm {
+                mov w0, #65001
+                mov w1, #8
+                mov x2, ${address}
+                mov x3, ${length}
+                mov x4, ${wide_address}
+                mov x5, ${wide_capacity}
+                bl MultiByteToWideChar
+                mov ${converted}, w0
+            }
+        }
+        converted != 0
+    }
+
+    /// Opens or creates a file with Windows access settings and returns the native HANDLE on success.
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64, u64) {
+        let mut wide: [u16; 32768] = [0; 32768];
+        if !wide_path(path, &mut wide[..]) { return (false, 0, 0); }
+        let explicit = copy(perm) != 0xffffffff;
+        let mut descriptor: [u32; 160] = [0; 160];
+        if copy(explicit) {
+            let error = file_security_descriptor(&mut descriptor[..], perm);
+            if copy(error) != 0 { return (true, error, 0); }
+        }
+        let access_mode = copy(mode) & 3;
+        let read_access: u64 = if copy(access_mode) == 1 { 0 } else { 0x80000000 };
+        let write_access: u64 = if access_mode == 0 { 0 }
+            else if (copy(mode) & 4) != 0 { 0x100084 }
+            else { 0x40000080 };
+        let security_access: u64 = if copy(explicit) { 0x20000 } else { 0 };
+        let access = read_access | write_access | security_access;
+        let disposition: u64 = if create { 1 } else if (mode & 8) != 0 { 5 } else { 3 };
+        let mut handle: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            let wide_address = addr(&wide[0]);
+            let descriptor_address = addr(&descriptor[0]);
+            @asm {
+                sub sp, sp, #32
+                mov x0, ${wide_address}
+                mov x1, ${access}
+                mov w2, #7
+                mov x3, #0
+                tbz x1, #17, 2f
+                mov x6, #24
+                str x6, [sp]
+                mov x6, ${descriptor_address}
+                str x6, [sp, #8]
+                str xzr, [sp, #16]
+                mov x3, sp
+                2:
+                mov x4, ${disposition}
+                mov w5, #128
+                mov x6, #0
+                bl CreateFileW
+                mov ${handle}, x0
+                cmn x0, #1
+                b.ne 1f
+                bl GetLastError
+                mov ${error}, x0
+                1:
+                add sp, sp, #32
+            }
+        }
+        if copy(error) == 0 && explicit {
+            let security_error = check_file_security(copy(handle), &descriptor[..]);
+            if copy(security_error) != 0 {
+                close(handle);
+                return (true, security_error, 0);
+            }
+        }
+        return (true, error, handle);
+    }
+
+    /// Reads from the HANDLE into caller-owned storage and returns status and byte count.
+    pub fn read(handle: u64, buffer: &mut [u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            let address = addr(&mut buffer[0]);
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${handle}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, sp
+                mov x4, #0
+                bl ReadFile
+                cbz w0, 1f
+                ldr w0, [sp]
+                mov ${count}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                2:
+                add sp, sp, #16
+            }
+        }
+        if error == 38 { return (0, 0); }
+        return (error, count);
+    }
+
+    /// Writes caller-owned bytes using the HANDLE and returns status and byte count.
+    pub fn write(handle: u64, buffer: &[u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${handle}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, sp
+                mov x4, #0
+                bl WriteFile
+                cbz w0, 1f
+                ldr w0, [sp]
+                mov ${count}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                2:
+                add sp, sp, #16
+            }
+        }
+        return (error, count);
+    }
+
+    /// Queries the open HANDLE for the size of the file.
+    pub fn stats(handle: u64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut size: u64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${handle}
+                mov x1, sp
+                bl GetFileSizeEx
+                cbz w0, 1f
+                ldr x0, [sp]
+                mov ${size}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov ${status}, x0
+                2:
+                add sp, sp, #16
+            }
+        }
+        (status, size)
+    }
+
+    /// Moves the HANDLE's file offset relative to the supplied origin.
+    pub fn seek(handle: u64, offset: i64, origin: i64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut position: u64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${handle}
+                mov x1, ${offset}
+                mov x2, sp
+                mov x3, ${origin}
+                bl SetFilePointerEx
+                cbz w0, 1f
+                ldr x0, [sp]
+                mov ${position}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${status}, x0
+                2:
+                add sp, sp, #16
+            }
+        }
+        return (status, position);
+    }
+
+    /// Converts both paths to UTF-16 and invokes the native rename operation.
+    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+        let mut old_wide: [u16; 32768] = [0; 32768];
+        let mut new_wide: [u16; 32768] = [0; 32768];
+        if !wide_path(source, &mut old_wide[..]) || !wide_path(destination, &mut new_wide[..]) {
+            return (false, 0);
+        }
+        let mut status: i64 = 0;
+        @unchecked {
+            let old_address = addr(&old_wide[0]);
+            let new_address = addr(&new_wide[0]);
+            @asm {
+                mov x0, ${old_address}
+                mov x1, ${new_address}
+                mov w2, #1
+                bl MoveFileExW
+                cbnz w0, 1f
+                bl GetLastError
+                mov w0, w0
+                mov ${status}, x0
+                1:
+            }
+        }
+        return (true, status);
+    }
+
+    /// Converts the path to UTF-16 and invokes the native delete operation.
+    pub fn delete(path: &[u8]) -> (bool, i64) {
+        let mut wide: [u16; 32768] = [0; 32768];
+        if !wide_path(path, &mut wide[..]) { return (false, 0); }
+        let mut raw: i64 = 0;
+        @unchecked {
+            let wide_address = addr(&wide[0]);
+            @asm {
+                mov x0, ${wide_address}
+                bl DeleteFileW
+                cbnz w0, 1f
+                bl GetLastError
+                mov ${raw}, x0
+                1:
+            }
+        }
+        (true, raw)
+    }
+
+    /// Releases the native file HANDLE.
+    pub fn close(handle: u64) {
+        @unchecked {
+            @asm {
+                mov x0, ${handle}
+                bl CloseHandle
+            }
+        }
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    use std::sys::valid_file_path;
+
+    /// Converts a validated UTF-8 path to a zero-terminated UTF-16 path in native storage.
+    fn wide_path(path: &[u8], wide: &mut [u16]) -> bool {
+        let length = path.len();
+        if copy(length) > 32768 || !valid_file_path(&path[0..copy(length)]) { return false; }
+        let wide_capacity = wide.len();
+        let mut converted: i32 = 0;
+        @unchecked {
+            let address = addr(&path[0]);
+            let wide_address = addr(&mut wide[0]);
+            @asm {
+                sub rsp, 48
+                mov ecx, 65001
+                mov edx, 8
+                mov r8, ${address}
+                mov r9, ${length}
+                mov rax, ${wide_address}
+                mov QWORD PTR [rsp + 32], rax
+                mov rax, ${wide_capacity}
+                mov QWORD PTR [rsp + 40], rax
+                call MultiByteToWideChar
+                mov ${converted}, eax
+                add rsp, 48
+            }
+        }
+        converted != 0
+    }
+
+    /// Opens or creates a file with Windows access settings and returns the native HANDLE on success.
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64, u64) {
+        let mut wide: [u16; 32768] = [0; 32768];
+        if !wide_path(path, &mut wide[..]) { return (false, 0, 0); }
+        let explicit = copy(perm) != 0xffffffff;
+        let mut descriptor: [u32; 160] = [0; 160];
+        if copy(explicit) {
+            let error = file_security_descriptor(&mut descriptor[..], perm);
+            if copy(error) != 0 { return (true, error, 0); }
+        }
+        let access_mode = copy(mode) & 3;
+        let read_access: u64 = if copy(access_mode) == 1 { 0 } else { 0x80000000 };
+        let write_access: u64 = if access_mode == 0 { 0 }
+            else if (copy(mode) & 4) != 0 { 0x100084 }
+            else { 0x40000080 };
+        let security_access: u64 = if copy(explicit) { 0x20000 } else { 0 };
+        let access = read_access | write_access | security_access;
+        let disposition: u64 = if create { 1 } else if (mode & 8) != 0 { 5 } else { 3 };
+        let mut handle: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            let wide_address = addr(&wide[0]);
+            let descriptor_address = addr(&descriptor[0]);
+            @asm {
+                sub rsp, 80
+                mov rcx, ${wide_address}
+                mov rdx, ${access}
+                mov r8d, 7
+                xor r9d, r9d
+                test edx, 0x20000
+                jz 2f
+                mov QWORD PTR [rsp + 56], 24
+                mov rax, ${descriptor_address}
+                mov QWORD PTR [rsp + 64], rax
+                mov QWORD PTR [rsp + 72], 0
+                lea r9, [rsp + 56]
+                2:
+                mov rax, ${disposition}
+                mov QWORD PTR [rsp + 32], rax
+                mov QWORD PTR [rsp + 40], 128
+                mov QWORD PTR [rsp + 48], 0
+                call CreateFileW
+                mov ${handle}, rax
+                cmp rax, -1
+                jne 1f
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                1:
+                add rsp, 80
+            }
+        }
+        if copy(error) == 0 && explicit {
+            let security_error = check_file_security(copy(handle), &descriptor[..]);
+            if copy(security_error) != 0 {
+                close(handle);
+                return (true, security_error, 0);
+            }
+        }
+        return (true, error, handle);
+    }
+
+    /// Reads from the HANDLE into caller-owned storage and returns status and byte count.
+    pub fn read(handle: u64, buffer: &mut [u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            let address = addr(&mut buffer[0]);
+            @asm {
+                sub rsp, 48
+                mov rcx, ${handle}
+                mov rdx, ${address}
+                mov r8, ${length}
+                lea r9, [rsp + 40]
+                mov QWORD PTR [rsp + 32], 0
+                call ReadFile
+                test eax, eax
+                jz 1f
+                mov eax, DWORD PTR [rsp + 40]
+                mov ${count}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                2:
+                add rsp, 48
+            }
+        }
+        if error == 38 { return (0, 0); }
+        return (error, count);
+    }
+
+    /// Writes caller-owned bytes using the HANDLE and returns status and byte count.
+    pub fn write(handle: u64, buffer: &[u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 48
+                mov rcx, ${handle}
+                mov rdx, ${address}
+                mov r8, ${length}
+                lea r9, [rsp + 40]
+                mov QWORD PTR [rsp + 32], 0
+                call WriteFile
+                test eax, eax
+                jz 1f
+                mov eax, DWORD PTR [rsp + 40]
+                mov ${count}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                2:
+                add rsp, 48
+            }
+        }
+        return (error, count);
+    }
+
+    /// Queries the open HANDLE for the size of the file.
+    pub fn stats(handle: u64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut size: u64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 48
+                mov rcx, ${handle}
+                lea rdx, [rsp + 32]
+                call GetFileSizeEx
+                test eax, eax
+                jz 1f
+                mov rax, QWORD PTR [rsp + 32]
+                mov ${size}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${status}, rax
+                2:
+                add rsp, 48
+            }
+        }
+        (status, size)
+    }
+
+    /// Moves the HANDLE's file offset relative to the supplied origin.
+    pub fn seek(handle: u64, offset: i64, origin: i64) -> (i64, u64) {
+        let mut status: i64 = 0;
+        let mut position: u64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 48
+                mov rcx, ${handle}
+                mov rdx, ${offset}
+                lea r8, [rsp + 32]
+                mov r9, ${origin}
+                call SetFilePointerEx
+                test eax, eax
+                jz 1f
+                mov rax, QWORD PTR [rsp + 32]
+                mov ${position}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${status}, rax
+                2:
+                add rsp, 48
+            }
+        }
+        return (status, position);
+    }
+
+    /// Converts both paths to UTF-16 and invokes the native rename operation.
+    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+        let mut old_wide: [u16; 32768] = [0; 32768];
+        let mut new_wide: [u16; 32768] = [0; 32768];
+        if !wide_path(source, &mut old_wide[..]) || !wide_path(destination, &mut new_wide[..]) {
+            return (false, 0);
+        }
+        let mut status: i64 = 0;
+        @unchecked {
+            let old_address = addr(&old_wide[0]);
+            let new_address = addr(&new_wide[0]);
+            @asm {
+                sub rsp, 32
+                mov rcx, ${old_address}
+                mov rdx, ${new_address}
+                mov r8d, 1
+                call MoveFileExW
+                test eax, eax
+                jnz 1f
+                call GetLastError
+                mov eax, eax
+                mov ${status}, rax
+                1:
+                add rsp, 32
+            }
+        }
+        return (true, status);
+    }
+
+    /// Converts the path to UTF-16 and invokes the native delete operation.
+    pub fn delete(path: &[u8]) -> (bool, i64) {
+        let mut wide: [u16; 32768] = [0; 32768];
+        if !wide_path(path, &mut wide[..]) { return (false, 0); }
+        let mut raw: i64 = 0;
+        @unchecked {
+            let wide_address = addr(&wide[0]);
+            @asm {
+                sub rsp, 32
+                mov rcx, ${wide_address}
+                call DeleteFileW
+                test eax, eax
+                jnz 1f
+                call GetLastError
+                mov eax, eax
+                mov ${raw}, rax
+                1:
+                add rsp, 32
+            }
+        }
+        (true, raw)
+    }
+
+    /// Releases the native file HANDLE.
+    pub fn close(handle: u64) {
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${handle}
+                call CloseHandle
+                add rsp, 32
+            }
+        }
+    }
+#(endif)

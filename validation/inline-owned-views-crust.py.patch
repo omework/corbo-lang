@@ -1,0 +1,80 @@
+--- before/crust.py
++++ after/crust.py
+@@ -5410,6 +5410,7 @@
+         root = view.inline_root
+         root = (updates or {}).get(root.id, (root, root))[1]
+         view.dependencies = project_fields(root.dependencies, view.inline_path)
++        view.owned_fields = project_fields(root.owned_fields, view.inline_path)
+         view.borrow_parents = root.borrow_parents
+         view.alive, view.definite = root.alive, root.definite
+         view.scope, view.sources = root.scope, root.sources
+@@ -5427,8 +5428,6 @@
+         layout = contained_field(self.enums, binding.alloc.typ, path)
+         if layout is None:
+             self.fail(f"sous-structure inconnue '{path}' dans {binding.alloc.typ}")
+-        if any(typ != 'Int' and reference_type(typ) is None for _, typ in self.enums[layout.typ]['']):
+-            self.fail('prototype : vue de sous-structure à champs propriétaires non encore raccordée')
+         targets, parents = [], []
+         for holder in binding.referents or (binding.alloc,):
+             root = holder.inline_root or holder
+@@ -5617,9 +5616,13 @@
+     def replace_owned_field(self, place, binding, offset, typ, rhs, scope):
+         holders = binding.referents or (binding.alloc,)
+         key = '.' + place[2]
+-        self.check_external_owned_write(holders, key)
++        destinations = tuple((holder.inline_root or holder,
++                              '.' + holder.inline_path + key if holder.inline_root else key)
++                             for holder in holders)
++        for destination, field in destinations:
++            self.check_external_owned_write((destination,), field)
+         tracked = {id(allocation) for allocation in (*self.allocations, *self.embedded_allocations())}
+-        if any(id(holder) not in tracked for holder in holders):
++        if any(id(holder) not in tracked for holder, _ in destinations):
+             self.fail('prototype : remplacement de champ propriétaire exige un porteur local suivi')
+         if rhs[0] not in ('move', 'transfer', 'new_transfer', 'array_transfer'):
+             self.fail('remplacement de champ propriétaire : transfert explicite <- requis')
+@@ -5635,7 +5638,7 @@
+         self.array_access(self.struct_int_view(place, binding), write=True, after=True)
+         self.check_allocation_handle_type(typ, kind, incoming)
+         updates = []
+-        for carrier in holders:
++        for carrier, key in destinations:
+             proposed = copy.copy(carrier)
+             incoming_field = ((key, (copy.copy(incoming),)),)
+             proposed.owned_fields = (self.merge_dependencies(carrier.owned_fields, incoming_field)
+@@ -12028,9 +12031,17 @@
+     def prepare_owned_field_writes(self, summary, params, bindings):
+         updates = {}
+         tracked = {id(allocation) for allocation in (*self.allocations, *self.embedded_allocations())}
++        writes = []
+         for index, path, child in summary.owned_field_writes:
+             binding = bindings[params[index][0]]
+             holders = binding.referents or (binding.alloc,)
++            groups = {}
++            for holder in holders:
++                actual_path = '.' + holder.inline_path + path if holder.inline_root else path
++                groups.setdefault(actual_path, []).append(holder.inline_root or holder)
++            writes.extend((tuple(group), actual_path, child, len(holders) > 1)
++                          for actual_path, group in groups.items())
++        for holders, path, child, conditional in writes:
+             prefix, separator, key = path.rpartition('/')
+             for step in prefix.split('/') if separator else ():
+                 arm, _, _ = step.partition('.')
+@@ -12052,7 +12063,7 @@
+             holders = tuple({id(holder): holder for holder in holders}.values())
+             if any(id(holder) not in tracked for holder in holders):
+                 self.fail('prototype : remplacement par appel exige un porteur suivi')
+-            preserves_input = len(holders) > 1 or any(
++            preserves_input = conditional or len(holders) > 1 or any(
+                 item.kind == 'owned_field_input' for item in child.candidates)
+             incoming = frozenset(item for item in child.candidates if item.kind != 'owned_field_input')
+             for holder in holders:
+@@ -14489,7 +14500,7 @@
+             if result[0] in JOIN_RESULT_TYPES and result[1] not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
+                 self.fail('type de charge propriétaire inconnu dans Result')
+             if self.has_owned_fields(content) and not (
+-                    result[0] in ('owned', *JOIN_RESULT_TYPES) and result[1] == content
++                    result[0] in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and result[1] == content
+                     and self.supports_owned_signature(content, allow_cycles=True)):
+                 self.fail('prototype : contrat de champ propriétaire non pris en charge')
+             if self.has_typed_reference_fields(content) and not (

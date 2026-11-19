@@ -1,0 +1,200 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -411,7 +411,7 @@
+     completion = getattr(node, 'field_effect_summary', None)
+     completed_targets = completion.completion_result.reference_targets if completion and completion.complete else ()
+     if completion and completion.complete and (completion.structure_fields or completed_targets and all(
+-            target.kind in ('parameter', 'exclusive_join_parameter', 'field_parameter', 'detached_field_parameter',
++            target.kind in ('parameter', 'exclusive_join_parameter', 'field_parameter', 'moved_field_parameter', 'detached_field_parameter',
+                             'inline_field_parameter', 'indirect_field_parameter')
+             for target in completed_targets)):
+         # The completed contract follows stored references through local
+@@ -421,7 +421,7 @@
+         for target in completion.completion_result.reference_targets:
+             if target.kind in ('parameter', 'exclusive_join_parameter'):
+                 path = ()
+-            elif target.kind in ('field_parameter', 'detached_field_parameter', 'inline_field_parameter', 'indirect_field_parameter'):
++            elif target.kind in ('field_parameter', 'moved_field_parameter', 'detached_field_parameter', 'inline_field_parameter', 'indirect_field_parameter'):
+                 path = tuple(target.field.lstrip('.').split('.'))
+             else:
+                 fail(node.line, 'prototype : provenance du résultat de terminaison non raccordée')
+@@ -1058,8 +1058,8 @@
+ 
+     def move_stored_fields(source, destination):
+         for key in list(active_loans):
+-            if isinstance(key, tuple) and key[:2] == ('stored_field', source):
+-                target = ('stored_field', destination, key[2])
++            if isinstance(key, tuple) and key[0] in ('stored_field', 'owned_storage') and key[1] == source:
++                target = (key[0], destination, key[2])
+                 held = active_loans.pop(key)
+                 active_loans[target] = list(dict.fromkeys((*active_loans.get(target, ()), *held)))
+ 
+@@ -1080,8 +1080,13 @@
+ 
+     def clear_stored_fields(holder):
+         for key in list(active_loans):
+-            if isinstance(key, tuple) and key[:2] == ('stored_field', holder):
++            if isinstance(key, tuple) and key[0] in ('stored_field', 'owned_storage') and key[1] == holder:
+                 del active_loans[key]
++
++    def owned_storage_fields(value):
++        holder = next((name for name, member in fields.items() if value == f'frame->{member}'), value)
++        return {key[2]: list(origins) for key, origins in active_loans.items()
++                if isinstance(key, tuple) and key[0] == 'owned_storage' and key[1] in (value, holder)}
+ 
+     def owned_capture_field_loans(value, typ):
+         holder = next((name for name, member in fields.items() if value == f'frame->{member}'), value)
+@@ -1339,7 +1344,7 @@
+             source, loans = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]), 'mut', pool_type, line)
+         # Already evaluated owners must be cleaned if a later field suspends
+         # or exits. Publish the complete object only after every field exists.
+-        owners, stored_fields = [], {}
++        owners, stored_fields, stored_storage = [], {}, {}
+         storage = {destination} if local else set(pool_storage(expr[1]))
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, owners, loans))
+@@ -1374,6 +1379,10 @@
+                     steps.extend((f'{snapshot} = {value};', f'{value} = NULL;'))
+                     owners.append(snapshot)
+                     storage.update(storage_of(value))
++                    path = (*((variant,) if variant else ()), *field.split('.'))
++                    stored_storage[path] = [(origin, 'storage') for origin in storage_of(value)]
++                    for suffix, origins in owned_storage_fields(value).items():
++                        stored_storage[path + suffix] = origins
+                     for path, held in owned_capture_field_loans(value, field_type[2:-1]).items():
+                         stored_fields[(*((variant,) if variant else ()), *field.split('.'), *stored_field_path(path))] = held
+                         loans.extend(held)
+@@ -1402,6 +1411,8 @@
+         owned_result_types[cell] = typ
+         for path, held in stored_fields.items():
+             active_loans[('stored_field', cell, path)] = held
++        for path, origins in stored_storage.items():
++            active_loans[('owned_storage', cell, path)] = origins
+         keep_storage(cell, storage)
+         return cell
+ 
+@@ -2877,9 +2888,9 @@
+                 for field, alias in pattern:
+                     declared = dict(enum_layouts.get(typ, {}).get(variant, ())).get(field)
+                     if declared in ('&Int', '&mut Int'):
+-                        local[alias] = ('mut' if match.mutable and declared == '&mut Int' else 'ref', 'Int')
++                        local[alias] = ('mut' if (match.mutable or match.consuming) and declared == '&mut Int' else 'ref', 'Int')
+                     elif declared and declared.startswith('A<'):
+-                        local[alias] = ('mut' if match.mutable else 'ref', declared[2:-1])
++                        local[alias] = None if match.consuming else ('mut' if match.mutable else 'ref', declared[2:-1])
+                     else:
+                         local[alias] = None
+                 for statement in body:
+@@ -3342,7 +3353,7 @@
+         return (task_state, handles, {key: value for key, value in active.items()
+                                     if key not in mutable_ids and not (
+                                         ignore_stored_fields and isinstance(key, tuple)
+-                                        and key[0] == 'stored_field')},
++                                        and key[0] in ('stored_field', 'owned_storage'))},
+                 dead, joins, orders,
+                 {name: value for name, value in views.items() if name not in mutable_utf8_bindings},
+                 tuple({name: value for name, value in local.items() if name not in mutable_utf8_bindings}
+@@ -3357,9 +3368,9 @@
+         # branch still contains the capture-time field, not an empty loan.
+         # Backedges widen these same field targets through the retry engine.
+         for key in left[2].keys() | right[2].keys():
+-            if isinstance(key, tuple) and key[0] == 'stored_field':
++            if isinstance(key, tuple) and key[0] in ('stored_field', 'owned_storage'):
+                 _, holder, path = key
+-                initial = initial_stored_field_loans(holder,path)
++                initial = initial_stored_field_loans(holder,path) if key[0] == 'stored_field' else ()
+                 active[key] = list(dict.fromkeys((*left[2].get(key, initial),
+                                                  *right[2].get(key, initial))))
+         refs = [local.copy() for local in refs]
+@@ -4838,22 +4849,29 @@
+         layouts = enum_layouts.get(typ)
+         if layouts is None or holder not in fields:
+             fail(line, 'match async : enum requis')
+-        if statement.consuming:
+-            fail(line, 'prototype async : match consommant d’enum non raccordé')
++        if statement.consuming and references.get(holder) != 'owned':
++            fail(line, 'match consommant : allocation possédée requise')
+         if statement.mutable and not (references.get(holder) == 'mut'
+                 or references.get(holder) == 'owned' and holder in mutable):
+             fail(line, 'match mutable : accès mutable au porteur requis')
+         seen = set()
+-        for declared, variant, pattern, _ in arms:
++        for declared, variant, pattern, body in arms:
+             if declared != typ or variant not in layouts or variant in seen:
+                 fail(line, 'match : variante inconnue, incompatible ou dupliquée')
+             seen.add(variant)
+             names = [field for field, _ in pattern]
+             if len(set(names)) != len(names) or set(names) != dict(layouts[variant]).keys():
+                 fail(line, 'match : fournir tous les champs sans doublon')
++            if statement.consuming:
++                for field, alias in pattern:
++                    if dict(layouts[variant])[field].startswith('A<'):
++                        if alias == '_':
++                            fail(line, 'un motif _ ne peut pas écarter une allocation possédée')
++                        if not has_future_value_use(alias, body):
++                            fail(line, f"résultat propriétaire '{alias}' sans usage explicite")
+         if seen != layouts.keys():
+             fail(line, 'match non exhaustif')
+-        check_access(holder, line, write=statement.mutable)
++        check_access(holder, line, write=statement.mutable or statement.consuming)
+         cell = f'frame->{fields[holder]}'
+         tag = temporary('int')
+         steps.append(f'{tag} = {cell}->source->arm_tag;')
+@@ -4906,8 +4924,9 @@
+                 layout = enum_layouts[enum_type][variant]
+                 reservation = 'mut' if match.mutable or references.get(holder) == 'mut' else 'ref'
+                 held = [(holder, reservation), *received_refs.get(holder, ())]
+-                active_loans[id(held)] = held
+-                local_refs['\0match:' + holder] = held, float('inf')
++                if not match.consuming:
++                    active_loans[id(held)] = held
++                    local_refs['\0match:' + holder] = held, float('inf')
+                 for field, alias in pattern:
+                     if alias == '_':
+                         continue
+@@ -4922,14 +4941,34 @@
+                     owned = declared.startswith('A<')
+                     if declared not in ('&Int', '&mut Int') and not owned:
+                         fail(line, 'match async : type de champ non représentable')
+-                    mode = 'mut' if match.mutable and (declared == '&mut Int' or owned) else 'ref'
++                    if owned and match.consuming:
++                        target_type = declared[2:-1]
++                        references[alias] = 'owned'
++                        if target_type != 'Int':
++                            collection_types[alias] = target_type
++                            reference_types[alias] = target_type
++                        scopes[-1][0][alias] = None
++                        path = (variant, field)
++                        origins = active_loans.get(('owned_storage', holder, path))
++                        storage_bindings[alias] = (frozenset(origin for origin, _ in origins) if origins is not None
++                                                   else storage_bindings.get(holder, frozenset()))
++                        for key, loans in list(active_loans.items()):
++                            if (isinstance(key, tuple) and key[0] in ('stored_field', 'owned_storage')
++                                    and key[1] == holder and key[2][:2] == path and len(key[2]) > 2):
++                                active_loans[(key[0], alias, key[2][2:])] = list(loans)
++                        steps.extend((f'frame->{member} = cell_load_ref({enum_cell}, {offset});',
++                                      f'cell_store_ref({enum_cell}, {offset}, NULL);'))
++                        continue
++                    mode = 'mut' if (match.mutable or match.consuming) and (declared == '&mut Int' or owned) else 'ref'
+                     target_type = declared[2:-1] if owned else 'Int'
+                     references[alias] = mode
+                     reference_types[alias] = target_type
+                     if mode == 'mut':
+                         mutable.add(alias)
+                     path = (variant, field)
+-                    loans = (project_field_loans(held, path) if owned else
++                    loans = (list(active_loans.get(('stored_field', holder, path),
++                                                  initial_stored_field_loans(holder, path))) if match.consuming else
++                             project_field_loans(held, path) if owned else
+                              project_result_field_loans(held, enum_type, path))
+                     received_refs[alias] = loans
+                     active_loans[id(loans)] = loans
+@@ -4937,6 +4976,8 @@
+                     pointer = f'cell_load_ref({enum_cell}, {offset})'
+                     steps.append(f'frame->{member} = ' +
+                                  (f'&{pointer}->value' if target_type == 'Int' else pointer) + ';')
++                if match.consuming:
++                    drop_owned(holder, line)
+             prefix_count = 0
+             for statement in body:
+                 if statement.op != '->':

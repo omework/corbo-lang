@@ -1,0 +1,12 @@
+async fn work(p:&mut Pool<String>,scratch:->Int)-><-String{
+                drop(->scratch);let mut value=p.new();value.push_str("é");yield;return <-value;}
+            fn launch(p:&mut Pool<String>,scratch:->Int)-><-runtime::Handle<A<String>>{
+                let h=runtime::spawn(->work(p,->scratch));return <-h;}
+            fn relay(h:->runtime::Handle<A<String>>)-><-runtime::Handle<A<String>>{return <-h;}
+            fn again(h:->runtime::Handle<A<String>>)-><-runtime::Handle<A<String>>{
+                let next=relay(->h);return <-next;}fn main(){let mut p=pool<String>(1);let result={
+let mut scratch_pool=pool<Int>(1);let scratch=scratch_pool.new(123);
+let h=launch(&mut p,->scratch);let next=again(->h);
+let result=match next.join(){Ok(value)=>{<-value},Err(_)=>{let mut value=p.new();value.push_str("é");<-value}};
+let reused=scratch_pool.new(9);print(*reused);<-result};
+print(result.byte_len());drop(->result);let reused=p.new();drop(->reused);}

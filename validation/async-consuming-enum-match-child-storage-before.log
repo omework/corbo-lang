@@ -1,0 +1,65 @@
+test_child_survives_local_carrier_pool_but_not_own_pool (test_async_consuming_enum_match.AsyncConsumingEnumMatchTests.test_child_survives_local_carrier_pool_but_not_own_pool) ... FAIL
+
+======================================================================
+FAIL: test_child_survives_local_carrier_pool_but_not_own_pool (test_async_consuming_enum_match.AsyncConsumingEnumMatchTests.test_child_survives_local_carrier_pool_but_not_own_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16220, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14356, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 936, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7102, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3195, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4454, in emit_computed_transfer
+    return emit_region_block(body, expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4829, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5271, in emit_branches
+    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5388, in export_async_value
+    require_durable_storage(result, depth, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1098, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 970, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_consuming_enum_match.py", line 91, in test_child_survives_local_carrier_pool_but_not_own_pool
+    self.assertEqual(self.run_source(good).stdout,'7\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.011s
+
+FAILED (failures=1)

@@ -1,0 +1,31 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -1471,6 +1471,8 @@
+                     frame.append((value, mode))
+             if 'next' not in paths:
+                 return paths, UNKNOWN
++            if hook := getattr(self.analyzer, 'storage_call_hook', None):
++                hook(self, catalog[name], actuals, line)
+             if asynchronous:
+                 assets = frozenset(asset for (_, mode, _), value in zip(params, actuals)
+                                    if mode in ('owned', 'join_owned', 'join_nested') and isinstance(value, Value) for asset in value.all_assets)
+@@ -2099,6 +2101,8 @@
+                     following, value = self.expression(args[1], current, line, expected)
+                     if 'next' in following:
+                         continuing = following['next']
++                        if node.annotation and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
++                            hook(self, value, node.annotation, line)
+                         annotation = fixed_array_shape(node.annotation) if node.annotation else None
+                         if annotation and annotation[0] == 'u8' and isinstance(value, Value) and value.mode == 'array':
+                             value = replace(value, typ=node.annotation)
+@@ -2178,7 +2182,9 @@
+                 self.touch(tail, current, line)
+             elif op == 'return':
+                 mode, typ = self.node.args[2]
+-                following, _ = self.expression(args[0], current, line, typ if mode in ('array', 'array_refs') else None)
++                following, value = self.expression(args[0], current, line, typ if mode in ('array', 'array_refs') else None)
++                if self.node.handle_result and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
++                    hook(self, value, f'A<{typ}>', line)
+                 if 'next' in following:
+                     returning = following.pop('next')
+                     following = merge_paths(following, {'return': returning})

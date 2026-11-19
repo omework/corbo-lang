@@ -1,0 +1,10 @@
+struct Root{item:A<Int>}
+fn replace(root:&mut Root,p:&mut Pool<Int>,n:Int){root.item=<-p.new(n);}
+fn read(root:&Root)->Int{return *root.item;}async fn modify(root:&mut Root,p:&mut Pool<Int>,q:&mut Pool<Int>)->Int{
+replace(root,p,9);yield;replace(root,q,11);return 1;}fn prepare(root:&mut Root,p:&mut Pool<Int>,q:&mut Pool<Int>)-><-modify{return <-modify(root,p,q);}
+async fn relay(root:&mut Root,p:&mut Pool<Int>,q:&mut Pool<Int>)->Int{return prepare(root,p,q).await;}
+async fn ready()->Int{return 99;}async fn work()->Int{let mut first=pool<Int>(1);let old=first.new(7);let mut roots=pool<Root>(1);
+let mut root=roots.new(item:<-old);let mut p=pool<Int>(1);let mut q=pool<Int>(1);let mut s=runtime::select(->relay(&mut root,&mut p,&mut q),->ready());
+let n=s.await;print(n);drop(->s);print(read(&root));drop(->root);
+let a=first.new(20);let b=p.new(30);print(*a);print(*b);return 1;}
+        fn main(){let h=runtime::spawn(->work());match h.join(){Ok(r)=>{print(r);},Err(_)=>{print(99);}}}

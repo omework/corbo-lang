@@ -1,0 +1,9 @@
+fn wait(h:->runtime::Handle<A<Vector<A<Item>>>>)-><-Result<A<Vector<A<Item>>>,runtime::Error>{return <-h.join();}struct Item{value:&Int}
+async fn relay(v:->A<Vector<A<Item>>>)-><-A<Vector<A<Item>>>{yield;return <-v;}
+fn main(){
+ let mut ns=pool<Int>(1);let n=ns.new(7);let mut p=pool<Item>(1);
+ let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();v.push(->p.new(value:&n));
+ let h=runtime::spawn(->relay(->v));
+ match wait(->h){Ok(received)=>{let mut items=<-received;let item=<-items.remove(0);print(*item.value);drop(->item);drop(->items);},Err(_)=>{print(0);}}
+ drop(->n);
+}

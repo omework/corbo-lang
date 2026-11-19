@@ -1,0 +1,160 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1091,9 +1091,15 @@
+         if signature in reference_sync_types and borrow:
+             retained = []
+             for target in contract.result.reference_targets:
+-                if target.kind != 'parameter':
++                if target.kind in ('inline_field_parameter', 'indirect_field_parameter'):
++                    typ = contract.parameters[target.parameter][2]
++                    if typ not in reference_structs:
++                        fail(line, 'projection du résultat : structure prise en charge requise')
++                    retained.extend(project_field_loans(argument_loans[target.parameter], tuple(target.field.split('.'))))
++                elif target.kind == 'parameter':
++                    retained.extend(argument_loans[target.parameter])
++                else:
+                     fail(line, 'prototype : résultat synchrone emprunté sans paramètre direct')
+-                retained.extend(argument_loans[target.parameter])
+             active_loans[id(retained)] = retained
+             return value, retained, signature
+         if signature in reference_sync_types:
+@@ -1340,11 +1346,18 @@
+                         returned_loans.append(loan)
+                     else:
+                         returned_loans.extend(((root, prefix + path), reservation) for path in result_paths.get(index, ()))
+-                elif (mode in ('ref', 'mut') and argument[0] == 'call'
+-                      and sync_signature(argument) in reference_sync_types):
++                elif mode in ('ref', 'mut') and sync_signature(argument) in reference_sync_types:
+                     value, inherited, shape = reference_value(argument, line)
+                     if shape[1] != typ or mode == 'mut' and shape[0] != 'mut':
+                         fail(line, 'capture async : résultat synchrone de type ou mode incompatible')
++                    active_loans.pop(id(inherited), None)
++                    loans.extend(inherited)
++                    if index in result_paths:
++                        returned_loans.extend(inherited)
++                elif mode in ('ref', 'mut') and field_reference_shape(argument) is not None:
++                    value, inherited, shape = reference_value(argument, line)
++                    if shape != (mode, typ):
++                        fail(line, 'capture de champ : type ou mode incompatible')
+                     active_loans.pop(id(inherited), None)
+                     loans.extend(inherited)
+                     if index in result_paths:
+@@ -1785,6 +1798,8 @@
+         # Probe without evaluating; reference_value checks every continuing arm.
+         if sync_signature(expr) in reference_sync_types:
+             return sync_signature(expr)
++        if shape := field_reference_shape(expr, bindings):
++            return shape
+         if expr[0] in ('ref', 'mut') and expr[1] in fields and references.get(expr[1]) in (None, 'owned'):
+             typ = collection_types.get(expr[1], 'Bool' if expr[1] in boolean_bindings else
+                                        SCALAR_TYPES.get(inline_scalar_mode(expr[1])))
+@@ -1888,7 +1903,9 @@
+         if shape is None or shape not in reference_sync_types:
+             fail(line, 'expression empruntée Int ou mutable u8 requise')
+         mode, typ = shape
+-        if expr[0] in ('ref_expr', 'mut_expr'):
++        if field_reference_shape(expr) is not None:
++            pointer, loans = borrow_struct_field(expr, mode, line)
++        elif expr[0] in ('ref_expr', 'mut_expr'):
+             pointer, loan = capture_array_place(expr[1], mode, line, expected_element='uint8_t' if typ == 'u8' else 'int')
+             loans = [loan]
+         elif expr[0] in ('name', 'reborrow'):
+@@ -3918,8 +3935,7 @@
+                 local_names.update(attached.keys() - returning)
+                 moving.update(returning)
+         departing = (mutable_slices | pool_alias_origins.keys()).intersection(local_names)
+-        departing.update(name for name in local_names if name in received_refs
+-                         and reference_types.get(name) in reference_structs)
++        departing.update(name for name in local_names if name in received_refs)
+         task, returns_int, loans, nominal, returned_loans = value
+         if any(loan_root(target) in local_names and loan_root(target) not in departing for target, _ in loans):
+             fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')
+@@ -4162,14 +4178,58 @@
+         layout = reference_structs.get(typ)
+         if layout is None:
+             fail(line, 'projection async : référence de structure à champs Int ou références Int requise')
+-        if write and (references.get(name) != 'mut' or name in received_refs and name not in mutable):
+-            fail(line, 'écriture de champ : une référence mutable est requise (let mut pour une liaison locale)')
++        if write and references.get(name) != 'mut':
++            fail(line, 'écriture de champ : une référence mutable est requise')
+         for index, (field, field_type) in enumerate(layout):
+             if field == path:
+                 offset = ' + '.join('sizeof(int)' if kind == 'Int' else 'sizeof(Cell *)'
+                                     for _, kind in layout[:index]) or '0'
+                 return name, f'frame->{fields[name]}', offset, tuple(path.split('.')), field_type
+         fail(line, f"champ inconnu '{path}' dans {typ}")
++
++    def field_reference_shape(expr, bindings=None):
++        if expr[0] not in ('ref_expr', 'mut_expr'):
++            return None
++        place = expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
++        if place[0] != 'field':
++            return None
++        if bindings is None:
++            typ = reference_types.get(place[1])
++        else:
++            signature = bindings.get(place[1])
++            typ = signature[1] if signature else None
++        if typ not in reference_structs:
++            return None
++        # The actual field type/mode is checked by borrow_struct_field. In
++        # particular &view.reference is not shorthand for &*view.reference.
++        return ('mut' if expr[0] == 'mut_expr' else 'ref', 'Int')
++
++    def project_field_loans(loans, path):
++        projected = []
++        for target, mode in loans:
++            if mode == 'storage':
++                projected.append((target, mode))
++                continue
++            root, prefix = target if isinstance(target, tuple) else (target, ())
++            projected.append(((root, prefix + path), mode))
++        return projected
++
++    def borrow_struct_field(expr, mode, line):
++        indirect = expr[1][0] == 'field_deref'
++        place = expr[1][1] if indirect else expr[1]
++        name, cell, offset, path, typ = struct_field(place, line, write=mode == 'mut')
++        if indirect:
++            if typ not in ('&Int', '&mut Int') or mode == 'mut' and typ != '&mut Int':
++                fail(line, 'réemprunt de champ : type ou mode incompatible')
++            pointer = f'&cell_load_ref({cell}, {offset})->value'
++        else:
++            if typ != 'Int':
++                fail(line, 'emprunt imbriqué non pris en charge ; utiliser &* ou &mut * pour la cible')
++            pointer = f'(int *)((unsigned char *){cell}->fields + ({offset}))'
++        reservation = 'mut' if references.get(name) == 'mut' else mode
++        check_access(name, line, write=reservation == 'mut', path=path)
++        loans = [((name, path), reservation), *project_field_loans(received_refs.get(name, ()), path)]
++        return pointer, loans
+ 
+     def store_struct_field(place, rhs, line, *, following):
+         name, cell, offset, path, typ = struct_field(place, line, write=True)
+@@ -4370,8 +4430,7 @@
+     def store_array(place, rhs, line, *, following, returns_old=False):
+         if place[0] == 'name' and place[1] in references:
+             receiver = place[1]
+-            if (references[receiver] != 'mut' or receiver in collection_types
+-                    or receiver in received_refs and receiver not in mutable):
++            if references[receiver] != 'mut' or receiver in collection_types:
+                 fail(line, 'écriture par référence : un emprunt mutable modifiable est requis')
+             value = (byte_value(rhs, line, following=following)
+                      if reference_types.get(receiver) == 'u8'
+@@ -5238,8 +5297,6 @@
+             if mode not in ('ref', 'mut'):
+                 fail(line, '.await d’une tâche Void ne fournit pas de valeur')
+             value, loans, mode = await_task(initializer, line, returns_value=True, borrow=True, prepared=prepared)
+-        if mode == 'mut' and not statement.mutable:
+-            fail(line, 'recevoir le résultat emprunté mutable avec let mut')
+         member = declare(name, line)
+         references[name] = mode
+         if mode == 'owned':
+@@ -5367,8 +5424,6 @@
+         if (references[receiver] != 'mut'
+                 and not (references[receiver] == 'owned' and receiver in mutable)) or len(arguments) != 1:
+             fail(line, 'set exige un emprunt mutable ou une allocation mutable, et un argument Int')
+-        if receiver in received_refs and receiver not in mutable:
+-            fail(line, 'écriture par emprunt mutable : let mut requis')
+         value = byte_value(arguments[0], line) if reference_types.get(receiver) == 'u8' else expression(arguments[0], line)
+         check_access(receiver, line, write=True)
+         steps.append(f'{value_place(receiver)} = {value};')

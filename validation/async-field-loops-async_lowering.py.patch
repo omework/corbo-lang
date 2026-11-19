@@ -1,0 +1,45 @@
+--- /tmp/crust-before-field-loop-effects/async_lowering.py	2026-11-08 04:09:23
++++ async_lowering.py	2026-11-08 04:09:23
+@@ -2441,7 +2441,7 @@
+         active, views = active.copy(), views.copy()
+         # A conditional field store keeps every possible target. An untouched
+         # branch still contains the capture-time field, not an empty loan.
+-        # Backedges keep their stricter check until their fixed point is handled.
++        # Backedges widen these same field targets through the retry engine.
+         for key in left[2].keys() | right[2].keys():
+             if isinstance(key, tuple) and key[0] == 'stored_field':
+                 _, holder, path = key
+@@ -3536,6 +3536,16 @@
+         return f'&{handle}', returns_int, loans, nominal, returned_loans, field_changes
+ 
+     def prepare_utf8_loop(body, following, line):
++        # Stored-field hints share the retry engine with view hints, but their
++        # keys are tuples so they cannot collide with source variable names.
++        for key, additions in utf8_loop_hints.get(id(body), {}).items():
++            if isinstance(key, tuple) and key[0] == 'stored_field':
++                _, holder, path = key
++                initial = active_loans.get(key, initial_stored_field_loans(holder, path))
++                roots = tuple(dict.fromkeys((*initial, *additions)))
++                if any(loan_root(target) not in fields for target, _ in roots):
++                    fail(line, 'cible de champ non durable à la reprise de boucle')
++                active_loans[key] = list(roots)
+         names = mutable_utf8_bindings & fields.keys()
+         exit_live, head_live = {}, {}
+         for name in names:
+@@ -3558,9 +3568,15 @@
+ 
+     def verify_utf8_backedge(loop, state, line,
+                              message='la reprise doit préserver les obligations de nettoyage de la boucle async'):
+-        if non_utf8_control_state(state) != non_utf8_control_state(loop['entry']):
++        if non_utf8_control_state(state, ignore_stored_fields=True) != non_utf8_control_state(loop['entry'], ignore_stored_fields=True):
+             fail(line, message)
+         additions = {}
++        for key, roots in state[2].items():
++            if isinstance(key, tuple) and key[0] == 'stored_field':
++                _, holder, path = key
++                initial = loop['entry'][2].get(key, initial_stored_field_loans(holder, path))
++                if set(roots) - set(initial):
++                    additions[key] = tuple(roots)
+         for name in loop['utf8_bindings']:
+             if not loop['utf8_head_live'][name]:
+                 continue

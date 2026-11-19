@@ -1,0 +1,29 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2779,7 +2779,7 @@
+                         storage_type = capture_type[5:-1] if is_pool_capture else capture_type
+                         symbol = ('task_parameter', index, '')
+                         result_symbol = ('task_result_parameter', index, '')
+-                        if position in result_indexes and result_symbol in parents:
++                        if position in result_indexes and (is_public_handle(typ) or result_symbol in parents):
+                             symbol = result_symbol
+                         grouped = (capture in ('owned', *JOIN_RESULT_TYPES) or is_pool_capture) and symbol in parents
+                         group = find(symbol) if grouped else None
+@@ -13359,7 +13359,7 @@
+                     if mode != 'owned':
+                         self.fail('un runtime::Handle exige un transfert -> explicite')
+                     if public_signature(typ) is None:
+-                        self.fail('prototype : contrat Handle avec résultat emprunté ou propriétaire non encore pris en charge')
++                        self.fail('prototype : forme de résultat du contrat Handle non encore prise en charge')
+                     normalized.append((pname, 'execution', typ))
+                     continue
+                 nominal = typ[len('Execution<'):-1] if typ.startswith('Execution<') else typ
+@@ -13426,7 +13426,7 @@
+                 if result[0] != 'owned':
+                     self.fail('un retour runtime::Handle exige un transfert <- explicite')
+                 if public_signature(result[1]) is None:
+-                    self.fail('prototype : contrat Handle avec résultat emprunté ou propriétaire non encore pris en charge')
++                    self.fail('prototype : forme de résultat du contrat Handle non encore prise en charge')
+                 result = ('execution', result[1])
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             elif result[0] == 'owned' and result[1] in async_functions:

@@ -1,0 +1,34 @@
+async fn lire(nombre: &i32) -> i32 {
+    yield;
+    return *nombre;
+}
+
+async fn immediat() -> i32 {
+    return 9;
+}
+
+async fn choisir() -> i32 {
+    let mut nombres = pool<i32>(1);
+    let mut nombre = nombres.new(7);
+
+    let mut selection = {
+        let locale = runtime::select(lire(&nombre), immediat());
+        locale
+    };
+
+    let resultat = selection.await;
+    // lire reste suspendue et conserve son emprunt de nombre.
+    drop(selection);
+    // Le nettoyage de la perdante rend maintenant cet accès possible.
+    nombre = 20;
+    print(*nombre);
+    return resultat;
+}
+
+fn main() {
+    let execution = runtime::spawn(choisir());
+    match execution.join() {
+        Ok(resultat) => { print(resultat); },
+        Err(_) => { print(99); }
+    }
+}

@@ -1,0 +1,101 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Linux and Darwin entropy backends for ARM64 and x86-64.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    /// Requests bytes from the platform entropy source and returns its status and byte count.
+    pub fn read_random(output: &mut [u8]) -> (i64, usize) {
+        let length = output.len();
+        if length == 0 { return (0, 0); }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&mut output[0]);
+            @asm {
+                mov rdi, ${address}
+                mov rsi, ${length}
+                xor edx, edx
+                mov eax, 318
+                syscall
+                mov ${raw}, rax
+                mov ${count}, rax
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+#(endif)
+
+#(if: target.os == "linux" && target.arch == "aarch64" && target.pointer_width == "64")
+    /// Requests bytes from the platform entropy source and returns its status and byte count.
+    pub fn read_random(output: &mut [u8]) -> (i64, usize) {
+        let length = output.len();
+        if length == 0 { return (0, 0); }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&mut output[0]);
+            @asm {
+                mov x0, ${address}
+                mov x1, ${length}
+                mov w2, #0
+                mov x8, #278
+                svc #0
+                mov ${raw}, x0
+                mov ${count}, x0
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    /// Requests bytes from the platform entropy source and returns its status and byte count.
+    pub fn read_random(output: &mut [u8]) -> (i64, usize) {
+        let length = output.len();
+        if length == 0 { return (0, 0); }
+        let mut status: i64 = 0;
+        @unchecked {
+            let address = addr(&mut output[0]);
+            @asm {
+                mov x0, ${address}
+                mov x1, ${length}
+                bl _getentropy
+                cbz w0, 1f
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                mov ${status}, x0
+                1:
+            }
+        }
+        if status != 0 { return (status, 0); }
+        return (0, length);
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "x86_64")
+    /// Requests bytes from the platform entropy source and returns its status and byte count.
+    pub fn read_random(output: &mut [u8]) -> (i64, usize) {
+        let length = output.len();
+        if length == 0 { return (0, 0); }
+        let mut status: i64 = 0;
+        @unchecked {
+            let address = addr(&mut output[0]);
+            @asm {
+                mov rdi, ${address}
+                mov rsi, ${length}
+                call _getentropy
+                test eax, eax
+                jz 1f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                mov ${status}, rax
+                1:
+            }
+        }
+        if status != 0 { return (status, 0); }
+        return (0, length);
+    }
+#(endif)

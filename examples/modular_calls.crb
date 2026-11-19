@@ -1,0 +1,31 @@
+fn create(memory: &mut Pool<Int>, value: Int) -> <- Int {
+    let mut data = new(memory) Int(value);
+    return <- data;
+}
+
+fn choose(mut a: -> Int, mut b: -> Int, flag: Int) -> <- Int {
+    if flag == 0 { return <- a; }
+    return <- b;
+}
+
+fn read_then_reset(memory: &mut Pool<Int>, data: &Int) -> Int {
+    let mut value = *data;
+    memory.reset();
+    return value;
+}
+
+fn main() {
+    let mut left = pool<Int>(1);
+    let mut right = pool<Int>(1);
+    let mut first = create(&mut left, 42);
+    let mut second = create(&mut right, 7);
+    let mut selected = choose(-> first, -> second, 0);
+    print(selected);
+    drop(-> selected);
+    left.reset();
+    right.reset();
+    let mut fresh = create(&mut left, 99);
+    print(fresh);
+    let mut copied = read_then_reset(&mut left, &fresh);
+    print(copied);
+}

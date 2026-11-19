@@ -1,0 +1,20 @@
+--- before/results.py
++++ results.py
+@@ -545,6 +545,17 @@
+                 if exclusive:
+                     target = replace(target, kind='parameter')
+                 result_fields.setdefault(key, set()).add(target)
++            fields += tuple((key, frozenset(targets)) for key, targets in result_fields.items())
++        if result_mode in ASYNC_CAPTURE_VIEW_MODES:
++            from async_lowering import utf8_result_parameters
++            definition = self.analyzer.async_functions[value.typ]
++            indexes = utf8_result_parameters(definition, self.analyzer.async_functions)
++            result_fields = {}
++            for index in indexes:
++                for key, targets in capture_fields(value.fields, index):
++                    result_key = (('mut.5' if key.startswith('mut.') else 'ref.4')
++                                  if result_mode in ASYNC_SHARED_VIEW_MODES else 'mut.4')
++                    result_fields.setdefault(result_key, set()).update(targets)
+             fields += tuple((key, frozenset(targets)) for key, targets in result_fields.items())
+         return replace(value, typ=typ, fields=fields)
+ 

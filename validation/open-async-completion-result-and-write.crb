@@ -1,0 +1,24 @@
+struct View { data: &Int, spare: &Int }
+fn change(v: &mut View, n: &Int) { v.data = &*n; }
+async fn child(v: &mut View, n: &Int) -> &Int {
+    let old = v.data;
+    change(v, n);
+    yield;
+    return old;
+}
+async fn work(v: &mut View, n: &Int) -> Int {
+    let old = child(v, n).await;
+    v.spare = &*old;
+    return *v.data + *v.spare;
+}
+fn main() {
+    let mut p = pool<Int>(3);
+    let a = p.new(7);
+    let b = p.new(9);
+    let spare = p.new(11);
+    let mut view = View { data: &a, spare: &spare };
+    let h = runtime::spawn(->work(&mut view, &b));
+    match h.join() { Ok(n) => { print(n); }, Err(_) => { print(99); } }
+    print(*view.data);
+    print(*view.spare);
+}

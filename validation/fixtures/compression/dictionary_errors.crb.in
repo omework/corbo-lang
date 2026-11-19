@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+use std::compression::zstd;
+use std::compression::zstd::Error;
+fn error_code(error:Error)->i32{match error{Error.InvalidParams=>{1},Error.WorkspaceTooSmall=>{2},Error.BufferTooSmall=>{3},Error.InvalidData=>{4},Error.TruncatedInput=>{5},Error.ChecksumMismatch=>{6},Error.DictionaryRequired=>{7},Error.InvalidDictionary=>{8},Error.DictionaryMismatch=>{9},Error.InvalidState=>{10},Error.FrameTooLarge=>{11},}}
+fn main()->i32{
+ TRAINED
+ FRAME
+ let mut out:[u8;1024]=[0;1024];let mut work:[u8;131072]=[0;131072];
+ match zstd::decompress(&frame[..],&mut out[..],&mut work[..]){Ok(n)=>{drop(n);return 1;},Err(e)=>{let code=error_code(e);if code!=7{return 2;}}}
+ let other:[u8;8]=[1;8];
+ match zstd::decompress_with_dictionary(&frame[..],&mut out[..],&mut work[..],&other[..]){Ok(n)=>{drop(n);return 3;},Err(e)=>{let code=error_code(e);if code!=9{return 4;}}}
+ let bad:[u8;8]=[55,164,48,236,1,0,0,0];let mut matchwork:[u64;36864]=[0;36864];let params=zstd::Params::new();
+ match zstd::compress_with_dictionary(&other[..],&mut out[..],&params,&mut matchwork[..],&bad[..]){Ok(n)=>{drop(n);return 5;},Err(e)=>{let code=error_code(e);if code!=8{return 6;}}}
+ print(1);0
+}

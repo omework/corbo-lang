@@ -1,0 +1,176 @@
+--- /tmp/crust-before-async-handle-vector-replace/async_lowering.py
++++ async_lowering.py
+@@ -37,8 +37,9 @@
+ JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested', 'join_option': 'optional_nested', 'handle_option': 'optional_allocation'}
+ JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'join_option': 'value.value', 'handle_option': 'value'}
+ OWNED_WRAPPER_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult', 'join_option': 'CrustOptionJoinResult',
+-                       'handle_option': 'VectorHandleResult'}
+-OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation'}
++                       'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult'}
++OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation',
++                          'buffered_handle_exchange': 'exchange_allocation'}
+ ARRAY_BORROWS = {'array_ref': 'ref', 'array_mut': 'mut'}
+ SCALAR_TYPES = ChainMap(PLAIN_JOIN_TYPES, { **ERROR_VALUE_TYPES, 'runtime_error': 'runtime::Error', 'scalar': 'Int', 'bool': 'Bool', 'byte': 'u8', 'char': 'char', 'text': '&str', 'byte_ref': '&u8',
+                 **{mode: '&' + VALUE_MODES[mode] for mode in VECTOR_SLICE_ELEMENTS},
+@@ -1310,6 +1311,8 @@
+             mode, _ = sync_signature(expr)
+             value, _ = sync_call(expr, line, following=following, owned=True)
+             return value, OWNED_WRAPPER_PAYLOADS[mode], None
++        if expr[0] == 'array_buffered_replace':
++            return handle_replace_value(expr, line, following=following), 'exchange_allocation', None
+         if expr[0] == 'array_handle_option_pop':
+             return handle_pop_value(expr, line, following=following), 'optional_allocation', None
+         if expr[0] == 'await':
+@@ -2869,7 +2872,7 @@
+         if name not in join_results:
+             return False
+         record = join_results[name]
+-        return record is None or record[1] in ('allocation', 'optional_allocation') or (nested and record[1] in ('nested', 'optional_nested'))
++        return record is None or record[1] in ('allocation', 'optional_allocation', 'exchange_allocation') or (nested and record[1] in ('nested', 'optional_nested'))
+ 
+     def consume_owned_join(name, line):
+         record = join_results[name]
+@@ -2882,8 +2885,8 @@
+     def discard_owned_join(name, line):
+         result, payload, _ = consume_owned_join(name, line)
+         clear_stored_fields(result)
+-        cell = f'{result}.value' if payload == 'optional_allocation' else f'{result}.allocation'
+-        success = f'{result}.status == 0'
++        cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation') else f'{result}.allocation'
++        success = '1' if payload == 'exchange_allocation' else f'{result}.status == 0'
+         if payload in ('nested', 'optional_nested'):
+             cell = f'{result}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
+             success += f' && {result}.value.status == 0'
+@@ -3008,6 +3011,7 @@
+         if statement.annotation is not None and kind != 'array':
+             expected = (public_execution_type(value, statement.annotation, statement.line) if kind == 'execution' else
+                         'Option<A<Int>>' if kind == 'handle_option' else
++                        'Result<A<Int>,A<Int>>' if kind == 'buffered_handle_exchange' else
+                         (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
+                          f'A<{owned_result_types.get(value, "Int")}>') if kind == 'owned' else None)
+             if statement.annotation != expected:
+@@ -3272,6 +3276,28 @@
+             inner = initializer[1]
+             initializer = consumed_result_expression(inner, collection_types.get(inner[1][1]))
+         operator = initializer[0]
++        if operator in ('array_handle_exchange', 'array_buffered_replace',
++                        'array_handle_exchange_value', 'array_buffered_exchange_take'):
++            check_new_name(name, statement.line)
++            require_owned_result_use(statement, body, position, export_name)
++            if operator in ('array_handle_exchange_value', 'array_buffered_exchange_take'):
++                source = initializer[1][1]
++                record = handle_exchange_record(source, statement.line)
++                arm = 'ok' if initializer[2][1] == 0 else 'err'
++                value = temporary('Cell *')
++                origins = active_loans.get(('owned_storage', record[0], (arm,)))
++                keep_storage(value, (origin for origin, _ in origins) if origins is not None else storage_of(record[0]))
++                consume_owned_join(source, statement.line)
++                clear_stored_fields(record[0])
++                steps.extend((f'{value} = {record[0]}.value;', f'{record[0]}.value = NULL;'))
++                owned_result_types[value] = 'Int'
++                kind = 'owned'
++            else:
++                value = handle_replace_value(initializer, statement.line, following=body[position + 1:])
++                kind = 'buffered_handle_exchange'
++                value = value, 'exchange_allocation', None
++            bind_transferred_value(name, kind, value, statement)
++            return True
+         if operator in ('array_pop_handle', 'array_handle_option_pop', 'array_handle_option_value'):
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+@@ -3596,8 +3622,8 @@
+                     result, payload, _ = record
+                     if payload not in OWNED_WRAPPER_PAYLOADS.values():
+                         continue
+-                    cell = f'{result}.value' if payload == 'optional_allocation' else f'{result}.allocation'
+-                    success = f'{result}.status == 0'
++                    cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation') else f'{result}.allocation'
++                    success = '1' if payload == 'exchange_allocation' else f'{result}.status == 0'
+                     if payload in ('nested', 'optional_nested'):
+                         cell = f'{result}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
+                         success += f' && {result}.value.status == 0'
+@@ -4332,6 +4358,62 @@
+         else:
+             steps.append(f'if (vector_pop(frame->{fields[receiver]}, &{result}) != CRUST_CHAR_OK) fail("pop de handle vide");')
+         keep_storage(result, storage_bindings.get(receiver, ()))
++        owned_result_types[result] = 'Int'
++        return result
++
++    def handle_exchange_record(name, line):
++        if name not in join_results or join_results[name] is not None and join_results[name][1] != 'exchange_allocation':
++            fail(line, 'match consommant : résultat de replace requis')
++        if join_results[name] is None:
++            fail(line, f"résultat '{name}' déjà consommé")
++        return join_results[name]
++
++    def handle_replace_value(expr, line, *, following=None):
++        receiver = expr[1][1]
++        if following is not None:
++            release_statement_loans(following, earlier=(expr,))
++        handle_vector_mutation(receiver, line)
++        preparation = [(receiver, 'mut')]
++        active_loans[id(preparation)] = preparation
++        try:
++            index_value = expression(expr[2], line)
++            index = temporary('int')
++            steps.append(f'{index} = {index_value};')
++            argument = expr[3]
++            if argument[0] == 'down':
++                require_local_async_value(argument[1], line)
++                kind, incoming = export_async_value(argument[1], (), line)
++            elif argument[0] == 'transfer':
++                incoming = sync_owned_value(argument[1], line, following=following)
++                kind = 'owned'
++            else:
++                fail(line, 'replace de A<Int> exige un transfert explicite ->')
++            if kind != 'owned' or owned_result_types.get(incoming, 'Int') != 'Int':
++                fail(line, 'replace de Vector<A<Int>> exige une allocation Int')
++            if storage_of(incoming) & implicit_stacks:
++                fail(line, 'une case A<Int> exige une allocation de pool')
++            depth = next((index for index in reversed(range(len(scopes))) if receiver in scopes[index][0]), 0)
++            require_durable_storage(incoming, depth + 1 if references.get(receiver) == 'owned' else 0, line)
++            if references.get(receiver) != 'owned' and (node.field_effect_summary is None or not node.field_effect_summary.complete):
++                fail(line, 'replace dans un vecteur injecté : contrat de terminaison incomplet')
++        finally:
++            del active_loans[id(preparation)]
++        if following is not None:
++            release_statement_loans(following)
++        check_access(receiver, line, write=True)
++        result = temporary('VectorHandleResult')
++        previous = storage_bindings.get(receiver, frozenset())
++        added = storage_of(incoming)
++        keep_storage(result, previous | added)
++        active_loans[('owned_storage', result, ('ok',))] = [(origin, 'storage') for origin in previous]
++        active_loans[('owned_storage', result, ('err',))] = [(origin, 'storage') for origin in added]
++        key = ('owned_storage', receiver, ('items',))
++        held = [*active_loans.get(key, ()), *((origin, 'storage') for origin in added)]
++        install_field_change(key, list(dict.fromkeys(held)))
++        steps.extend((f'{result} = (VectorHandleResult){{0, {incoming}}};',
++                      f'{incoming} = NULL;',
++                      f'{result}.status = vector_replace(frame->{fields[receiver]}, {index}, &{result}.value);'))
++        clear_stored_fields(incoming)
+         owned_result_types[result] = 'Int'
+         return result
+ 
+@@ -6702,6 +6784,12 @@
+             receiver = expr[1][1]
+             handle_vector_mutation(receiver, line, following=following)
+             return f'vector_len(frame->{fields[receiver]})'
++        if expr[0] in ('array_handle_exchange_status', 'array_buffered_exchange_status'):
++            name = expr[1][1]
++            require_local_async_value(name, line)
++            if expr[0] == 'array_buffered_exchange_status' and expr[2][1] == 1:
++                fail(line, 'replace exige Ok(handle), pas Ok(())')
++            return f'{handle_exchange_record(name, line)[0]}.status'
+         if expr[0] == 'array_handle_option_status':
+             name = expr[1][1]
+             require_local_async_value(name, line)
+@@ -6861,7 +6949,7 @@
+         return f'(({ctype})({value}))', expr[2]
+ 
+     def infer_scalar_value(expr, line, *, following=None):
+-        if expr[0] in ('array_handle_len', 'array_handle_option_status'):
++        if expr[0] in ('array_handle_len', 'array_handle_option_status', 'array_handle_exchange_status', 'array_buffered_exchange_status'):
+             return expression(expr, line, following=following), 'Int'
+         if expr[0] == 'match_expr':
+             return match_enum(expr[1], valued=True, following=following, boolean=None)

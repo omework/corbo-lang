@@ -1,0 +1,61 @@
+test_async_state_keeps_returned_target_after_porter_drop (test_recursive_borrow_results.RecursiveBorrowResultTests.test_async_state_keeps_returned_target_after_porter_drop) ... FAIL
+test_detached_shared_target_after_helper (test_recursive_borrow_results.RecursiveBorrowResultTests.test_detached_shared_target_after_helper) ... ok
+
+======================================================================
+FAIL: test_async_state_keeps_returned_target_after_porter_drop (test_recursive_borrow_results.RecursiveBorrowResultTests.test_async_state_keeps_returned_target_after_porter_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16869, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14929, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 939, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7386, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3306, in bind_special
+    pointer, loans, (mode, typ) = reference_value(initializer, statement.line, following=body[position + 1:])
+                                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3146, in reference_value
+    return sync_call(expr, line, following=following, borrow=True)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2060, in sync_call
+    retained.extend(projected_argument_loans(target))
+                    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1908, in projected_argument_loans
+    fail(line, 'projection du résultat : structure prise en charge requise')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 975, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 7: projection du résultat : structure prise en charge requise
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_recursive_borrow_results.py", line 26, in test_async_state_keeps_returned_target_after_porter_drop
+    self.assertEqual(self.run_source(source.replace('CHECK','')).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 7: projection du résultat : structure prise en charge requise
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.679s
+
+FAILED (failures=1)

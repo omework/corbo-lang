@@ -1,0 +1,24 @@
+--- before/async_runtime.py
++++ after/async_runtime.py
+@@ -3,6 +3,13 @@
+ UTF8_VALUE_TYPES_C = r'''
+ #include <stddef.h>
+ #include <stdint.h>
++struct Cell;
++struct Source;
++typedef struct {
++    struct Cell *root;
++    size_t offset, size;
++    const struct Source *layout;
++} CrustStructureView;
+ typedef enum { CRUST_RUNTIME_LAUNCH_FAILED = 5 } CrustRuntimeError;
+ typedef struct {
+     const unsigned char *bytes;
+@@ -62,6 +69,7 @@
+     const int *reference;
+     int *mutable_reference;
+     uint8_t *mutable_byte_reference;
++    CrustStructureView structure_reference, mutable_structure_reference;
+     struct Cell *allocation;
+ } CrustJoinResult;
+ 

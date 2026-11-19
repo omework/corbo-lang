@@ -1,0 +1,68 @@
+test_async_handle_await_and_result_return (test_async_option_join.AsyncOptionJoinTests.test_async_handle_await_and_result_return) ... FAIL
+test_join_some_none_and_launch_failure (test_async_option_join.AsyncOptionJoinTests.test_join_some_none_and_launch_failure) ... FAIL
+test_named_drop_and_capture (test_async_option_join.AsyncOptionJoinTests.test_named_drop_and_capture) ... ok
+test_sources_outlive_result (test_async_option_join.AsyncOptionJoinTests.test_sources_outlive_result) ... ok
+test_sync_helpers_and_public_handle (test_async_option_join.AsyncOptionJoinTests.test_sync_helpers_and_public_handle) ... ok
+
+======================================================================
+FAIL: test_async_handle_await_and_result_return (test_async_option_join.AsyncOptionJoinTests.test_async_handle_await_and_result_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_option_join.py", line 44, in test_async_handle_await_and_result_return
+    self.assertEqual(failed.stdout,'99\n42\n8\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '7\n42\n8\n' != '99\n42\n8\n'
+- 7
++ 99
+  42
+  8
+
+
+======================================================================
+FAIL: test_join_some_none_and_launch_failure (test_async_option_join.AsyncOptionJoinTests.test_join_some_none_and_launch_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17013, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15072, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3203, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10436, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12071, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13513, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13574, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3369, in verify_state
+    self.fail('invariant interne : allocation vivante sans provenance')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1993, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: invariant interne : allocation vivante sans provenance
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_option_join.py", line 22, in test_join_some_none_and_launch_failure
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: invariant interne : allocation vivante sans provenance
+
+----------------------------------------------------------------------
+Ran 5 tests in 4.288s
+
+FAILED (failures=2)

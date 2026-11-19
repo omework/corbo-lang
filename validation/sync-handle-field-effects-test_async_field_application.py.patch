@@ -1,0 +1,13 @@
+--- before/tests/test_async_field_application.py
++++ after/tests/test_async_field_application.py
+@@ -159,10 +159,6 @@
+         factory=BASE+'''fn make(v:&mut View,n:&Int)-><-runtime::Handle<Int>{
+           let h=runtime::spawn(->update(v,n));return <-h;}'''
+         self.refused(factory,'contrat synchrone non raccord')
+-        helpers=BASE+'''fn finish(h:->runtime::Handle<Int>)->Int{
+-          return match h.join(){Ok(n)=>{n},Err(_)=>{0}};}'''
+-        self.refused(self.program('let h=runtime::spawn(->update(&mut v,&b));print(finish(->h));',helpers),
+-                     'contrat synchrone non raccord')
+ 
+     def test_enum_match_and_loop_transfers_preserve_pending_writes(self):
+         for variant in ('Left','Right'):

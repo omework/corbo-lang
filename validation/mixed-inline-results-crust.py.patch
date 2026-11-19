@@ -1,0 +1,147 @@
+--- before/crust.py
++++ after/crust.py
+@@ -3553,7 +3553,7 @@
+         if write and (binding.kind == 'owned' or binding.kind in COPY_VALUE_TYPES) and not binding.mutable:
+             self.fail(f"'{binding.name}' est immuable : déclarer let mut")
+         if binding.alloc:
+-            if self.is_structure_view(binding.alloc):
++            if self.is_structure_view(binding):
+                 for field, _ in self.enums[binding.alloc.typ]['']:
+                     self.array_access(self.struct_int_view(('field', binding.name, field), binding), write=write, after=after)
+             if any(not allocation.alive or not allocation.definite
+@@ -4116,6 +4116,8 @@
+                 if not any(s.bindings.get(parent.name) is parent
+                            for s in self.scopes[:self.scopes.index(destination) + 1]):
+                     self.fail('transfert refusé : le parent du réemprunt ne survit pas à la boucle')
++        if kind in ('ref', 'mut') and typ in self.struct_fields:
++            c = f'structure_reference_for({frame["result_c"]}, {c})'
+         self.lines.append(f'{frame["result_c"]} = {c};')
+         frame['values'].append((kind, typ, copy.copy(allocation)))
+ 
+@@ -4629,7 +4631,10 @@
+             # Transfer cleanup responsibility; do not leave the caller's old
+             # conditional-cleanup flag armed for a returned candidate.
+             self.lines.append(f'*({returned.guard}) = 0;')
+-        self.lines.append('return;' if result[0] == 'void' else f'return {result[1]};')
++        value = result[1]
++        if result[0] in ('ref', 'mut') and declared[1] in self.struct_fields:
++            value = f'structure_reference_for((CrustReferenceResult){{0}}, {value})'
++        self.lines.append('return;' if result[0] == 'void' else f'return {value};')
+         state = self.snapshot()
+         frame['paths'].append(state)
+         frame['results'].append(result)
+@@ -4967,6 +4972,8 @@
+                     if selected_kind is not None and selected_kind != kind:
+                         self.fail('expression if : même mode requis dans toutes les branches')
+                     selected_kind, selected_type = kind, typ
++                    if kind in ('ref', 'mut') and typ in self.struct_fields:
++                        c = f'structure_reference_for({result_c}, {c})'
+                     self.lines.append(f'{result_c} = {c};')
+                 if valued and selected_kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned',
+                                                 'join_nested', 'task', 'execution') and allocation is not None:
+@@ -5403,14 +5410,15 @@
+ 
+     @staticmethod
+     def is_structure_view(allocation):
+-        return bool(allocation and all(target.inline_root is not None
+-            for target in (allocation.reference_targets or (allocation,))))
++        if isinstance(allocation, Binding):
++            targets = allocation.referents or ((allocation.alloc,) if allocation.alloc else ())
++        else:
++            targets = allocation.reference_targets or (allocation,) if allocation else ()
++        return any(target.inline_root is not None for target in targets)
+ 
+     def reference_c_type(self, targets):
+         representations = {target.inline_root is not None for target in targets}
+-        if len(representations) > 1:
+-            self.fail('prototype : résultat mêlant une référence entière et une vue de sous-structure non encore raccordé')
+-        return 'CrustStructureView' if representations == {True} else 'Cell *'
++        return 'CrustStructureView' if True in representations else 'Cell *'
+ 
+     def refresh_inline_view(self, view, updates=None):
+         if view.inline_root is None:
+@@ -5471,7 +5479,7 @@
+         size = self.field_offset(self.enums[layout.typ][''], layout.count)
+         metadata = self.structure_layout_definition(layout.typ)
+         value = f'inline_view{self.uid()}'
+-        helper = 'structure_subview' if self.is_structure_view(binding.alloc) else 'structure_view'
++        helper = 'structure_subview' if self.is_structure_view(binding) else 'structure_view'
+         self.lines.append(f'CrustStructureView {value} = {helper}({binding.c}, {offset}, {size}, &{metadata});')
+         descriptor.c = value
+         return mode, value, descriptor
+@@ -5581,7 +5589,7 @@
+             parents.append(Binding(binding.name, mode, binding.c, holder,
+                                    borrow_parents=(binding, *holder.borrow_parents), match_reservation=True,
+                                    reserved_field=place[2]))
+-        helper = 'cell_load_view' if targets and all(t.inline_root for t in targets) else 'cell_load_ref'
++        helper = 'cell_load_view' if any(t.inline_root for t in targets) else 'cell_load_ref'
+         c = f'{helper}({binding.c}, {offset})'
+         if owned and not targets:
+             self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+@@ -5715,7 +5723,7 @@
+         return tuple(paths)
+ 
+     def copy_structure(self, binding, scope, label, source=None, source_c=None, expr=None):
+-        interior = self.is_structure_view(binding.alloc)
++        interior = self.is_structure_view(binding)
+         original = binding.alloc
+         if original is None or original.typ not in self.struct_fields:
+             self.fail('pool.copy exige une structure allouée')
+@@ -9427,7 +9435,7 @@
+                 mutable = op == 'mut_expr'
+                 self.array_access(view, write=mutable)
+                 pointer = (f'(int *)structure_view_address({binding.c}, {offset}, sizeof(int))'
+-                           if self.is_structure_view(binding.alloc) else
++                           if self.is_structure_view(binding) else
+                            f'(int *)((unsigned char *){binding.c}->fields + {offset})')
+                 return ('array_mut' if mutable else 'array_ref'), pointer, ('int', self.array_paths(view))
+             if expr[1][0] == 'array_deref_slot':
+@@ -11429,7 +11437,7 @@
+                     binding.read_parent = actual if actual.kind == 'mut' else actual.read_parent
+                     if mode in ('ref', 'mut') and self.has_mutable_fields(actual.alloc):
+                         binding.borrow_parents = (*binding.borrow_parents, actual)
+-                    ctype = 'CrustStructureView' if self.is_structure_view(actual.alloc) else 'Cell *'
++                    ctype = 'CrustStructureView' if self.is_structure_view(actual) else 'Cell *'
+                 used.append((key, mode))
+                 c = actual.c
+                 if actual.kind in ('ref', 'mut') or actual.kind == 'source' and actual.source_borrowed:
+@@ -11759,13 +11767,18 @@
+                     result[2].alive = result[2].definite = False
+                 if result[0] in ('owned', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', *JOIN_RESULT_TYPES) and result[2] is not None and result[2].guard:
+                     self.lines.append(f'*({result[2].guard}) = 0;')
+-                self.lines.append(f'return {result[1]};')
++                value = result[1]
++                if result[0] in ('ref', 'mut') and declared[1] in self.struct_fields:
++                    value = f'structure_reference_for((CrustReferenceResult){{0}}, {value})'
++                self.lines.append(f'return {value};')
+             function_name = f'crust_fn_{self.uid()}'
+             cparams = ', '.join(f'{t} {p}' for t, p, _ in arguments) or 'void'
+             qualifier = '_Noreturn ' if diverges else ''
+             if diverges:
+                 self.lines.append('fail("non-returning synchronous function returned");')
+             definition = f'static {qualifier}{result_type} {function_name}({cparams}) {{\n'
++            if not diverges and declared[0] in ('ref', 'mut') and declared[1] in self.struct_fields:
++                definition += f'    typedef {result_type} CrustReferenceResult;\n'
+             definition += '\n'.join('    ' + s for s in self.flag_declarations + self.lines) + '\n}\n'
+             self.definitions.append(definition)
+             conditional_sources, conditional_origins = None, frozenset()
+@@ -13004,6 +13017,8 @@
+                     if signature is not None and signature != result_signature:
+                         self.fail('expression match : même type et même mode requis dans tous les bras continuants')
+                     signature = result_signature
++                    if kind in ('ref', 'mut') and typ in self.struct_fields:
++                        value = f'structure_reference_for({result_c}, {value})'
+                     self.lines.append(f'{result_c} = {value};')
+                 self.sync_guards(base)
+                 continuations.append((self.snapshot(), code))
+@@ -14238,8 +14253,8 @@
+                 if op == 'address':
+                     if binding.alloc is None and binding.static_type != 'Int':
+                         self.fail('address exige une allocation ou un emprunt vers une allocation')
+-                    address = (f'structure_view_address({binding.c}, 0, 0)'
+-                               if self.is_structure_view(binding.alloc) else binding.c)
++                    address = (f'structure_reference_address({binding.c})'
++                               if self.is_structure_view(binding) else binding.c)
+                     self.lines.append(f'printf("%p\\n", (void *){address});')
+                 elif op == 'print':
+                     if binding.alloc and binding.alloc.typ != 'Int':

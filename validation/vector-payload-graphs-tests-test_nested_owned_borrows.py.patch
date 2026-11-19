@@ -1,0 +1,47 @@
+--- before/tests/test_nested_owned_borrows.py
++++ after/tests/test_nested_owned_borrows.py
+@@ -53,7 +53,7 @@
+         self.refused(invalid, 'emprunt|réserv|référenc')
+ 
+     def test_whole_result_keeps_nested_target(self):
+-        prefix = TYPES + '''async fn relay(v:->Outer)-><-Outer{yield;return <-v;}
++        prefix = TYPES + '''async fn relay(v:->Outer)-><-A<Outer>{yield;return <-v;}
+ fn make(v:->Outer)-><-relay{return <-relay(->v);}'''
+         for call in ('relay', 'make'):
+             body = SETUP + 'let result=' + call + '(->outer).await;yield;drop(->result);drop(->n);return 1;'
+@@ -64,7 +64,7 @@
+ 
+     def test_sync_caller_result_keeps_nested_target(self):
+         prefix = TYPES + '''fn read(v:&Inner)->Int{return *v.view;}
+-async fn relay(v:->Outer)-><-Outer{yield;return <-v;}
++async fn relay(v:->Outer)-><-A<Outer>{yield;return <-v;}
+ fn make(v:->Outer)-><-relay{return <-relay(->v);}'''
+         source = prefix + 'fn main(){' + SETUP + '''let h=runtime::spawn(->make(->outer));
+ let result=match h.join(){Ok(r)=>{<-r},Err(_)=>{return;}};
+@@ -131,7 +131,7 @@
+ 
+     def test_reads_across_owned_edges_and_after_return(self):
+         prefix = TYPES + '''fn read(v:&Inner)->Int{return *v.view;}
+-async fn relay(v:->Outer)-><-Outer{yield;print(read(&*v.inner));return <-v;}
++async fn relay(v:->Outer)-><-A<Outer>{yield;print(read(&*v.inner));return <-v;}
+ fn make(v:->Outer)-><-relay{return <-relay(->v);}'''
+         body = SETUP + '''let result=make(->outer).await;yield;print(read(&*result.inner));
+ drop(->result);drop(->n);return 1;'''
+@@ -171,7 +171,7 @@
+         for depth in (2, 4):
+             types = 'struct Level0{view:&Int}' + ''.join(
+                 f'struct Level{i}{{child:A<Level{i-1}>}}' for i in range(1, depth + 1))
+-            prefix = types + f'''async fn relay(v:->Level{depth})-><-Level{depth}{{yield;return <-v;}}
++            prefix = types + f'''async fn relay(v:->Level{depth})-><-A<Level{depth}>{{yield;return <-v;}}
+ fn make(v:->Level{depth})-><-relay{{return <-relay(->v);}}'''
+             body = 'let mut ns=pool<Int>(1);let n=ns.new(9);'
+             body += ''.join(f'let mut p{i}=pool<Level{i}>(1);' for i in range(depth + 1))
+@@ -208,7 +208,7 @@
+     def test_returned_mutable_graph_and_child_reborrow(self):
+         prefix = TYPES.replace('&Int', '&mut Int') + '''
+ fn read(v:&Inner)->Int{return *v.view;}
+-async fn relay(v:->Outer)-><-Outer{yield;return <-v;}
++async fn relay(v:->Outer)-><-A<Outer>{yield;return <-v;}
+ fn make(v:->Outer)-><-relay{return <-relay(->v);}'''
+         setup = SETUP.replace('let n=', 'let mut n=').replace('view:&n', 'view:&mut n')
+         body = setup + '''let result=make(->outer).await;

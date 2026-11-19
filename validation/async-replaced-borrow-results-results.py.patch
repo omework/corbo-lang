@@ -1,0 +1,23 @@
+--- before/results.py
++++ after/results.py
+@@ -3554,7 +3554,19 @@
+             if tail and key not in fields:
+                 return parent
+             fields[key] = update(fields[key], tail) if tail else value
+-            return replace(parent, owned_fields=tuple(fields.items()))
++            # A later read through the carrier must observe the installed
++            # descendant, while an earlier detached reference keeps its snapshot.
++            prefix = key + '/'
++            borrowed = {path: targets for path, targets in parent.fields
++                        if not path.startswith(prefix)}
++            def descendant_fields(child, path):
++                for member, targets in child.fields:
++                    yield path + member, targets
++                for member, nested in child.owned_fields:
++                    yield from descendant_fields(nested, path + member + '/')
++            for path, targets in descendant_fields(fields[key], prefix):
++                borrowed[path] = borrowed.get(path, frozenset()) | targets
++            return replace(parent, fields=tuple(borrowed.items()), owned_fields=tuple(fields.items()))
+ 
+         self.owned_field_at(environment, carrier, field)
+         path = field.split('/')

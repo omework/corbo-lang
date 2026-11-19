@@ -1,0 +1,23 @@
+--- /tmp/crust-before-suspension-effects/results.py	2026-11-08 04:39:29
++++ results.py	2026-11-08 04:39:29
+@@ -2742,6 +2742,9 @@
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates))
+ 
++    def observe_suspension(self, environment, line):
++        """Extension point: synchronous completion inference has no prefix exits."""
++
+     def nodes(self, nodes, environment, valued=False, shadows=None, expected_array=None):
+         flow, tail = {'next'}, UNKNOWN
+         for index, node in enumerate(nodes):
+@@ -2755,7 +2758,9 @@
+                 if builtin is not None:
+                     op, args = builtin
+             part = {'next'}
+-            if op == 'set_expr':
++            if op == 'yield':
++                self.observe_suspension(environment, line)
++            elif op == 'set_expr':
+                 part, _ = self.expression(args[1], environment, line)
+             elif op in ('var', 'assign'):
+                 name, expr = args

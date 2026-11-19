@@ -1,0 +1,33 @@
+--- before/structure_views.py
++++ after/structure_views.py
+@@ -103,6 +103,18 @@
+     return structure_view(parent.root, parent.offset + offset, size, layout);
+ }
+ 
++static CrustStructureView structure_whole_view(Cell *cell) {
++    return structure_view(cell, 0, cell->storage_size - sizeof(Cell), cell->layout);
++}
++static CrustStructureView structure_reference_identity(CrustStructureView view) { return view; }
++static Cell *cell_reference_identity(Cell *cell) { return cell; }
++
++/* The destination's type is fixed after all branches have been checked.
++   Convert only the representation, without allocating or moving the target. */
++#define structure_reference_for(destination,value) _Generic((destination), \
++    CrustStructureView: _Generic((value), CrustStructureView: structure_reference_identity, default: structure_whole_view), \
++    default: cell_reference_identity)(value)
++
+ static unsigned char *structure_view_address(CrustStructureView view, size_t offset,
+                                              size_t width) {
+     if (!view.root || !view.root->alive)
+@@ -110,6 +122,11 @@
+     if (offset > view.size || width > view.size - offset)
+         fail("structure field outside view");
+     return (unsigned char *)view.root->fields + view.offset + offset;
++}
++
++static void *structure_reference_address(CrustStructureView view) {
++    unsigned char *payload = structure_view_address(view, 0, 0);
++    return view.offset == 0 && view.layout == view.root->layout ? (void *)view.root : (void *)payload;
+ }
+ 
+ static int structure_view_load_int(CrustStructureView view, size_t offset) {

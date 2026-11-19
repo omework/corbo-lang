@@ -1,0 +1,10 @@
+struct Point{x:Int}fn make()-><-Point{let p=Point{x:7};return <-p;}
+fn duplicate(p:->Point)-><-Point{let q=copy(p);return <-q;}
+async fn work()->Int{let p=make();let q=duplicate(->p);yield;return q.x;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}
+7
+ destroy p=Point
+destroy q=0
+reclaim q
+reclaim p
+

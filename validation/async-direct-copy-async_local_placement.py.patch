@@ -1,0 +1,14 @@
+--- /tmp/crust-before-async-direct-copy/async_local_placement.py
++++ async_local_placement.py
+@@ -26,6 +26,11 @@
+         op = expr[0]
+         if op == 'new_enum' and expr[1] is None:
+             return expr[2], {id(expr): expr}
++        if op == 'array_copy':
++            original = evaluate(expr[1], env)
++            if original is not None and isinstance(original[0], str):
++                return original[0], {id(expr): expr}
++            return None
+         if op in ('name', 'ref', 'mut', 'move', 'down'):
+             return env.get(expr[1])
+         if op in ('array_transfer', 'new_transfer', 'transfer'):

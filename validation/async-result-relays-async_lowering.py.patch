@@ -1,0 +1,45 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1043,7 +1043,7 @@
+         from async_local_placement import result_constructors
+         locals_ = {name: collection_types.get(name, 'Int') for name, origins in storage_bindings.items()
+                    if origins & implicit_stacks and name not in consumed}
+-        constructors = result_constructors(expr, sync_contracts, locals_)
++        constructors = result_constructors(expr, sync_contracts, locals_, async_functions=functions)
+         unplaced = [constructor for constructor in constructors if id(constructor) not in local_destinations]
+         if unplaced:
+             destination = destination or implicit_stack()
+@@ -1057,8 +1057,13 @@
+         if not targets:
+             return
+         locals_ = {name: collection_types.get(name, 'Int') for name in targets}
+-        plans = result_constructors(('scope', '', body), sync_contracts, locals_, assigned_to=targets)
++        plans = result_constructors(('scope', '', body), sync_contracts, locals_, assigned_to=targets,
++                                    async_functions=functions)
+         depths = {name: depth for depth, scope in enumerate(scopes) for name in scope[0] if name in implicit_stacks}
++        # Captured local storage and the output destination are external to
++        # every scope of this frame. A replacement must not shorten that plan.
++        for storage in implicit_stacks:
++            depths.setdefault(storage, -1)
+         for name, constructors in plans.items():
+             for constructor in constructors:
+                 previous = local_destinations.get(id(constructor))
+@@ -5528,7 +5533,7 @@
+                 destinations = storage_bindings[receiver] & implicit_stacks
+                 if len(destinations) == 1:
+                     place_local_result(expr, destination=next(iter(destinations)))
+-            if expr[0] in ('array_transfer', 'new_transfer') and expr[1][0] in ('scope', 'if_expr', 'value_match', 'loop_expr'):
++            if expr[0] in ('array_transfer', 'new_transfer') and expr[1][0] in ('scope', 'if_expr', 'value_match', 'loop_expr', 'await'):
+                 expr = expr[1]
+             operator = expr[0]
+             if operator == 'move':
+@@ -6432,7 +6437,8 @@
+         implicit_stacks.add(destination)
+         local_pools[destination] = '(*frame->result_storage)'
+         local_inputs = {parameter: typ for index, (parameter, _, typ) in enumerate(parameters) if index in local_parameters}
+-        constructors = result_constructors(('scope', None, body), sync_contracts, local_inputs, returns=True)
++        constructors = result_constructors(('scope', None, body), sync_contracts, local_inputs, returns=True,
++                                           async_functions=functions)
+         for constructor in constructors:
+             local_destinations[id(constructor)] = destination
+     resume_point = 0

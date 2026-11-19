@@ -1,0 +1,65 @@
+struct Resource { id: i64 }
+impl Resource { fn drop(&mut self) { print((*self).id); } }
+enum Error { Bad }
+fn create() -> Result<Resource, Error> { Ok(Resource { id: 1 }) }
+fn failed() -> Result<i64, Resource> { Err(Resource { id: 2 }) }
+fn unwrap() -> Result<i64, Error> {
+    let resource = create()?;
+    print(resource.id);
+    drop(resource);
+    Ok(3)
+}
+fn propagate_owned_error() -> Result<bool, Resource> {
+    let resource = Resource { id: 4 };
+    let number = failed()?;
+    drop(resource);
+    Ok(number > 0)
+}
+fn pooled(p: &mut Pool<Resource>) -> Result<A<Resource>, Error> {
+    Ok(p.new(Resource { id: 5 }))
+}
+fn use_alloc(p: &mut Pool<Resource>) -> Result<i64, Error> {
+    let resource = pooled(p)?;
+    drop(resource);
+    let reused = p.new(Resource { id: 6 });
+    drop(reused);
+    Ok(7)
+}
+
+async fn task() -> i64 { yield; 33 }
+fn launched() -> Result<runtime::Handle<i64>, Error> {
+    let handle = runtime::spawn(task());
+    Ok(handle)
+}
+fn wait_for_task() -> Result<i64, Error> {
+    let handle = launched()?;
+    match handle.join() { Ok(n) => { Ok(n) }, Err(_) => { Err(Error.Bad) }, }
+}
+fn combine(resource: Resource, n: i64) -> i64 { drop(resource); n }
+fn fail_argument() -> Result<i64, Resource> {
+    let previous = Resource { id: 15 };
+    let number = combine(Resource { id: 16 }, failed()?);
+    drop(previous);
+    Ok(number)
+}
+fn borrow(value: &i64) -> Result<&i64, Error> { Ok(value) }
+fn read(value: &i64) -> Result<i64, Error> {
+    let reference = borrow(value)?;
+    Ok(*reference)
+}
+fn main() {
+    match fail_argument() { Ok(_) => {}, Err(resource) => { drop(resource); }, }
+    match wait_for_task() { Ok(n) => { print(n); }, Err(_) => {}, }
+
+    match unwrap() { Ok(n) => {print(n);}, Err(_) => {}, }
+    match propagate_owned_error() {
+        Ok(_) => {},
+        Err(resource) => { print(resource.id); drop(resource); },
+    }
+    let mut resources = pool<Resource>(1);
+    match use_alloc(&mut resources) { Ok(n) => {print(n);}, Err(_) => {}, }
+    let mut value: i64 = 43;
+    match read(&value) { Ok(n) => {print(n);}, Err(_) => {}, }
+    value = 44;
+    print(value);
+}

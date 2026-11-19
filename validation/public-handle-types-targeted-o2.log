@@ -1,0 +1,102 @@
+test_borrowed_result_keeps_target_reserved (test_public_handle_types.PublicHandleTypeTests.test_borrowed_result_keeps_target_reserved) ... ok
+test_different_frames_moves_and_wait_obligation (test_public_handle_types.PublicHandleTypeTests.test_different_frames_moves_and_wait_obligation) ... ok
+test_owned_result_keeps_pool_and_destroys_once (test_public_handle_types.PublicHandleTypeTests.test_owned_result_keeps_pool_and_destroys_once) ... ok
+test_result_type_matrix_sync_and_async (test_public_handle_types.PublicHandleTypeTests.test_result_type_matrix_sync_and_async) ... 
+  test_result_type_matrix_sync_and_async (test_public_handle_types.PublicHandleTypeTests.test_result_type_matrix_sync_and_async) (typ='u8', asynchronous=False) ... ERROR
+  test_result_type_matrix_sync_and_async (test_public_handle_types.PublicHandleTypeTests.test_result_type_matrix_sync_and_async) (typ='u8', asynchronous=True) ... ERROR
+
+======================================================================
+ERROR: test_result_type_matrix_sync_and_async (test_public_handle_types.PublicHandleTypeTests.test_result_type_matrix_sync_and_async) (typ='u8', asynchronous=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_public_handle_types.py", line 34, in test_result_type_matrix_sync_and_async
+    self.assertEqual(self.run_c_oracle(compile_source(source)).stdout, output)
+                                       ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15134, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15127, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13628, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13473, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2979, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9583, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10764, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12060, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12148, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4594, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12060, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13098, in statements
+    self.fail('opération indisponible sur cette valeur UTF-8')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1929, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: opération indisponible sur cette valeur UTF-8
+
+======================================================================
+ERROR: test_result_type_matrix_sync_and_async (test_public_handle_types.PublicHandleTypeTests.test_result_type_matrix_sync_and_async) (typ='u8', asynchronous=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_public_handle_types.py", line 34, in test_result_type_matrix_sync_and_async
+    self.assertEqual(self.run_c_oracle(compile_source(source)).stdout, output)
+                                       ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15134, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15127, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13628, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13468, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 855, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5513, in _lower_async_function
+    returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3991, in match_statement
+    return match_async_result((statement, *tail), statement.line, valued=False, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2321, in match_async_result
+    return emit_branches(test, yes, no, line, valued=valued,
+                         join_payload=(result, payload, status, loans, direct, subject[1] if not direct and subject[0] == 'name' else None), construct='match',
+                         transfer_result=transfer_result, following=following, boolean=boolean,
+                         reference_result=reference_result)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3751, in emit_branches
+    emit_print(statement, body[position + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4978, in emit_print
+    fail(statement.line, 'print async exige un Int, un char ou une vue &str')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 881, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: print async exige un Int, un char ou une vue &str
+
+----------------------------------------------------------------------
+Ran 4 tests in 7.568s
+
+FAILED (errors=2)

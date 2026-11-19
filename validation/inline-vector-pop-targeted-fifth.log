@@ -1,0 +1,85 @@
+test_function_return_and_relay (test_inline_vector_pop.InlineVectorAsyncPopTests.test_function_return_and_relay) ... ok
+test_last_in_first_out_and_direct_drop (test_inline_vector_pop.InlineVectorAsyncPopTests.test_last_in_first_out_and_direct_drop) ... ok
+test_loop_reuse_and_empty_structure (test_inline_vector_pop.InlineVectorAsyncPopTests.test_loop_reuse_and_empty_structure) ... ok
+test_mutable_target_and_remaining_case (test_inline_vector_pop.InlineVectorAsyncPopTests.test_mutable_target_and_remaining_case) ... ok
+test_owned_field_cleanup_once (test_inline_vector_pop.InlineVectorAsyncPopTests.test_owned_field_cleanup_once) ... ok
+test_shared_target_outlives_carrier (test_inline_vector_pop.InlineVectorAsyncPopTests.test_shared_target_outlives_carrier) ... ok
+test_some_none_and_annotation (test_inline_vector_pop.InlineVectorAsyncPopTests.test_some_none_and_annotation) ... ok
+test_await_some_none (test_inline_vector_pop.InlineVectorPopTaskReturnTests.test_await_some_none) ... ok
+test_join_borrowed_field_keeps_target (test_inline_vector_pop.InlineVectorPopTaskReturnTests.test_join_borrowed_field_keeps_target) ... ok
+test_join_owned_field_cleanup (test_inline_vector_pop.InlineVectorPopTaskReturnTests.test_join_owned_field_cleanup) ... ok
+test_join_some_none_and_storage_kind (test_inline_vector_pop.InlineVectorPopTaskReturnTests.test_join_some_none_and_storage_kind) ... ok
+test_public_handle_and_result_relay (test_inline_vector_pop.InlineVectorPopTaskReturnTests.test_public_handle_and_result_relay) ... FAIL
+test_function_return_and_relay (test_inline_vector_pop.InlineVectorPopTests.test_function_return_and_relay) ... ok
+test_last_in_first_out_and_direct_drop (test_inline_vector_pop.InlineVectorPopTests.test_last_in_first_out_and_direct_drop) ... ok
+test_loop_reuse_and_empty_structure (test_inline_vector_pop.InlineVectorPopTests.test_loop_reuse_and_empty_structure) ... ok
+test_mutable_target_and_remaining_case (test_inline_vector_pop.InlineVectorPopTests.test_mutable_target_and_remaining_case) ... ok
+test_owned_field_cleanup_once (test_inline_vector_pop.InlineVectorPopTests.test_owned_field_cleanup_once) ... ok
+test_shared_target_outlives_carrier (test_inline_vector_pop.InlineVectorPopTests.test_shared_target_outlives_carrier) ... ok
+test_some_none_and_annotation (test_inline_vector_pop.InlineVectorPopTests.test_some_none_and_annotation) ... ok
+
+======================================================================
+FAIL: test_public_handle_and_result_relay (test_inline_vector_pop.InlineVectorPopTaskReturnTests.test_public_handle_and_result_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17808, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15726, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 212, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 562, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 66, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2470, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 62, in expression
+    return super().expression(expr, state, line, expected_array)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1675, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1711, in call
+    hook(self, catalog[name], actuals, line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 167, in call
+    require(context, actuals[index], required, line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 102, in require
+    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} '
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                 f'(T local / allocation A<T> ; distinction valeur {value.typ} / allocation A<{value.typ}>)')
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 390, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 4: exigence de stockage pool incompatible avec la valeur local (T local / allocation A<T> ; distinction valeur Point / allocation A<Point>)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_pop.py", line 95, in test_public_handle_and_result_relay
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: exigence de stockage pool incompatible avec la valeur local (T local / allocation A<T> ; distinction valeur Point / allocation A<Point>)
+
+----------------------------------------------------------------------
+Ran 19 tests in 8.749s
+
+FAILED (failures=1)

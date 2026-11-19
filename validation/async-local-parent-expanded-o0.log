@@ -1,0 +1,117 @@
+test_alias_and_parameter_return_relay (test_async_local_parent.AsyncLocalParentTests.test_alias_and_parameter_return_relay) ... ok
+test_conditional_results_and_early_return (test_async_local_parent.AsyncLocalParentTests.test_conditional_results_and_early_return) ... ok
+test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) ... ok
+test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) ... ok
+test_loop_model_reuses_parent_slot (test_async_local_parent.AsyncLocalParentTests.test_loop_model_reuses_parent_slot) ... ok
+test_loop_result_with_continue (test_async_local_parent.AsyncLocalParentTests.test_loop_result_with_continue) ... ok
+test_match_result_and_branch_assignment (test_async_local_parent.AsyncLocalParentTests.test_match_result_and_branch_assignment) ... FAIL
+test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) ... 
+  test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=True) ... FAIL
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... ok
+test_replacement_keeps_old_until_new_is_evaluated (test_async_local_parent.AsyncLocalParentTests.test_replacement_keeps_old_until_new_is_evaluated) ... ok
+test_result_borrow_reserves_value (test_async_local_parent.AsyncLocalParentTests.test_result_borrow_reserves_value) ... ok
+
+======================================================================
+FAIL: test_match_result_and_branch_assignment (test_async_local_parent.AsyncLocalParentTests.test_match_result_and_branch_assignment)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6374, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2688, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3930, in emit_computed_transfer
+    return emit_region_block(body[:-1], expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4294, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4491, in emit_branches
+    returned_in_branch = conditional(*statement.args, statement.line, valued=False,
+                                     following=body[position + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3902, in conditional
+    return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+                         boolean=boolean)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4494, in emit_branches
+    assign(*statement.args, statement.line, following=body[position + 1:])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5508, in assign
+    fail(line, f"résultat propriétaire '{receiver}' sans usage explicite")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: résultat propriétaire 'p' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 68, in test_match_result_and_branch_assignment
+    self.assertEqual(self.run_source(source).stdout,'1\n'+('7\n' if flag=='true' else '1\n'))
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: résultat propriétaire 'p' sans usage explicite
+
+======================================================================
+FAIL: test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) (complete=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 124, in test_parent_identity_survives_child_reclamation
+                    run=self.storage_probe(source,'''
+                        ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+        CrustTask *task=crust_async_work_create();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        assert(observed_close_count==2 && observed_closed[1]==parent);
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 115, in storage_probe
+    return self.run_c_oracle(code+'\n#include <assert.h>\nint main(void){crust_task_context_init();'+body+
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             'crust_task_context_close();return 0;}')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12416, in run_c_oracle
+    self.assertEqual(build.returncode, 0, build.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp_q97ckux/task.c:2638:44: error: redefinition of 'result' with a different type: 'int' vs 'Cell *' (aka 'struct Cell *')
+ 2638 | assert(task_poll(task)==TASK_COMPLETE);int result;assert(task_take(task,&result));assert(result==7);
+      |                                            ^
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp_q97ckux/task.c:2631:11: note: previous definition is here
+ 2631 |     Cell *result=observed_cells[1];Source *parent=result->source;Source *child=observed_cells[0]->source;
+      |           ^
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp_q97ckux/task.c:2638:96: error: comparison between pointer and integer ('Cell *' (aka 'struct Cell *') and 'int') [-Werror,-Wpointer-integer-compare]
+ 2638 | assert(task_poll(task)==TASK_COMPLETE);int result;assert(task_take(task,&result));assert(result==7);
+      |                                                                                          ~~~~~~^ ~
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h:72:25: note: expanded from macro 'assert'
+   72 |     (__builtin_expect(!(e), 0) ? __assert_rtn(__func__, __ASSERT_FILE_NAME, __LINE__, #e) : (void)0)
+      |                         ^
+2 errors generated.
+
+
+----------------------------------------------------------------------
+Ran 11 tests in 7.990s
+
+FAILED (failures=2)

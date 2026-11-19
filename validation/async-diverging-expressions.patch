@@ -1,0 +1,981 @@
+--- /tmp/crust-async-before-diverging-expressions.py	2026-11-07 20:48:39
++++ async_lowering.py	2026-11-07 20:53:16
+@@ -18,6 +18,10 @@
+ )
+ 
+ 
++class NoAsyncContinuation(Exception):
++    """An emitted expression has no path back to its enclosing instruction."""
++
++
+ JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested'}
+ JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation'}
+ ARRAY_BORROWS = {'array_ref': 'ref', 'array_mut': 'mut'}
+@@ -235,6 +239,8 @@
+     definitions = list(definitions)
+     for statement in body:
+         if statement.op in ('loop', 'while'):
++            if statement.op == 'loop' and branch_control_exit([statement]):
++                return
+             continue
+         if statement.op == 'var':
+             yield from in_expression(statement.args[1], definitions)
+@@ -254,25 +260,44 @@
+             yield from reference_loop_exits(statement.args[1], definitions)
+         else:
+             yield from in_expression(statement.args, definitions)
++        if branch_control_exit([statement]):
++            return
+ 
+ 
+-def branch_control_exit(body):
+-    """Recognize a tail with no value and no path back to its receiver."""
+-    if not isinstance(body, list) or not body:
++def expression_control_exit(value):
++    """Whether expression evaluation is known not to reach its receiver."""
++    if not isinstance(value, (tuple, list)) or not value:
+         return False
+-    tail = body[-1]
+-    if tail.op in ('return', 'break', 'continue'):
+-        return True
+-    if tail.op == 'if':
+-        return all(branch_control_exit(arm) for arm in tail.args[1:])
+-    if tail.op == 'scope':
+-        return branch_control_exit(tail.args[1])
+-    if tail.op == 'if_yield':
+-        value = tail.args[0]
+-        if value[0] == 'if_expr':
+-            return all(branch_control_exit(arm) for arm in value[2:])
+-        if value[0] == 'scope':
+-            return branch_control_exit(value[2])
++    if value[0] == 'if_expr':
++        return expression_control_exit(value[1]) or all(branch_control_exit(arm) for arm in value[2:])
++    if value[0] == 'scope':
++        return branch_control_exit(value[2])
++    if value[0] == 'value_match':
++        return branch_control_exit(value[1])
++    if value[0] == 'loop_expr':
++        return not any(reference_loop_exits(value[1].args[0]))
++    return any(expression_control_exit(part) for part in value)
++
++
++def branch_control_exit(body):
++    """Recognize a sequence with no path back to its receiver."""
++    if not isinstance(body, list):
++        return expression_control_exit(body)
++    for statement in body:
++        if statement.op in ('return', 'break', 'continue'):
++            return True
++        if statement.op == 'if':
++            if (expression_control_exit(statement.args[0])
++                    or all(branch_control_exit(arm) for arm in statement.args[1:])):
++                return True
++        elif statement.op == 'scope':
++            if branch_control_exit(statement.args[1]):
++                return True
++        elif statement.op == 'loop':
++            if not any(reference_loop_exits(statement.args[0])):
++                return True
++        elif statement.op != 'while' and expression_control_exit(statement.args):
++            return True
+     return False
+ 
+ 
+@@ -464,7 +489,9 @@
+                 for binding in definitions:
+                     record_binding(*binding.args, local_tasks, local_awaited)
+                 possibilities.append(reference_origin(value, local_tasks, local_awaited, break_line))
+-            if not possibilities or any(mode != possibilities[0][0] for mode, _ in possibilities):
++            if not possibilities:
++                return result_mode, set()
++            if any(mode != possibilities[0][0] for mode, _ in possibilities):
+                 fail(line, diagnostic)
+             return possibilities[0][0], set().union(*(origins for _, origins in possibilities))
+         if expr[0] == 'utf8_value' and expr[1][0] == 'name' and expr[1][1] in awaited:
+@@ -485,7 +512,7 @@
+             arms = expr[2:] if expr[0] == 'if_expr' else (expr[1] if expr[0] == 'value_match' else expr[2],)
+             possibilities = [origin for body in arms if (origin := branch(body)) is not None]
+             if not possibilities:
+-                fail(line, diagnostic)
++                return result_mode, set()
+             mode = possibilities[0][0]
+             if any(other != mode for other, _ in possibilities):
+                 fail(line, diagnostic)
+@@ -522,6 +549,8 @@
+                 if getattr(item, 'op', None) == 'var':
+                     record_binding(*item.args, task_calls, awaited)
+                 yield from scan(item, task_calls, awaited)
++                if hasattr(item, 'op') and branch_control_exit([item]):
++                    break
+         elif isinstance(value, tuple):
+             for item in value:
+                 yield from scan(item, task_calls, awaited)
+@@ -854,6 +883,7 @@
+     lexical_tails = []
+     statement_tails = {}
+     argument_tails = []
++    pending_capture_groups = []
+     internal_members = []
+     task_holder_count = 0
+     resume_point = 0
+@@ -894,195 +924,207 @@
+         for index, path in borrowed_result_paths(declaration, functions, fail, result_parameters_cache):
+             result_paths.setdefault(index, []).append(path)
+         active_loans[id(loans)] = loans
+-        for index, (argument, (_, mode, typ)) in enumerate(zip(arguments, declaration.args[1])):
+-            argument_tails.append((len(scopes) - 1, arguments[index + 1:]))
+-            if mode == 'scalar':
+-                value = boolean_value(argument, line) if typ == 'Bool' else expression(argument, line)
+-            elif mode == 'byte':
+-                value = byte_value(argument, line, context='une capture async u8')
+-            elif mode in ERROR_VALUE_TYPES:
+-                value = builtin_error_value(argument, mode, line)
+-            elif mode == 'runtime_error':
+-                value = runtime_error_value(argument, line)
+-            elif mode in PLAIN_JOIN_TYPES:
+-                value = plain_join_value(argument, mode, line)
+-            elif mode == 'char':
+-                value = char_value(argument, line, context='une capture async char')
+-            elif mode == 'text':
+-                value = static_text_value(argument, line)
+-            elif mode == 'byte_ref':
+-                value = static_byte_ref_value(argument, line)
+-            elif mode in VECTOR_SLICE_ELEMENTS:
+-                value = vector_view_value(argument, line, mode)
+-            elif mode in SHARED_VECTOR_SLICE_MODES:
+-                reborrow = ('reborrow', argument[1], 'mut') if argument[0] == 'name' else argument
+-                value = mutable_slice_value(reborrow, line, mode)
+-                local_loans = local_utf8_loans(reborrow, value)
+-                loans.extend(local_loans)
+-                if index in utf8_indexes:
+-                    if reborrow[0] == 'reborrow' and declaration.args[2][0] in ASYNC_SHARED_VIEW_MODES:
+-                        source = reborrow[1]
+-                        returned_loans.extend(((source, 'ref'), *utf8_view_loans.get(source, ())))
+-                    else:
+-                        returned_loans.extend(local_loans)
+-            elif mode in UTF8_VALUE_RESULT_FAMILIES:
+-                value, actual_type = infer_scalar_value(argument, line)
+-                if actual_type != typ:
+-                    fail(line, f'capture async : attendu {typ}')
+-            elif mode == 'array':
+-                shape, element = scalar_array_layout(typ)
+-                if argument[0] == 'array_transfer':
+-                    argument = argument[1]
+-                plan = None
+-                if argument[0] == 'array_copy':
+-                    source, _ = array_element(argument[1], line, remaining=shape, expected_element=element)
+-                elif argument[0] in ('down', 'move') and argument[1] in arrays:
+-                    original = argument[1]
+-                    require_local_async_value(original, line)
+-                    _, (source, actual, actual_element) = export_async_value(original, (), line)
+-                    if (actual, actual_element) != (shape, element):
+-                        fail(line, 'capture de tableau : dimensions incompatibles')
+-                elif argument[0] in ('array_literal', 'array_repeat'):
+-                    actual, plan, _ = layout_array(argument, shape, line, element)
+-                    if actual != shape:
+-                        fail(line, 'capture de tableau : dimensions incompatibles')
+-                else:
+-                    fail(line, 'capture de tableau par valeur : copie ou déplacement explicite requis')
+-                snapshot = temporary(element, array_dimensions(shape))
+-                if plan is not None:
+-                    initialize_array(snapshot, plan)
+-                elif all(shape):
+-                    steps.append(f'memcpy({snapshot}, {source}, sizeof {snapshot});')
+-                value = snapshot
+-            elif mode in ARRAY_BORROWS:
+-                access = ARRAY_BORROWS[mode]
+-                if argument[0] in (access + '_expr', 'array_ref' if access == 'ref' else 'array_mut_ref'):
+-                    projection = argument[1]
+-                elif argument[0] == access and argument[1] not in parameter_modes:
+-                    projection = ('name', argument[1])
+-                elif (argument[0] in ('name', 'reborrow') and parameter_modes.get(argument[1]) in ARRAY_BORROWS
+-                      and (argument[0] == 'name' or argument[2] == access)):
+-                    projection = ('name', argument[1])
+-                else:
+-                    fail(line, 'capture de tableau async : emprunt explicite du mode déclaré requis')
+-                row_shape = int_reference_row(typ, mode)
+-                if row_shape:
+-                    root, indices = reference_array_path(projection)
+-                    if (root not in reference_rows
+-                            or reference_rows[root][1][len(indices):] != int_reference_layout(typ, mode)
+-                            or access == 'mut' and parameter_modes[root] != 'array_mut'):
+-                        fail(line, 'capture async : tableau de références du type déclaré requis')
+-                    place, (_, path) = array_element(projection, line, write=access == 'mut',
+-                                                     remaining=row_shape, defer_access=True,
+-                                                     reference_container=True)
+-                    reservation = ARRAY_BORROWS[parameter_modes[root]]
+-                    if reservation == 'mut':
+-                        path = ()
+-                    check_access(root, line, write=reservation == 'mut', path=path)
+-                    value, loan = f'&({place})', ((root, path), reservation)
+-                else:
++        prepared_owners = []
++        pending_capture_groups.append((len(scopes) - 1, prepared_owners, loans))
++        argument_depth = len(argument_tails)
++        try:
++            for index, (argument, (_, mode, typ)) in enumerate(zip(arguments, declaration.args[1])):
++                argument_tails.append((len(scopes) - 1, arguments[index + 1:]))
++                if mode == 'scalar':
++                    value = boolean_value(argument, line) if typ == 'Bool' else expression(argument, line)
++                elif mode == 'byte':
++                    value = byte_value(argument, line, context='une capture async u8')
++                elif mode in ERROR_VALUE_TYPES:
++                    value = builtin_error_value(argument, mode, line)
++                elif mode == 'runtime_error':
++                    value = runtime_error_value(argument, line)
++                elif mode in PLAIN_JOIN_TYPES:
++                    value = plain_join_value(argument, mode, line)
++                elif mode == 'char':
++                    value = char_value(argument, line, context='une capture async char')
++                elif mode == 'text':
++                    value = static_text_value(argument, line)
++                elif mode == 'byte_ref':
++                    value = static_byte_ref_value(argument, line)
++                elif mode in VECTOR_SLICE_ELEMENTS:
++                    value = vector_view_value(argument, line, mode)
++                elif mode in SHARED_VECTOR_SLICE_MODES:
++                    reborrow = ('reborrow', argument[1], 'mut') if argument[0] == 'name' else argument
++                    value = mutable_slice_value(reborrow, line, mode)
++                    local_loans = local_utf8_loans(reborrow, value)
++                    loans.extend(local_loans)
++                    if index in utf8_indexes:
++                        if reborrow[0] == 'reborrow' and declaration.args[2][0] in ASYNC_SHARED_VIEW_MODES:
++                            source = reborrow[1]
++                            returned_loans.extend(((source, 'ref'), *utf8_view_loans.get(source, ())))
++                        else:
++                            returned_loans.extend(local_loans)
++                elif mode in UTF8_VALUE_RESULT_FAMILIES:
++                    value, actual_type = infer_scalar_value(argument, line)
++                    if actual_type != typ:
++                        fail(line, f'capture async : attendu {typ}')
++                elif mode == 'array':
+                     shape, element = scalar_array_layout(typ)
+-                    value, loan = capture_array_place(projection, access, line, remaining=shape, expected_element=element)
+-                loans.append(loan)
+-                (root, prefix), reservation = loan
+-                if index in utf8_indexes:
+-                    returned_loans.append((root, reservation))
+-                elif row_shape and reservation == 'mut' and index in result_paths:
+-                    returned_loans.append(loan)
++                    if argument[0] == 'array_transfer':
++                        argument = argument[1]
++                    plan = None
++                    if argument[0] == 'array_copy':
++                        source, _ = array_element(argument[1], line, remaining=shape, expected_element=element)
++                    elif argument[0] in ('down', 'move') and argument[1] in arrays:
++                        original = argument[1]
++                        require_local_async_value(original, line)
++                        _, (source, actual, actual_element) = export_async_value(original, (), line)
++                        if (actual, actual_element) != (shape, element):
++                            fail(line, 'capture de tableau : dimensions incompatibles')
++                    elif argument[0] in ('array_literal', 'array_repeat'):
++                        actual, plan, _ = layout_array(argument, shape, line, element)
++                        if actual != shape:
++                            fail(line, 'capture de tableau : dimensions incompatibles')
++                    else:
++                        fail(line, 'capture de tableau par valeur : copie ou déplacement explicite requis')
++                    snapshot = temporary(element, array_dimensions(shape))
++                    if plan is not None:
++                        initialize_array(snapshot, plan)
++                    elif all(shape):
++                        steps.append(f'memcpy({snapshot}, {source}, sizeof {snapshot});')
++                    value = snapshot
++                elif mode in ARRAY_BORROWS:
++                    access = ARRAY_BORROWS[mode]
++                    if argument[0] in (access + '_expr', 'array_ref' if access == 'ref' else 'array_mut_ref'):
++                        projection = argument[1]
++                    elif argument[0] == access and argument[1] not in parameter_modes:
++                        projection = ('name', argument[1])
++                    elif (argument[0] in ('name', 'reborrow') and parameter_modes.get(argument[1]) in ARRAY_BORROWS
++                          and (argument[0] == 'name' or argument[2] == access)):
++                        projection = ('name', argument[1])
++                    else:
++                        fail(line, 'capture de tableau async : emprunt explicite du mode déclaré requis')
++                    row_shape = int_reference_row(typ, mode)
++                    if row_shape:
++                        root, indices = reference_array_path(projection)
++                        if (root not in reference_rows
++                                or reference_rows[root][1][len(indices):] != int_reference_layout(typ, mode)
++                                or access == 'mut' and parameter_modes[root] != 'array_mut'):
++                            fail(line, 'capture async : tableau de références du type déclaré requis')
++                        place, (_, path) = array_element(projection, line, write=access == 'mut',
++                                                         remaining=row_shape, defer_access=True,
++                                                         reference_container=True)
++                        reservation = ARRAY_BORROWS[parameter_modes[root]]
++                        if reservation == 'mut':
++                            path = ()
++                        check_access(root, line, write=reservation == 'mut', path=path)
++                        value, loan = f'&({place})', ((root, path), reservation)
++                    else:
++                        shape, element = scalar_array_layout(typ)
++                        value, loan = capture_array_place(projection, access, line, remaining=shape, expected_element=element)
++                    loans.append(loan)
++                    (root, prefix), reservation = loan
++                    if index in utf8_indexes:
++                        returned_loans.append((root, reservation))
++                    elif row_shape and reservation == 'mut' and index in result_paths:
++                        returned_loans.append(loan)
++                    else:
++                        returned_loans.extend(((root, prefix + path), reservation) for path in result_paths.get(index, ()))
++                elif mode in ('ref', 'mut') and argument[0] == mode + '_expr' and argument[1][0] in (
++                        'array_index', 'array_deref_slot'):
++                    value, loan = capture_array_place(argument[1], mode, line, expected_element='uint8_t' if typ == 'u8' else 'int')
++                    loans.append(loan)
++                    if index in result_paths:
++                        returned_loans.append(loan)
++                elif mode in JOIN_PAYLOADS:
++                    if argument[0] != 'down' or not is_owned_join(argument[1], nested=True):
++                        fail(line, 'capture de Result alloué : transfert -> requis')
++                    require_local_async_value(argument[1], line)
++                    value, payload, _ = consume_owned_join(argument[1], line)
++                    if payload != JOIN_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
++                        fail(line, 'capture de Result alloué : type de Result incompatible')
+                 else:
+-                    returned_loans.extend(((root, prefix + path), reservation) for path in result_paths.get(index, ()))
+-            elif mode in ('ref', 'mut') and argument[0] == mode + '_expr' and argument[1][0] in (
+-                    'array_index', 'array_deref_slot'):
+-                value, loan = capture_array_place(argument[1], mode, line, expected_element='uint8_t' if typ == 'u8' else 'int')
+-                loans.append(loan)
+-                if index in result_paths:
+-                    returned_loans.append(loan)
+-            elif mode in JOIN_PAYLOADS:
+-                if argument[0] != 'down' or not is_owned_join(argument[1], nested=True):
+-                    fail(line, 'capture de Result alloué : transfert -> requis')
+-                require_local_async_value(argument[1], line)
+-                value, payload, _ = consume_owned_join(argument[1], line)
+-                if payload != JOIN_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
+-                    fail(line, 'capture de Result alloué : type de Result incompatible')
+-            else:
+-                operator, *operands = argument
++                    operator, *operands = argument
++                    if mode == 'owned':
++                        if operator != 'down':
++                            fail(line, 'capture par transfert : utiliser -> sur une allocation nommée')
++                    elif operator not in (mode, 'name', 'reborrow'):
++                        fail(line, 'capture async : emprunt explicite ou référence nommée requis')
++                    name = operands[0]
++                    if name not in fields:
++                        fail(line, f"variable inconnue '{name}'")
++                    if name in arrays:
++                        fail(line, 'capture async : indexer le tableau pour emprunter un Int')
++                    if name in boolean_bindings or name in byte_bindings and typ != 'u8':
++                        typ = 'Bool' if name in boolean_bindings else 'u8'
++                        fail(line, f'une capture par emprunt Int ne peut pas cibler une valeur {typ}')
++                    if name in builtin_error_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler une erreur builtin')
++                    if name in runtime_error_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler runtime::Error')
++                    if name in plain_join_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler un Result')
++                    if name in char_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler une valeur char')
++                    if name in text_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler une vue &str')
++                    if name in byte_ref_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler un &u8')
++                    if name in slice_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler une tranche')
++                    if name in wrapped_utf8_bindings:
++                        fail(line, 'une capture par emprunt Int ne peut pas cibler un résultat UTF-8')
++                    actual = references.get(name, 'scalar')
++                    if reference_types.get(name, collection_types.get(name, 'u8' if name in byte_bindings else 'Int')) != typ:
++                        fail(line, 'capture async : type incompatible avec la liaison')
++                    if mode == 'owned':
++                        compatible = actual == 'owned'
++                    elif operator == mode:
++                        compatible = actual in ('owned', 'scalar') and (mode == 'ref' or name in mutable)
++                    else:
++                        compatible = (actual == 'mut' or mode == actual == 'ref') and (
++                            operator != 'reborrow' or operands[1] == mode)
++                    if not compatible:
++                        fail(line, 'capture async : mode incompatible avec la liaison')
++                    shared_vector = mode == 'ref' and typ in VECTOR_SLICE_MODES
++                    reservation = 'mut' if actual == 'mut' and not shared_vector else mode
++                    check_access(name, line, write=reservation != 'ref')
++                    value = f'frame->{fields[name]}'
++                    if mode != 'owned':
++                        if actual in ('scalar', 'owned') and name not in collection_types:
++                            value = f'&({value_place(name)})'
++                        loan = (name, reservation)
++                        capture_loans = (loan, *received_refs.get(name, ()))
++                        loans.extend(capture_loans)
++                        if (index in utf8_indexes and actual == 'mut' and typ in VECTOR_SLICE_MODES
++                                and declaration.args[2][0] in (*VECTOR_SLICE_ELEMENTS, 'byte_ref')):
++                            returned_loans.append((name, 'ref'))
++                        elif index in result_paths or index in utf8_indexes:
++                            returned_loans.extend(capture_loans)
++                if mode in ASYNC_SHARED_VIEW_MODES:
++                    local_loans = local_utf8_loans(argument, value)
++                    loans.extend(local_loans)
++                    if index in utf8_indexes:
++                        returned_loans.extend(local_loans)
++                if tracks_utf8_captures and mode in ASYNC_CAPTURE_VIEW_MODES and not is_literal_utf8_storage(argument):
++                    # This reservation has no local slot. It keeps the parent's
++                    # caller-side loan alive by requiring the child to finish.
++                    loans.append(('\0utf8-capture', 'ref'))
++                captured = temporary(capture_ctype(mode, typ))
++                steps.append(f'{captured} = {value};')
++                captures.append(captured)
+                 if mode == 'owned':
+-                    if operator != 'down':
+-                        fail(line, 'capture par transfert : utiliser -> sur une allocation nommée')
+-                elif operator not in (mode, 'name', 'reborrow'):
+-                    fail(line, 'capture async : emprunt explicite ou référence nommée requis')
+-                name = operands[0]
+-                if name not in fields:
+-                    fail(line, f"variable inconnue '{name}'")
+-                if name in arrays:
+-                    fail(line, 'capture async : indexer le tableau pour emprunter un Int')
+-                if name in boolean_bindings or name in byte_bindings and typ != 'u8':
+-                    typ = 'Bool' if name in boolean_bindings else 'u8'
+-                    fail(line, f'une capture par emprunt Int ne peut pas cibler une valeur {typ}')
+-                if name in builtin_error_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler une erreur builtin')
+-                if name in runtime_error_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler runtime::Error')
+-                if name in plain_join_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler un Result')
+-                if name in char_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler une valeur char')
+-                if name in text_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler une vue &str')
+-                if name in byte_ref_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler un &u8')
+-                if name in slice_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler une tranche')
+-                if name in wrapped_utf8_bindings:
+-                    fail(line, 'une capture par emprunt Int ne peut pas cibler un résultat UTF-8')
+-                actual = references.get(name, 'scalar')
+-                if reference_types.get(name, collection_types.get(name, 'u8' if name in byte_bindings else 'Int')) != typ:
+-                    fail(line, 'capture async : type incompatible avec la liaison')
+-                if mode == 'owned':
+-                    compatible = actual == 'owned'
+-                elif operator == mode:
+-                    compatible = actual in ('owned', 'scalar') and (mode == 'ref' or name in mutable)
+-                else:
+-                    compatible = (actual == 'mut' or mode == actual == 'ref') and (
+-                        operator != 'reborrow' or operands[1] == mode)
+-                if not compatible:
+-                    fail(line, 'capture async : mode incompatible avec la liaison')
+-                shared_vector = mode == 'ref' and typ in VECTOR_SLICE_MODES
+-                reservation = 'mut' if actual == 'mut' and not shared_vector else mode
+-                check_access(name, line, write=reservation != 'ref')
+-                value = f'frame->{fields[name]}'
+-                if mode != 'owned':
+-                    if actual in ('scalar', 'owned') and name not in collection_types:
+-                        value = f'&({value_place(name)})'
+-                    loan = (name, reservation)
+-                    capture_loans = (loan, *received_refs.get(name, ()))
+-                    loans.extend(capture_loans)
+-                    if (index in utf8_indexes and actual == 'mut' and typ in VECTOR_SLICE_MODES
+-                            and declaration.args[2][0] in (*VECTOR_SLICE_ELEMENTS, 'byte_ref')):
+-                        returned_loans.append((name, 'ref'))
+-                    elif index in result_paths or index in utf8_indexes:
+-                        returned_loans.extend(capture_loans)
+-            if mode in ASYNC_SHARED_VIEW_MODES:
+-                local_loans = local_utf8_loans(argument, value)
+-                loans.extend(local_loans)
+-                if index in utf8_indexes:
+-                    returned_loans.extend(local_loans)
+-            if tracks_utf8_captures and mode in ASYNC_CAPTURE_VIEW_MODES and not is_literal_utf8_storage(argument):
+-                # This reservation has no local slot. It keeps the parent's
+-                # caller-side loan alive by requiring the child to finish.
+-                loans.append(('\0utf8-capture', 'ref'))
+-            captured = temporary(capture_ctype(mode, typ))
+-            steps.append(f'{captured} = {value};')
+-            captures.append(captured)
+-            if mode == 'owned':
+-                consumed.add(name)
+-                steps.append(f'{value} = NULL;')
+-            elif mode in JOIN_PAYLOADS:
+-                steps.append(f'{value}.{JOIN_CELLS[mode]} = NULL;')
+-            argument_tails.pop()
+-        task = temporary('CrustTask *')
+-        steps.append(f'{task} = crust_async_{callee}_create({", ".join(captures)});')
+-        return task, declaration.args[2] == ('scalar', 'Int'), loans, callee, returned_loans
++                    consumed.add(name)
++                    steps.append(f'{value} = NULL;')
++                    prepared_owners.append(captured)
++                elif mode in JOIN_PAYLOADS:
++                    steps.append(f'{value}.{JOIN_CELLS[mode]} = NULL;')
++                    prepared_owners.append(f'{captured}.{JOIN_CELLS[mode]}')
++                argument_tails.pop()
++            task = temporary('CrustTask *')
++            steps.append(f'{task} = crust_async_{callee}_create({", ".join(captures)});')
++            return task, declaration.args[2] == ('scalar', 'Int'), loans, callee, returned_loans
++        except NoAsyncContinuation:
++            active_loans.pop(id(loans), None)
++            raise
++        finally:
++            del argument_tails[argument_depth:]
++            pending_capture_groups.pop()
+ 
+     def consume_task(name, line):
+         if name not in tasks or tasks[name] is None:
+@@ -2756,6 +2798,8 @@
+         if not valued:
+             return exit_state is None
+         if loop['result'] is None:
++            if exit_state is None:
++                raise NoAsyncContinuation
+             fail(line, 'boucle expression async sans break avec résultat')
+         kind, target, returns_int, nominal = loop['result']
+         if kind == 'reference':
+@@ -2849,6 +2893,19 @@
+         for name in join_results.keys() - previous[4].keys():
+             del join_results[name]
+ 
++    def cleanup_prepared_captures(depth=0):
++        # A later argument can leave the call before its task exists. The
++        # earlier moved arguments are then owned by these temporary captures.
++        # A break/continue of a loop *inside* a later argument does not abort
++        # the surrounding call, hence the lexical-depth check.
++        for owner_depth, cells, loans in reversed(pending_capture_groups):
++            if owner_depth < depth:
++                continue
++            active_loans.pop(id(loans), None)
++            for cell in reversed(cells):
++                steps.append(f'if ({cell}) cell_drop({cell});')
++                steps.append(f'{cell} = NULL;')
++
+     def loop_exit(op, value, line):
+         if not loops:
+             fail(line, f'{op} hors boucle async')
+@@ -2873,6 +2930,7 @@
+             release_loop_exit_loans(loop)
+         else:
+             release_statement_loans((), utf8_only=True)
++        cleanup_prepared_captures(depth)
+         for index in range(len(scopes) - 1, depth - 1, -1):
+             release_results(scopes[index][4])
+             cleanup_scope(index, line)
+@@ -3108,158 +3166,163 @@
+                 elif value[0] == 'scope':
+                     body = [*body[:-1], replace(body[-1], op='scope', args=value[1:3],
+                                                region_limit=value[3] if len(value) > 3 else None)]
+-            terminal = body[-1] if body and (body[-1].op in ('return', 'if_yield')
+-                                             or (transfer_result and ends_in_transfer(body))) else None
+-            returned_in_branch = False
+-            statements = iter(enumerate(body[:-1] if terminal is not None else body))
+-            for position, statement in statements:
+-                statement_tails[len(scopes) - 1] = body[position + 1:]
+-                release_results(local_refs, before=position)
+-                release_statement_loans(body[position:], utf8_only=True)
+-                if returned_in_branch:
+-                    fail(statement.line, 'instruction après retour async')
+-                if statement.op == '->':
+-                    fail(statement.line, '-> est autorisé uniquement à l’entrée du bloc async')
+-                if statement.op == '<-' and statement.terminated:
+-                    name = statement.args[0]
+-                    if name not in scopes[-1][0]:
+-                        fail(statement.line, '<- exige une tâche ou un handle du bloc courant')
+-                    if references.get(name) == 'owned' or name in arrays:
+-                        if name in consumed:
++            try:
++                terminal = body[-1] if body and (body[-1].op in ('return', 'if_yield')
++                                                 or (transfer_result and ends_in_transfer(body))) else None
++                returned_in_branch = False
++                statements = iter(enumerate(body[:-1] if terminal is not None else body))
++                for position, statement in statements:
++                    statement_tails[len(scopes) - 1] = body[position + 1:]
++                    release_results(local_refs, before=position)
++                    release_statement_loans(body[position:], utf8_only=True)
++                    if returned_in_branch:
++                        fail(statement.line, 'instruction après retour async')
++                    if statement.op == '->':
++                        fail(statement.line, '-> est autorisé uniquement à l’entrée du bloc async')
++                    if statement.op == '<-' and statement.terminated:
++                        name = statement.args[0]
++                        if name not in scopes[-1][0]:
++                            fail(statement.line, '<- exige une tâche ou un handle du bloc courant')
++                        if references.get(name) == 'owned' or name in arrays:
++                            if name in consumed:
++                                fail(statement.line, f"'{name}' déjà consommé")
++                        elif async_binding_values(name).get(name) is None:
+                             fail(statement.line, f"'{name}' déjà consommé")
+-                    elif async_binding_values(name).get(name) is None:
+-                        fail(statement.line, f"'{name}' déjà consommé")
+-                    if name in returned_imports:
+-                        fail(statement.line, 'transfert déjà marqué')
+-                    if name in imports:
+-                        returned_imports.add(name)
+-                    else:
+-                        warn(statement.line, 'transfert sans receveur', name)
+-                elif statement.op == 'yield':
+-                    suspend()
+-                elif statement.op in ('break', 'continue'):
+-                    loop_exit(statement.op, statement.args[0], statement.line)
+-                    returned_in_branch = True
+-                elif statement.op in ('loop', 'while'):
+-                    returned_in_branch = emit_loop(statement.args[0], statement.line, following=body[position + 1:])
+-                elif statement.op == 'scope':
+-                    returned_in_branch = emit_block(statement, body[position + 1:])
+-                elif statement.op == 'if':
+-                    returned_in_branch = conditional(*statement.args, statement.line, valued=False,
+-                                                     following=body[position + 1:])
+-                elif statement.op == 'assign':
+-                    assign(*statement.args, statement.line, following=body[position + 1:])
+-                elif statement.op in ('array_store', 'array_deref_store'):
+-                    store_array(*statement.args, statement.line, following=body[position + 1:])
+-                elif statement.op == 'array_statement' and statement.args[0][0] == 'array_swap':
+-                    swap_array(statement.args[0], statement.line, following=body[position + 1:])
+-                elif set_reference(statement, body[position + 1:]):
+-                    pass
+-                elif drop_async_binding(statement):
+-                    pass
+-                elif statement.op == 'await_statement':
+-                    await_task(statement.args[0], statement.line, returns_value=False)
+-                elif statement.op in ('print', 'print_expr'):
+-                    emit_print(statement, body[position + 1:])
+-                elif statement.op == 'var' and statement.utf8_match_subject:
+-                    returned_in_branch = match_statement(statement, (item for _, item in statements),
+-                                                         following=body[position + 3:])
+-                elif statement.op == 'var':
+-                    if bind_array(statement, following=body[position + 1:]):
+-                        locals_in_arm.append(statement.args[0])
+-                        continue
+-                    if receive_await_result(statement, body, position, export_name=export_name):
+-                        if statement.args[0] in fields:
++                        if name in returned_imports:
++                            fail(statement.line, 'transfert déjà marqué')
++                        if name in imports:
++                            returned_imports.add(name)
++                        else:
++                            warn(statement.line, 'transfert sans receveur', name)
++                    elif statement.op == 'yield':
++                        suspend()
++                    elif statement.op in ('break', 'continue'):
++                        loop_exit(statement.op, statement.args[0], statement.line)
++                        returned_in_branch = True
++                    elif statement.op in ('loop', 'while'):
++                        returned_in_branch = emit_loop(statement.args[0], statement.line, following=body[position + 1:])
++                    elif statement.op == 'scope':
++                        returned_in_branch = emit_block(statement, body[position + 1:])
++                    elif statement.op == 'if':
++                        returned_in_branch = conditional(*statement.args, statement.line, valued=False,
++                                                         following=body[position + 1:])
++                    elif statement.op == 'assign':
++                        assign(*statement.args, statement.line, following=body[position + 1:])
++                    elif statement.op in ('array_store', 'array_deref_store'):
++                        store_array(*statement.args, statement.line, following=body[position + 1:])
++                    elif statement.op == 'array_statement' and statement.args[0][0] == 'array_swap':
++                        swap_array(statement.args[0], statement.line, following=body[position + 1:])
++                    elif set_reference(statement, body[position + 1:]):
++                        pass
++                    elif drop_async_binding(statement):
++                        pass
++                    elif statement.op == 'await_statement':
++                        await_task(statement.args[0], statement.line, returns_value=False)
++                    elif statement.op in ('print', 'print_expr'):
++                        emit_print(statement, body[position + 1:])
++                    elif statement.op == 'var' and statement.utf8_match_subject:
++                        returned_in_branch = match_statement(statement, (item for _, item in statements),
++                                                             following=body[position + 3:])
++                    elif statement.op == 'var':
++                        if bind_array(statement, following=body[position + 1:]):
+                             locals_in_arm.append(statement.args[0])
+-                        continue
+-                    if bind_special(statement, body, position, export_name=export_name):
+-                        if statement.args[0] in fields:
+-                            locals_in_arm.append(statement.args[0])
+-                        continue
+-                    bind_scalar(statement, body[position + 1:], body, position)
+-                    locals_in_arm.append(statement.args[0])
+-                else:
+-                    fail(statement.line, f'branche de {construct} async : instruction non prise en charge')
+-            release_results(local_refs, before=len(body) - 1)
+-            if returned_in_branch:
+-                if terminal is not None:
+-                    fail(terminal.line, 'instruction après retour async')
+-            elif terminal is not None and terminal.op == 'return':
+-                emit_return(terminal.args[0], terminal.line)
+-            else:
+-                if valued and not transfer_result and terminal is None and arm_value is None:
+-                    fail(line, f'branche de {construct} async : résultat Int ou retour requis')
+-                if transfer_result:
+-                    if terminal is None or terminal.op != '<-':
+-                        fail(line, 'chaque branche continuante doit transférer une valeur avec <-')
+-                    name = terminal.args[0]
+-                    require_local_async_value(name, terminal.line)
+-                    kind, record = export_async_value(name, locals_in_arm, terminal.line, depth=len(scopes) - 1)
+-                    if kind == 'owned':
+-                        result, signature, ctype = record, (kind, owned_result_types.get(record, 'Int')), 'Cell *'
+-                    elif kind == 'array':
+-                        result, shape, ctype = record
+-                        signature = kind, shape, ctype
+-                    elif kind in ('join_owned', 'join_nested'):
+-                        result, payload, _ = record
+-                        signature = kind, payload, owned_result_types.get(result, 'Int')
+-                        ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++                            continue
++                        if receive_await_result(statement, body, position, export_name=export_name):
++                            if statement.args[0] in fields:
++                                locals_in_arm.append(statement.args[0])
++                            continue
++                        if bind_special(statement, body, position, export_name=export_name):
++                            if statement.args[0] in fields:
++                                locals_in_arm.append(statement.args[0])
++                            continue
++                        bind_scalar(statement, body[position + 1:], body, position)
++                        locals_in_arm.append(statement.args[0])
+                     else:
+-                        result, child_returns_int, loans, nominal, returned_loans = record
+-                        signature = kind, child_returns_int, nominal
+-                        ctype = 'CrustTask *' if kind == 'task' else 'CrustAsyncExecution *'
+-                        del active_loans[id(loans)]
+-                        selected_loans.extend(loans)
+-                        selected_returned_loans.extend(returned_loans)
+-                    if selected_signature is None:
+-                        selected_signature = signature
+-                        target = temporary(ctype, array_dimensions(shape) if kind == 'array' else '')
+-                    elif signature != selected_signature:
+-                        fail(terminal.line, 'même type et même mode requis dans toutes les branches async')
+-                    if kind != 'array':
+-                        steps.append(f'{target} = {result};')
+-                    elif all(shape):
+-                        steps.append(f'memcpy({target}, {result}, sizeof {target});')
+-                elif valued:
+-                    item = terminal.args[0] if arm_value is None else arm_value
+-                    item_line = terminal.line if arm_value is None else line
+-                    if reference_result:
+-                        value, loans, signature = reference_value(item, item_line, following=())
+-                        selected_reference_loans.extend(surviving_reference_loans(loans, len(scopes) - 1, item_line))
+-                        active_loans.pop(id(loans), None)
+-                        if reference_signature is not None and signature != reference_signature:
+-                            fail(item_line, 'branches empruntées : même type et même mode requis')
+-                        if reference_signature is None:
+-                            target = temporary(capture_ctype(*signature))
+-                        reference_signature = signature
+-                    elif boolean is None:
+-                        value, typ = infer_scalar_value(item, item_line, following=())
+-                        if typ in ASYNC_VIEW_TYPES:
+-                            loans = local_utf8_loans(item, value)
+-                            selected_utf8_loans.extend(surviving_view_loans(loans, len(scopes) - 1, item_line))
+-                        if scalar_type is not None and typ != scalar_type:
+-                            fail(item_line, f'branches de {construct} async : même type scalaire requis')
+-                        if scalar_type is None:
+-                            target = temporary(capture_ctype(SCALAR_MODES[typ]))
+-                        scalar_type = typ
+-                    else:
+-                        evaluate = boolean_value if boolean else expression
+-                        value = evaluate(item, item_line)
+-                    steps.append(f'{target} = {value};')
+-                if export_name is not None:
+-                    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+-                release_results(local_refs)
+-                if join_payload and result_loans is not None:
+-                    if direct:
+-                        active_loans.pop(id(result_loans), None)
+-                    elif had_result_loan:
+-                        active_loans[id(result_loans)] = result_loans
+-                if following is not None and no is not None:
+-                    # Compare only the loans that can survive the branch.
+-                    release_statement_loans(())
+-                release_statement_loans((), utf8_only=True)
+-                cleanup_scope(len(scopes) - 1, line)
+-                continuing.append(control_state(len(scopes) - 1))
++                        fail(statement.line, f'branche de {construct} async : instruction non prise en charge')
++                release_results(local_refs, before=len(body) - 1)
++                if returned_in_branch:
++                    if terminal is not None:
++                        fail(terminal.line, 'instruction après retour async')
++                elif terminal is not None and terminal.op == 'return':
++                    emit_return(terminal.args[0], terminal.line)
++                else:
++                    if valued and not transfer_result and terminal is None and arm_value is None:
++                        fail(line, f'branche de {construct} async : résultat Int ou retour requis')
++                    if transfer_result:
++                        if terminal is None or terminal.op != '<-':
++                            fail(line, 'chaque branche continuante doit transférer une valeur avec <-')
++                        name = terminal.args[0]
++                        require_local_async_value(name, terminal.line)
++                        kind, record = export_async_value(name, locals_in_arm, terminal.line, depth=len(scopes) - 1)
++                        if kind == 'owned':
++                            result, signature, ctype = record, (kind, owned_result_types.get(record, 'Int')), 'Cell *'
++                        elif kind == 'array':
++                            result, shape, ctype = record
++                            signature = kind, shape, ctype
++                        elif kind in ('join_owned', 'join_nested'):
++                            result, payload, _ = record
++                            signature = kind, payload, owned_result_types.get(result, 'Int')
++                            ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++                        else:
++                            result, child_returns_int, loans, nominal, returned_loans = record
++                            signature = kind, child_returns_int, nominal
++                            ctype = 'CrustTask *' if kind == 'task' else 'CrustAsyncExecution *'
++                            del active_loans[id(loans)]
++                            selected_loans.extend(loans)
++                            selected_returned_loans.extend(returned_loans)
++                        if selected_signature is None:
++                            selected_signature = signature
++                            target = temporary(ctype, array_dimensions(shape) if kind == 'array' else '')
++                        elif signature != selected_signature:
++                            fail(terminal.line, 'même type et même mode requis dans toutes les branches async')
++                        if kind != 'array':
++                            steps.append(f'{target} = {result};')
++                        elif all(shape):
++                            steps.append(f'memcpy({target}, {result}, sizeof {target});')
++                    elif valued:
++                        item = terminal.args[0] if arm_value is None else arm_value
++                        item_line = terminal.line if arm_value is None else line
++                        if reference_result:
++                            value, loans, signature = reference_value(item, item_line, following=())
++                            selected_reference_loans.extend(surviving_reference_loans(loans, len(scopes) - 1, item_line))
++                            active_loans.pop(id(loans), None)
++                            if reference_signature is not None and signature != reference_signature:
++                                fail(item_line, 'branches empruntées : même type et même mode requis')
++                            if reference_signature is None:
++                                target = temporary(capture_ctype(*signature))
++                            reference_signature = signature
++                        elif boolean is None:
++                            value, typ = infer_scalar_value(item, item_line, following=())
++                            if typ in ASYNC_VIEW_TYPES:
++                                loans = local_utf8_loans(item, value)
++                                selected_utf8_loans.extend(surviving_view_loans(loans, len(scopes) - 1, item_line))
++                            if scalar_type is not None and typ != scalar_type:
++                                fail(item_line, f'branches de {construct} async : même type scalaire requis')
++                            if scalar_type is None:
++                                target = temporary(capture_ctype(SCALAR_MODES[typ]))
++                            scalar_type = typ
++                        else:
++                            evaluate = boolean_value if boolean else expression
++                            value = evaluate(item, item_line)
++                        steps.append(f'{target} = {value};')
++                    if export_name is not None:
++                        exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
++                    release_results(local_refs)
++                    if join_payload and result_loans is not None:
++                        if direct:
++                            active_loans.pop(id(result_loans), None)
++                        elif had_result_loan:
++                            active_loans[id(result_loans)] = result_loans
++                    if following is not None and no is not None:
++                        # Compare only the loans that can survive the branch.
++                        release_statement_loans(())
++                    release_statement_loans((), utf8_only=True)
++                    cleanup_scope(len(scopes) - 1, line)
++                    continuing.append(control_state(len(scopes) - 1))
++            except NoAsyncContinuation:
++                # All paths already emitted their exit and cleanup. Do not
++                # evaluate a receiver or generate its unreachable suffix.
++                pass
+             statement_tails.pop(len(scopes) - 1, None)
+             scopes.pop()
+             for name in locals_in_arm:
+@@ -3306,7 +3369,7 @@
+         if continuing:
+             restore_control_state(continuing[0])
+         if valued and not continuing:
+-            fail(line, f'utiliser {construct} comme instruction quand toutes les branches retournent')
++            raise NoAsyncContinuation
+         if export_name is not None:
+             if exported is None:
+                 fail(line, 'bloc async sans sortie qui fournit le transfert')
+@@ -3387,6 +3450,7 @@
+     def discard_pending(line):
+         # Emit terminal cleanup in the release callback, after result extraction.
+         start = len(steps)
++        cleanup_prepared_captures()
+         for _, _, _, _, local_refs in scopes:
+             release_results(local_refs)
+         for names, _, _, _, _ in reversed(scopes):
+@@ -4098,6 +4162,11 @@
+             result = temporary('int')
+             steps.append(f"{result} = int_arithmetic('{expr[1]}', {saved_left}, {right});")
+             return result
++        if op == 'scope':
++            value, typ = infer_scalar_value(expr, line, following=following)
++            if typ != 'Int':
++                fail(line, f'une valeur Int est requise, reçu {typ}')
++            return value
+         if op == 'if_expr':
+             _, condition, yes, no = expr
+             return conditional(condition, yes, no, line, valued=True, following=following)
+@@ -4738,45 +4807,49 @@
+         op, args, line = statement.op, statement.args, statement.line
+         if returned:
+             fail(line, 'instruction après retour async')
+-        if op == 'yield':
+-            suspend()
+-        elif op == 'var' and statement.utf8_match_subject:
+-            returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+-        elif op == 'var':
+-            if bind_array(statement, following=body[index + 1:]):
+-                continue
+-            if receive_await_result(statement, body, index):
+-                continue
+-            if bind_special(statement, body, index):
+-                continue
+-            bind_scalar(statement, body[index + 1:], body, index)
+-        elif set_reference(statement, body[index + 1:]):
+-            pass
+-        elif op == 'assign':
+-            assign(*args, line, following=body[index + 1:])
+-        elif op in ('array_store', 'array_deref_store'):
+-            store_array(*args, line, following=body[index + 1:])
+-        elif op == 'array_statement' and args[0][0] == 'array_swap':
+-            swap_array(args[0], line, following=body[index + 1:])
+-        elif op == 'scope':
+-            returned = emit_block(statement, body[index + 1:])
+-        elif op == 'if':
+-            returned = conditional(*args, line, valued=False, following=body[index + 1:])
+-        elif op in ('loop', 'while'):
+-            returned = emit_loop(args[0], line, following=body[index + 1:])
+-        elif op in ('break', 'continue'):
+-            loop_exit(op, args[0], line)
+-        elif op in ('print', 'print_expr'):
+-            emit_print(statement, body[index + 1:])
+-        elif op == 'await_statement':
+-            await_task(args[0], line, returns_value=False)
+-        elif drop_async_binding(statement):
+-            pass
+-        elif op == 'return' or (op == '<-' and not statement.terminated and index == len(body) - 1):
+-            emit_return(args[0] if op == 'return' else ('move', args[0]), line)
++        try:
++            if op == 'yield':
++                suspend()
++            elif op == 'var' and statement.utf8_match_subject:
++                returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
++            elif op == 'var':
++                if bind_array(statement, following=body[index + 1:]):
++                    continue
++                if receive_await_result(statement, body, index):
++                    continue
++                if bind_special(statement, body, index):
++                    continue
++                bind_scalar(statement, body[index + 1:], body, index)
++            elif set_reference(statement, body[index + 1:]):
++                pass
++            elif op == 'assign':
++                assign(*args, line, following=body[index + 1:])
++            elif op in ('array_store', 'array_deref_store'):
++                store_array(*args, line, following=body[index + 1:])
++            elif op == 'array_statement' and args[0][0] == 'array_swap':
++                swap_array(args[0], line, following=body[index + 1:])
++            elif op == 'scope':
++                returned = emit_block(statement, body[index + 1:])
++            elif op == 'if':
++                returned = conditional(*args, line, valued=False, following=body[index + 1:])
++            elif op in ('loop', 'while'):
++                returned = emit_loop(args[0], line, following=body[index + 1:])
++            elif op in ('break', 'continue'):
++                loop_exit(op, args[0], line)
++            elif op in ('print', 'print_expr'):
++                emit_print(statement, body[index + 1:])
++            elif op == 'await_statement':
++                await_task(args[0], line, returns_value=False)
++            elif drop_async_binding(statement):
++                pass
++            elif op == 'return' or (op == '<-' and not statement.terminated and index == len(body) - 1):
++                emit_return(args[0] if op == 'return' else ('move', args[0]), line)
++                returned = True
++            else:
++                fail(line, f'prototype async : instruction {op} non prise en charge')
++        except NoAsyncContinuation:
+             returned = True
+-        else:
+-            fail(line, f'prototype async : instruction {op} non prise en charge')
++            break
+     if not returned:
+         if returns_value:
+             fail(node.line, 'retour Int requis dans la fonction async' if not (returns_owned or returns_join) else

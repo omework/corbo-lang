@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! SHAKE128 and SHAKE256 extendable output using the shared Keccak sponge.
+
+/// Number of bytes in a SHAKE128 absorption or squeeze block.
+const SHAKE128_RATE: u64 = 168;
+/// Number of bytes in a SHAKE256 absorption or squeeze block.
+const SHAKE256_RATE: u64 = 136;
+/// Delimited suffix that identifies the SHAKE sponge domain.
+const SHAKE_SUFFIX: u64 = 0x1f;
+
+/// Absorbs a message at the selected rate and squeezes enough bytes to fill the output.
+fn shake(input: &[u8], output: &mut [u8], rate: u64) {
+    if output.len() == 0 { return; }
+    let mut state = new_state();
+    absorb(&mut state, copy(rate), input);
+    finish_state(&mut state, rate, SHAKE_SUFFIX, output);
+}
+
+/// Fills the caller's output with SHAKE128 bytes.
+pub fn shake128(input: &[u8], output: &mut [u8]) {
+    shake(input, output, SHAKE128_RATE);
+}
+
+/// Fills the caller's output with SHAKE256 bytes.
+pub fn shake256(input: &[u8], output: &mut [u8]) {
+    shake(input, output, SHAKE256_RATE);
+}

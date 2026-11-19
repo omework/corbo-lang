@@ -1,0 +1,78 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13871,13 +13871,14 @@
+                                                 self.async_sync_slots, self.async_frame_slots, Error)
+         return main
+ 
+-    def reserve_async_sync_bridge(self, name, parent):
++    def reserve_async_sync_bridge(self, name, parent, *, local_parameters=frozenset()):
+         """Call-site verification uses signatures/effects, never callee C."""
+         self.async_sync_calls.setdefault(parent, set()).add(name)
+-        if name not in self.async_sync_bridges:
++        key = (name, local_parameters) if local_parameters else name
++        if key not in self.async_sync_bridges:
+             symbol = f'crust_sync_bridge_{self.uid()}'
+-            self.async_sync_bridges[name] = symbol, not self.function_contracts[name].effects.may_return
+-        return self.async_sync_bridges[name]
++            self.async_sync_bridges[key] = symbol, not self.function_contracts[name].effects.may_return
++        return self.async_sync_bridges[key]
+ 
+     def emit_async_sync_bridge(self, name):
+         """Emit an ordinary synchronous ABI once, using the checked backend.
+@@ -13887,6 +13888,8 @@
+         Separate compiler state prevents speculative lowering/loop retries from
+         leaking those local lifetimes into a caller's frame.
+         """
++        key = name
++        name, local_parameters = name if isinstance(name, tuple) else (name, frozenset())
+         contract = self.function_contracts[name]
+         check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
+         for attr in ('functions', 'async_definitions', 'async_reference_paths', 'enums', 'struct_fields',
+@@ -13927,7 +13930,7 @@
+         for index, (_, mode, typ) in enumerate(contract.parameters):
+             parameter = f'bridge_input_{index}'
+             if mode == 'owned':
+-                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)
+                 allocation = Allocation(check.uid(), root.id, parameter, (source,), c=parameter, typ=typ)
+@@ -13985,7 +13988,7 @@
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 ctype = 'Cell *'
+             elif mode in ('ref', 'mut') and typ in self.struct_fields:
+-                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)
+                 allocation = Allocation(check.uid(), external.id, parameter, (source,), c=parameter, typ=typ)
+@@ -14024,6 +14027,20 @@
+             parameters.append(f'{ctype} {parameter}')
+             arguments.append(('down' if mode == 'owned' or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
++        if any(candidate.kind == 'fresh' and (candidate.source.kind == 'local_value'
++                    or candidate.source.kind == 'allocation_parameter' and candidate.source.index in local_parameters)
++               for candidate in contract.result.candidates):
++            parameter = 'bridge_local_storage'
++            parameters.append(f'Source *{parameter}')
++            source = MemorySource(check.uid(), external.id, 'local_stack',
++                                  'data stack du receveur async', parameter)
++            external.sources.append(source)
++            _, layout = check.local_structure_storage(external, contract.result_type[1])
++            members = check.enums[contract.result_type[1]]['']
++            size = check.field_offset(members, len(members))
++            reserved = 'bridge_local_output'
++            check.lines.append(f'Cell *{reserved} = local_cell_new({parameter}, &{layout}, {size}, NULL);')
++            check.local_reservations[id(call)] = source, layout, reserved
+         check.index_expression(call)
+         result = None
+         try:
+@@ -14034,7 +14051,7 @@
+         except PathsReturned:
+             pass
+         check.record_async_slots()
+-        symbol, _ = self.async_sync_bridges[name]
++        symbol, _ = self.async_sync_bridges[key]
+         mode = contract.result_type[0]
+         ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])

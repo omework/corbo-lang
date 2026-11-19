@@ -1,0 +1,3 @@
+struct View{data:&Int}async fn relay(v:->View)-><-View{yield;return <-v;}
+ fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let v=View{data:&n};let h=runtime::spawn(->relay(->v));
+ match h.join(){Ok(v)=>{print(*v.data);drop(->v);},Err(_)=>{}}drop(->n);}

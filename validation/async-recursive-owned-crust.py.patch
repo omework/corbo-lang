@@ -1,0 +1,189 @@
+--- before/crust.py
++++ crust.py
+@@ -1615,6 +1615,18 @@
+         return nodes
+ 
+ 
++@dataclass(frozen=True)
++class AsyncFieldStorage:
++    path: str
++    sources: tuple
++    origins: frozenset
++    variants: frozenset = frozenset()
++
++    def __iter__(self):
++        # Source consumers keep the existing three-component projection.
++        return iter((self.path, self.sources, self.origins))
++
++
+ @dataclass
+ class Allocation:
+     id: int
+@@ -4666,10 +4678,20 @@
+         if mode in ('owned', 'join_owned'):
+             projected, parents = self.project_task_result_fields(nominal, allocation.dependencies,
+                                                                  allocation.borrow_parents)
+-            from array_syntax import owned_reference_paths
+-            modes = {field: access for field, access, _ in owned_reference_paths(
+-                self.enums, self.async_definitions[nominal][0].args[2][1])}
+-            result_dependencies = tuple((modes[field] + '.4/' + field, targets) for field, targets in projected)
++            def field_mode(path):
++                typ = self.async_definitions[nominal][0].args[2][1]
++                steps = path.split('/')
++                for index, step in enumerate(steps):
++                    arm, _, member = step.partition('.')
++                    declared = dict(self.enums.get(typ, {}).get(arm, ())).get(member, '')
++                    if index == len(steps) - 1 and reference_type(declared):
++                        return reference_type(declared)[0]
++                    if not declared.startswith('A<'):
++                        self.fail('handle : chemin de référence stockée incompatible')
++                    typ = declared[2:-1]
++                self.fail('handle : chemin de référence stockée incomplet')
++            result_dependencies = tuple((field_mode(field) + '.4/' + field, targets)
++                                        for field, targets in projected)
+             allocation.borrow_parents = tuple({id(parent): parent for parent in
+                                                (*allocation.borrow_parents, *parents)}.values())
+         if mode in ('ref', 'mut'):
+@@ -8027,12 +8049,15 @@
+ 
+     @staticmethod
+     def merge_async_result_fields(*groups):
+-        fields = {}
++        fields, variants = {}, {}
+         for group in groups:
+-            for path, sources, origins in group:
++            for record in group:
++                path, sources, origins = record
+                 previous_sources, previous_origins = fields.get(path, ((), frozenset()))
+                 fields[path] = source_union(previous_sources, sources), previous_origins | origins
+-        return tuple((path, *value) for path, value in sorted(fields.items()))
++                variants.setdefault(path, []).append(getattr(record, 'variants', frozenset()))
++        return tuple(AsyncFieldStorage(path, *value, Compiler.merge_task_variants(variants[path]))
++                     for path, value in sorted(fields.items()))
+ 
+     def task_owned_result_fields(self, roots):
+         return self.merge_async_result_fields(*(self.owned_field_storage(root.owned_fields) for root in roots))
+@@ -8077,18 +8102,20 @@
+         output = []
+         for key, targets in fields:
+             path = prefix + key
+-            output.append((path, source_union(*(child.sources for child in targets)),
+-                           frozenset(origin for child in targets for origin in child.origins)))
++            output.append(AsyncFieldStorage(path, source_union(*(child.sources for child in targets)),
++                           frozenset(origin for child in targets for origin in child.origins),
++                           self.merge_task_variants(child.variants for child in targets)))
+             for child in targets:
+                 output.extend(self.owned_field_storage(child.owned_fields, path + '/'))
+         return self.merge_async_result_fields(output)
+ 
+     def restore_async_owned_fields(self, allocation, fields, variants=frozenset()):
+         storage = {path: (sources, origins) for path, sources, origins in fields}
+-        def restore(typ, prefix=''):
++        child_variants = {record.path: record.variants for record in fields if isinstance(record, AsyncFieldStorage)}
++        def restore(typ, prefix='', possible=frozenset()):
+             children = []
+             for arm, members in self.enums.get(typ, {}).items():
+-                if not prefix and variants and arm not in variants:
++                if possible and arm not in possible:
+                     continue
+                 for name, declared in members:
+                     if not declared.startswith('A<'):
+@@ -8099,14 +8126,15 @@
+                     if not sources:
+                         self.fail('résultat async : provenance du champ propriétaire absente')
+                     child_type = declared[2:-1]
+-                    nested = restore(child_type, path + '/')
++                    possible_child = child_variants.get(path, frozenset())
++                    nested = restore(child_type, path + '/', possible_child)
+                     child = Allocation(self.uid(), allocation.scope, name, sources, typ=child_type,
+                         origins=origins, owned_fields=nested, item_sources=self.owned_field_sources(nested),
+-                        variants=frozenset(self.enums.get(child_type, {})))
++                        variants=possible_child or frozenset(self.enums.get(child_type, {})))
+                     children.append((key, (child,)))
+             return tuple(children)
+         if not allocation.absent_owned_payload:
+-            allocation.owned_fields = restore(allocation.typ)
++            allocation.owned_fields = restore(allocation.typ, possible=variants)
+             allocation.variants = variants or frozenset(self.enums.get(allocation.typ, {}))
+             if allocation.owned_fields:
+                 allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+@@ -10456,6 +10484,29 @@
+                 roots.update((root.id, root) for _, candidates in dependencies for root in candidates)
+                 parents.update((id(parent), parent) for parent in chain)
+             fields.append((field, tuple(roots.values())))
++        # A recursive input has arbitrarily deep, but finite, concrete fields.
++        # The type-level summary stops at repeated types. Preserve the remaining
++        # input paths when the whole owner is returned, without replacing fields
++        # explicitly described by the completion contract.
++        node = self.async_definitions[nominal][0]
++        effect = getattr(node, 'field_effect_summary', None)
++        summary = effect.completion_result if effect and effect.complete else None
++        known = {field for field, _ in fields}
++        inherited = {}
++        if summary and summary.mode in ('owned', 'join_owned', 'join_nested'):
++            for candidate in summary.candidates:
++                if candidate.kind != 'parameter':
++                    continue
++                for key, targets in capture_fields(captures, candidate.parameter):
++                    _, separator, path = key.partition('/')
++                    if separator and path not in known:
++                        inherited.setdefault(path, {}).update((target.id, target) for target in targets)
++        fields.extend((path, tuple(targets.values())) for path, targets in inherited.items())
++        inherited_ids = {target.id for targets in inherited.values() for target in targets.values()}
++        for parent in ancestry:
++            if any(target.id in inherited_ids for target in
++                   (*(parent.referents or (parent.alloc,)), *self.dependency_targets(parent.alloc))):
++                parents[id(parent)] = parent
+         return tuple(fields), tuple(parents.values())
+ 
+     def async_array_capture(self, loan, root):
+@@ -14795,8 +14846,29 @@
+         check.scopes.extend((external, root))
+         parameters, arguments = [], []
+ 
+-        def owned_bridge_fields(allocation, pointer):
+-            """Describe the live graph without relocating or separately owning children."""
++        def owned_bridge_fields(allocation, pointer, ancestors=frozenset()):
++            """Describe finite layout paths; recursive input edges stay symbolic."""
++            if allocation.typ in ancestors:
++                # As for ordinary function inputs, expand recursive projections
++                # on demand. Runtime access comes from the matched Cell pointer;
++                # these sources only represent opaque external lifetimes.
++                sources = []
++                reachable = {allocation.typ}
++                pending = [allocation.typ]
++                while pending:
++                    typ = pending.pop()
++                    for members in check.enums.get(typ, {}).values():
++                        for _, declared in members:
++                            if declared.startswith('A<') and declared[2:-1] not in reachable:
++                                reachable.add(declared[2:-1])
++                                pending.append(declared[2:-1])
++                for typ in sorted(reachable):
++                    source = MemorySource(check.uid(), external.id, 'symbolic', typ, 'NULL', element_type=typ)
++                    external.sources.append(source)
++                    sources.append((typ, source))
++                allocation.recursive_projection_sources = ((allocation.id, tuple(sources)),)
++                return
++            ancestors = ancestors | {allocation.typ}
+             fields = []
+             borrowed = []
+             for tag, (variant, members) in enumerate(check.enums.get(allocation.typ, {}).items()):
+@@ -14833,7 +14905,7 @@
+                         check.origin_sources[target.id] = source
+                         check.allocations.append(target_root)
+                         external.allocations.append(target_root)
+-                        owned_bridge_fields(target, target_pointer)
++                        owned_bridge_fields(target, target_pointer, ancestors)
+                         target_root.owned_fields = target.owned_fields
+                         target_root.dependencies = target.dependencies
+                         target_root.variants = target.variants
+@@ -14854,7 +14926,7 @@
+                     child = Allocation(check.uid(), allocation.scope, name, (source,), c=child_pointer,
+                                        typ=declared[2:-1], variants=frozenset(check.enums.get(declared[2:-1], {})))
+                     check.origin_sources[child.id] = source
+-                    owned_bridge_fields(child, child_pointer)
++                    owned_bridge_fields(child, child_pointer, ancestors)
+                     fields.append((variant + '.' + name, (child,)))
+             allocation.owned_fields = tuple(fields)
+             allocation.dependencies = tuple(borrowed)

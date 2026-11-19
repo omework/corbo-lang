@@ -1,0 +1,20 @@
+--- /tmp/crust-before-select-contracts/results.py	2026-11-08 04:58:27
++++ results.py	2026-11-08 04:58:27
+@@ -1953,7 +1953,7 @@
+             return {'next'}, SCALAR
+         if op in ('name', 'move', 'down', 'ref', 'mut'):
+             value = self.lookup(expr[1], environment, line)
+-            if op == 'move' and (not isinstance(value, Value) or value.mode not in ('owned', 'array', 'array_refs', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', 'join_owned', 'join_nested')):
++            if op == 'move' and (not isinstance(value, Value) or value.mode not in ('owned', 'array', 'array_refs', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', 'selection', 'join_owned', 'join_nested')):
+                 self.fail(line, 'seule une allocation explicite est déplaçable')
+             if op in ('ref', 'mut') and isinstance(value, Value):
+                 if value.mode == 'array_refs':
+@@ -2076,7 +2076,7 @@
+                     continue
+                 if not isinstance(value, Value) or value.mode not in (
+                         'owned', 'scalar', 'array', 'array_refs', 'handle_option', 'buffered_handle_exchange',
+-                        'join_owned', 'join_nested', 'vector_split', 'task', 'execution', 'ref', 'mut', *VALUE_MODES):
++                        'join_owned', 'join_nested', 'vector_split', 'task', 'execution', 'selection', 'ref', 'mut', *VALUE_MODES):
+                     self.fail(line, 'une expression if exige une allocation transférée par <- ou une valeur copiable')
+                 if typ is not None and typ != value.typ:
+                     self.fail(line, 'expression if : même type requis dans toutes les branches')

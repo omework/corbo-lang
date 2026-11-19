@@ -1,0 +1,40 @@
+test_initial_owned_contract_example (test_public_owned_handles.PublicOwnedHandleTests.test_initial_owned_contract_example) ... ok
+test_opaque_contract_preserves_result_source_through_join_helper (test_public_owned_handles.PublicOwnedHandleTests.test_opaque_contract_preserves_result_source_through_join_helper) ... ok
+test_result_borrow_blocks_drop_and_legacy_reset (test_public_owned_handles.PublicOwnedHandleTests.test_result_borrow_blocks_drop_and_legacy_reset) ... ok
+test_result_outlives_unrelated_capture_pool_for_each_owned_type (test_public_owned_handles.PublicOwnedHandleTests.test_result_outlives_unrelated_capture_pool_for_each_owned_type) ... 
+  test_result_outlives_unrelated_capture_pool_for_each_owned_type (test_public_owned_handles.PublicOwnedHandleTests.test_result_outlives_unrelated_capture_pool_for_each_owned_type) (typ='String') ... ERROR
+
+======================================================================
+ERROR: test_result_outlives_unrelated_capture_pool_for_each_owned_type (test_public_owned_handles.PublicOwnedHandleTests.test_result_outlives_unrelated_capture_pool_for_each_owned_type) (typ='String')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_public_owned_handles.py", line 50, in test_result_outlives_unrelated_capture_pool_for_each_owned_type
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15193, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13477, in verify
+    self.function_effects = EffectAnalyzer(self.functions, self.enums, Error, async_functions).infer_all()
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 148, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 175, in infer
+    outcomes = self.nodes(body, environment, resets, allocations, pools)
+  File "/Users/jabarkarim/sources/crust/effects.py", line 634, in nodes
+    part = (part - {'next'}) | self.expression(expr, environment, resets, allocations, pools, line, break_types=break_types)
+                               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 391, in expression
+    flow = self.expression_flow(expr, environment, resets, allocations, pools, line, result_types, break_types)
+  File "/Users/jabarkarim/sources/crust/effects.py", line 484, in expression_flow
+    self.fail(line, f"méthode inconnue ou receveur indéterminé '{expr[2]}'")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 144, in fail
+    raise self.error(f'ligne {line}: {message}')
+crust.Error: ligne 13: méthode inconnue ou receveur indéterminé 'byte_len'
+
+----------------------------------------------------------------------
+Ran 4 tests in 4.986s
+
+FAILED (errors=1)

@@ -1,0 +1,4867 @@
+# Corbo standard library reference
+
+Generated from source documentation. Do not edit this reference by hand.
+
+Public declarations and their target conditions are listed below.
+Implementation fields are shown for context; listing them does not grant public field access.
+Internal and platform helpers are documented in the linked source files.
+Compiler-backed collection methods are described in the [collection API guide](COLLECTIONS_API.md).
+
+Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
+
+## Modules
+
+- [`std`](#std)
+- [`std::compression::gzip`](#stdcompressiongzip)
+- [`std::compression::zstd`](#stdcompressionzstd)
+- [`std::crypto::aes`](#stdcryptoaes)
+- [`std::crypto::argon2id`](#stdcryptoargon2id)
+- [`std::crypto::md5`](#stdcryptomd5)
+- [`std::crypto::p256`](#stdcryptop256)
+- [`std::crypto::pbkdf2`](#stdcryptopbkdf2)
+- [`std::crypto::pkcs8`](#stdcryptopkcs8)
+- [`std::crypto::random`](#stdcryptorandom)
+- [`std::crypto::rsa`](#stdcryptorsa)
+- [`std::crypto::sha256`](#stdcryptosha256)
+- [`std::crypto::sha3`](#stdcryptosha3)
+- [`std::crypto::sha384`](#stdcryptosha384)
+- [`std::crypto::sha512`](#stdcryptosha512)
+- [`std::crypto::x509`](#stdcryptox509)
+- [`std::encoding::base64`](#stdencodingbase64)
+- [`std::encoding::der`](#stdencodingder)
+- [`std::encoding::hex`](#stdencodinghex)
+- [`std::encoding::pem`](#stdencodingpem)
+- [`std::env`](#stdenv)
+- [`std::io`](#stdio)
+- [`std::io::asyn`](#stdioasyn)
+- [`std::io::asyn::buffered`](#stdioasynbuffered)
+- [`std::io::buffered`](#stdiobuffered)
+- [`std::iter`](#stditer)
+- [`std::net`](#stdnet)
+- [`std::net::asyn::tcp`](#stdnetasyntcp)
+- [`std::net::asyn::udp`](#stdnetasynudp)
+- [`std::net::ipv4`](#stdnetipv4)
+- [`std::net::tcp`](#stdnettcp)
+- [`std::net::tls`](#stdnettls)
+- [`std::net::tls::keys`](#stdnettlskeys)
+- [`std::net::tls::openssl`](#stdnettlsopenssl)
+- [`std::net::tls::record`](#stdnettlsrecord)
+- [`std::net::udp`](#stdnetudp)
+- [`std::num`](#stdnum)
+- [`std::text`](#stdtext)
+
+## `std`
+
+Root STD exports for the existing native collection types.
+Files in this directory belong to `std`, so import with `use std::{Vector, HashMap, String};`.
+These declarations bind compiler-provided types, not empty record layouts.
+Storage, operations and dependency tracking retain their existing native implementation.
+
+### `Vector`
+
+[collections.crb:9](../stdlib/src/collections.crb#L9)
+
+```rust
+pub struct Vector<T>
+```
+
+A contiguous, region-backed sequence of owned values of type T, initially empty.
+Construct through `pool<Vector<T>>(...).new()`; normal moves and loans apply.
+
+### `HashMap`
+
+[collections.crb:14](../stdlib/src/collections.crb#L14)
+
+```rust
+pub struct HashMap<K, V>
+```
+
+A region-backed map with integer or boolean keys and stable entry storage.
+`insert` moves its arguments; `get` and `get_mut` borrow values by borrowed key.
+
+### `String`
+
+[collections.crb:20](../stdlib/src/collections.crb#L20)
+
+```rust
+pub struct String
+```
+
+An owned, region-backed UTF-8 string with the existing String operations.
+Construct through a String pool; borrowed text views retain its lifetime.
+`split(separator)` returns `std::text::Split`, yielding borrowed `&str` pieces.
+
+
+## `std::compression::gzip`
+
+Native RFC 1952 Gzip with RFC 1951 DEFLATE and caller-owned buffers.
+
+### `Error`
+
+[gzip.crb:5](../stdlib/src/compression/gzip/gzip.crb#L5)
+
+```rust
+pub enum Error
+```
+
+Reports invalid parameters, bounded storage exhaustion, malformed input or checksum failure.
+
+Members:
+
+- [`InvalidParams`](../stdlib/src/compression/gzip/gzip.crb#L7) (variant): A parameter is outside this algorithm's supported bounds.
+- [`WorkspaceTooSmall`](../stdlib/src/compression/gzip/gzip.crb#L9) (variant): The caller-provided scratch buffer cannot hold the required working state.
+- [`BufferTooSmall`](../stdlib/src/compression/gzip/gzip.crb#L11) (variant): The caller-provided output buffer cannot hold the result.
+- [`InvalidData`](../stdlib/src/compression/gzip/gzip.crb#L13) (variant): The encoded input violates the format or a supported codec constraint.
+- [`TruncatedInput`](../stdlib/src/compression/gzip/gzip.crb#L15) (variant): The encoded input ends before a required field or frame is complete.
+- [`ChecksumMismatch`](../stdlib/src/compression/gzip/gzip.crb#L17) (variant): The computed checksum differs from the encoded checksum.
+- [`InvalidState`](../stdlib/src/compression/gzip/gzip.crb#L19) (variant): The operation is incompatible with the current streaming state.
+- [`FrameTooLarge`](../stdlib/src/compression/gzip/gzip.crb#L21) (variant): The frame exceeds the caller's explicit storage budget.
+
+### `Params`
+
+[gzip.crb:25](../stdlib/src/compression/gzip/gzip.crb#L25)
+
+```rust
+pub struct Params
+```
+
+Controls match-search effort. Level zero stores bytes; levels one through nine compress.
+
+Members:
+
+- [`level`](../stdlib/src/compression/gzip/gzip.crb#L27) (implementation field): Requested compression effort level; constructors validate the supported range.
+
+### `Params::new`
+
+[gzip.crb:32](../stdlib/src/compression/gzip/gzip.crb#L32)
+
+```rust
+fn new() -> Params
+```
+
+Uses level six. Levels express this encoder's search effort, not another library's byte output.
+
+### `compress`
+
+[gzip.crb:202](../stdlib/src/compression/gzip/gzip.crb#L202)
+
+```rust
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error>
+```
+
+Compresses one complete Gzip member. The workspace requires 36864 u64 words for levels 1–9.
+Output may contain a partial member on an error; input and workspace are never retained.
+
+### `decompress`
+
+[gzip.crb:429](../stdlib/src/compression/gzip/gzip.crb#L429)
+
+```rust
+pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decompresses concatenated members. Errors may leave a partial output prefix.
+
+
+Bounded, caller-buffered streaming with explicit backpressure and frame budgets.
+
+### `Encoder`
+
+[stream.crb:9](../stdlib/src/compression/gzip/stream.crb#L9)
+
+```rust
+pub struct Encoder
+```
+
+Encodes bounded chunks as concatenated standard frames; owns no heap storage.
+Call process until finished. Destruction discards pending bytes without flushing.
+
+Members:
+
+- [`input`](../stdlib/src/compression/gzip/stream.crb#L11) (implementation field): Caller-owned frame input storage, borrowed for streaming operation.
+- [`pending`](../stdlib/src/compression/gzip/stream.crb#L13) (implementation field): Caller-owned encoded-output storage awaiting draining.
+- [`workspace`](../stdlib/src/compression/gzip/stream.crb#L15) (implementation field): Caller-owned codec scratch storage; required length is checked before use.
+- [`level`](../stdlib/src/compression/gzip/stream.crb#L17) (implementation field): Requested compression effort level; constructors validate the supported range.
+- [`used`](../stdlib/src/compression/gzip/stream.crb#L19) (implementation field): Number of bytes currently accumulated in input/pending storage.
+- [`count`](../stdlib/src/compression/gzip/stream.crb#L21) (implementation field): Number of valid pending-output bytes.
+- [`next`](../stdlib/src/compression/gzip/stream.crb#L23) (implementation field): Offset of the next pending byte to drain.
+- [`ending`](../stdlib/src/compression/gzip/stream.crb#L25) (implementation field): Records the caller's end-of-input request.
+- [`done`](../stdlib/src/compression/gzip/stream.crb#L27) (implementation field): Records that the current frame has been completely emitted/decoded.
+- [`seen`](../stdlib/src/compression/gzip/stream.crb#L29) (implementation field): Tracks whether input/progress has been observed for this frame.
+- [`failed`](../stdlib/src/compression/gzip/stream.crb#L31) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`last_read`](../stdlib/src/compression/gzip/stream.crb#L33) (implementation field): Number of input bytes consumed by the latest streaming operation.
+
+### `Encoder::consumed`
+
+[stream.crb:38](../stdlib/src/compression/gzip/stream.crb#L38)
+
+```rust
+fn consumed(&self)->usize
+```
+
+Returns the input accepted by the last successful process call; re-submit the remaining suffix.
+
+### `Encoder::finished`
+
+[stream.crb:40](../stdlib/src/compression/gzip/stream.crb#L40)
+
+```rust
+fn finished(&self)->bool
+```
+
+Reports EOF after all pending output has been drained.
+
+### `Encoder::new`
+
+[stream.crb:44](../stdlib/src/compression/gzip/stream.crb#L44)
+
+```rust
+fn new(level:u32, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64]) -> Encoder
+```
+
+Borrows staging, pending-output and match-search buffers; snapshots the scalar options.
+Pending needs 2*staging.len()+128 bytes.
+
+### `Encoder::reset`
+
+[stream.crb:51](../stdlib/src/compression/gzip/stream.crb#L51)
+
+```rust
+fn reset(&mut self)
+```
+
+Reuses the borrowed buffers and parameters for a fresh stream, discarding pending bytes.
+
+### `Encoder::process`
+
+[stream.crb:59](../stdlib/src/compression/gzip/stream.crb#L59)
+
+```rust
+fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) -> Result<usize, Error>
+```
+
+Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
+finish marks EOF only once all supplied input is accepted; an empty output can apply backpressure.
+
+### `Decoder`
+
+[stream.crb:98](../stdlib/src/compression/gzip/stream.crb#L98)
+
+```rust
+pub struct Decoder
+```
+
+Buffers one complete encoded and decoded frame before exposing its validated output.
+The two borrowed buffers are hard per-frame budgets, not an unbounded-history window.
+
+Members:
+
+- [`encoded`](../stdlib/src/compression/gzip/stream.crb#L100) (implementation field): Caller-owned storage for a bounded encoded frame.
+- [`decoded`](../stdlib/src/compression/gzip/stream.crb#L102) (implementation field): Caller-owned storage for the bounded decoded frame.
+- [`used`](../stdlib/src/compression/gzip/stream.crb#L104) (implementation field): Number of bytes currently accumulated in input/pending storage.
+- [`count`](../stdlib/src/compression/gzip/stream.crb#L106) (implementation field): Number of valid pending-output bytes.
+- [`next`](../stdlib/src/compression/gzip/stream.crb#L108) (implementation field): Offset of the next pending byte to drain.
+- [`ending`](../stdlib/src/compression/gzip/stream.crb#L110) (implementation field): Records the caller's end-of-input request.
+- [`done`](../stdlib/src/compression/gzip/stream.crb#L112) (implementation field): Records that the current frame has been completely emitted/decoded.
+- [`seen`](../stdlib/src/compression/gzip/stream.crb#L114) (implementation field): Tracks whether input/progress has been observed for this frame.
+- [`failed`](../stdlib/src/compression/gzip/stream.crb#L116) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`last_read`](../stdlib/src/compression/gzip/stream.crb#L118) (implementation field): Number of input bytes consumed by the latest streaming operation.
+
+### `Decoder::consumed`
+
+[stream.crb:123](../stdlib/src/compression/gzip/stream.crb#L123)
+
+```rust
+fn consumed(&self)->usize
+```
+
+Returns the input accepted by the last successful process call.
+
+### `Decoder::finished`
+
+[stream.crb:125](../stdlib/src/compression/gzip/stream.crb#L125)
+
+```rust
+fn finished(&self)->bool
+```
+
+Reports EOF after all validated output has been drained.
+
+### `Decoder::new`
+
+[stream.crb:128](../stdlib/src/compression/gzip/stream.crb#L128)
+
+```rust
+fn new(encoded:&mut [u8], decoded:&mut [u8] ) -> Decoder
+```
+
+Borrows maximum-frame storage; Zstandard additionally needs its 128 KiB literal workspace.
+
+### `Decoder::reset`
+
+[stream.crb:134](../stdlib/src/compression/gzip/stream.crb#L134)
+
+```rust
+fn reset(&mut self)
+```
+
+Starts a new stream with the same storage and dictionary, discarding pending data.
+
+### `Decoder::process`
+
+[stream.crb:141](../stdlib/src/compression/gzip/stream.crb#L141)
+
+```rust
+fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)->Result<usize,Error>
+```
+
+Returns validated output bytes written; consumed() reports accepted input.
+Frame, checksum or state errors require reset or destruction; a truncated prefix waits for more input.
+
+
+## `std::compression::zstd`
+
+Native greedy LZ77 Zstandard encoding with raw literals and RLE sequence tables.
+
+### `compress`
+
+[encode.crb:59](../stdlib/src/compression/zstd/encode.crb#L59)
+
+```rust
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error>
+```
+
+Compresses one Zstandard frame. Workspace requires 36864 u64 words; no heap allocation occurs.
+Levels 1–22 control native chain-search effort; zero selects level three. Partial output may remain on errors.
+
+### `compress_with_dictionary`
+
+[encode.crb:65](../stdlib/src/compression/zstd/encode.crb#L65)
+
+```rust
+pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8]) -> Result<usize, Error>
+```
+
+Compresses with borrowed raw or formatted dictionary history; writes the dictionary ID when present.
+
+
+Bounded, caller-buffered streaming with explicit backpressure and frame budgets.
+
+### `Encoder`
+
+[stream.crb:9](../stdlib/src/compression/zstd/stream.crb#L9)
+
+```rust
+pub struct Encoder
+```
+
+Encodes bounded chunks as concatenated standard frames; owns no heap storage.
+Call process until finished. Destruction discards pending bytes without flushing.
+
+Members:
+
+- [`input`](../stdlib/src/compression/zstd/stream.crb#L11) (implementation field): Caller-owned frame input storage, borrowed for streaming operation.
+- [`pending`](../stdlib/src/compression/zstd/stream.crb#L13) (implementation field): Caller-owned encoded-output storage awaiting draining.
+- [`workspace`](../stdlib/src/compression/zstd/stream.crb#L15) (implementation field): Caller-owned codec scratch storage; required length is checked before use.
+- [`level`](../stdlib/src/compression/zstd/stream.crb#L17) (implementation field): Requested compression effort level; constructors validate the supported range.
+- [`checksum`](../stdlib/src/compression/zstd/stream.crb#L19) (implementation field): Whether the encoded frame includes its content checksum.
+- [`dictionary`](../stdlib/src/compression/zstd/stream.crb#L21) (implementation field): Borrowed optional dictionary bytes; they must outlive the codec.
+- [`used`](../stdlib/src/compression/zstd/stream.crb#L23) (implementation field): Number of bytes currently accumulated in input/pending storage.
+- [`count`](../stdlib/src/compression/zstd/stream.crb#L25) (implementation field): Number of valid pending-output bytes.
+- [`next`](../stdlib/src/compression/zstd/stream.crb#L27) (implementation field): Offset of the next pending byte to drain.
+- [`ending`](../stdlib/src/compression/zstd/stream.crb#L29) (implementation field): Records the caller's end-of-input request.
+- [`done`](../stdlib/src/compression/zstd/stream.crb#L31) (implementation field): Records that the current frame has been completely emitted/decoded.
+- [`seen`](../stdlib/src/compression/zstd/stream.crb#L33) (implementation field): Tracks whether input/progress has been observed for this frame.
+- [`failed`](../stdlib/src/compression/zstd/stream.crb#L35) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`last_read`](../stdlib/src/compression/zstd/stream.crb#L37) (implementation field): Number of input bytes consumed by the latest streaming operation.
+
+### `Encoder::consumed`
+
+[stream.crb:42](../stdlib/src/compression/zstd/stream.crb#L42)
+
+```rust
+fn consumed(&self)->usize
+```
+
+Returns the input accepted by the last successful process call; re-submit the remaining suffix.
+
+### `Encoder::finished`
+
+[stream.crb:44](../stdlib/src/compression/zstd/stream.crb#L44)
+
+```rust
+fn finished(&self)->bool
+```
+
+Reports EOF after all pending output has been drained.
+
+### `Encoder::new`
+
+[stream.crb:48](../stdlib/src/compression/zstd/stream.crb#L48)
+
+```rust
+fn new(level:u32, checksum:bool, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64], dictionary:&[u8]) -> Encoder
+```
+
+Borrows staging, pending-output and match-search buffers; snapshots the scalar options.
+Pending needs 2*staging.len()+128 bytes. Zstandard also borrows its dictionary (empty means none).
+
+### `Encoder::reset`
+
+[stream.crb:54](../stdlib/src/compression/zstd/stream.crb#L54)
+
+```rust
+fn reset(&mut self)
+```
+
+Reuses the borrowed buffers and parameters for a fresh stream, discarding pending bytes.
+
+### `Encoder::process`
+
+[stream.crb:62](../stdlib/src/compression/zstd/stream.crb#L62)
+
+```rust
+fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) -> Result<usize, Error>
+```
+
+Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
+finish marks EOF only once all supplied input is accepted; an empty output can apply backpressure.
+
+### `Decoder`
+
+[stream.crb:101](../stdlib/src/compression/zstd/stream.crb#L101)
+
+```rust
+pub struct Decoder
+```
+
+Buffers one complete encoded and decoded frame before exposing its validated output.
+The two borrowed buffers are hard per-frame budgets, not an unbounded-history window.
+
+Members:
+
+- [`encoded`](../stdlib/src/compression/zstd/stream.crb#L103) (implementation field): Caller-owned storage for a bounded encoded frame.
+- [`decoded`](../stdlib/src/compression/zstd/stream.crb#L105) (implementation field): Caller-owned storage for the bounded decoded frame.
+- [`workspace`](../stdlib/src/compression/zstd/stream.crb#L107) (implementation field): Caller-owned codec scratch storage; required length is checked before use.
+- [`dictionary`](../stdlib/src/compression/zstd/stream.crb#L109) (implementation field): Borrowed optional dictionary bytes; they must outlive the codec.
+- [`used`](../stdlib/src/compression/zstd/stream.crb#L111) (implementation field): Number of bytes currently accumulated in input/pending storage.
+- [`count`](../stdlib/src/compression/zstd/stream.crb#L113) (implementation field): Number of valid pending-output bytes.
+- [`next`](../stdlib/src/compression/zstd/stream.crb#L115) (implementation field): Offset of the next pending byte to drain.
+- [`ending`](../stdlib/src/compression/zstd/stream.crb#L117) (implementation field): Records the caller's end-of-input request.
+- [`done`](../stdlib/src/compression/zstd/stream.crb#L119) (implementation field): Records that the current frame has been completely emitted/decoded.
+- [`seen`](../stdlib/src/compression/zstd/stream.crb#L121) (implementation field): Tracks whether input/progress has been observed for this frame.
+- [`failed`](../stdlib/src/compression/zstd/stream.crb#L123) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`last_read`](../stdlib/src/compression/zstd/stream.crb#L125) (implementation field): Number of input bytes consumed by the latest streaming operation.
+
+### `Decoder::consumed`
+
+[stream.crb:130](../stdlib/src/compression/zstd/stream.crb#L130)
+
+```rust
+fn consumed(&self)->usize
+```
+
+Returns the input accepted by the last successful process call.
+
+### `Decoder::finished`
+
+[stream.crb:132](../stdlib/src/compression/zstd/stream.crb#L132)
+
+```rust
+fn finished(&self)->bool
+```
+
+Reports EOF after all validated output has been drained.
+
+### `Decoder::new`
+
+[stream.crb:135](../stdlib/src/compression/zstd/stream.crb#L135)
+
+```rust
+fn new(encoded:&mut [u8], decoded:&mut [u8] ,workspace:&mut [u8],dictionary:&[u8]) -> Decoder
+```
+
+Borrows maximum-frame storage; Zstandard additionally needs its 128 KiB literal workspace.
+
+### `Decoder::reset`
+
+[stream.crb:140](../stdlib/src/compression/zstd/stream.crb#L140)
+
+```rust
+fn reset(&mut self)
+```
+
+Starts a new stream with the same storage and dictionary, discarding pending data.
+
+### `Decoder::process`
+
+[stream.crb:147](../stdlib/src/compression/zstd/stream.crb#L147)
+
+```rust
+fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)->Result<usize,Error>
+```
+
+Returns validated output bytes written; consumed() reports accepted input.
+Frame, checksum or state errors require reset or destruction; a truncated prefix waits for more input.
+
+
+Native RFC 8878 Zstandard frames with caller-owned output and workspace.
+
+### `Error`
+
+[zstd.crb:8](../stdlib/src/compression/zstd/zstd.crb#L8)
+
+```rust
+pub enum Error
+```
+
+Reports invalid options, bounded storage exhaustion, malformed frames, checksum failure or dictionary requirements.
+
+Members:
+
+- [`InvalidParams`](../stdlib/src/compression/zstd/zstd.crb#L10) (variant): A parameter is outside this algorithm's supported bounds.
+- [`WorkspaceTooSmall`](../stdlib/src/compression/zstd/zstd.crb#L12) (variant): The caller-provided scratch buffer cannot hold the required working state.
+- [`BufferTooSmall`](../stdlib/src/compression/zstd/zstd.crb#L14) (variant): The caller-provided output buffer cannot hold the result.
+- [`InvalidData`](../stdlib/src/compression/zstd/zstd.crb#L16) (variant): The encoded input violates the format or a supported codec constraint.
+- [`TruncatedInput`](../stdlib/src/compression/zstd/zstd.crb#L18) (variant): The encoded input ends before a required field or frame is complete.
+- [`ChecksumMismatch`](../stdlib/src/compression/zstd/zstd.crb#L20) (variant): The computed checksum differs from the encoded checksum.
+- [`DictionaryRequired`](../stdlib/src/compression/zstd/zstd.crb#L22) (variant): The frame requires a dictionary that was not supplied.
+- [`InvalidDictionary`](../stdlib/src/compression/zstd/zstd.crb#L24) (variant): The supplied dictionary encoding is invalid or unsupported.
+- [`DictionaryMismatch`](../stdlib/src/compression/zstd/zstd.crb#L26) (variant): The supplied dictionary identity does not match the frame.
+- [`InvalidState`](../stdlib/src/compression/zstd/zstd.crb#L28) (variant): The operation is incompatible with the current streaming state.
+- [`FrameTooLarge`](../stdlib/src/compression/zstd/zstd.crb#L30) (variant): The frame exceeds the caller's explicit storage budget.
+
+### `Params`
+
+[zstd.crb:34](../stdlib/src/compression/zstd/zstd.crb#L34)
+
+```rust
+pub struct Params
+```
+
+Controls native match-search effort and whether a content checksum is emitted.
+
+Members:
+
+- [`level`](../stdlib/src/compression/zstd/zstd.crb#L36) (implementation field): Requested compression effort level; constructors validate the supported range.
+- [`checksum`](../stdlib/src/compression/zstd/zstd.crb#L38) (implementation field): Whether the encoded frame includes its content checksum.
+
+### `Params::new`
+
+[zstd.crb:43](../stdlib/src/compression/zstd/zstd.crb#L43)
+
+```rust
+fn new() -> Params
+```
+
+Uses search level three and includes a content checksum.
+
+### `decompress`
+
+[zstd.crb:201](../stdlib/src/compression/zstd/zstd.crb#L201)
+
+```rust
+pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) -> Result<usize, Error>
+```
+
+Decompresses concatenated/skippable frames with a caller-owned literal workspace of at least 128 KiB.
+Dictionary-dependent frames report DictionaryRequired. Errors may leave a partial output prefix.
+
+### `decompress_with_dictionary`
+
+[zstd.crb:207](../stdlib/src/compression/zstd/zstd.crb#L207)
+
+```rust
+pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) -> Result<usize, Error>
+```
+
+Decodes frames with a borrowed raw or formatted dictionary. No dictionary bytes are retained.
+
+
+## `std::crypto::aes`
+
+Padded AES-256-CBC for interoperable private-key containers.
+
+### `CbcError`
+
+[cbc.crb:5](../stdlib/src/crypto/aes/cbc.crb#L5)
+
+```rust
+pub enum CbcError
+```
+
+Reports insufficient storage, invalid ciphertext length, or invalid CBC padding.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/crypto/aes/cbc.crb#L7) (variant): The caller-provided output buffer cannot hold the result.
+- [`InvalidCiphertext`](../stdlib/src/crypto/aes/cbc.crb#L9) (variant): The ciphertext length or padding is invalid.
+
+### `cbc_encrypt_padded`
+
+[cbc.crb:88](../stdlib/src/crypto/aes/cbc.crb#L88)
+
+```rust
+pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8], output: &mut [u8]) -> Result<usize, CbcError>
+```
+
+Encrypts bytes with AES-256-CBC and PKCS#7 padding and returns the ciphertext length.
+
+### `cbc_decrypt_padded`
+
+[cbc.crb:126](../stdlib/src/crypto/aes/cbc.crb#L126)
+
+```rust
+pub fn cbc_decrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8], output: &mut [u8]) -> Result<usize, CbcError>
+```
+
+Decrypts padded AES-256-CBC. Invalid padding clears the decrypted region of output.
+On success, the returned length excludes the padding.
+
+
+AES-128-GCM and AES-256-GCM with detached tags and caller-provided output.
+
+### `Error`
+
+[gcm.crb:5](../stdlib/src/crypto/aes/gcm.crb#L5)
+
+```rust
+pub enum Error
+```
+
+Reports a length mismatch, an input limit violation, or a failed authentication tag.
+
+Members:
+
+- [`LengthMismatch`](../stdlib/src/crypto/aes/gcm.crb#L7) (variant): Input/output lengths violate the operation's fixed-size contract.
+- [`InputTooLong`](../stdlib/src/crypto/aes/gcm.crb#L9) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+- [`AuthenticationFailed`](../stdlib/src/crypto/aes/gcm.crb#L11) (variant): Authentication failed; the operation must not expose unauthenticated plaintext.
+
+### `AES128GCM`
+
+[gcm.crb:15](../stdlib/src/crypto/aes/gcm.crb#L15)
+
+```rust
+pub struct AES128GCM
+```
+
+Holds the expanded key and backend choice for AES-128-GCM.
+
+Members:
+
+- [`schedule`](../stdlib/src/crypto/aes/gcm.crb#L17) (implementation field): Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
+- [`accelerated`](../stdlib/src/crypto/aes/gcm.crb#L19) (implementation field): Whether this instance uses the available hardware compression/encryption path.
+
+### `AES256GCM`
+
+[gcm.crb:23](../stdlib/src/crypto/aes/gcm.crb#L23)
+
+```rust
+pub struct AES256GCM
+```
+
+Holds the expanded key and backend choice for AES-256-GCM.
+
+Members:
+
+- [`schedule`](../stdlib/src/crypto/aes/gcm.crb#L25) (implementation field): Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
+- [`accelerated`](../stdlib/src/crypto/aes/gcm.crb#L27) (implementation field): Whether this instance uses the available hardware compression/encryption path.
+
+### `AES128GCM::new`
+
+[gcm.crb:135](../stdlib/src/crypto/aes/gcm.crb#L135)
+
+```rust
+fn new(key: &[u8; 16]) -> AES128GCM
+```
+
+Builds a GCM context from a 16-byte AES key.
+
+### `AES128GCM::seal`
+
+[gcm.crb:149](../stdlib/src/crypto/aes/gcm.crb#L149)
+
+```rust
+fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) -> Result<[u8; 16], Error>
+```
+
+Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
+Use a unique 12-byte nonce for every message under the same key.
+
+### `AES128GCM::open`
+
+[gcm.crb:157](../stdlib/src/crypto/aes/gcm.crb#L157)
+
+```rust
+fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) -> Result<(), Error>
+```
+
+Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
+
+### `AES256GCM::new`
+
+[gcm.crb:167](../stdlib/src/crypto/aes/gcm.crb#L167)
+
+```rust
+fn new(key: &[u8; 32]) -> AES256GCM
+```
+
+Builds a GCM context from a 32-byte AES key.
+
+### `AES256GCM::seal`
+
+[gcm.crb:181](../stdlib/src/crypto/aes/gcm.crb#L181)
+
+```rust
+fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) -> Result<[u8; 16], Error>
+```
+
+Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
+Use a unique 12-byte nonce for every message under the same key.
+
+### `AES256GCM::open`
+
+[gcm.crb:189](../stdlib/src/crypto/aes/gcm.crb#L189)
+
+```rust
+fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) -> Result<(), Error>
+```
+
+Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
+
+
+## `std::crypto::argon2id`
+
+Argon2id version 1.3 with caller-provided memory blocks and output storage.
+
+### `Params`
+
+[argon2id.crb:5](../stdlib/src/crypto/argon2id/argon2id.crb#L5)
+
+```rust
+pub struct Params
+```
+
+Sets the number of passes and lanes. The workspace supplied to `derive` sets the memory cost.
+
+Members:
+
+- [`passes`](../stdlib/src/crypto/argon2id/argon2id.crb#L7) (implementation field): Argon2 time-cost iteration count.
+- [`lanes`](../stdlib/src/crypto/argon2id/argon2id.crb#L9) (implementation field): Configured Argon2 parallel lane count.
+
+### `Error`
+
+[argon2id.crb:13](../stdlib/src/crypto/argon2id/argon2id.crb#L13)
+
+```rust
+pub enum Error
+```
+
+Reports invalid parameters, insufficient workspace, or incompatible input or output lengths.
+
+Members:
+
+- [`InvalidParams`](../stdlib/src/crypto/argon2id/argon2id.crb#L15) (variant): A parameter is outside this algorithm's supported bounds.
+- [`InvalidMemory`](../stdlib/src/crypto/argon2id/argon2id.crb#L17) (variant): The supplied Argon2 memory blocks do not meet the configured parameters.
+- [`InvalidOutput`](../stdlib/src/crypto/argon2id/argon2id.crb#L19) (variant): The requested Argon2 output length is invalid.
+- [`InputTooLong`](../stdlib/src/crypto/argon2id/argon2id.crb#L21) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `derive`
+
+[argon2id.crb:361](../stdlib/src/crypto/argon2id/argon2id.crb#L361)
+
+```rust
+pub fn derive(password: &[u8], salt: &[u8], params: Params, work: &mut [[u64; 128]], output: &mut [u8]) -> Result<(), Error>
+```
+
+Derives the requested Argon2id output using the supplied workspace and parameters.
+
+
+## `std::crypto::md5`
+
+MD5 checksums for compatibility with formats that require RFC 1321.
+
+### `Md5`
+
+[md5.crb:11](../stdlib/src/crypto/md5/md5.crb#L11)
+
+```rust
+pub struct Md5
+```
+
+Streaming state for a legacy 16-byte MD5 checksum.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/md5/md5.crb#L13) (implementation field): Internal chaining or sponge state retained between updates.
+- [`block`](../stdlib/src/crypto/md5/md5.crb#L15) (implementation field): Pending input block; update compresses full blocks before reusing this storage.
+- [`bytes`](../stdlib/src/crypto/md5/md5.crb#L17) (implementation field): Total input bytes incorporated by this hash instance.
+
+### `Md5::new`
+
+[md5.crb:22](../stdlib/src/crypto/md5/md5.crb#L22)
+
+```rust
+fn new() -> Md5
+```
+
+Creates a hasher with the standard MD5 initial state.
+
+### `Md5::update`
+
+[md5.crb:31](../stdlib/src/crypto/md5/md5.crb#L31)
+
+```rust
+fn update(&mut self, input: &[u8])
+```
+
+Absorbs input bytes and compresses full blocks as they become available.
+
+### `Md5::finish`
+
+[md5.crb:51](../stdlib/src/crypto/md5/md5.crb#L51)
+
+```rust
+fn finish(mut self: Md5) -> [u8; 16]
+```
+
+Consumes the state, adds MD5 padding and returns the checksum.
+
+### `digest`
+
+[md5.crb:164](../stdlib/src/crypto/md5/md5.crb#L164)
+
+```rust
+pub fn digest(input: &[u8]) -> [u8; 16]
+```
+
+Computes a 16-byte MD5 checksum for interoperability.
+
+
+## `std::crypto::p256`
+
+DER and PEM serialization for P-256 signing keys and public keys.
+
+### `spki_point_offset`
+
+[key_der.crb:21](../stdlib/src/crypto/p256/key_der.crb#L21)
+
+```rust
+pub fn spki_point_offset(input: &[u8], start: u64, end: u64) -> u64
+```
+
+Returns the SEC1 point offset inside P-256 SubjectPublicKeyInfo, or zero on invalid framing.
+
+
+P-256 key generation, ephemeral key agreement and deterministic ECDSA.
+
+### `Error`
+
+[p256.crb:9](../stdlib/src/crypto/p256/p256.crb#L9)
+
+```rust
+pub enum Error
+```
+
+Reports invalid keys or signatures, input limits, output capacity or system entropy errors.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/crypto/p256/p256.crb#L11) (variant): The caller-provided output buffer cannot hold the result.
+- [`RandomFailed`](../stdlib/src/crypto/p256/p256.crb#L13) (variant): The system random source could not provide the required bytes.
+- [`InvalidPrivateKey`](../stdlib/src/crypto/p256/p256.crb#L15) (variant): The encoded/private scalar material is invalid for this key format.
+- [`InvalidPublicKey`](../stdlib/src/crypto/p256/p256.crb#L17) (variant): The public point/key encoding is invalid or outside the supported curve.
+- [`InvalidSignature`](../stdlib/src/crypto/p256/p256.crb#L19) (variant): The signature encoding or scalar values are invalid.
+- [`InputTooLong`](../stdlib/src/crypto/p256/p256.crb#L21) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `EphemeralKey`
+
+[p256.crb:25](../stdlib/src/crypto/p256/p256.crb#L25)
+
+```rust
+pub struct EphemeralKey
+```
+
+Holds a private P-256 scalar for one consuming ECDHE agreement.
+
+Members:
+
+- [`secret`](../stdlib/src/crypto/p256/p256.crb#L27) (implementation field): Private scalar limbs; never expose these through a public borrowed view.
+
+### `SigningKey`
+
+[p256.crb:31](../stdlib/src/crypto/p256/p256.crb#L31)
+
+```rust
+pub struct SigningKey
+```
+
+Holds a P-256 private scalar used to derive a public key and sign messages.
+
+Members:
+
+- [`secret`](../stdlib/src/crypto/p256/p256.crb#L33) (implementation field): Private scalar limbs; never expose these through a public borrowed view.
+
+### `PublicKey`
+
+[p256.crb:37](../stdlib/src/crypto/p256/p256.crb#L37)
+
+```rust
+pub struct PublicKey
+```
+
+Holds a validated P-256 curve point.
+
+Members:
+
+- [`point`](../stdlib/src/crypto/p256/p256.crb#L39) (implementation field): Encoded internal elliptic-curve point representation.
+
+### `EphemeralKey::generate`
+
+[p256.crb:106](../stdlib/src/crypto/p256/p256.crb#L106)
+
+```rust
+fn generate() -> Result<EphemeralKey, Error>
+```
+
+Creates a key using a private scalar sampled from system entropy.
+
+### `EphemeralKey::public_key`
+
+[p256.crb:116](../stdlib/src/crypto/p256/p256.crb#L116)
+
+```rust
+fn public_key(&self) -> PublicKey
+```
+
+Derives the public point corresponding to this private scalar.
+
+### `EphemeralKey::agree`
+
+[p256.crb:122](../stdlib/src/crypto/p256/p256.crb#L122)
+
+```rust
+fn agree(self: EphemeralKey, peer: &PublicKey, output: &mut [u8; 32]) -> Result<(), Error>
+```
+
+Consumes the ephemeral key and writes the 32-byte ECDHE shared secret.
+
+### `SigningKey::generate`
+
+[p256.crb:143](../stdlib/src/crypto/p256/p256.crb#L143)
+
+```rust
+fn generate() -> Result<SigningKey, Error>
+```
+
+Creates a key using a private scalar sampled from system entropy.
+
+### `SigningKey::from_bytes`
+
+[p256.crb:153](../stdlib/src/crypto/p256/p256.crb#L153)
+
+```rust
+fn from_bytes(input: &[u8; 32]) -> Result<SigningKey, Error>
+```
+
+Imports a 32-byte big-endian private scalar after checking its range.
+
+### `SigningKey::public_key`
+
+[p256.crb:173](../stdlib/src/crypto/p256/p256.crb#L173)
+
+```rust
+fn public_key(&self) -> PublicKey
+```
+
+Derives the public point corresponding to this private scalar.
+
+### `SigningKey::sign_sha256`
+
+[p256.crb:179](../stdlib/src/crypto/p256/p256.crb#L179)
+
+```rust
+fn sign_sha256(&self, message: &[u8], output: &mut [u8; 72]) -> Result<usize, Error>
+```
+
+Signs a message with deterministic ECDSA and writes the DER signature.
+
+### `PublicKey::from_sec1_uncompressed`
+
+[p256.crb:200](../stdlib/src/crypto/p256/p256.crb#L200)
+
+```rust
+fn from_sec1_uncompressed(input: &[u8]) -> Result<PublicKey, Error>
+```
+
+Parses a 65-byte SEC1 point and checks its coordinates and curve equation.
+
+### `PublicKey::to_sec1_uncompressed`
+
+[p256.crb:221](../stdlib/src/crypto/p256/p256.crb#L221)
+
+```rust
+fn to_sec1_uncompressed(&self) -> [u8; 65]
+```
+
+Serializes the public point in uncompressed SEC1 form.
+
+### `verify_sha256`
+
+[p256.crb:230](../stdlib/src/crypto/p256/p256.crb#L230)
+
+```rust
+pub fn verify_sha256(key: &PublicKey, message: &[u8], signature: &[u8]) -> Result<bool, Error>
+```
+
+Verifies a DER-encoded P-256 ECDSA signature over a SHA-256 message digest.
+
+### `SigningKey::from_der`
+
+[p256.crb:261](../stdlib/src/crypto/p256/p256.crb#L261)
+
+```rust
+fn from_der(input: &[u8]) -> Result<SigningKey, Error>
+```
+
+Imports a P-256 signing key from unencrypted PKCS#8 or SEC1 DER.
+
+### `SigningKey::from_pem`
+
+[p256.crb:272](../stdlib/src/crypto/p256/p256.crb#L272)
+
+```rust
+fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<SigningKey, Error>
+```
+
+Imports one PRIVATE KEY or EC PRIVATE KEY block. The scratch buffer retains private DER.
+
+### `PublicKey::from_der`
+
+[p256.crb:302](../stdlib/src/crypto/p256/p256.crb#L302)
+
+```rust
+fn from_der(input: &[u8]) -> Result<PublicKey, Error>
+```
+
+Imports a P-256 SubjectPublicKeyInfo with an uncompressed point.
+
+### `PublicKey::from_pem`
+
+[p256.crb:312](../stdlib/src/crypto/p256/p256.crb#L312)
+
+```rust
+fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<PublicKey, Error>
+```
+
+Decodes one PUBLIC KEY block into scratch and imports its P-256 public point.
+
+### `SigningKey::to_der`
+
+[p256.crb:331](../stdlib/src/crypto/p256/p256.crb#L331)
+
+```rust
+fn to_der(&self, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes an unencrypted PKCS#8 PrivateKeyInfo and returns its DER length.
+
+### `SigningKey::to_sec1_der`
+
+[p256.crb:344](../stdlib/src/crypto/p256/p256.crb#L344)
+
+```rust
+fn to_sec1_der(&self, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes an unencrypted SEC1 ECPrivateKey and returns its DER length.
+
+### `SigningKey::to_pem`
+
+[p256.crb:351](../stdlib/src/crypto/p256/p256.crb#L351)
+
+```rust
+fn to_pem(&self, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a PRIVATE KEY PEM block containing an unencrypted PKCS#8 key.
+
+### `SigningKey::to_sec1_pem`
+
+[p256.crb:362](../stdlib/src/crypto/p256/p256.crb#L362)
+
+```rust
+fn to_sec1_pem(&self, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes an EC PRIVATE KEY PEM block containing an unencrypted SEC1 key.
+
+### `PublicKey::to_der`
+
+[p256.crb:375](../stdlib/src/crypto/p256/p256.crb#L375)
+
+```rust
+fn to_der(&self, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a DER SubjectPublicKeyInfo with an uncompressed P-256 point.
+
+### `PublicKey::to_pem`
+
+[p256.crb:390](../stdlib/src/crypto/p256/p256.crb#L390)
+
+```rust
+fn to_pem(&self, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a PUBLIC KEY PEM block with a P-256 SubjectPublicKeyInfo.
+
+
+## `std::crypto::pbkdf2`
+
+PBKDF2 using HMAC-SHA-256 with caller-owned output.
+
+### `Error`
+
+[pbkdf2.crb:7](../stdlib/src/crypto/pbkdf2/pbkdf2.crb#L7)
+
+```rust
+pub enum Error
+```
+
+Reports zero iterations, a length outside the PBKDF2 output range, or an oversized input.
+
+Members:
+
+- [`InvalidIterations`](../stdlib/src/crypto/pbkdf2/pbkdf2.crb#L9) (variant): The derivation iteration count is invalid.
+- [`InvalidOutputLength`](../stdlib/src/crypto/pbkdf2/pbkdf2.crb#L11) (variant): The derivation output length is invalid.
+- [`InputTooLong`](../stdlib/src/crypto/pbkdf2/pbkdf2.crb#L13) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `derive_sha256`
+
+[pbkdf2.crb:18](../stdlib/src/crypto/pbkdf2/pbkdf2.crb#L18)
+
+```rust
+pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32, output: &mut [u8]) -> Result<(), Error>
+```
+
+Derives output.len() bytes with PBKDF2-HMAC-SHA-256. The caller sets the salt and iteration count.
+Parameter errors leave the output unchanged.
+
+
+## `std::crypto::pkcs8`
+
+Password-protected PKCS#8 with PBES2, PBKDF2-HMAC-SHA-256 and AES-256-CBC.
+
+### `Error`
+
+[pkcs8.crb:12](../stdlib/src/crypto/pkcs8/pkcs8.crb#L12)
+
+```rust
+pub enum Error
+```
+
+Reports a malformed or unsupported container, bad password, work limit, storage, or entropy error.
+
+Members:
+
+- [`InvalidPrivateKey`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L14) (variant): The encoded/private scalar material is invalid for this key format.
+- [`InvalidEnvelope`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L16) (variant): The PEM/DER container is malformed or uses an unsupported envelope.
+- [`InvalidPasswordOrData`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L18) (variant): Password-based authentication/decryption failed or the decrypted encoding is invalid.
+- [`InvalidIterations`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L20) (variant): The derivation iteration count is invalid.
+- [`IterationLimit`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L22) (variant): The encoded PBKDF2 work factor exceeds the caller's allowed limit.
+- [`BufferTooSmall`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L24) (variant): The caller-provided output buffer cannot hold the result.
+- [`RandomFailed`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L26) (variant): The system random source could not provide the required bytes.
+- [`InvalidPasswordLength`](../stdlib/src/crypto/pkcs8/pkcs8.crb#L28) (variant): The password length is outside the accepted bounds.
+
+### `decrypt_der`
+
+[pkcs8.crb:173](../stdlib/src/crypto/pkcs8/pkcs8.crb#L173)
+
+```rust
+pub fn decrypt_der(input: &[u8], password: &[u8], max_iterations: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decrypts an EncryptedPrivateKeyInfo DER block to version-zero PrivateKeyInfo DER.
+Output must fit the ciphertext length. Invalid password or plaintext clears the written prefix.
+The caller sets the maximum accepted PBKDF2 iteration count.
+
+### `encrypt_der`
+
+[pkcs8.crb:245](../stdlib/src/crypto/pkcs8/pkcs8.crb#L245)
+
+```rust
+pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Protects version-zero PrivateKeyInfo DER using a fresh random salt and IV.
+The caller selects a nonzero iteration count and supplies the output buffer.
+
+### `encrypt_pem`
+
+[pkcs8.crb:286](../stdlib/src/crypto/pkcs8/pkcs8.crb#L286)
+
+```rust
+pub fn encrypt_pem(input: &[u8], password: &[u8], iterations: u32, scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Encrypts a PrivateKeyInfo into ENCRYPTED PRIVATE KEY PEM using DER scratch.
+
+### `decrypt_pem`
+
+[pkcs8.crb:299](../stdlib/src/crypto/pkcs8/pkcs8.crb#L299)
+
+```rust
+pub fn decrypt_pem(input: &[u8], password: &[u8], max_iterations: u32, scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decodes ENCRYPTED PRIVATE KEY PEM into DER scratch, then decrypts into output.
+
+
+## `std::crypto::random`
+
+System entropy with platform dispatch and retry for interrupted reads.
+
+### `RandomError`
+
+[random.crb:22](../stdlib/src/crypto/random/random.crb#L22)
+
+```rust
+pub enum RandomError
+```
+
+Reports an OS entropy error or an invalid byte count from the backend.
+
+Members:
+
+- [`Os`](../stdlib/src/crypto/random/random.crb#L24) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/crypto/random/random.crb#L26) (implementation field): Native operating-system status code preserved by this error.
+- [`InvalidCount`](../stdlib/src/crypto/random/random.crb#L29) (variant): The OS returned an invalid byte count.
+
+### `fill`
+
+[random.crb:35](../stdlib/src/crypto/random/random.crb#L35)
+
+```rust
+pub fn fill(output: &mut [u8]) -> Result<(), RandomError>
+```
+
+Fills the caller's buffer with system random bytes. A failure can leave a partially filled buffer.
+
+
+## `std::crypto::rsa`
+
+RSA key container conversion with caller-owned PKCS#1 DER and output buffers.
+
+### `Error`
+
+[rsa.crb:9](../stdlib/src/crypto/rsa/rsa.crb#L9)
+
+```rust
+pub enum Error
+```
+
+Reports invalid RSA key syntax or insufficient output or PEM scratch storage.
+
+Members:
+
+- [`InvalidKey`](../stdlib/src/crypto/rsa/rsa.crb#L11) (variant): The key container or required integer components are invalid.
+- [`BufferTooSmall`](../stdlib/src/crypto/rsa/rsa.crb#L13) (variant): The caller-provided output buffer cannot hold the result.
+
+### `public_from_der`
+
+[rsa.crb:88](../stdlib/src/crypto/rsa/rsa.crb#L88)
+
+```rust
+pub fn public_from_der(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Imports a PKCS#1 or SPKI RSA public key and writes canonical PKCS#1 DER.
+
+### `private_from_der`
+
+[rsa.crb:93](../stdlib/src/crypto/rsa/rsa.crb#L93)
+
+```rust
+pub fn private_from_der(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Imports a PKCS#1 or unencrypted PKCS#8 RSA private key and writes canonical PKCS#1 DER.
+
+### `public_to_der`
+
+[rsa.crb:129](../stdlib/src/crypto/rsa/rsa.crb#L129)
+
+```rust
+pub fn public_to_der(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Wraps a PKCS#1 RSA public key in DER SubjectPublicKeyInfo.
+
+### `private_to_der`
+
+[rsa.crb:134](../stdlib/src/crypto/rsa/rsa.crb#L134)
+
+```rust
+pub fn private_to_der(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Wraps a PKCS#1 RSA private key in unencrypted DER PrivateKeyInfo.
+
+### `public_from_pem`
+
+[rsa.crb:166](../stdlib/src/crypto/rsa/rsa.crb#L166)
+
+```rust
+pub fn public_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Reads PUBLIC KEY or RSA PUBLIC KEY PEM and writes canonical PKCS#1 DER.
+
+### `private_from_pem`
+
+[rsa.crb:173](../stdlib/src/crypto/rsa/rsa.crb#L173)
+
+```rust
+pub fn private_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Reads PRIVATE KEY or RSA PRIVATE KEY PEM and writes canonical PKCS#1 DER.
+
+### `public_to_pem`
+
+[rsa.crb:188](../stdlib/src/crypto/rsa/rsa.crb#L188)
+
+```rust
+pub fn public_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a PUBLIC KEY PEM block using caller-owned DER scratch.
+
+### `private_to_pem`
+
+[rsa.crb:197](../stdlib/src/crypto/rsa/rsa.crb#L197)
+
+```rust
+pub fn private_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes an unencrypted PRIVATE KEY PEM block using caller-owned DER scratch.
+
+### `public_to_pkcs1_pem`
+
+[rsa.crb:206](../stdlib/src/crypto/rsa/rsa.crb#L206)
+
+```rust
+pub fn public_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes an RSA PUBLIC KEY PEM block containing the supplied PKCS#1 key.
+
+### `private_to_pkcs1_pem`
+
+[rsa.crb:214](../stdlib/src/crypto/rsa/rsa.crb#L214)
+
+```rust
+pub fn private_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes an unencrypted RSA PRIVATE KEY PEM block containing the supplied PKCS#1 key.
+
+
+## `std::crypto::sha256`
+
+HKDF extract and expand using HMAC-SHA-256.
+
+### `KdfError`
+
+[hkdf.crb:5](../stdlib/src/crypto/sha256/hkdf.crb#L5)
+
+```rust
+pub enum KdfError
+```
+
+Reports an oversized HKDF result, a short pseudorandom key, or an input length limit.
+
+Members:
+
+- [`OutputTooLong`](../stdlib/src/crypto/sha256/hkdf.crb#L7) (variant): Requested output exceeds the derivation's algorithmic limit.
+- [`InvalidPrkLength`](../stdlib/src/crypto/sha256/hkdf.crb#L9) (variant): The pseudorandom key length does not meet this HKDF API's requirement.
+- [`InputTooLong`](../stdlib/src/crypto/sha256/hkdf.crb#L11) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `hkdf_extract`
+
+[hkdf.crb:15](../stdlib/src/crypto/sha256/hkdf.crb#L15)
+
+```rust
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 32], HashError>
+```
+
+Derives a pseudorandom key from salt and input key material using HMAC.
+
+### `hkdf_expand`
+
+[hkdf.crb:23](../stdlib/src/crypto/sha256/hkdf.crb#L23)
+
+```rust
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError>
+```
+
+Fills the output with derived key material using the pseudorandom key and context.
+The pseudorandom key needs at least 32 bytes and the output can hold up to 8160 bytes.
+
+
+HMAC authentication using SHA-256.
+
+### `hmac_parts`
+
+[hmac.crb:7](../stdlib/src/crypto/sha256/hmac.crb#L7)
+
+```rust
+pub fn hmac_parts(key: &[u8], prefix: &[u8], message: &[u8], suffix: &[u8]) -> Result<[u8; 32], HashError>
+```
+
+Computes HMAC over the concatenation of its input fragments.
+
+### `hmac`
+
+[hmac.crb:70](../stdlib/src/crypto/sha256/hmac.crb#L70)
+
+```rust
+pub fn hmac(key: &[u8], message: &[u8]) -> Result<[u8; 32], HashError>
+```
+
+Computes the HMAC authentication tag of a message with the supplied key.
+
+
+Streaming and one-shot SHA-256 hashing.
+
+### `HashError`
+
+[sha256.crb:8](../stdlib/src/crypto/sha256/sha256.crb#L8)
+
+```rust
+pub enum HashError
+```
+
+Reports that the input length exceeds the SHA-256 limit.
+
+Members:
+
+- [`InputTooLong`](../stdlib/src/crypto/sha256/sha256.crb#L10) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `Sha256`
+
+[sha256.crb:14](../stdlib/src/crypto/sha256/sha256.crb#L14)
+
+```rust
+pub struct Sha256
+```
+
+Holds SHA-256 chaining state, byte count and pending block.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha256/sha256.crb#L16) (implementation field): Internal chaining or sponge state retained between updates.
+- [`block`](../stdlib/src/crypto/sha256/sha256.crb#L18) (implementation field): Pending input block; update compresses full blocks before reusing this storage.
+- [`bytes`](../stdlib/src/crypto/sha256/sha256.crb#L20) (implementation field): Total input bytes incorporated by this hash instance.
+- [`accelerated`](../stdlib/src/crypto/sha256/sha256.crb#L22) (implementation field): Whether this instance uses the available hardware compression/encryption path.
+
+### `Sha256::portable`
+
+[sha256.crb:27](../stdlib/src/crypto/sha256/sha256.crb#L27)
+
+```rust
+fn portable() -> Sha256
+```
+
+Creates a fresh SHA-256 hasher that uses portable compression.
+
+### `Sha256::new`
+
+[sha256.crb:38](../stdlib/src/crypto/sha256/sha256.crb#L38)
+
+```rust
+fn new() -> Sha256
+```
+
+Creates a fresh SHA-256 hasher and selects an available compression backend.
+
+### `Sha256::hardware_accelerated`
+
+[sha256.crb:46](../stdlib/src/crypto/sha256/sha256.crb#L46)
+
+```rust
+fn hardware_accelerated(&self) -> bool
+```
+
+Reports whether this hasher uses the hardware compression path.
+
+### `Sha256::snapshot`
+
+[sha256.crb:49](../stdlib/src/crypto/sha256/sha256.crb#L49)
+
+```rust
+fn snapshot(&self) -> [u8; 32]
+```
+
+Computes the digest of the bytes seen so far while keeping the hasher available.
+
+### `Sha256::update`
+
+[sha256.crb:71](../stdlib/src/crypto/sha256/sha256.crb#L71)
+
+```rust
+fn update(&mut self, input: &[u8]) -> Result<(), HashError>
+```
+
+Feeds a byte slice into the hash, compressing full blocks and retaining the remainder.
+
+### `Sha256::finish`
+
+[sha256.crb:94](../stdlib/src/crypto/sha256/sha256.crb#L94)
+
+```rust
+fn finish(mut self: Sha256) -> [u8; 32]
+```
+
+Consumes the hasher and returns its 32-byte digest after padding the message.
+
+### `digest`
+
+[sha256.crb:139](../stdlib/src/crypto/sha256/sha256.crb#L139)
+
+```rust
+pub fn digest(input: &[u8]) -> Result<[u8; 32], HashError>
+```
+
+Computes a SHA-256 digest in one call.
+
+
+## `std::crypto::sha3`
+
+The Keccak sponge and streaming SHA3-224, SHA3-256, SHA3-384 and SHA3-512.
+
+### `Sha3_224`
+
+[sha3.crb:24](../stdlib/src/crypto/sha3/sha3.crb#L24)
+
+```rust
+pub struct Sha3_224
+```
+
+Streaming SHA3-224 sponge with a 28-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L26) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_256`
+
+[sha3.crb:29](../stdlib/src/crypto/sha3/sha3.crb#L29)
+
+```rust
+pub struct Sha3_256
+```
+
+Streaming SHA3-256 sponge with a 32-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L31) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_384`
+
+[sha3.crb:34](../stdlib/src/crypto/sha3/sha3.crb#L34)
+
+```rust
+pub struct Sha3_384
+```
+
+Streaming SHA3-384 sponge with a 48-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L36) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_512`
+
+[sha3.crb:39](../stdlib/src/crypto/sha3/sha3.crb#L39)
+
+```rust
+pub struct Sha3_512
+```
+
+Streaming SHA3-512 sponge with a 64-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L41) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_224::new`
+
+[sha3.crb:109](../stdlib/src/crypto/sha3/sha3.crb#L109)
+
+```rust
+fn new() -> Sha3_224
+```
+
+Creates an empty streaming hasher for this SHA-3 variant.
+
+### `Sha3_224::update`
+
+[sha3.crb:115](../stdlib/src/crypto/sha3/sha3.crb#L115)
+
+```rust
+fn update(&mut self, input: &[u8])
+```
+
+Absorbs the input into this variant's sponge.
+
+### `Sha3_224::finish`
+
+[sha3.crb:120](../stdlib/src/crypto/sha3/sha3.crb#L120)
+
+```rust
+fn finish(mut self: Sha3_224) -> [u8; 28]
+```
+
+Consumes the hasher and returns the fixed-length digest.
+
+### `Sha3_256::new`
+
+[sha3.crb:129](../stdlib/src/crypto/sha3/sha3.crb#L129)
+
+```rust
+fn new() -> Sha3_256
+```
+
+Creates an empty streaming hasher for this SHA-3 variant.
+
+### `Sha3_256::update`
+
+[sha3.crb:135](../stdlib/src/crypto/sha3/sha3.crb#L135)
+
+```rust
+fn update(&mut self, input: &[u8])
+```
+
+Absorbs the input into this variant's sponge.
+
+### `Sha3_256::finish`
+
+[sha3.crb:140](../stdlib/src/crypto/sha3/sha3.crb#L140)
+
+```rust
+fn finish(mut self: Sha3_256) -> [u8; 32]
+```
+
+Consumes the hasher and returns the fixed-length digest.
+
+### `Sha3_384::new`
+
+[sha3.crb:149](../stdlib/src/crypto/sha3/sha3.crb#L149)
+
+```rust
+fn new() -> Sha3_384
+```
+
+Creates an empty streaming hasher for this SHA-3 variant.
+
+### `Sha3_384::update`
+
+[sha3.crb:155](../stdlib/src/crypto/sha3/sha3.crb#L155)
+
+```rust
+fn update(&mut self, input: &[u8])
+```
+
+Absorbs the input into this variant's sponge.
+
+### `Sha3_384::finish`
+
+[sha3.crb:160](../stdlib/src/crypto/sha3/sha3.crb#L160)
+
+```rust
+fn finish(mut self: Sha3_384) -> [u8; 48]
+```
+
+Consumes the hasher and returns the fixed-length digest.
+
+### `Sha3_512::new`
+
+[sha3.crb:169](../stdlib/src/crypto/sha3/sha3.crb#L169)
+
+```rust
+fn new() -> Sha3_512
+```
+
+Creates an empty streaming hasher for this SHA-3 variant.
+
+### `Sha3_512::update`
+
+[sha3.crb:175](../stdlib/src/crypto/sha3/sha3.crb#L175)
+
+```rust
+fn update(&mut self, input: &[u8])
+```
+
+Absorbs the input into this variant's sponge.
+
+### `Sha3_512::finish`
+
+[sha3.crb:180](../stdlib/src/crypto/sha3/sha3.crb#L180)
+
+```rust
+fn finish(mut self: Sha3_512) -> [u8; 64]
+```
+
+Consumes the hasher and returns the fixed-length digest.
+
+### `digest224`
+
+[sha3.crb:188](../stdlib/src/crypto/sha3/sha3.crb#L188)
+
+```rust
+pub fn digest224(input: &[u8]) -> [u8; 28]
+```
+
+Computes a 28-byte SHA3-224 digest.
+
+### `digest256`
+
+[sha3.crb:195](../stdlib/src/crypto/sha3/sha3.crb#L195)
+
+```rust
+pub fn digest256(input: &[u8]) -> [u8; 32]
+```
+
+Computes a 32-byte SHA3-256 digest.
+
+### `digest384`
+
+[sha3.crb:202](../stdlib/src/crypto/sha3/sha3.crb#L202)
+
+```rust
+pub fn digest384(input: &[u8]) -> [u8; 48]
+```
+
+Computes a 48-byte SHA3-384 digest.
+
+### `digest512`
+
+[sha3.crb:209](../stdlib/src/crypto/sha3/sha3.crb#L209)
+
+```rust
+pub fn digest512(input: &[u8]) -> [u8; 64]
+```
+
+Computes a 64-byte SHA3-512 digest.
+
+
+SHAKE128 and SHAKE256 extendable output using the shared Keccak sponge.
+
+### `shake128`
+
+[shake.crb:20](../stdlib/src/crypto/sha3/shake.crb#L20)
+
+```rust
+pub fn shake128(input: &[u8], output: &mut [u8])
+```
+
+Fills the caller's output with SHAKE128 bytes.
+
+### `shake256`
+
+[shake.crb:25](../stdlib/src/crypto/sha3/shake.crb#L25)
+
+```rust
+pub fn shake256(input: &[u8], output: &mut [u8])
+```
+
+Fills the caller's output with SHAKE256 bytes.
+
+
+## `std::crypto::sha384`
+
+HKDF extract and expand using HMAC-SHA-384.
+
+### `KdfError`
+
+[hkdf.crb:7](../stdlib/src/crypto/sha384/hkdf.crb#L7)
+
+```rust
+pub enum KdfError
+```
+
+Reports an oversized HKDF result, a short pseudorandom key, or an input length limit.
+
+Members:
+
+- [`OutputTooLong`](../stdlib/src/crypto/sha384/hkdf.crb#L9) (variant): Requested output exceeds the derivation's algorithmic limit.
+- [`InvalidPrkLength`](../stdlib/src/crypto/sha384/hkdf.crb#L11) (variant): The pseudorandom key length does not meet this HKDF API's requirement.
+- [`InputTooLong`](../stdlib/src/crypto/sha384/hkdf.crb#L13) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `hkdf_extract`
+
+[hkdf.crb:17](../stdlib/src/crypto/sha384/hkdf.crb#L17)
+
+```rust
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 48], HashError>
+```
+
+Derives a pseudorandom key from salt and input key material using HMAC.
+
+### `hkdf_expand`
+
+[hkdf.crb:25](../stdlib/src/crypto/sha384/hkdf.crb#L25)
+
+```rust
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError>
+```
+
+Fills the output with derived key material using the pseudorandom key and context.
+The pseudorandom key needs at least 48 bytes and the output can hold up to 12240 bytes.
+
+
+HMAC authentication using SHA-384.
+
+### `hmac`
+
+[hmac.crb:72](../stdlib/src/crypto/sha384/hmac.crb#L72)
+
+```rust
+pub fn hmac(key: &[u8], message: &[u8]) -> Result<[u8; 48], HashError>
+```
+
+Computes the HMAC authentication tag of a message with the supplied key.
+
+
+## `std::crypto::sha512`
+
+Streaming SHA-384 and SHA-512 with shared buffering and compression.
+
+### `HashError`
+
+[sha512.crb:9](../stdlib/src/crypto/sha512/sha512.crb#L9)
+
+```rust
+pub enum HashError
+```
+
+Reports that the input exceeds the hash's message length limit.
+
+Members:
+
+- [`InputTooLong`](../stdlib/src/crypto/sha512/sha512.crb#L11) (variant): Input length exceeds the algorithm's supported counter or encoding limit.
+
+### `Sha384`
+
+[sha512.crb:27](../stdlib/src/crypto/sha512/sha512.crb#L27)
+
+```rust
+pub struct Sha384
+```
+
+Streaming SHA-384 state with its distinct initial values and 48-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha512/sha512.crb#L29) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha512`
+
+[sha512.crb:32](../stdlib/src/crypto/sha512/sha512.crb#L32)
+
+```rust
+pub struct Sha512
+```
+
+Streaming SHA-512 state with a 64-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha512/sha512.crb#L34) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha384::new`
+
+[sha512.crb:135](../stdlib/src/crypto/sha512/sha512.crb#L135)
+
+```rust
+fn new() -> Sha384
+```
+
+Creates a fresh hasher with this variant's initial chaining values.
+
+### `Sha384::update`
+
+[sha512.crb:147](../stdlib/src/crypto/sha512/sha512.crb#L147)
+
+```rust
+fn update(&mut self, input: &[u8]) -> Result<(), HashError>
+```
+
+Adds input bytes and checks the maximum message length.
+
+### `Sha384::finish`
+
+[sha512.crb:152](../stdlib/src/crypto/sha512/sha512.crb#L152)
+
+```rust
+fn finish(mut self: Sha384) -> [u8; 48]
+```
+
+Consumes the hasher and returns the digest for this variant.
+
+### `Sha512::new`
+
+[sha512.crb:161](../stdlib/src/crypto/sha512/sha512.crb#L161)
+
+```rust
+fn new() -> Sha512
+```
+
+Creates a fresh hasher with this variant's initial chaining values.
+
+### `Sha512::update`
+
+[sha512.crb:173](../stdlib/src/crypto/sha512/sha512.crb#L173)
+
+```rust
+fn update(&mut self, input: &[u8]) -> Result<(), HashError>
+```
+
+Adds input bytes and checks the maximum message length.
+
+### `Sha512::finish`
+
+[sha512.crb:178](../stdlib/src/crypto/sha512/sha512.crb#L178)
+
+```rust
+fn finish(mut self: Sha512) -> [u8; 64]
+```
+
+Consumes the hasher and returns the digest for this variant.
+
+### `digest384`
+
+[sha512.crb:186](../stdlib/src/crypto/sha512/sha512.crb#L186)
+
+```rust
+pub fn digest384(input: &[u8]) -> Result<[u8; 48], HashError>
+```
+
+Computes a 48-byte SHA-384 digest.
+
+### `digest512`
+
+[sha512.crb:195](../stdlib/src/crypto/sha512/sha512.crb#L195)
+
+```rust
+pub fn digest512(input: &[u8]) -> Result<[u8; 64], HashError>
+```
+
+Computes a 64-byte SHA-512 digest.
+
+
+## `std::crypto::x509`
+
+X.509 certificate parsing, issued-by checks and ordered P-256 server path validation.
+
+### `CertificateError`
+
+[certificate.crb:11](../stdlib/src/crypto/x509/certificate.crb#L11)
+
+```rust
+pub enum CertificateError
+```
+
+Reports certificate encoding, time, usage, trust, DNS or buffer errors.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/crypto/x509/certificate.crb#L13) (variant): The caller-provided output buffer cannot hold the result.
+- [`InvalidCertificate`](../stdlib/src/crypto/x509/certificate.crb#L15) (variant): The certificate encoding is malformed or outside the supported profile.
+- [`InvalidTime`](../stdlib/src/crypto/x509/certificate.crb#L17) (variant): The certificate is not valid at the supplied time.
+- [`WrongUsage`](../stdlib/src/crypto/x509/certificate.crb#L19) (variant): The certificate constraints do not permit the requested purpose.
+- [`UntrustedChain`](../stdlib/src/crypto/x509/certificate.crb#L21) (variant): No acceptable chain to the supplied trust anchor was established.
+- [`NameMismatch`](../stdlib/src/crypto/x509/certificate.crb#L23) (variant): The certificate identity does not match the requested server name.
+
+### `Certificate`
+
+[certificate.crb:171](../stdlib/src/crypto/x509/certificate.crb#L171)
+
+```rust
+pub struct Certificate
+```
+
+Owns parsed certificate metadata, a DER fingerprint and an encoded public point.
+
+Members:
+
+- [`parsed`](../stdlib/src/crypto/x509/certificate.crb#L173) (implementation field): Validated DER offsets and certificate properties used by this certificate wrapper.
+- [`fingerprint`](../stdlib/src/crypto/x509/certificate.crb#L175) (implementation field): SHA-256 certificate fingerprint binding the wrapper to its original DER bytes.
+- [`encoded_key`](../stdlib/src/crypto/x509/certificate.crb#L177) (implementation field): Uncompressed SEC1 P-256 public-key bytes extracted from the certificate.
+
+### `PublicKey`
+
+[certificate.crb:181](../stdlib/src/crypto/x509/certificate.crb#L181)
+
+```rust
+pub struct PublicKey
+```
+
+Wraps the P-256 verification key used by the X.509 profile.
+
+Members:
+
+- [`p256`](../stdlib/src/crypto/x509/certificate.crb#L183) (implementation field): Owned parsed P-256 verification key.
+
+### `PublicKey::from_p256_sec1`
+
+[certificate.crb:188](../stdlib/src/crypto/x509/certificate.crb#L188)
+
+```rust
+fn from_p256_sec1(encoded: &[u8]) -> Result<PublicKey, CertificateError>
+```
+
+Checks and wraps a P-256 public point encoded in uncompressed SEC1 form.
+
+### `PublicKey::from_der`
+
+[certificate.crb:199](../stdlib/src/crypto/x509/certificate.crb#L199)
+
+```rust
+fn from_der(input: &[u8]) -> Result<PublicKey, CertificateError>
+```
+
+Imports a P-256 SubjectPublicKeyInfo for X.509 signature verification.
+
+### `PublicKey::from_pem`
+
+[certificate.crb:210](../stdlib/src/crypto/x509/certificate.crb#L210)
+
+```rust
+fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<PublicKey, CertificateError>
+```
+
+Imports one PEM PUBLIC KEY block using caller-owned scratch.
+
+### `PublicKey::to_der`
+
+[certificate.crb:231](../stdlib/src/crypto/x509/certificate.crb#L231)
+
+```rust
+fn to_der(&self, output: &mut [u8]) -> Result<usize, CertificateError>
+```
+
+Writes the public key as DER SubjectPublicKeyInfo and returns the bytes written.
+
+### `PublicKey::to_pem`
+
+[certificate.crb:240](../stdlib/src/crypto/x509/certificate.crb#L240)
+
+```rust
+fn to_pem(&self, output: &mut [u8]) -> Result<usize, CertificateError>
+```
+
+Writes the public key as one PUBLIC KEY PEM block and returns the bytes written.
+
+### `PublicKey::verify_ecdsa_sha256`
+
+[certificate.crb:249](../stdlib/src/crypto/x509/certificate.crb#L249)
+
+```rust
+fn verify_ecdsa_sha256(&self, message: &[u8], signature: &[u8]) -> Result<bool, CertificateError>
+```
+
+Verifies a DER ECDSA signature over the SHA-256 digest of the supplied message.
+
+### `Certificate::from_der`
+
+[certificate.crb:276](../stdlib/src/crypto/x509/certificate.crb#L276)
+
+```rust
+fn from_der(input: &[u8], now: i64) -> Result<Certificate, CertificateError>
+```
+
+Parses one DER certificate and validates its time window at the supplied Unix time.
+
+### `Certificate::from_pem`
+
+[certificate.crb:304](../stdlib/src/crypto/x509/certificate.crb#L304)
+
+```rust
+fn from_pem(input: &[u8], scratch: &mut [u8], now: i64) -> Result<Certificate, CertificateError>
+```
+
+Decodes one CERTIFICATE block into scratch and parses its DER at the supplied Unix time.
+
+### `Certificate::der_len`
+
+[certificate.crb:321](../stdlib/src/crypto/x509/certificate.crb#L321)
+
+```rust
+fn der_len(&self) -> u64
+```
+
+Returns the exact DER length for slicing the caller's original or decoded bytes.
+
+### `Certificate::to_der`
+
+[certificate.crb:327](../stdlib/src/crypto/x509/certificate.crb#L327)
+
+```rust
+fn to_der(&self, input: &[u8], output: &mut [u8]) -> Result<usize, CertificateError>
+```
+
+Verifies the caller's backing DER and writes its original signed bytes to output.
+
+### `Certificate::to_pem`
+
+[certificate.crb:340](../stdlib/src/crypto/x509/certificate.crb#L340)
+
+```rust
+fn to_pem(&self, input: &[u8], output: &mut [u8]) -> Result<usize, CertificateError>
+```
+
+Verifies the backing DER and writes it in a CERTIFICATE PEM block.
+
+### `Certificate::public_key`
+
+[certificate.crb:352](../stdlib/src/crypto/x509/certificate.crb#L352)
+
+```rust
+fn public_key(&self) -> Result<PublicKey, CertificateError>
+```
+
+Returns a validated P-256 verification key from the certificate's encoded public point.
+
+### `Certificate::matches_dns_name`
+
+[certificate.crb:363](../stdlib/src/crypto/x509/certificate.crb#L363)
+
+```rust
+fn matches_dns_name(&self, input: &[u8], name: &[u8]) -> Result<bool, CertificateError>
+```
+
+Checks a reference DNS name against the certificate's DNS SANs using its original DER.
+
+### `Certificate::verify_issued_by`
+
+[certificate.crb:375](../stdlib/src/crypto/x509/certificate.crb#L375)
+
+```rust
+fn verify_issued_by(&self, input: &[u8], issuer: &Certificate, issuer_der: &[u8]) -> Result<bool, CertificateError>
+```
+
+Checks the original DER of both certificates, then verifies the issuer name and signature.
+
+### `validate_server_path`
+
+[certificate.crb:443](../stdlib/src/crypto/x509/certificate.crb#L443)
+
+```rust
+pub fn validate_server_path(chain: &[u8], ranges: &[u64; 16], count: u64, anchor: &[u8], hostname: &[u8], now: i64) -> Result<PublicKey, CertificateError>
+```
+
+Validates ranged DER entries in a leaf-first chain and returns the verified DNS server key.
+
+### `validate_server_chain`
+
+[certificate.crb:483](../stdlib/src/crypto/x509/certificate.crb#L483)
+
+```rust
+pub fn validate_server_chain(chain: &[u8], anchor: &[u8], hostname: &[u8], now: i64) -> Result<PublicKey, CertificateError>
+```
+
+Validates up to eight concatenated DER certificates against the trust anchor and DNS name.
+
+
+X.509 DNS identity matching and certificate validity time parsing.
+
+### `valid_dns_name`
+
+[identity.crb:12](../stdlib/src/crypto/x509/identity.crb#L12)
+
+```rust
+pub fn valid_dns_name(name: &[u8]) -> bool
+```
+
+Checks the syntax and size bounds of a reference DNS name.
+
+
+## `std::encoding::base64`
+
+Standard Base64 encoding with canonical padding and caller-owned buffers.
+
+### `Error`
+
+[base64.crb:5](../stdlib/src/encoding/base64/base64.crb#L5)
+
+```rust
+pub enum Error
+```
+
+Reports an undersized output or invalid Base64 length, alphabet, or padding.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/encoding/base64/base64.crb#L7) (variant): The caller-provided output buffer cannot hold the result.
+- [`InvalidLength`](../stdlib/src/encoding/base64/base64.crb#L9) (variant): The input length is incompatible with this encoding.
+- [`InvalidCharacter`](../stdlib/src/encoding/base64/base64.crb#L11) (variant): An input byte is outside the encoding alphabet.
+- [`InvalidPadding`](../stdlib/src/encoding/base64/base64.crb#L13) (variant): The Base64 padding or unused tail bits are invalid.
+
+### `encode`
+
+[base64.crb:37](../stdlib/src/encoding/base64/base64.crb#L37)
+
+```rust
+pub fn encode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes standard padded Base64 and returns the bytes written. A short output is left unchanged.
+
+### `decode`
+
+[base64.crb:119](../stdlib/src/encoding/base64/base64.crb#L119)
+
+```rust
+pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decodes canonical padded Base64 without whitespace. Errors leave the output unchanged.
+
+### `decode_wrapped`
+
+[base64.crb:125](../stdlib/src/encoding/base64/base64.crb#L125)
+
+```rust
+pub fn decode_wrapped(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decodes canonical Base64 while allowing ASCII spaces, tabs, CR and LF.
+
+
+## `std::encoding::der`
+
+Bounds-checked DER framing and validation of common ASN.1 values.
+
+### `Der`
+
+[der.crb:6](../stdlib/src/encoding/der/der.crb#L6)
+
+```rust
+pub struct Der
+```
+
+Holds the content and end offsets of a DER element. End zero denotes malformed input.
+
+Members:
+
+- [`body`](../stdlib/src/encoding/der/der.crb#L8) (implementation field): Start of the parsed DER value body.
+- [`end`](../stdlib/src/encoding/der/der.crb#L10) (implementation field): Exclusive end of the parsed DER value.
+
+### `invalid_der`
+
+[der.crb:14](../stdlib/src/encoding/der/der.crb#L14)
+
+```rust
+pub fn invalid_der() -> Der
+```
+
+Returns the sentinel for a malformed or missing DER element.
+
+### `der`
+
+[der.crb:17](../stdlib/src/encoding/der/der.crb#L17)
+
+```rust
+pub fn der(input: &[u8], at: u64, limit: u64, tag: u8) -> Der
+```
+
+Parses one element with the expected tag and a canonical definite length within the supplied limit.
+
+### `bytes_equal`
+
+[der.crb:40](../stdlib/src/encoding/der/der.crb#L40)
+
+```rust
+pub fn bytes_equal(a: &[u8], b: &[u8]) -> bool
+```
+
+Compares the length and contents of two byte slices.
+
+### `uint_valid`
+
+[der.crb:52](../stdlib/src/encoding/der/der.crb#L52)
+
+```rust
+pub fn uint_valid(input: &[u8], start: u64, end: u64) -> bool
+```
+
+Checks that a byte range is a minimally encoded nonnegative DER integer.
+
+### `oid_valid`
+
+[der.crb:59](../stdlib/src/encoding/der/der.crb#L59)
+
+```rust
+pub fn oid_valid(input: &[u8], start: u64, end: u64) -> bool
+```
+
+Checks the base-128 component encoding and termination of a DER object identifier.
+
+### `der_header_size`
+
+[der.crb:73](../stdlib/src/encoding/der/der.crb#L73)
+
+```rust
+pub fn der_header_size(length: u64) -> u64
+```
+
+Returns the width of a DER tag and definite length, or zero when the length exceeds 32 bits.
+
+### `der_octet`
+
+[der.crb:83](../stdlib/src/encoding/der/der.crb#L83)
+
+```rust
+pub fn der_octet(word: u64, shift: u64) -> u8
+```
+
+Returns the octet at the supplied position of a word.
+
+### `write_der_header`
+
+[der.crb:97](../stdlib/src/encoding/der/der.crb#L97)
+
+```rust
+pub fn write_der_header(tag: u8, length: u64, output: &mut [u8]) -> u64
+```
+
+Writes a DER header and returns its width, or zero when the header cannot fit.
+
+### `copy_der`
+
+[der.crb:115](../stdlib/src/encoding/der/der.crb#L115)
+
+```rust
+pub fn copy_der(input: &[u8], output: &mut [u8]) -> usize
+```
+
+Copies a byte slice into caller-owned storage, returning zero on insufficient capacity.
+
+
+## `std::encoding::hex`
+
+Hexadecimal encoding and decoding into caller-owned buffers.
+
+### `Error`
+
+[hex.crb:5](../stdlib/src/encoding/hex/hex.crb#L5)
+
+```rust
+pub enum Error
+```
+
+Reports an undersized output, an odd input length, or a non-hexadecimal digit.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/encoding/hex/hex.crb#L7) (variant): The caller-provided output buffer cannot hold the result.
+- [`InvalidLength`](../stdlib/src/encoding/hex/hex.crb#L9) (variant): The input length is incompatible with this encoding.
+- [`InvalidCharacter`](../stdlib/src/encoding/hex/hex.crb#L11) (variant): An input byte is outside the encoding alphabet.
+
+### `encode`
+
+[hex.crb:29](../stdlib/src/encoding/hex/hex.crb#L29)
+
+```rust
+pub fn encode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes lowercase hexadecimal and returns the bytes written. Errors leave the output unchanged.
+
+### `decode`
+
+[hex.crb:42](../stdlib/src/encoding/hex/hex.crb#L42)
+
+```rust
+pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decodes an even number of hexadecimal digits in either case. Errors leave the output unchanged.
+
+
+## `std::encoding::pem`
+
+Labelled PEM encoding and decoding with caller-owned buffers.
+
+### `Error`
+
+[pem.crb:8](../stdlib/src/encoding/pem/pem.crb#L8)
+
+```rust
+pub enum Error
+```
+
+Reports a malformed PEM envelope, invalid Base64, or an undersized output buffer.
+
+Members:
+
+- [`InvalidEnvelope`](../stdlib/src/encoding/pem/pem.crb#L10) (variant): The PEM/DER container is malformed or uses an unsupported envelope.
+- [`InvalidBase64`](../stdlib/src/encoding/pem/pem.crb#L12) (variant): The PEM body is not valid Base64.
+- [`BufferTooSmall`](../stdlib/src/encoding/pem/pem.crb#L14) (variant): The caller-provided output buffer cannot hold the result.
+
+### `decode`
+
+[pem.crb:40](../stdlib/src/encoding/pem/pem.crb#L40)
+
+```rust
+pub fn decode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Decodes one nonempty PEM block with the expected label and returns the DER byte count.
+
+### `encode`
+
+[pem.crb:126](../stdlib/src/encoding/pem/pem.crb#L126)
+
+```rust
+pub fn encode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes one PEM block with 64 Base64 characters per full line and returns the bytes written.
+The input must be nonempty. Labels use uppercase ASCII letters and digits with single spaces or hyphens between groups.
+Invalid input or insufficient capacity leaves the output unchanged.
+
+
+## `std::env`
+
+Access to the current process arguments.
+
+### `ArgsError`
+
+[args.crb:5](../stdlib/src/env/args.crb#L5)
+
+```rust
+pub enum ArgsError
+```
+
+Reports failures encountered while obtaining a process argument.
+
+Members:
+
+- [`InvalidUtf8`](../stdlib/src/env/args.crb#L7) (variant): A process argument is not valid UTF-8.
+- [`Unavailable`](../stdlib/src/env/args.crb#L9) (variant): The process argument source is unavailable.
+
+### `args`
+
+[args.crb:13](../stdlib/src/env/args.crb#L13)
+
+```rust
+pub fn args() -> Result<&[&str], ArgsError>
+```
+
+Returns the current process argument list supplied by the executable entry point.
+
+
+## `std::io`
+
+Portable blocking file I/O, open modes, permissions and seek origins.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `File`
+
+[file.crb:13](../stdlib/src/io/file.crb#L13)
+
+```rust
+pub struct File
+```
+
+Owns an open file and closes the platform handle when destroyed.
+
+Members:
+
+- [`inner`](../stdlib/src/io/file.crb#L15) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
+
+### `FileError`
+
+[file.crb:19](../stdlib/src/io/file.crb#L19)
+
+```rust
+pub enum FileError
+```
+
+Reports invalid path or options, or an error code from the operating system.
+
+Members:
+
+- [`InvalidPath`](../stdlib/src/io/file.crb#L21) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/file.crb#L23) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/file.crb#L25) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/file.crb#L27) (implementation field): Native operating-system status code preserved by this error.
+
+### `FileStats`
+
+[file.crb:40](../stdlib/src/io/file.crb#L40)
+
+```rust
+pub struct FileStats
+```
+
+Holds the metadata returned by the file API, including its size.
+
+Members:
+
+- [`size_bytes`](../stdlib/src/io/file.crb#L42) (implementation field): File length reported by the platform in bytes.
+
+### `FileStats::size`
+
+[file.crb:47](../stdlib/src/io/file.crb#L47)
+
+```rust
+fn size(&self) -> u64
+```
+
+Returns the file size in bytes captured by the stats operation.
+
+### `FilePerm`
+
+[file.crb:51](../stdlib/src/io/file.crb#L51)
+
+```rust
+pub enum FilePerm
+```
+
+Selects platform-default permissions or explicit permission bits for creation.
+
+Members:
+
+- [`DefaultMode`](../stdlib/src/io/file.crb#L53) (variant): Uses the documented platform default permissions for creation.
+- [`Perm`](../stdlib/src/io/file.crb#L55) (variant): Requests explicit Unix-style permission bits; unsupported platform behavior is reported by the API.
+
+### `SeekFrom`
+
+[file.crb:59](../stdlib/src/io/file.crb#L59)
+
+```rust
+pub enum SeekFrom
+```
+
+Specifies a byte offset from the start, current position, or end of the file.
+
+Members:
+
+- [`Start`](../stdlib/src/io/file.crb#L61) (variant): Seeks to the supplied absolute byte offset.
+- [`Current`](../stdlib/src/io/file.crb#L63) (variant): Seeks by a signed byte displacement from the current position.
+- [`End`](../stdlib/src/io/file.crb#L65) (variant): Seeks by a signed byte displacement from the file end.
+
+### `FileMode`
+
+[file.crb:69](../stdlib/src/io/file.crb#L69)
+
+```rust
+pub struct FileMode
+```
+
+Provides the access modes and flags accepted by file open and create.
+
+### `FileMode::READ_ONLY`
+
+[file.crb:74](../stdlib/src/io/file.crb#L74)
+
+```rust
+const READ_ONLY: i64 = 0
+```
+
+Opens the file for reading only.
+
+### `FileMode::WRITE_ONLY`
+
+[file.crb:76](../stdlib/src/io/file.crb#L76)
+
+```rust
+const WRITE_ONLY: i64 = 1
+```
+
+Opens the file for writing only.
+
+### `FileMode::READ_WRITE`
+
+[file.crb:78](../stdlib/src/io/file.crb#L78)
+
+```rust
+const READ_WRITE: i64 = 2
+```
+
+Allows both reading and writing.
+
+### `FileMode::APPEND`
+
+[file.crb:80](../stdlib/src/io/file.crb#L80)
+
+```rust
+const APPEND: i64 = 4
+```
+
+Requests that writes append to the file.
+
+### `FileMode::TRUNCATE`
+
+[file.crb:82](../stdlib/src/io/file.crb#L82)
+
+```rust
+const TRUNCATE: i64 = 8
+```
+
+Requests that an existing file be truncated on open.
+
+### `FileMode::read_only`
+
+[file.crb:85](../stdlib/src/io/file.crb#L85)
+
+```rust
+fn read_only() -> i64
+```
+
+Returns the mode for read-only access.
+
+### `FileMode::write_only`
+
+[file.crb:87](../stdlib/src/io/file.crb#L87)
+
+```rust
+fn write_only() -> i64
+```
+
+Returns the mode for write-only access.
+
+### `FileMode::read_write`
+
+[file.crb:89](../stdlib/src/io/file.crb#L89)
+
+```rust
+fn read_write() -> i64
+```
+
+Returns the mode for read and write access.
+
+### `FileMode::append`
+
+[file.crb:91](../stdlib/src/io/file.crb#L91)
+
+```rust
+fn append() -> i64
+```
+
+Returns the append flag to combine with a writable access mode.
+
+### `FileMode::truncate`
+
+[file.crb:93](../stdlib/src/io/file.crb#L93)
+
+```rust
+fn truncate() -> i64
+```
+
+Returns the truncate flag to combine with a writable access mode.
+
+### `File::open`
+
+[file.crb:112](../stdlib/src/io/file.crb#L112)
+
+```rust
+fn open(path: &[u8], mode: i64) -> Result<File, FileError>
+```
+
+Opens an existing file with the requested access mode and flags. The path needs one trailing NUL.
+
+### `File::create`
+
+[file.crb:115](../stdlib/src/io/file.crb#L115)
+
+```rust
+fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
+```
+
+Opens or creates a file with the requested mode and creation permissions. The path needs one trailing NUL.
+
+### `File::read`
+
+[file.crb:127](../stdlib/src/io/file.crb#L127)
+
+```rust
+fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
+```
+
+Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+
+### `File::write`
+
+[file.crb:136](../stdlib/src/io/file.crb#L136)
+
+```rust
+fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
+```
+
+Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+
+### `File::seek`
+
+[file.crb:145](../stdlib/src/io/file.crb#L145)
+
+```rust
+fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
+```
+
+Moves the file cursor relative to the supplied origin and returns its new absolute position.
+
+### `File::stats`
+
+[file.crb:163](../stdlib/src/io/file.crb#L163)
+
+```rust
+fn stats(&self) -> Result<FileStats, FileError>
+```
+
+Returns a snapshot of file metadata from its open handle.
+
+### `File::rename`
+
+[file.crb:172](../stdlib/src/io/file.crb#L172)
+
+```rust
+fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
+```
+
+Renames a file from the source path to the destination path using platform semantics.
+
+### `File::delete`
+
+[file.crb:180](../stdlib/src/io/file.crb#L180)
+
+```rust
+fn delete(path: &[u8]) -> Result<(), FileError>
+```
+
+Removes the file named by the supplied path.
+
+
+## `std::io::asyn`
+
+Asynchronous file operations dispatched to the runtime's blocking workers.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `File`
+
+[file.crb:8](../stdlib/src/io/asyn/file.crb#L8)
+
+```rust
+pub struct File
+```
+
+Owns a blocking file handle and exposes operations that await worker completion.
+
+Members:
+
+- [`inner`](../stdlib/src/io/asyn/file.crb#L10) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
+
+### `FileError`
+
+[file.crb:14](../stdlib/src/io/asyn/file.crb#L14)
+
+```rust
+pub enum FileError
+```
+
+Reports file errors or the runtime's failure to launch a worker.
+
+Members:
+
+- [`InvalidPath`](../stdlib/src/io/asyn/file.crb#L16) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/asyn/file.crb#L18) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/asyn/file.crb#L20) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/asyn/file.crb#L22) (implementation field): Native operating-system status code preserved by this error.
+- [`LaunchFailed`](../stdlib/src/io/asyn/file.crb#L25) (variant): The runtime could not launch the blocking worker.
+
+### `File::open`
+
+[file.crb:89](../stdlib/src/io/asyn/file.crb#L89)
+
+```rust
+async fn open(path: &[u8], mode: i64) -> Result<File, FileError>
+```
+
+Awaits opening an existing file with the selected mode. The path needs one trailing NUL.
+
+### `File::create`
+
+[file.crb:94](../stdlib/src/io/asyn/file.crb#L94)
+
+```rust
+async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
+```
+
+Awaits opening or creating a file with the selected mode and permissions. The path needs one trailing NUL.
+
+### `File::read`
+
+[file.crb:99](../stdlib/src/io/asyn/file.crb#L99)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
+```
+
+Awaits a read into the caller's buffer and returns the actual byte count.
+
+### `File::write`
+
+[file.crb:115](../stdlib/src/io/asyn/file.crb#L115)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
+```
+
+Awaits a write from the caller's buffer and returns the actual byte count.
+
+### `File::seek`
+
+[file.crb:131](../stdlib/src/io/asyn/file.crb#L131)
+
+```rust
+async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
+```
+
+Awaits moving the file cursor and returns the new absolute byte offset.
+
+### `File::stats`
+
+[file.crb:146](../stdlib/src/io/asyn/file.crb#L146)
+
+```rust
+async fn stats(&self) -> Result<FileStats, FileError>
+```
+
+Awaits a snapshot of the open file's metadata.
+
+### `File::rename`
+
+[file.crb:161](../stdlib/src/io/asyn/file.crb#L161)
+
+```rust
+async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
+```
+
+Awaits moving a filesystem entry to a different path.
+
+### `File::delete`
+
+[file.crb:175](../stdlib/src/io/asyn/file.crb#L175)
+
+```rust
+async fn delete(path: &[u8]) -> Result<(), FileError>
+```
+
+Awaits removing a file by path.
+
+
+## `std::io::asyn::buffered`
+
+Asynchronous buffered byte streams with caller-provided storage.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `BufferedError`
+
+[buffered.crb:8](../stdlib/src/io/asyn/buffered/buffered.crb#L8)
+
+```rust
+pub enum BufferedError<E>
+```
+
+Preserves the stream's error type and reports writes that make no progress.
+
+Members:
+
+- [`Stream`](../stdlib/src/io/asyn/buffered/buffered.crb#L10) (variant): Wraps the underlying stream error without changing its type.
+- [`Stream.error`](../stdlib/src/io/asyn/buffered/buffered.crb#L12) (implementation field): Underlying stream error retained with its original type.
+- [`WriteZero`](../stdlib/src/io/asyn/buffered/buffered.crb#L15) (variant): A nonempty write made no progress.
+
+### `BufReader`
+
+[buffered.crb:23](../stdlib/src/io/asyn/buffered/buffered.crb#L23)
+
+```rust
+pub struct BufReader<T, E>
+```
+
+Reads ahead from a borrowed byte stream into a borrowed buffer.
+
+Members:
+
+- [`stream`](../stdlib/src/io/asyn/buffered/buffered.crb#L25) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+- [`buffer`](../stdlib/src/io/asyn/buffered/buffered.crb#L27) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+- [`start`](../stdlib/src/io/asyn/buffered/buffered.crb#L29) (implementation field): Offset of the next unread/unsent buffered byte.
+- [`end`](../stdlib/src/io/asyn/buffered/buffered.crb#L31) (implementation field): Exclusive end of the valid buffered byte range.
+
+### `BufReader::new`
+
+[buffered.crb:36](../stdlib/src/io/asyn/buffered/buffered.crb#L36)
+
+```rust
+async fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+```
+
+Borrows the constrained stream and buffer. An empty buffer uses direct reads.
+
+### `BufReader::from_tcp`
+
+[buffered.crb:41](../stdlib/src/io/asyn/buffered/buffered.crb#L41)
+
+```rust
+async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+```
+
+Borrows the TCP connection and buffer. An empty buffer uses direct reads.
+
+### `BufReader::read`
+
+[buffered.crb:47](../stdlib/src/io/asyn/buffered/buffered.crb#L47)
+
+```rust
+async fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
+```
+
+Reads into the output, returning the bytes copied. Dropping the reader
+discards unread buffered bytes. The underlying stream has already consumed them.
+
+### `BufWriter`
+
+[buffered.crb:90](../stdlib/src/io/asyn/buffered/buffered.crb#L90)
+
+```rust
+pub struct BufWriter<T, E>
+```
+
+Holds pending output in a borrowed buffer. Call `flush()` to write it to the stream.
+
+Members:
+
+- [`stream`](../stdlib/src/io/asyn/buffered/buffered.crb#L92) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+- [`buffer`](../stdlib/src/io/asyn/buffered/buffered.crb#L94) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+- [`start`](../stdlib/src/io/asyn/buffered/buffered.crb#L96) (implementation field): Offset of the next unread/unsent buffered byte.
+- [`end`](../stdlib/src/io/asyn/buffered/buffered.crb#L98) (implementation field): Exclusive end of the valid buffered byte range.
+
+### `BufWriter::new`
+
+[buffered.crb:103](../stdlib/src/io/asyn/buffered/buffered.crb#L103)
+
+```rust
+async fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+```
+
+Borrows the constrained stream and buffer. An empty buffer uses direct writes.
+
+### `BufWriter::from_tcp`
+
+[buffered.crb:108](../stdlib/src/io/asyn/buffered/buffered.crb#L108)
+
+```rust
+async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+```
+
+Borrows the TCP connection and buffer. An empty buffer uses direct writes.
+
+### `BufWriter::write`
+
+[buffered.crb:114](../stdlib/src/io/asyn/buffered/buffered.crb#L114)
+
+```rust
+async fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
+```
+
+Accepts a prefix of the input and returns the number accepted.
+Flushes previously buffered bytes when the buffer is already full.
+
+### `BufWriter::flush`
+
+[buffered.crb:154](../stdlib/src/io/asyn/buffered/buffered.crb#L154)
+
+```rust
+async fn flush(&mut self) -> Result<(), BufferedError<E>>
+```
+
+Writes pending bytes to the stream. After an error, retrying starts at the
+first byte the stream has yet to accept. Destruction discards pending bytes.
+
+
+## `std::io::buffered`
+
+Buffered blocking byte streams with caller-provided storage.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `BufferedError`
+
+[buffered.crb:8](../stdlib/src/io/buffered/buffered.crb#L8)
+
+```rust
+pub enum BufferedError<E>
+```
+
+Preserves the stream's error type and reports writes that make no progress.
+
+Members:
+
+- [`Stream`](../stdlib/src/io/buffered/buffered.crb#L10) (variant): Wraps the underlying stream error without changing its type.
+- [`Stream.error`](../stdlib/src/io/buffered/buffered.crb#L12) (implementation field): Underlying stream error retained with its original type.
+- [`WriteZero`](../stdlib/src/io/buffered/buffered.crb#L15) (variant): A nonempty write made no progress.
+
+### `BufReader`
+
+[buffered.crb:23](../stdlib/src/io/buffered/buffered.crb#L23)
+
+```rust
+pub struct BufReader<T, E>
+```
+
+Reads ahead from a borrowed byte stream into a borrowed buffer.
+
+Members:
+
+- [`stream`](../stdlib/src/io/buffered/buffered.crb#L25) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+- [`buffer`](../stdlib/src/io/buffered/buffered.crb#L27) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+- [`start`](../stdlib/src/io/buffered/buffered.crb#L29) (implementation field): Offset of the next unread/unsent buffered byte.
+- [`end`](../stdlib/src/io/buffered/buffered.crb#L31) (implementation field): Exclusive end of the valid buffered byte range.
+
+### `BufReader::new`
+
+[buffered.crb:36](../stdlib/src/io/buffered/buffered.crb#L36)
+
+```rust
+fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+```
+
+Borrows the constrained stream and buffer. An empty buffer uses direct reads.
+
+### `BufReader::from_tcp`
+
+[buffered.crb:41](../stdlib/src/io/buffered/buffered.crb#L41)
+
+```rust
+fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+```
+
+Borrows the TCP connection and buffer. An empty buffer uses direct reads.
+
+### `BufReader::read`
+
+[buffered.crb:47](../stdlib/src/io/buffered/buffered.crb#L47)
+
+```rust
+fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
+```
+
+Reads into the output, returning the bytes copied. Dropping the reader
+discards unread buffered bytes. The underlying stream has already consumed them.
+
+### `BufWriter`
+
+[buffered.crb:90](../stdlib/src/io/buffered/buffered.crb#L90)
+
+```rust
+pub struct BufWriter<T, E>
+```
+
+Holds pending output in a borrowed buffer. Call `flush()` to write it to the stream.
+
+Members:
+
+- [`stream`](../stdlib/src/io/buffered/buffered.crb#L92) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+- [`buffer`](../stdlib/src/io/buffered/buffered.crb#L94) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+- [`start`](../stdlib/src/io/buffered/buffered.crb#L96) (implementation field): Offset of the next unread/unsent buffered byte.
+- [`end`](../stdlib/src/io/buffered/buffered.crb#L98) (implementation field): Exclusive end of the valid buffered byte range.
+
+### `BufWriter::new`
+
+[buffered.crb:103](../stdlib/src/io/buffered/buffered.crb#L103)
+
+```rust
+fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+```
+
+Borrows the constrained stream and buffer. An empty buffer uses direct writes.
+
+### `BufWriter::from_tcp`
+
+[buffered.crb:108](../stdlib/src/io/buffered/buffered.crb#L108)
+
+```rust
+fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+```
+
+Borrows the TCP connection and buffer. An empty buffer uses direct writes.
+
+### `BufWriter::write`
+
+[buffered.crb:114](../stdlib/src/io/buffered/buffered.crb#L114)
+
+```rust
+fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
+```
+
+Accepts a prefix of the input and returns the number accepted.
+Flushes previously buffered bytes when the buffer is already full.
+
+### `BufWriter::flush`
+
+[buffered.crb:154](../stdlib/src/io/buffered/buffered.crb#L154)
+
+```rust
+fn flush(&mut self) -> Result<(), BufferedError<E>>
+```
+
+Writes pending bytes to the stream. After an error, retrying starts at the
+first byte the stream has yet to accept. Destruction discards pending bytes.
+
+
+## `std::iter`
+
+Statically constrained iteration over an explicitly borrowed source.
+
+### `Iter`
+
+[iter.crb:9](../stdlib/src/iter/iter.crb#L9)
+
+```rust
+pub struct Iter<T, V>
+```
+
+Borrows a source exclusively. The source must outlive the iterator.
+
+Members:
+
+- [`source`](../stdlib/src/iter/iter.crb#L11) (implementation field): Exclusively borrowed source; it must remain valid for the complete iterator lifetime.
+
+### `Iter::new`
+
+[iter.crb:16](../stdlib/src/iter/iter.crb#L16)
+
+```rust
+fn new(source: &mut T) -> Iter<T, V>
+```
+
+Captures the source reference when the iterator is constructed.
+
+### `Iter::next`
+
+[iter.crb:21](../stdlib/src/iter/iter.crb#L21)
+
+```rust
+fn next(&mut self) -> Option<V>
+```
+
+Requests one item through the source's statically resolved method.
+
+### `Iter::collect`
+
+[iter.crb:28](../stdlib/src/iter/iter.crb#L28)
+
+```rust
+fn collect(mut self: Iter<T, V>, destination: &mut D)
+```
+
+Consumes this chain and appends its remaining items to the destination.
+
+### `Map`
+
+[iter.crb:42](../stdlib/src/iter/iter.crb#L42)
+
+```rust
+pub struct Map<T, V, X>
+```
+
+Owns its predecessor and mapper. Items retain their ordinary dependencies.
+
+Members:
+
+- [`previous`](../stdlib/src/iter/iter.crb#L44) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+- [`mapper`](../stdlib/src/iter/iter.crb#L46) (implementation field): Stored transformation/predicate/reduction function and its captured state.
+
+### `Map::next`
+
+[iter.crb:51](../stdlib/src/iter/iter.crb#L51)
+
+```rust
+fn next(&mut self) -> Option<X>
+```
+
+Advances the predecessor once and transforms the yielded item.
+
+### `Map::collect`
+
+[iter.crb:60](../stdlib/src/iter/iter.crb#L60)
+
+```rust
+fn collect(mut self: Map<T, V, X>, destination: &mut D)
+```
+
+Consumes this chain and appends its remaining items to the destination.
+
+### `Filter`
+
+[iter.crb:73](../stdlib/src/iter/iter.crb#L73)
+
+```rust
+pub struct Filter<T, V>
+```
+
+Owns its predecessor and predicate; rejected items are destroyed normally.
+
+Members:
+
+- [`previous`](../stdlib/src/iter/iter.crb#L75) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+- [`mapper`](../stdlib/src/iter/iter.crb#L77) (implementation field): Stored transformation/predicate/reduction function and its captured state.
+
+### `Filter::next`
+
+[iter.crb:82](../stdlib/src/iter/iter.crb#L82)
+
+```rust
+fn next(&mut self) -> Option<V>
+```
+
+Returns the next accepted item. The predicate borrows it for this call.
+
+### `Filter::collect`
+
+[iter.crb:97](../stdlib/src/iter/iter.crb#L97)
+
+```rust
+fn collect(mut self: Filter<T, V>, destination: &mut D)
+```
+
+Consumes this chain and appends its remaining items to the destination.
+
+### `Reduce`
+
+[iter.crb:110](../stdlib/src/iter/iter.crb#L110)
+
+```rust
+pub struct Reduce<T, V>
+```
+
+Reduces a source once, using its first item as the initial accumulator.
+
+Members:
+
+- [`previous`](../stdlib/src/iter/iter.crb#L112) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+- [`mapper`](../stdlib/src/iter/iter.crb#L114) (implementation field): Stored transformation/predicate/reduction function and its captured state.
+- [`finished`](../stdlib/src/iter/iter.crb#L116) (implementation field): Records that this reduction has already consumed its source and must yield no more items.
+
+### `Reduce::next`
+
+[iter.crb:121](../stdlib/src/iter/iter.crb#L121)
+
+```rust
+fn next(&mut self) -> Option<V>
+```
+
+Consumes the remaining source and yields at most one accumulated item.
+
+### `Reduce::remaining`
+
+[iter.crb:132](../stdlib/src/iter/iter.crb#L132)
+
+```rust
+fn remaining(&mut self, mut accumulator: V) -> V
+```
+
+Folds the remainder into an existing accumulator without fabricating a default.
+
+### `Reduce::collect`
+
+[iter.crb:144](../stdlib/src/iter/iter.crb#L144)
+
+```rust
+fn collect(mut self: Reduce<T, V>, destination: &mut D)
+```
+
+Consumes this chain and appends its remaining items to the destination.
+
+### `iter`
+
+[iter.crb:157](../stdlib/src/iter/iter.crb#L157)
+
+```rust
+pub fn iter(source: &mut T) -> Iter<T, V>
+```
+
+Builds an iterator by explicitly borrowing a compatible source exclusively.
+
+
+## `std::net`
+
+Shared socket errors and metadata for incoming UDP datagrams.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `SocketError`
+
+[socket.crb:17](../stdlib/src/net/socket.crb#L17)
+
+```rust
+pub enum SocketError
+```
+
+Reports platform errors and socket conditions such as an occupied address or an oversized datagram.
+
+Members:
+
+- [`Os`](../stdlib/src/net/socket.crb#L19) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/net/socket.crb#L21) (implementation field): Native operating-system status code preserved by this error.
+- [`AddressInUse`](../stdlib/src/net/socket.crb#L24) (variant): The requested local endpoint is already in use.
+- [`ConnectionRefused`](../stdlib/src/net/socket.crb#L26) (variant): The remote endpoint refused the connection.
+- [`DatagramTooLarge`](../stdlib/src/net/socket.crb#L28) (variant): The received datagram exceeded the supplied buffer and was consumed.
+
+### `Datagram`
+
+[socket.crb:32](../stdlib/src/net/socket.crb#L32)
+
+```rust
+pub struct Datagram
+```
+
+Stores the received datagram's byte count and sender address.
+
+Members:
+
+- [`size`](../stdlib/src/net/socket.crb#L34) (implementation field): Number of received datagram payload bytes.
+- [`peer`](../stdlib/src/net/socket.crb#L36) (implementation field): Packed sender IPv4 address and port, decoded by the public peer accessor.
+
+### `Datagram::count`
+
+[socket.crb:41](../stdlib/src/net/socket.crb#L41)
+
+```rust
+fn count(&self) -> usize
+```
+
+Returns how many payload bytes were received.
+
+### `Datagram::sender`
+
+[socket.crb:44](../stdlib/src/net/socket.crb#L44)
+
+```rust
+fn sender(&self) -> SocketAddr
+```
+
+Returns the datagram's source IPv4 address and port.
+
+### `datagram`
+
+[socket.crb:51](../stdlib/src/net/socket.crb#L51)
+
+```rust
+pub fn datagram(size: u64, peer: u64) -> Datagram
+```
+
+Creates metadata for the byte count and sender returned by a receive operation.
+
+
+## `std::net::asyn::tcp`
+
+Asynchronous IPv4 TCP connections, listeners and borrowed stream halves.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Connection`
+
+[socket.crb:12](../stdlib/src/net/asyn/tcp/socket.crb#L12)
+
+```rust
+pub struct Connection
+```
+
+Owns the socket used by asynchronous TCP reads and writes.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/asyn/tcp/socket.crb#L14) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/asyn/tcp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/asyn/tcp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
+- [`read_descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L20) (implementation field): Descriptor view reserved for the read half; the connection retains closure responsibility.
+- [`write_descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L22) (implementation field): Descriptor view reserved for the write half; the connection retains closure responsibility.
+
+### `ReadHalf`
+
+[socket.crb:26](../stdlib/src/net/asyn/tcp/socket.crb#L26)
+
+```rust
+pub struct ReadHalf
+```
+
+Borrows the portion of a TCP connection needed to read without owning its socket.
+
+Members:
+
+- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L28) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
+
+### `WriteHalf`
+
+[socket.crb:32](../stdlib/src/net/asyn/tcp/socket.crb#L32)
+
+```rust
+pub struct WriteHalf
+```
+
+Borrows the portion of a TCP connection needed to write without owning its socket.
+
+Members:
+
+- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L34) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
+
+### `ReadHalf::read`
+
+[socket.crb:39](../stdlib/src/net/asyn/tcp/socket.crb#L39)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+
+### `WriteHalf::write`
+
+[socket.crb:46](../stdlib/src/net/asyn/tcp/socket.crb#L46)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Awaits a write from the borrowed slice and returns the actual byte count.
+
+### `Listener`
+
+[socket.crb:52](../stdlib/src/net/asyn/tcp/socket.crb#L52)
+
+```rust
+pub struct Listener
+```
+
+Owns a nonblocking listening socket for asynchronous accepts.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/asyn/tcp/socket.crb#L54) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/asyn/tcp/socket.crb#L56) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+
+### `connect`
+
+[socket.crb:77](../stdlib/src/net/asyn/tcp/socket.crb#L77)
+
+```rust
+pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError>
+```
+
+Awaits a nonblocking TCP connection to the supplied endpoint.
+
+### `Connection::split`
+
+[socket.crb:87](../stdlib/src/net/asyn/tcp/socket.crb#L87)
+
+```rust
+fn split(&mut self) -> (ReadHalf, WriteHalf)
+```
+
+Borrows separate read and write views from the connection, which still owns the socket.
+
+### `Connection::addr`
+
+[socket.crb:94](../stdlib/src/net/asyn/tcp/socket.crb#L94)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:100](../stdlib/src/net/asyn/tcp/socket.crb#L100)
+
+```rust
+fn peer(&self) -> SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::write`
+
+[socket.crb:106](../stdlib/src/net/asyn/tcp/socket.crb#L106)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Awaits a write from the borrowed slice and returns the actual byte count.
+
+### `Connection::read`
+
+[socket.crb:113](../stdlib/src/net/asyn/tcp/socket.crb#L113)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+
+### `Listener::bind`
+
+[socket.crb:121](../stdlib/src/net/asyn/tcp/socket.crb#L121)
+
+```rust
+fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
+```
+
+Binds a TCP listener and prepares its native socket for asynchronous accepts.
+
+### `Listener::addr`
+
+[socket.crb:141](../stdlib/src/net/asyn/tcp/socket.crb#L141)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Listener::accept`
+
+[socket.crb:147](../stdlib/src/net/asyn/tcp/socket.crb#L147)
+
+```rust
+async fn accept(&mut self) -> Result<Connection, SocketError>
+```
+
+Awaits an incoming TCP connection and returns its owned socket wrapper.
+
+
+## `std::net::asyn::udp`
+
+Asynchronous IPv4 UDP I/O with synchronous socket setup.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Connection`
+
+[socket.crb:12](../stdlib/src/net/asyn/udp/socket.crb#L12)
+
+```rust
+pub struct Connection
+```
+
+Owns a UDP socket prepared for asynchronous I/O with an associated peer.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/asyn/udp/socket.crb#L14) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/asyn/udp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
+
+### `Listener`
+
+[socket.crb:22](../stdlib/src/net/asyn/udp/socket.crb#L22)
+
+```rust
+pub struct Listener
+```
+
+Owns a bound UDP socket prepared for asynchronous addressed I/O.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/asyn/udp/socket.crb#L24) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L26) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+
+### `connect`
+
+[socket.crb:30](../stdlib/src/net/asyn/udp/socket.crb#L30)
+
+```rust
+pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
+```
+
+Associates a UDP socket with a peer and prepares it for asynchronous I/O.
+
+### `Connection::addr`
+
+[socket.crb:47](../stdlib/src/net/asyn/udp/socket.crb#L47)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:53](../stdlib/src/net/asyn/udp/socket.crb#L53)
+
+```rust
+fn peer(&self) -> SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::send`
+
+[socket.crb:59](../stdlib/src/net/asyn/udp/socket.crb#L59)
+
+```rust
+async fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Awaits transmission of one complete datagram to the connected peer, including an empty datagram.
+
+### `Connection::recv`
+
+[socket.crb:66](../stdlib/src/net/asyn/udp/socket.crb#L66)
+
+```rust
+async fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Awaits one datagram from the connected peer. An oversized payload is consumed and reported.
+
+### `Listener::bind`
+
+[socket.crb:78](../stdlib/src/net/asyn/udp/socket.crb#L78)
+
+```rust
+fn bind(address: SocketAddr) -> Result<Listener, SocketError>
+```
+
+Binds the supplied endpoint and prepares the socket for asynchronous I/O.
+
+### `Listener::addr`
+
+[socket.crb:94](../stdlib/src/net/asyn/udp/socket.crb#L94)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Listener::recv`
+
+[socket.crb:100](../stdlib/src/net/asyn/udp/socket.crb#L100)
+
+```rust
+async fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
+```
+
+Awaits one datagram and its sender address. An oversized payload is consumed and reported.
+
+### `Listener::send`
+
+[socket.crb:106](../stdlib/src/net/asyn/udp/socket.crb#L106)
+
+```rust
+async fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
+```
+
+Awaits transmission of one complete datagram to the supplied destination, including an empty datagram.
+
+
+## `std::net::ipv4`
+
+IPv4 addresses and socket endpoints with dotted-decimal parsing.
+
+### `Addr`
+
+[address.crb:5](../stdlib/src/net/ipv4/address.crb#L5)
+
+```rust
+pub struct Addr
+```
+
+Stores an IPv4 address as four packed octets.
+
+Members:
+
+- [`bits`](../stdlib/src/net/ipv4/address.crb#L7) (implementation field): IPv4 address bits in the representation used by from_parts and octet accessors.
+
+### `SocketAddr`
+
+[address.crb:11](../stdlib/src/net/ipv4/address.crb#L11)
+
+```rust
+pub struct SocketAddr
+```
+
+Pairs a packed IPv4 address with a 16-bit port.
+
+Members:
+
+- [`bits`](../stdlib/src/net/ipv4/address.crb#L13) (implementation field): IPv4 address bits in the representation used by from_parts and octet accessors.
+- [`port_number`](../stdlib/src/net/ipv4/address.crb#L15) (implementation field): Transport port number, including zero before OS port allocation.
+
+### `ParseError`
+
+[address.crb:19](../stdlib/src/net/ipv4/address.crb#L19)
+
+```rust
+pub enum ParseError
+```
+
+Reports invalid IPv4 endpoint syntax or an out-of-range address component.
+
+Members:
+
+- [`InvalidAddress`](../stdlib/src/net/ipv4/address.crb#L21) (variant): The IPv4 address or port text is malformed or out of range.
+
+### `Addr::new`
+
+[address.crb:26](../stdlib/src/net/ipv4/address.crb#L26)
+
+```rust
+fn new(a: u8, b: u8, c: u8, d: u8) -> Addr
+```
+
+Packs four IPv4 octets in network order.
+
+### `SocketAddr::new`
+
+[address.crb:33](../stdlib/src/net/ipv4/address.crb#L33)
+
+```rust
+fn new(ip: Addr, port: u16) -> SocketAddr
+```
+
+Pairs an IPv4 address with the supplied port number.
+
+### `SocketAddr::ipv4_bits`
+
+[address.crb:38](../stdlib/src/net/ipv4/address.crb#L38)
+
+```rust
+fn ipv4_bits(&self) -> u32
+```
+
+Returns the address with the first IPv4 octet in the high byte.
+
+### `SocketAddr::port`
+
+[address.crb:41](../stdlib/src/net/ipv4/address.crb#L41)
+
+```rust
+fn port(&self) -> u16
+```
+
+Returns the socket endpoint's port number.
+
+### `SocketAddr::parse`
+
+[address.crb:44](../stdlib/src/net/ipv4/address.crb#L44)
+
+```rust
+fn parse(text: &str) -> Result<SocketAddr, ParseError>
+```
+
+Parses an IPv4 endpoint written as four decimal octets, a colon and a decimal port.
+
+### `from_parts`
+
+[address.crb:81](../stdlib/src/net/ipv4/address.crb#L81)
+
+```rust
+pub fn from_parts(ip: u32, port: u16) -> SocketAddr
+```
+
+Constructs a socket endpoint from packed IPv4 bits and a port.
+
+
+## `std::net::tcp`
+
+Blocking IPv4 TCP connections and listeners over the platform socket API.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Connection`
+
+[socket.crb:10](../stdlib/src/net/tcp/socket.crb#L10)
+
+```rust
+pub struct Connection
+```
+
+Owns a connected IPv4 TCP socket.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L12) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/tcp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/tcp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
+
+### `Listener`
+
+[socket.crb:20](../stdlib/src/net/tcp/socket.crb#L20)
+
+```rust
+pub struct Listener
+```
+
+Owns a TCP listening socket and accepts incoming connections.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/tcp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+
+### `connect`
+
+[socket.crb:41](../stdlib/src/net/tcp/socket.crb#L41)
+
+```rust
+pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
+```
+
+Establishes a blocking TCP connection to the supplied endpoint.
+
+### `Connection::addr`
+
+[socket.crb:51](../stdlib/src/net/tcp/socket.crb#L51)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:57](../stdlib/src/net/tcp/socket.crb#L57)
+
+```rust
+fn peer(&self) -> SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::write`
+
+[socket.crb:63](../stdlib/src/net/tcp/socket.crb#L63)
+
+```rust
+fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+
+### `Connection::read`
+
+[socket.crb:70](../stdlib/src/net/tcp/socket.crb#L70)
+
+```rust
+fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+
+### `Listener::bind`
+
+[socket.crb:78](../stdlib/src/net/tcp/socket.crb#L78)
+
+```rust
+fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
+```
+
+Binds and listens at the supplied endpoint. Use port zero for an assigned port and None for the system maximum backlog.
+
+### `Listener::addr`
+
+[socket.crb:95](../stdlib/src/net/tcp/socket.crb#L95)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Listener::accept`
+
+[socket.crb:101](../stdlib/src/net/tcp/socket.crb#L101)
+
+```rust
+fn accept(&mut self) -> Result<Connection, SocketError>
+```
+
+Blocks until it can return an owned accepted TCP connection or an error.
+
+
+## `std::net::tls`
+
+TLS 1.3 handshake framing, extensions and Certificate message encoding.
+
+### `Certificate`
+
+[codec.crb:287](../stdlib/src/net/tls/codec.crb#L287)
+
+```rust
+pub struct Certificate
+```
+
+Stores the byte ranges of a parsed TLS Certificate message in the caller's input.
+
+Members:
+
+- [`context_size`](../stdlib/src/net/tls/codec.crb#L289) (implementation field): Byte length of the TLS Certificate request context.
+- [`entries`](../stdlib/src/net/tls/codec.crb#L291) (implementation field): Number of parsed certificate-list entries.
+- [`der_ranges`](../stdlib/src/net/tls/codec.crb#L293) (implementation field): Start/end offsets of the bounded certificate DER entries.
+- [`extension_ranges`](../stdlib/src/net/tls/codec.crb#L295) (implementation field): Start/end offsets of each certificate entry's extensions.
+
+### `Certificate::from_message`
+
+[codec.crb:334](../stdlib/src/net/tls/codec.crb#L334)
+
+```rust
+fn from_message(input: &[u8]) -> Result<Certificate, HandshakeError>
+```
+
+Parses a complete TLS Certificate handshake message and records the ranges in it.
+
+### `Certificate::context_length`
+
+[codec.crb:348](../stdlib/src/net/tls/codec.crb#L348)
+
+```rust
+fn context_length(&self) -> u64
+```
+
+Returns the request context length in bytes.
+
+### `Certificate::context_range`
+
+[codec.crb:351](../stdlib/src/net/tls/codec.crb#L351)
+
+```rust
+fn context_range(&self) -> (u64, u64)
+```
+
+Returns the start and exclusive end of the request context.
+
+### `Certificate::count`
+
+[codec.crb:356](../stdlib/src/net/tls/codec.crb#L356)
+
+```rust
+fn count(&self) -> u64
+```
+
+Returns the number of certificate entries in the handshake message.
+
+### `Certificate::der_range`
+
+[codec.crb:359](../stdlib/src/net/tls/codec.crb#L359)
+
+```rust
+fn der_range(&self, index: u64) -> (u64, u64)
+```
+
+Returns the start and exclusive end of the DER bytes for an entry.
+
+### `Certificate::extensions_range`
+
+[codec.crb:365](../stdlib/src/net/tls/codec.crb#L365)
+
+```rust
+fn extensions_range(&self, index: u64) -> (u64, u64)
+```
+
+Returns the start and exclusive end of the encoded extensions for an entry.
+
+### `Certificate::supports_server_certificate`
+
+[codec.crb:371](../stdlib/src/net/tls/codec.crb#L371)
+
+```rust
+fn supports_server_certificate(&self) -> bool
+```
+
+Checks the request context and entry extensions for the supported server profile.
+
+### `Certificate::server_key`
+
+[codec.crb:384](../stdlib/src/net/tls/codec.crb#L384)
+
+```rust
+fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64) -> Result<X509PublicKey, HandshakeError>
+```
+
+Checks the received certificate against a configured pin and obtains the associated public key.
+
+
+Client and server handshake state machines for the blocking P-256 TLS 1.3 profile.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Session`
+
+[handshake.crb:14](../stdlib/src/net/tls/handshake.crb#L14)
+
+```rust
+pub struct Session
+```
+
+Holds the read and write ciphers established by a successful TLS handshake.
+
+Members:
+
+- [`reader`](../stdlib/src/net/tls/handshake.crb#L16) (implementation field): Owned inbound record cipher established by the handshake.
+- [`writer`](../stdlib/src/net/tls/handshake.crb#L18) (implementation field): Owned outbound record cipher established by the handshake.
+
+### `Session::write_application`
+
+[handshake.crb:23](../stdlib/src/net/tls/handshake.crb#L23)
+
+```rust
+fn write_application(&mut self, socket: &mut Connection, content: &[u8], fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError>
+```
+
+Protects and sends an application record on the original TCP connection.
+
+### `Session::read_application`
+
+[handshake.crb:35](../stdlib/src/net/tls/handshake.crb#L35)
+
+```rust
+fn read_application(&mut self, socket: &mut Connection, wire: &mut [u8], output: &mut [u8]) -> Result<u64, HandshakeError>
+```
+
+Receives and authenticates an application record, or returns zero on authenticated closure.
+
+### `Session::shutdown`
+
+[handshake.crb:55](../stdlib/src/net/tls/handshake.crb#L55)
+
+```rust
+fn shutdown(&mut self, socket: &mut Connection, fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError>
+```
+
+Sends the authenticated TLS close_notify alert.
+
+### `client_handshake`
+
+[handshake.crb:167](../stdlib/src/net/tls/handshake.crb#L167)
+
+```rust
+pub fn client_handshake(socket: &mut Connection, pin: &[u8], peer_key: &PublicKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+```
+
+Runs the client handshake using a configured leaf certificate and public key pin.
+
+### `client_handshake_x509`
+
+[handshake.crb:178](../stdlib/src/net/tls/handshake.crb#L178)
+
+```rust
+pub fn client_handshake_x509(socket: &mut Connection, hostname: &[u8], anchor: &[u8], now: i64, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+```
+
+Runs the client handshake with an explicit trust anchor and DNS identity check.
+
+### `server_handshake`
+
+[handshake.crb:360](../stdlib/src/net/tls/handshake.crb#L360)
+
+```rust
+pub fn server_handshake(socket: &mut Connection, certificate: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+```
+
+Runs the server handshake with one DER certificate and its signing key.
+
+### `server_handshake_chain`
+
+[handshake.crb:368](../stdlib/src/net/tls/handshake.crb#L368)
+
+```rust
+pub fn server_handshake_chain(socket: &mut Connection, chain: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+```
+
+Runs the server handshake with a framed leaf-first certificate list and its signing key.
+
+
+Handshake message transport across TCP and TLS record boundaries.
+
+### `HandshakeError`
+
+[transport.crb:5](../stdlib/src/net/tls/transport.crb#L5)
+
+```rust
+pub enum HandshakeError
+```
+
+Reports TLS handshake framing, negotiation, authentication or I/O failures.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/net/tls/transport.crb#L7) (variant): The caller-provided output buffer cannot hold the result.
+- [`Transport`](../stdlib/src/net/tls/transport.crb#L9) (variant): The underlying TCP transport operation failed.
+- [`Protocol`](../stdlib/src/net/tls/transport.crb#L11) (variant): The handshake message or negotiation violates the supported TLS profile.
+- [`Authentication`](../stdlib/src/net/tls/transport.crb#L13) (variant): The peer's handshake authentication failed.
+- [`Crypto`](../stdlib/src/net/tls/transport.crb#L15) (variant): An underlying cryptographic operation failed.
+
+
+## `std::net::tls::keys`
+
+TLS 1.3 SHA-256 transcript and key schedule for TLS_AES_128_GCM_SHA256.
+
+### `KeyError`
+
+[keys.crb:7](../stdlib/src/net/tls/keys/keys.crb#L7)
+
+```rust
+pub enum KeyError
+```
+
+Reports an invalid key schedule input, hash failure or output length error.
+
+Members:
+
+- [`InvalidLabel`](../stdlib/src/net/tls/keys/keys.crb#L9) (variant): The TLS HKDF label exceeds its encoded length limit.
+- [`InvalidContext`](../stdlib/src/net/tls/keys/keys.crb#L11) (variant): The TLS HKDF context exceeds its encoded length limit.
+- [`InvalidSecret`](../stdlib/src/net/tls/keys/keys.crb#L13) (variant): The supplied TLS secret has an invalid size.
+- [`OutputTooLong`](../stdlib/src/net/tls/keys/keys.crb#L15) (variant): Requested output exceeds the derivation's algorithmic limit.
+- [`HashFailed`](../stdlib/src/net/tls/keys/keys.crb#L17) (variant): The underlying transcript/HMAC operation failed.
+
+### `Traffic`
+
+[keys.crb:21](../stdlib/src/net/tls/keys/keys.crb#L21)
+
+```rust
+pub enum Traffic
+```
+
+Selects the role and handshake or application phase of a traffic secret.
+
+Members:
+
+- [`ClientHandshake`](../stdlib/src/net/tls/keys/keys.crb#L23) (variant): Selects client handshake traffic secrets.
+- [`ServerHandshake`](../stdlib/src/net/tls/keys/keys.crb#L25) (variant): Selects server handshake traffic secrets.
+- [`ClientApplication`](../stdlib/src/net/tls/keys/keys.crb#L27) (variant): Selects client application traffic secrets.
+- [`ServerApplication`](../stdlib/src/net/tls/keys/keys.crb#L29) (variant): Selects server application traffic secrets.
+
+### `Transcript`
+
+[keys.crb:33](../stdlib/src/net/tls/keys/keys.crb#L33)
+
+```rust
+pub struct Transcript
+```
+
+Accumulates the ordered handshake bytes in a streaming SHA-256 state.
+
+Members:
+
+- [`hash`](../stdlib/src/net/tls/keys/keys.crb#L35) (implementation field): Streaming handshake transcript hash; record headers are not appended.
+
+### `Transcript::new`
+
+[keys.crb:40](../stdlib/src/net/tls/keys/keys.crb#L40)
+
+```rust
+fn new() -> Transcript
+```
+
+Starts an empty handshake transcript.
+
+### `Transcript::append`
+
+[keys.crb:48](../stdlib/src/net/tls/keys/keys.crb#L48)
+
+```rust
+fn append(&mut self, message: &[u8]) -> Result<(), KeyError>
+```
+
+Adds handshake bytes in protocol order without record headers.
+
+### `Transcript::digest`
+
+[keys.crb:58](../stdlib/src/net/tls/keys/keys.crb#L58)
+
+```rust
+fn digest(&self) -> [u8; 32]
+```
+
+Returns a snapshot of the current transcript hash.
+
+### `hkdf_expand_label`
+
+[keys.crb:79](../stdlib/src/net/tls/keys/keys.crb#L79)
+
+```rust
+pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8], output: &mut [u8]) -> Result<(), KeyError>
+```
+
+Derives output using the TLS 1.3 label prefix and serialized length and context.
+
+### `early_secret`
+
+[keys.crb:140](../stdlib/src/net/tls/keys/keys.crb#L140)
+
+```rust
+pub fn early_secret() -> Result<[u8; 32], KeyError>
+```
+
+Derives the initial TLS early secret without a configured PSK.
+
+### `derive_secret`
+
+[keys.crb:146](../stdlib/src/net/tls/keys/keys.crb#L146)
+
+```rust
+pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError>
+```
+
+Derives a 32-byte secret from the given label and transcript hash.
+
+### `derived_secret`
+
+[keys.crb:154](../stdlib/src/net/tls/keys/keys.crb#L154)
+
+```rust
+pub fn derived_secret(secret: &[u8]) -> Result<[u8; 32], KeyError>
+```
+
+Derives the intermediate secret used as salt for the next extraction step.
+
+### `handshake_secret`
+
+[keys.crb:166](../stdlib/src/net/tls/keys/keys.crb#L166)
+
+```rust
+pub fn handshake_secret(early: &[u8], shared: &[u8]) -> Result<[u8; 32], KeyError>
+```
+
+Mixes the ECDHE shared secret into the key schedule.
+
+### `master_secret`
+
+[keys.crb:177](../stdlib/src/net/tls/keys/keys.crb#L177)
+
+```rust
+pub fn master_secret(handshake: &[u8]) -> Result<[u8; 32], KeyError>
+```
+
+Derives the master secret for application traffic and subsequent derivations.
+
+### `traffic_secret`
+
+[keys.crb:188](../stdlib/src/net/tls/keys/keys.crb#L188)
+
+```rust
+pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) -> Result<[u8; 32], KeyError>
+```
+
+Derives the requested client or server traffic secret for the selected phase.
+
+### `aes128_key`
+
+[keys.crb:202](../stdlib/src/net/tls/keys/keys.crb#L202)
+
+```rust
+pub fn aes128_key(traffic: &[u8]) -> Result<[u8; 16], KeyError>
+```
+
+Derives the 16-byte record encryption key from a traffic secret.
+
+### `traffic_iv`
+
+[keys.crb:214](../stdlib/src/net/tls/keys/keys.crb#L214)
+
+```rust
+pub fn traffic_iv(traffic: &[u8]) -> Result<[u8; 12], KeyError>
+```
+
+Derives the 12-byte static record IV from a traffic secret.
+
+### `finished_key`
+
+[keys.crb:226](../stdlib/src/net/tls/keys/keys.crb#L226)
+
+```rust
+pub fn finished_key(handshake_traffic: &[u8]) -> Result<[u8; 32], KeyError>
+```
+
+Derives the key for Finished authentication.
+
+### `finished_verify_data`
+
+[keys.crb:234](../stdlib/src/net/tls/keys/keys.crb#L234)
+
+```rust
+pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError>
+```
+
+Computes Finished verify_data over the transcript before Finished.
+
+### `verify_finished`
+
+[keys.crb:248](../stdlib/src/net/tls/keys/keys.crb#L248)
+
+```rust
+pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], received: &[u8]) -> Result<bool, KeyError>
+```
+
+Checks received verify_data against the expected Finished authentication value.
+
+
+## `std::net::tls::openssl`
+
+Blocking TLS connection wrapper over the OpenSSL backend.
+
+Available when `target.os == "macos" && target.arch == "aarch64"`.
+
+### `TlsError`
+
+[connection.crb:9](../stdlib/src/net/tls/openssl/connection.crb#L9)
+
+```rust
+pub enum TlsError
+```
+
+Reports context, handshake, peer verification or TLS I/O failures.
+
+Members:
+
+- [`InvalidInput`](../stdlib/src/net/tls/openssl/connection.crb#L11) (variant): Input does not meet this TLS backend's parameter contract.
+- [`ConfigurationFailed`](../stdlib/src/net/tls/openssl/connection.crb#L13) (variant): The TLS backend could not construct its configuration.
+- [`PeerVerificationFailed`](../stdlib/src/net/tls/openssl/connection.crb#L15) (variant): The peer certificate/identity verification failed.
+- [`HandshakeFailed`](../stdlib/src/net/tls/openssl/connection.crb#L17) (variant): The TLS handshake failed.
+- [`TransportFailed`](../stdlib/src/net/tls/openssl/connection.crb#L19) (variant): The TLS backend reported an underlying transport failure.
+
+### `Connection`
+
+[connection.crb:23](../stdlib/src/net/tls/openssl/connection.crb#L23)
+
+```rust
+pub struct Connection
+```
+
+Owns the TLS session and its underlying TCP connection.
+
+Members:
+
+- [`socket`](../stdlib/src/net/tls/openssl/connection.crb#L25) (implementation field): Owned underlying TCP connection; it outlives the TLS session cleanup.
+- [`session`](../stdlib/src/net/tls/openssl/connection.crb#L27) (implementation field): Owned native OpenSSL session address; used only by this optional backend.
+- [`failed`](../stdlib/src/net/tls/openssl/connection.crb#L29) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+
+### `connect`
+
+[connection.crb:33](../stdlib/src/net/tls/openssl/connection.crb#L33)
+
+```rust
+pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) -> Result<Connection, TlsError>
+```
+
+Consumes a connected TCP socket and performs TLS with a NUL-terminated hostname and trust path.
+
+### `accept`
+
+[connection.crb:56](../stdlib/src/net/tls/openssl/connection.crb#L56)
+
+```rust
+pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) -> Result<Connection, TlsError>
+```
+
+Consumes a connected TCP socket and performs TLS with NUL-terminated certificate and key paths.
+
+### `Connection::read`
+
+[connection.crb:77](../stdlib/src/net/tls/openssl/connection.crb#L77)
+
+```rust
+fn read(&mut self, destination: &mut [u8]) -> Result<usize, TlsError>
+```
+
+Reads authenticated application data into the caller's slice.
+
+### `Connection::write`
+
+[connection.crb:90](../stdlib/src/net/tls/openssl/connection.crb#L90)
+
+```rust
+fn write(&mut self, source: &[u8]) -> Result<usize, TlsError>
+```
+
+Sends application bytes and returns the count accepted by the TLS session.
+
+### `Connection::close`
+
+[connection.crb:104](../stdlib/src/net/tls/openssl/connection.crb#L104)
+
+```rust
+fn close(self: Connection) -> Result<(), TlsError>
+```
+
+Consumes the connection and requests a TLS shutdown.
+
+### `Connection::drop`
+
+[connection.crb:111](../stdlib/src/net/tls/openssl/connection.crb#L111)
+
+```rust
+fn drop(&mut self)
+```
+
+Frees the OpenSSL session before the underlying TCP connection is destroyed.
+
+
+## `std::net::tls::record`
+
+TLS 1.3 record framing, authenticated encryption and blocking TCP transport.
+
+### `HANDSHAKE`
+
+[record.crb:7](../stdlib/src/net/tls/record/record.crb#L7)
+
+```rust
+pub const HANDSHAKE: u8 = 22
+```
+
+TLS handshake content type.
+
+### `APPLICATION_DATA`
+
+[record.crb:9](../stdlib/src/net/tls/record/record.crb#L9)
+
+```rust
+pub const APPLICATION_DATA: u8 = 23
+```
+
+TLS application data content type.
+
+### `ALERT`
+
+[record.crb:11](../stdlib/src/net/tls/record/record.crb#L11)
+
+```rust
+pub const ALERT: u8 = 21
+```
+
+TLS alert content type.
+
+### `CHANGE_CIPHER_SPEC`
+
+[record.crb:13](../stdlib/src/net/tls/record/record.crb#L13)
+
+```rust
+pub const CHANGE_CIPHER_SPEC: u8 = 20
+```
+
+TLS compatibility ChangeCipherSpec content type.
+
+### `Error`
+
+[record.crb:33](../stdlib/src/net/tls/record/record.crb#L33)
+
+```rust
+pub enum Error
+```
+
+Reports TLS framing, size, authentication, cipher state or transport failures.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/net/tls/record/record.crb#L35) (variant): The caller-provided output buffer cannot hold the result.
+- [`RecordOverflow`](../stdlib/src/net/tls/record/record.crb#L37) (variant): The record exceeds the supported TLS size limit.
+- [`InvalidRecord`](../stdlib/src/net/tls/record/record.crb#L39) (variant): The TLS record encoding or content type is invalid.
+- [`AuthenticationFailed`](../stdlib/src/net/tls/record/record.crb#L41) (variant): Authentication failed; the operation must not expose unauthenticated plaintext.
+- [`WrongDirection`](../stdlib/src/net/tls/record/record.crb#L43) (variant): The cipher was used for the opposite traffic direction.
+- [`KeyLimit`](../stdlib/src/net/tls/record/record.crb#L45) (variant): The traffic key's record sequence limit has been reached.
+- [`Closed`](../stdlib/src/net/tls/record/record.crb#L47) (variant): This traffic direction is already closed.
+- [`Failed`](../stdlib/src/net/tls/record/record.crb#L49) (variant): The cipher is in a sticky failed state.
+- [`Transport`](../stdlib/src/net/tls/record/record.crb#L51) (variant): The underlying TCP transport operation failed.
+- [`Truncated`](../stdlib/src/net/tls/record/record.crb#L53) (variant): The transport closed before the complete record arrived.
+
+### `Record`
+
+[record.crb:57](../stdlib/src/net/tls/record/record.crb#L57)
+
+```rust
+pub struct Record
+```
+
+Describes authenticated content and closure status after opening a record.
+
+Members:
+
+- [`content_type`](../stdlib/src/net/tls/record/record.crb#L59) (implementation field): Authenticated inner TLS content type.
+- [`length`](../stdlib/src/net/tls/record/record.crb#L61) (implementation field): Number of authenticated plaintext bytes.
+- [`closing`](../stdlib/src/net/tls/record/record.crb#L63) (implementation field): Whether this record contains authenticated close_notify.
+
+### `Record::kind`
+
+[record.crb:68](../stdlib/src/net/tls/record/record.crb#L68)
+
+```rust
+fn kind(&self) -> u8
+```
+
+Returns the authenticated inner content type.
+
+### `Record::len`
+
+[record.crb:70](../stdlib/src/net/tls/record/record.crb#L70)
+
+```rust
+fn len(&self) -> u64
+```
+
+Returns the number of content bytes in the plaintext buffer.
+
+### `Record::is_close_notify`
+
+[record.crb:72](../stdlib/src/net/tls/record/record.crb#L72)
+
+```rust
+fn is_close_notify(&self) -> bool
+```
+
+Reports whether the authenticated record closes the receive direction.
+
+### `RecordCipher`
+
+[record.crb:76](../stdlib/src/net/tls/record/record.crb#L76)
+
+```rust
+pub struct RecordCipher
+```
+
+Holds the key, IV, sequence and state for one record direction.
+
+Members:
+
+- [`aes`](../stdlib/src/net/tls/record/record.crb#L78) (implementation field): Owned AES-GCM key schedule for this traffic direction.
+- [`iv`](../stdlib/src/net/tls/record/record.crb#L80) (implementation field): Per-direction IV used with the record sequence number.
+- [`sequence`](../stdlib/src/net/tls/record/record.crb#L82) (implementation field): Next record sequence number; key limits are checked before further use.
+- [`sending`](../stdlib/src/net/tls/record/record.crb#L84) (implementation field): True for a writer, false for a reader; direction-specific operations validate it.
+- [`status`](../stdlib/src/net/tls/record/record.crb#L86) (implementation field): Internal cipher state encoding active, closed or failed operation.
+
+### `RecordCipher::writer`
+
+[record.crb:182](../stdlib/src/net/tls/record/record.crb#L182)
+
+```rust
+fn writer(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher
+```
+
+Creates an outbound record cipher from a traffic key and static IV.
+
+### `RecordCipher::reader`
+
+[record.crb:184](../stdlib/src/net/tls/record/record.crb#L184)
+
+```rust
+fn reader(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher
+```
+
+Creates an inbound record cipher from a traffic key and static IV.
+
+### `RecordCipher::seal`
+
+[record.crb:188](../stdlib/src/net/tls/record/record.crb#L188)
+
+```rust
+fn seal(&mut self, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error>
+```
+
+Encrypts one TLS record into caller-owned wire storage with optional padding.
+
+### `RecordCipher::open`
+
+[record.crb:225](../stdlib/src/net/tls/record/record.crb#L225)
+
+```rust
+fn open(&mut self, wire: &[u8], plaintext: &mut [u8]) -> Result<Record, Error>
+```
+
+Authenticates and decrypts a complete TLS record into caller-owned storage.
+
+### `RecordCipher::seal_close_notify`
+
+[record.crb:275](../stdlib/src/net/tls/record/record.crb#L275)
+
+```rust
+fn seal_close_notify(&mut self, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error>
+```
+
+Builds a protected close_notify record and closes the write direction.
+
+### `encode_plaintext`
+
+[record.crb:292](../stdlib/src/net/tls/record/record.crb#L292)
+
+```rust
+pub fn encode_plaintext(kind: u8, initial_client_hello: bool, content: &[u8], wire: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a cleartext TLS record for a supported handshake message.
+
+### `decode_plaintext`
+
+[record.crb:308](../stdlib/src/net/tls/record/record.crb#L308)
+
+```rust
+pub fn decode_plaintext(wire: &[u8]) -> Result<Record, Error>
+```
+
+Validates the supplied cleartext record and returns its metadata.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `read_record`
+
+[record.crb:347](../stdlib/src/net/tls/record/record.crb#L347)
+
+```rust
+pub fn read_record(socket: &mut Connection, wire: &mut [u8]) -> Result<usize, Error>
+```
+
+Reads one full framed record, handling partial TCP reads.
+
+### `write_record`
+
+[record.crb:365](../stdlib/src/net/tls/record/record.crb#L365)
+
+```rust
+pub fn write_record(socket: &mut Connection, wire: &[u8]) -> Result<(), Error>
+```
+
+Writes all record bytes, handling short TCP writes.
+
+### `RecordCipher::send_record`
+
+[record.crb:386](../stdlib/src/net/tls/record/record.crb#L386)
+
+```rust
+fn send_record(&mut self, socket: &mut Connection, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error>
+```
+
+Protects and sends one record using the caller's wire and scratch buffers.
+
+### `RecordCipher::receive_record`
+
+[record.crb:403](../stdlib/src/net/tls/record/record.crb#L403)
+
+```rust
+fn receive_record(&mut self, socket: &mut Connection, wire: &mut [u8], plaintext: &mut [u8]) -> Result<Record, Error>
+```
+
+Reads and authenticates one TLS record using caller-owned buffers.
+
+### `RecordCipher::close_notify`
+
+[record.crb:422](../stdlib/src/net/tls/record/record.crb#L422)
+
+```rust
+fn close_notify(&mut self, socket: &mut Connection, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error>
+```
+
+Sends a protected closure alert over TCP and marks the write direction closed.
+
+
+## `std::net::udp`
+
+Blocking IPv4 UDP sockets for connected or addressed datagram I/O.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Connection`
+
+[socket.crb:10](../stdlib/src/net/udp/socket.crb#L10)
+
+```rust
+pub struct Connection
+```
+
+Owns a UDP socket associated with one remote endpoint.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L12) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/udp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/udp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
+
+### `Listener`
+
+[socket.crb:20](../stdlib/src/net/udp/socket.crb#L20)
+
+```rust
+pub struct Listener
+```
+
+Owns a bound UDP socket that can receive from and send to arbitrary endpoints.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/udp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+
+### `connect`
+
+[socket.crb:28](../stdlib/src/net/udp/socket.crb#L28)
+
+```rust
+pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
+```
+
+Associates a UDP socket with the specified peer without a transport handshake.
+
+### `Connection::addr`
+
+[socket.crb:42](../stdlib/src/net/udp/socket.crb#L42)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:48](../stdlib/src/net/udp/socket.crb#L48)
+
+```rust
+fn peer(&self) -> SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::send`
+
+[socket.crb:54](../stdlib/src/net/udp/socket.crb#L54)
+
+```rust
+fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Sends a complete datagram to the connected peer, including an empty datagram.
+
+### `Connection::recv`
+
+[socket.crb:61](../stdlib/src/net/udp/socket.crb#L61)
+
+```rust
+fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Receives one datagram from the connected peer. An oversized payload is consumed and reported.
+
+### `Listener::bind`
+
+[socket.crb:73](../stdlib/src/net/udp/socket.crb#L73)
+
+```rust
+fn bind(address: SocketAddr) -> Result<Listener, SocketError>
+```
+
+Binds a UDP socket to the supplied local endpoint. Use port zero for an assigned port.
+
+### `Listener::addr`
+
+[socket.crb:86](../stdlib/src/net/udp/socket.crb#L86)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Listener::recv`
+
+[socket.crb:92](../stdlib/src/net/udp/socket.crb#L92)
+
+```rust
+fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
+```
+
+Receives one datagram with sender metadata. An oversized payload is consumed and reported.
+
+### `Listener::send`
+
+[socket.crb:98](../stdlib/src/net/udp/socket.crb#L98)
+
+```rust
+fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
+```
+
+Sends a complete datagram to the supplied destination, including an empty datagram.
+
+
+## `std::num`
+
+Minimum selection for signed 64-bit integers.
+
+### `min_i64`
+
+[min.crb:5](../stdlib/src/num/min.crb#L5)
+
+```rust
+pub fn min_i64(left: i64, right: i64) -> i64
+```
+
+Returns the smaller of two signed 64-bit values.
+
+
+## `std::text`
+
+Allocation-free splitting of UTF-8 text into borrowed views.
+
+### `Split`
+
+[split.crb:6](../stdlib/src/text/split.crb#L6)
+
+```rust
+pub struct Split
+```
+
+A forward iterator over non-overlapping literal separator matches.
+Pieces borrow the original text; no piece owns or copies its bytes.
+
+Members:
+
+- [`text`](../stdlib/src/text/split.crb#L8) (implementation field): Original UTF-8 storage, retained independently of the iterator cursor.
+- [`separator`](../stdlib/src/text/split.crb#L10) (implementation field): Literal separator; its storage must remain valid while matching continues.
+- [`position`](../stdlib/src/text/split.crb#L12) (implementation field): Byte offset of the next unconsumed piece.
+- [`finished`](../stdlib/src/text/split.crb#L14) (implementation field): Records exhaustion, including the final empty piece after a trailing match.
+- [`empty_started`](../stdlib/src/text/split.crb#L16) (implementation field): Records whether an empty separator has yielded its leading empty piece.
+
+### `split`
+
+[split.crb:21](../stdlib/src/text/split.crb#L21)
+
+```rust
+pub fn split(text: &str, separator: &str) -> Split
+```
+
+Borrows text and its separator and constructs a fixed-size iterator descriptor.
+Empty pieces are preserved. An empty separator splits at Unicode scalar boundaries.
+
+### `Split::next`
+
+[split.crb:28](../stdlib/src/text/split.crb#L28)
+
+```rust
+fn next(&mut self) -> Option<&str>
+```
+
+Returns the next UTF-8 view, or None after exhaustion.
+Returned pieces depend on the original text, independently of this cursor.

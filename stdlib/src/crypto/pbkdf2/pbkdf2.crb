@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! PBKDF2 using HMAC-SHA-256 with caller-owned output.
+
+use std::crypto::sha256::{hmac, hmac_parts};
+
+/// Reports zero iterations, a length outside the PBKDF2 output range, or an oversized input.
+pub enum Error {
+    /// The derivation iteration count is invalid.
+    InvalidIterations,
+    /// The derivation output length is invalid.
+    InvalidOutputLength,
+    /// Input length exceeds the algorithm's supported counter or encoding limit.
+    InputTooLong
+}
+
+/// Derives output.len() bytes with PBKDF2-HMAC-SHA-256. The caller sets the salt and iteration count.
+/// Parameter errors leave the output unchanged.
+pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32,
+                      output: &mut [u8]) -> Result<(), Error> {
+    if iterations == 0 { return Err(Error.InvalidIterations); }
+    let length = output.len();
+    if length == 0 || (length as u64) > 0xffffffff * 32 { return Err(Error.InvalidOutputLength); }
+    let password_len = password.len();
+    let salt_len = salt.len();
+    // U1 hashes the 64-byte HMAC pad, the salt and the 4-byte block index.
+    if (password_len as u64) > 0x1fffffffffffffff
+       || (salt_len as u64) > 0x1fffffffffffffff - 68 { return Err(Error.InputTooLong); }
+
+    let prefix: [u8; 0] = [];
+    let mut written: usize = 0;
+    let mut block: [u8; 4] = [0, 0, 0, 1];
+    while written < length {
+        let mut u = match hmac_parts(&password[0..password_len], &prefix[..], &salt[0..salt_len], &block[..]) {
+            Err(error) => { drop(error); return Err(Error.InputTooLong); },
+            Ok(value) => { value },
+        };
+        let mut sum: [u8; 32] = [0; 32];
+        let mut index: usize = 0;
+        while index < 32 {
+            sum[index] = u[index];
+            index = index + 1;
+        }
+        let mut round: u32 = 1;
+        while round < iterations {
+            let next = match hmac(&password[0..password_len], &u[..]) {
+                Err(error) => { drop(error); return Err(Error.InputTooLong); },
+                Ok(value) => { value },
+            };
+            index = 0;
+            while index < 32 {
+                let byte = next[index];
+                sum[index] = sum[index] ^ copy(byte);
+                u[index] = byte;
+                index = index + 1;
+            }
+            round = round + 1;
+        }
+        index = 0;
+        while index < 32 && written < length {
+            output[written] = sum[index];
+            index = index + 1;
+            written = written + 1;
+        }
+        if written < length {
+            // RFC 8018 encodes the 1-based index as four big-endian bytes.
+            let mut carry: usize = 3;
+            while block[carry] == 255 {
+                block[carry] = 0;
+                carry = carry - 1;
+            }
+            block[carry] = block[carry] + 1;
+        }
+    }
+    Ok(())
+}

@@ -1,0 +1,17 @@
+fn make(memory: &mut Pool<Int>) -> <-Int {
+    let a = memory.new(7);
+    return <-a;
+}
+
+async fn work(memory: &mut Pool<Int>) -> <-Int {
+    return <-make(memory);
+}
+
+fn main() {
+    let mut p = pool<Int>(1);
+    let h = runtime::spawn(->work(&mut p));
+    match h.join() {
+        Ok(a) => { print(a); drop(->a); },
+        Err(_) => {}
+    }
+}

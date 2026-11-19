@@ -1,0 +1,56 @@
+test_recursive_handle_field_layout_is_pointer_sized (test_foundation_rules.FoundationTests.test_recursive_handle_field_layout_is_pointer_sized) ... ok
+test_recursive_owned_fields_drop_children_once_in_origin_pools (test_foundation_rules.FoundationTests.test_recursive_owned_fields_drop_children_once_in_origin_pools) ... ok
+test_function_returns_finite_value_of_recursive_owned_type (test_foundation_rules.FoundationTests.test_function_returns_finite_value_of_recursive_owned_type) ... ok
+test_recursive_owned_parameter_can_be_inspected_relayed_and_destroyed (test_foundation_rules.FoundationTests.test_recursive_owned_parameter_can_be_inspected_relayed_and_destroyed) ... ok
+test_recursive_mutable_parameter_updates_deep_leaf_in_place (test_foundation_rules.FoundationTests.test_recursive_mutable_parameter_updates_deep_leaf_in_place) ... ok
+test_consuming_match_extracts_recursive_owned_child_beyond_first_repeat (test_foundation_rules.FoundationTests.test_consuming_match_extracts_recursive_owned_child_beyond_first_repeat) ... ok
+test_function_returns_consumed_recursive_owned_projection_through_relay (test_foundation_rules.FoundationTests.test_function_returns_consumed_recursive_owned_projection_through_relay) ... ERROR
+
+======================================================================
+ERROR: test_function_returns_consumed_recursive_owned_projection_through_relay (test_foundation_rules.FoundationTests.test_function_returns_consumed_recursive_owned_projection_through_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 1560, in test_function_returns_consumed_recursive_owned_projection_through_relay
+    run = self.native(source.replace('CHECK', ''))
+  File "/Users/jabarkarim/sources/crust/tests/test_foundation_rules.py", line 722, in native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16679, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16672, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15147, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14725, in verify
+    infer_storage_requirements(self.functions, async_functions, self.function_effects,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               self.function_results, self.function_constraints, self.enums, Error)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 183, in infer_storage_requirements
+    StorageContext(analyzer, node).infer()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 478, in infer
+    self.nodes(self.node.args[3], initial,
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               valued=self.node.args[2][0] == 'owned')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 56, in nodes
+    return super().nodes(nodes, state, valued, expected_array)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2296, in nodes
+    hook(self, value, f'A<{typ}>', line)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 129, in annotation
+    require(context, value, 'pool', line)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/storage_requirements.py", line 120, in require
+    context.fail(line, 'prototype : exigence de stockage sur une projection non raccordée')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 340, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 6: prototype : exigence de stockage sur une projection non raccordée
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.156s
+
+FAILED (errors=1)

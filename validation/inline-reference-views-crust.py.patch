@@ -1,0 +1,118 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2078,7 +2078,10 @@
+     def reserved_targets(self, binding):
+         if binding.reserved_field is not None:
+             key = ('.' if binding.alloc.typ in self.struct_fields else '') + binding.reserved_field
+-            return dict(binding.alloc.dependencies).get(key, ()) or dict(binding.alloc.owned_fields).get(key, ())
++            return tuple({target.id: target
++                          for field, targets in (*binding.alloc.dependencies, *binding.alloc.owned_fields)
++                          if field == key or field.startswith(key + '.')
++                          for target in targets}.values())
+         return self.dependency_targets(binding.alloc)
+ 
+     @staticmethod
+@@ -2571,8 +2574,9 @@
+                     field_mode = 'mut' if owned else self.field_modes(holder.typ).get(target.field)
+                     if field_mode is None or (summary.mode == 'mut' and field_mode != 'mut'):
+                         self.fail('invariant interne : champ incompatible avec le contrat de retour')
++                    updated_holder = self.refresh_inline_view(copy.copy(holder), structure_updates)
+                     updated = (structure_updates or {}).get(holder.id) if field is not None else None
+-                    projected = owned or dict((updated[1] if updated else holder).dependencies).get(target.field)
++                    projected = owned or dict((updated[1] if updated else updated_holder).dependencies).get(target.field)
+                     if not projected:
+                         self.fail('invariant interne : cible de champ absente du contrat de retour')
+                     key = (holder.id, field) if field is not None else holder.id
+@@ -3257,6 +3261,8 @@
+ 
+     def verify_state(self):
+         """Executable verifier invariants, not a proof of compiler correctness."""
++        for view in self.inline_views.values():
++            self.refresh_inline_view(view)
+         scopes = {scope.id: scope for scope in self.scopes}
+         sources = {source.id: source for scope in self.scopes for source in scope.sources}
+         handles = {}
+@@ -3320,6 +3326,8 @@
+         for scope in reversed(self.scopes):
+             if name in scope.bindings:
+                 binding = scope.bindings[name]
++                for target in binding.referents or ((binding.alloc,) if binding.alloc else ()):
++                    self.refresh_inline_view(target)
+                 if not binding.valid or (binding.alloc and not binding.alloc.alive):
+                     self.fail(f"'{name}' n'est plus utilisable (déplacée ou allocation libérée)")
+                 return binding
+@@ -5395,13 +5403,32 @@
+             self.fail('prototype : résultat mêlant une référence entière et une vue de sous-structure non encore raccordé')
+         return 'CrustStructureView' if representations == {True} else 'Cell *'
+ 
++    def refresh_inline_view(self, view, updates=None):
++        if view.inline_root is None:
++            return view
++        from structure_views import project_fields
++        root = view.inline_root
++        root = (updates or {}).get(root.id, (root, root))[1]
++        view.dependencies = project_fields(root.dependencies, view.inline_path)
++        view.borrow_parents = root.borrow_parents
++        view.alive, view.definite = root.alive, root.definite
++        view.scope, view.sources = root.scope, root.sources
++        return view
++
++    @staticmethod
++    def inline_field_update(holder, changes):
++        if holder.inline_root is None:
++            return holder, changes
++        from structure_views import prefix_fields
++        return holder.inline_root, prefix_fields(changes, holder.inline_path)
++
+     def inline_structure_projection(self, binding, path, mode, c=''):
+         from structure_views import contained_field
+         layout = contained_field(self.enums, binding.alloc.typ, path)
+         if layout is None:
+             self.fail(f"sous-structure inconnue '{path}' dans {binding.alloc.typ}")
+-        if any(typ != 'Int' for _, typ in self.enums[layout.typ]['']):
+-            self.fail('prototype : vue de sous-structure à champs non Int non encore raccordée')
++        if any(typ not in ('Int', '&Int', '&mut Int') for _, typ in self.enums[layout.typ]['']):
++            self.fail('prototype : vue de sous-structure à champs typés ou propriétaires non encore raccordée')
+         targets, parents = [], []
+         for holder in binding.referents or (binding.alloc,):
+             root = holder.inline_root or holder
+@@ -5411,7 +5438,7 @@
+                 self.inline_views[key] = Allocation(self.uid(), root.scope, full_path, root.sources,
+                     typ=layout.typ, variants=frozenset({''}), inline_root=root, inline_path=full_path)
+             view = self.inline_views[key]
+-            view.scope, view.sources = root.scope, root.sources
++            self.refresh_inline_view(view)
+             targets.append(view)
+             parents.append(Binding(binding.name, mode, binding.c, root,
+                 borrow_parents=(binding,), match_reservation=True, reserved_field=full_path))
+@@ -5658,7 +5685,8 @@
+         paths = [(root, parent) for root in self.struct_int_roots(binding, path)]
+         for holder in binding.referents or (binding.alloc,):
+             key = '.' + path
+-            updated = (structure_updates or {}).get(holder.id, (holder, holder))[1]
++            updated = self.refresh_inline_view(copy.copy(holder), structure_updates)
++            updated = (structure_updates or {}).get(holder.id, (updated, updated))[1]
+             targets = dict(updated.dependencies).get(key, ())
+             if self.field_modes(holder.typ).get(key) != 'mut' or not targets:
+                 self.fail('champ mutable emprunté : cible non disponible')
+@@ -11968,7 +11996,9 @@
+                         updates[leaf.id] = leaf, proposed
+                 continue
+             for allocation in holders:
+-                proposed = self.propose_field_update(allocation, dependencies, parents, len(holders) > 1)
++                allocation, changes = self.inline_field_update(allocation, dependencies)
++                previous = updates.get(allocation.id, (allocation, allocation))[1]
++                proposed = self.propose_field_update(previous, changes, parents, len(holders) > 1)
+                 if allocation.typ in REFERENCE_VECTORS:
+                     slots = dict(result.reference_appends).get(index)
+                     proposed.reference_positions = None if proposed.dependencies else ()
+@@ -13293,7 +13323,8 @@
+                     holders = binding.referents or (allocation,)
+                     dependencies = (('.' + place[2], descriptor.reference_targets or (descriptor,)),)
+                     for holder in holders:
+-                        proposed = self.propose_field_update(holder, dependencies, descriptor.borrow_parents,
++                        holder, changes = self.inline_field_update(holder, dependencies)
++                        proposed = self.propose_field_update(holder, changes, descriptor.borrow_parents,
+                                                              len(holders) > 1)
+                         destination = next(active for active in self.scopes if active.id == holder.scope)
+                         self.check_borrow_destination(proposed, destination)

@@ -1,0 +1,142 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1,4 +1,6 @@
+ """Lower async bodies to the task ABI with static checks of memory transitions."""
++
++from capture_paths import capture_index
+ 
+ from collections import ChainMap
+ from dataclasses import dataclass, replace
+@@ -1042,13 +1044,19 @@
+                 held = active_loans.pop(key)
+                 active_loans[target] = list(dict.fromkeys((*active_loans.get(target, ()), *held)))
+ 
+-    def retain_result_fields(holder, summary_fields, argument_loans, line):
++    def retain_result_fields(holder, summary_fields, argument_loans, line, argument_fields=None):
+         for field, targets in summary_fields:
+             held = []
+             for target in targets:
+-                if target.kind not in ('parameter', 'exclusive_join_parameter'):
++                if target.kind == 'field_parameter' and argument_fields is not None:
++                    captured = argument_fields.get((target.parameter, target.field))
++                    if captured is None:
++                        fail(line, 'résultat struct async : champ emprunté absent de la capture')
++                    held.extend(captured)
++                elif target.kind in ('parameter', 'exclusive_join_parameter'):
++                    held.extend(argument_loans[target.parameter])
++                else:
+                     fail(line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+-                held.extend(argument_loans[target.parameter])
+             active_loans[('stored_field', holder, tuple(field.lstrip('.').split('.')))] = list(dict.fromkeys(held))
+ 
+     def clear_stored_fields(holder):
+@@ -1516,6 +1524,7 @@
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+         prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
++        argument_fields = {}
+         local_parameters = set()
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, prepared_owners, loans))
+@@ -1536,7 +1545,9 @@
+                         fail(line, 'une valeur locale T ne peut pas devenir une allocation A<T>')
+                     if storage_of(value) & implicit_stacks:
+                         local_parameters.add(index)
+-                    held = [loan for group in owned_capture_field_loans(value, typ).values() for loan in group]
++                    field_loans = owned_capture_field_loans(value, typ)
++                    argument_fields.update(((index, path), group) for path, group in field_loans.items())
++                    held = [loan for group in field_loans.values() for loan in group]
+                     loans.extend(held)
+                 elif (mode, typ) in owned_join_sync_types:
+                     if argument[0] not in ('down', 'transfer'):
+@@ -1640,6 +1651,7 @@
+         if signature in handle_sync_types or signature in task_sync_types:
+             retained, returned = [], []
+             capture_loans = {}
++            capture_field_loans = {}
+             result_captures = (borrowed_result_parameters(functions[signature[1]], functions, fail, {},
+                               sync_contracts=sync_contracts)
+                                if signature in task_sync_types else {4, 5})
+@@ -1655,14 +1667,18 @@
+                             fail(line, 'projection du handle : structure prise en charge requise')
+                         held.extend(project_result_field_loans(argument_loans[target.parameter], typ,
+                                                               tuple(target.field.lstrip('.').split('.'))))
+-                    elif target.kind in ('parameter', 'utf8_parameter', 'string_parameter', 'vector_parameter', 'owned_capture_field'):
++                    elif target.kind == 'owned_capture_field':
++                        held.extend(argument_fields[(target.parameter, target.field)])
++                    elif target.kind in ('parameter', 'utf8_parameter', 'string_parameter', 'vector_parameter'):
+                         held.extend(argument_loans[target.parameter])
+                     else:
+                         fail(line, 'prototype : capture du handle synchrone sans paramètre direct')
+                 retained.extend(held)
+-                capture_index = int(field.partition('.')[2])
+-                capture_loans.setdefault(capture_index, []).extend(held)
+-                if capture_index in result_captures:
++                position = capture_index(field.partition('.')[2])
++                capture_loans.setdefault(position, []).extend(held)
++                if '/' in field:
++                    capture_field_loans[(position, field.partition('/')[2])] = held
++                if position in result_captures:
+                     returned.extend(held)
+             for sources, output in ((contract.result.task_sources, retained),
+                                     (contract.result.task_result_sources, returned)):
+@@ -1681,7 +1697,7 @@
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]
+                 from async_result_storage import borrowed_result_fields
+-                retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line)
++                retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line, capture_field_loans)
+                 task_prefix_changes[value] = ((definition.field_effect_summary, definition.args[1],
+                     tuple(tuple(capture_loans.get(index, ())) for index in range(len(definition.args[1])))),)
+                 return value, definition.args[2] == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+@@ -1710,7 +1726,7 @@
+                          and candidate.source.kind == 'source_parameter' else None)
+                 keep_storage(value, argument_storage[index] if index is not None else
+                              frozenset().union(*argument_storage))
+-            retain_result_fields(value, contract.result.borrowed_fields, argument_loans, line)
++            retain_result_fields(value, contract.result.borrowed_fields, argument_loans, line, argument_fields)
+             return value, signature[1]
+         if signature in view_sync_types:
+             retained_views = []
+@@ -1777,8 +1793,11 @@
+         if completion is None or not completion.complete:
+             fail(node.line, 'résultat struct async : contrat des cibles empruntées incomplet')
+         for _, targets in completion.completion_result.borrowed_fields:
+-            if not targets or any(target.kind not in ('parameter', 'exclusive_join_parameter') or
+-                    parameters[target.parameter][1] not in ('ref', 'mut') for target in targets):
++            if not targets or any(not (
++                    target.kind in ('parameter', 'exclusive_join_parameter') and parameters[target.parameter][1] in ('ref', 'mut')
++                    or target.kind == 'field_parameter' and parameters[target.parameter][1] in ('owned', *JOIN_PAYLOADS)
++                    and dict(reference_structs.get(parameters[target.parameter][2], ())).get(target.field.lstrip('.')) in ('&Int', '&mut Int')
++                    ) for target in targets):
+                 fail(node.line, 'résultat struct async : cible empruntée sans paramètre durable raccordé')
+     returns_int = result == ('scalar', 'Int')
+     returns_bool = result == ('scalar', 'Bool')
+@@ -1888,6 +1907,7 @@
+         if len(arguments) != len(declaration.args[1]):
+             fail(line, f"'{callee}' attend {len(declaration.args[1])} argument(s), reçu {len(arguments)}")
+         captures, loans, returned_loans, argument_loans = [], [], [], []
++        argument_fields = {}
+         local_captures = set()
+         capture_storage = []
+         owner_indexes = owned_result_parameters(declaration, functions,
+@@ -2122,7 +2142,9 @@
+                     local_captures.add(index)
+                 if mode in ('owned', *JOIN_PAYLOADS):
+                     if mode == 'owned':
+-                        loans.extend(loan for group in owned_capture_field_loans(value, typ).values() for loan in group)
++                        field_loans = owned_capture_field_loans(value, typ)
++                        argument_fields.update(((index, path), group) for path, group in field_loans.items())
++                        loans.extend(loan for group in field_loans.values() for loan in group)
+                     if storage_of(value) & implicit_stacks:
+                         if declaration.args[1][index][0] in declaration.handle_parameters:
+                             fail(line, 'capture A<T> : une structure locale T ne peut pas remplacer une allocation de pool')
+@@ -2169,7 +2191,7 @@
+                 captures.append('&' + local_pools[destination] if destination else 'NULL')
+             steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
+             from async_result_storage import borrowed_result_fields
+-            retain_result_fields(task, borrowed_result_fields(declaration), argument_loans, line)
++            retain_result_fields(task, borrowed_result_fields(declaration), argument_loans, line, argument_fields)
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
+                        if effects is not None and effects.complete else ())
+             # Resolve only when Select needs it; ordinary awaits may use types

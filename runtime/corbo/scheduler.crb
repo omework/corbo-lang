@@ -1,0 +1,148 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Queue and park/publication transitions run under the scheduler lock.
+//! Poll bodies and destruction callbacks run outside that lock.
+/// Links a task at the queue tail; caller holds the scheduler lock and the task is not already queued.
+fn task_enqueue(task:usize) {
+    s_Task_next(copy(task),0);
+    write_word(get_task_tail(),copy(task));
+    set_task_tail(a_Task_next(copy(task)));
+}
+/// Publishes completion and wakes or enqueues a waiting root exactly through the locked scheduler transition.
+fn task_publish(task:usize) {
+    s_Task_done(copy(task),true);
+    let waiter=g_Task_waiter(copy(task));
+    if copy(waiter)!=0 {
+        s_Task_waiting(copy(waiter),false);
+        if g_Task_parked(copy(waiter)) {
+            s_Task_parked(copy(waiter),false);
+            if !g_Task_blocking(copy(waiter)) {
+                task_enqueue(copy(waiter));
+            }
+        }
+    }
+    broadcast();
+}
+/// Registers the current root as child's waiter if unfinished; returns whether completion was already visible under the lock.
+fn task_await(child:usize,current:usize)->bool {
+    let ancestor=g_Task_root(copy(current));
+    let root:usize=if copy(ancestor)!=0 {
+        copy(ancestor)
+    } else {
+        copy(current)
+    };
+    lock();
+    let ready=g_Task_done(copy(child));
+    if !copy(ready) {
+        s_Task_waiter(copy(child),copy(root));
+        s_Task_waiting(copy(root),true);
+    }
+    unlock();
+    copy(ready)
+}
+/// Consumes queued tasks, polls outside the lock, then publishes, parks or requeues them; releases its thread-local stack on exit.
+fn task_poll_worker(unused:usize)->usize {
+    drop(copy(unused));
+    if get_base()==0 {
+        reserve(1);
+    }
+    lock();
+    loop {
+        while get_task_head()==0 && !get_task_stopping() {
+            condition_wait();
+        }
+        let task=get_task_head();
+        if copy(task)==0 {
+            break;
+        }
+        set_task_head(g_Task_next(copy(task)));
+        if get_task_head()==0 {
+            set_task_tail(head_address());
+        }
+        unlock();
+        let done=call_poll(g_Task_poll(copy(task)),copy(task),false);
+        lock();
+        if copy(done) {
+            task_publish(copy(task));
+            if g_Task_abandoned(copy(task)) {
+                let discard=g_Task_discard(copy(task));
+                unlock();
+                call_task_drop(copy(discard),copy(task));
+                lock();
+            }
+            set_task_active(get_task_active()-1);
+        }   else {
+            if g_Task_waiting(copy(task)) {
+                s_Task_parked(copy(task),true);
+            } else {
+                task_enqueue(copy(task));
+            }
+        }
+        broadcast();
+    }
+    unlock();
+    if get_base()!=0 {
+        release();
+    }
+    0
+}
+/// Initializes a task and starts poll workers once; enqueues it or records launch failure and clears captures if no worker starts.
+fn task_spawn_with(task:usize,poll:usize,discard:usize) {
+    memory_zero(copy(task),size_Task());
+    s_Task_poll(copy(task),copy(poll));
+    s_Task_discard(copy(task),copy(discard));
+    lock();
+    if !get_task_attempted() {
+        set_task_attempted(true);
+        let mut index:usize=0;
+        while copy(index)<2 {
+            let count=get_task_worker_count();
+            if thread_create(worker_address(copy(count)),pointer_task_poll_worker(),0)==0 {
+                set_task_worker_count(copy(count)+1);
+            }
+            index=copy(index)+1;
+        }
+    }
+    if get_task_worker_count()==0 {
+        unlock();
+        s_Task_failed(copy(task),true);
+        drop(call_poll(g_Task_poll(copy(task)),copy(task),true));
+        s_Task_done(copy(task),true);
+        return;
+    }
+    set_task_active(get_task_active()+1);
+    task_enqueue(copy(task));
+    broadcast();
+    unlock();
+}
+/// Schedules a task without an abandonment callback; its caller must preserve the frame through completion.
+fn task_spawn(task:usize,poll:usize) {
+    task_spawn_with(copy(task),copy(poll),0);
+}
+/// Blocks the current thread on the scheduler condition until the task is done.
+fn task_join(task:usize) {
+    lock();
+    while !g_Task_done(copy(task)) {
+        condition_wait();
+    }
+    unlock();
+}
+/// Drains active scheduled tasks, signals shutdown and joins every poll worker.
+fn task_end() {
+    if get_task_worker_count()==0 {
+        return;
+    }
+    lock();
+    while get_task_active()!=0 {
+        condition_wait();
+    }
+    set_task_stopping(true);
+    broadcast();
+    unlock();
+    let mut index:usize=0;
+    while copy(index)<get_task_worker_count() {
+        if thread_join(worker_address(copy(index)))!=0 {
+            os_abort();
+        }
+        index=copy(index)+1;
+    }
+}

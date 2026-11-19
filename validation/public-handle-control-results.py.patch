@@ -1,0 +1,51 @@
+--- before/results.py
++++ after/results.py
+@@ -535,6 +535,14 @@
+         fields = tuple((key, frozenset(targets)) for key, targets in canonical_captures(
+             value.fields, self.analyzer.async_functions[value.typ].args[1]))
+         return replace(value, typ=typ, fields=fields)
++
++    def unify_handle_values(self, values, line):
++        from handle_types import common_public_handle
++        if values and all(isinstance(value, Value) and value.mode == 'execution' for value in values):
++            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions)
++            if public is not None:
++                return [self.public_handle_value(value, public, line) for value in values]
++        return values
+ 
+     def parameter_array(self, index, typ, prefix=''):
+         mode, count = reference_array_shape(typ)
+@@ -1972,6 +1980,8 @@
+             self.join_environments(environment, ((left, left_env), (right, right_env)))
+             candidates, returning = set(), []
+             kind, typ = None, None
++            if 'next' in left and 'next' in right:
++                a, b = self.unify_handle_values([a, b], line)
+             for branch, value in ((left, a), (right, b)):
+                 if 'next' not in branch:
+                     continue
+@@ -2711,6 +2721,8 @@
+                             self.fail(line, 'break sans valeur dans une boucle avec receveur')
+                         if isinstance(value, Value):
+                             values = self.loops[-1]['values']
++                            combined = self.unify_handle_values([*values, value], line)
++                            values[:], value = combined[:-1], combined[-1]
+                             if values and (value.mode, value.typ) != (values[0].mode, values[0].typ):
+                                 self.fail(line, 'break : même type et même mode requis sur toutes les sorties')
+                             values.append(value)
+@@ -2798,6 +2810,7 @@
+                     part |= outcome
+                 self.join_environments(environment, continuing)
+                 if values and all(isinstance(value, Value) and value.mode != 'unknown' for value in values):
++                    values = self.unify_handle_values(values, line)
+                     signatures = {(value.mode.removeprefix('array_') if value.mode in ('array_ref', 'array_mut')
+                                    else value.mode, value.typ,
+                                    value.container_mode if value.container_borrow else None)
+@@ -2860,6 +2873,7 @@
+                 values.append(value)
+         self.join_environments(environment, continuing)
+         if values:
++            values = self.unify_handle_values(values, line)
+             return flow, replace(merge_reference_values(values),
+                                  payload_reference=any(value.payload_reference for value in values),
+                                  handle_items=merge_handle_items(values),

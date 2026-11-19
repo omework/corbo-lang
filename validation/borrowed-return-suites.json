@@ -1,0 +1,107 @@
+{
+  "cycle": "owned returns with borrowed &Int fields, child-to-parent checking, 2026-11-02",
+  "approved_rules": [
+    "B4c and P9: result field identity mapping and destination lifetime checks"
+  ],
+  "historical_baseline": {
+    "tests": 572,
+    "note": "previous cycle; initial make_view return restriction reproduced, not a new full baseline run"
+  },
+  "earlier_cycle_run": {
+    "standard_tests": 604,
+    "standard_seconds": 372.332,
+    "ubsan_tests": 604,
+    "ubsan_seconds": 372.037,
+    "status": "OK before an additional mutable-parent alias counterexample was found and corrected"
+  },
+  "final_runs": [
+    {
+      "command": "python3 -m unittest discover -s tests -q",
+      "tests": 605,
+      "seconds": 334.931,
+      "status": "OK"
+    },
+    {
+      "command": "CRUST_SANITIZE=undefined python3 -m unittest discover -s tests -q",
+      "tests": 605,
+      "seconds": 334.73,
+      "status": "OK"
+    }
+  ],
+  "new_test_methods": 33,
+  "independent_scope_model": {
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "wrapper_depths": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "expected_valid_executed": 12,
+    "expected_invalid_rejected": 12,
+    "limits": [
+      "scope route model, not a complete borrowing oracle"
+    ]
+  },
+  "existing_models_included": [
+    "cleanup order",
+    "pool type routes",
+    "reference field frontier",
+    "runtime pool oracle: 3000 operations"
+  ],
+  "mutations": {
+    "new": 5,
+    "previous_field_mutations_replayed": 4,
+    "all_detected": true,
+    "reports": [
+      "borrowed-return-mutations.json",
+      "reference-field-mutations-current.json"
+    ],
+    "limit": "selected samples, no global detection rate"
+  },
+  "optimized_C": {
+    "executions": 12,
+    "normal": 8,
+    "expected_capacity_aborts": 4,
+    "report": "borrowed-return-c.json"
+  },
+  "corrected_counterexamples": [
+    "normal-return caller scope unavailable after pop",
+    "shared reborrow parent reactivated too early",
+    "unrelated original-handle alias while mutable parent still live"
+  ],
+  "limits": [
+    "one C compiler family",
+    "ASan not run in cycle, earlier host probes failed",
+    "UBSan full-suite covers harness C/oracle, not ordinary CLI-built binaries",
+    "no implicit promotion of local targets",
+    "no direct borrowed return",
+    "no general reference graph",
+    "no formal proof"
+  ]
+}

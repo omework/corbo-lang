@@ -1,0 +1,12 @@
+--- tests/test_async_direct_copy.py
++++ tests/test_async_direct_copy.py
+@@ -26,7 +26,8 @@
+         for creation in ('let p=Point{x:7};',
+                          'let mut points=pool<Point>(2);let p=points.new(x:7);'):
+             with self.subTest(creation=creation):
+-                source = self.program(creation + 'let q=leaf(&p).await;drop(->p);yield;return q.x;', helpers)
++                typed_helpers = helpers if 'Point{x:7}' in creation else helpers.replace('-><-Point', '-><-A<Point>')
++                source = self.program(creation + 'let q=leaf(&p).await;drop(->p);yield;return q.x;', typed_helpers)
+                 self.assertEqual(self.run_source(source).stdout, '7\n')
+ 
+     def test_explicit_pool_copy_and_reuse(self):

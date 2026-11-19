@@ -1,0 +1,52 @@
+--- /tmp/crust-before-typed-vector-exchanges/results.py
++++ /Users/jabarkarim/sources/crust/results.py
+@@ -17,6 +17,7 @@
+ 
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ASYNC_SHARED_VIEW_MODES, VECTOR_SLICE_ELEMENTS, VECTOR_SPLIT_TYPES, SHARED_VECTOR_SLICE_MODES, VECTOR_SLICE_MODES, VECTOR_MUT_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, UTF8_BORROW_MODES, VALUE_MODES, UTF8_VALUE_RESULT_FAMILIES
+ from dataclasses import dataclass, field, replace
++from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import aggregate_owned_paths
+ from array_syntax import merge_structure_choices
+@@ -1018,7 +1019,7 @@
+                 environment[name] = SourceOrigin('source_parameter', index,
+                                                  element=typ[5:-1] if typ.startswith('Pool<') else None)
+             elif mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+-                payloads = (frozenset() if typ == 'Result<(),A<Int>>' or exchange_is_try_push(mode) else
++                payloads = (frozenset() if exchange_optional(typ) or exchange_is_try_push(mode) else
+                             frozenset({ResultCandidate('exchange_parameter', index, item_index=0)}),
+                             frozenset({ResultCandidate('exchange_parameter', index, item_index=1)}))
+                 environment[name] = Value(mode, typ, frozenset().union(*payloads), exchange_payloads=payloads)
+@@ -2058,10 +2059,10 @@
+                 if op in ('array_buffered_replace', 'array_buffered_try_push'):
+                     self.publish_handle_exchange(environment, exchange, exact=False)
+                     old = frozenset() if append else handle_items_at(old_items, index) or frozenset()
+-                    typ = 'Result<(),A<Int>>' if append else 'Result<A<Int>,A<Int>>'
++                    typ = exchange_type(handle_vector_element(vector.typ), append)
+                     return flow, Value('buffered_handle_exchange', typ, incoming | old,
+                                        exchange_payloads=(old, incoming))
+-                return flow, Value('handle_exchange', '?', incoming,
++                return flow, Value('handle_exchange', handle_vector_element(vector.typ), incoming,
+                                    handle_items=handle_items_at(old_items, index), handle_exchange=exchange)
+             if op == 'array_handle_exchange_status':
+                 return flow, SCALAR
+@@ -2070,8 +2071,8 @@
+                 if exchange.mode in ('mutable_ref_replace', 'mutable_ref_try_push'):
+                     return flow, replace(exchange, mode='mut', typ='Int')
+                 if expr[2][1] != 0:
+-                    return flow, Value('owned', 'Int', exchange.candidates)
+-                return flow, extracted_handle(exchange.handle_items)
++                    return flow, Value('owned', exchange.typ, exchange.candidates)
++                return flow, extracted_handle(exchange.handle_items, exchange.typ)
+             if op == 'array_handle_len':
+                 return flow, SCALAR
+             if op == 'array_buffered_exchange_status':
+@@ -2085,7 +2086,7 @@
+                     return flow, replace(exchange, mode='mut', typ='Int')
+                 if not isinstance(exchange, Value) or len(exchange.exchange_payloads) != 2:
+                     self.fail(line, 'match (-> résultat) exige un résultat de replace ou try_push')
+-                return flow, extracted_handle(exchange.exchange_payloads[arm == 5])
++                return flow, extracted_handle(exchange.exchange_payloads[arm == 5], exchange_element(exchange.typ))
+             if op == 'array_handle_option_status':
+                 return flow, SCALAR
+             if op == 'array_handle_option_value':

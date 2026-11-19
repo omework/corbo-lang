@@ -1,0 +1,17 @@
+--- /dev/null
++++ exchange_join_types.py
+@@ -0,0 +1,14 @@
++"""Owned vector-operation results wrapped by a runtime execution result."""
++
++EXCHANGE_JOIN_INNERS = {
++    'join_exchange': 'Result<A<Int>,A<Int>>',
++    'join_try_push': 'Result<(),A<Int>>',
++}
++EXCHANGE_JOIN_TYPES = {
++    mode: f'Result<{inner},runtime::Error>'
++    for mode, inner in EXCHANGE_JOIN_INNERS.items()
++}
++
++
++def exchange_join_mode(inner):
++    return next(mode for mode, typ in EXCHANGE_JOIN_INNERS.items() if typ == inner)

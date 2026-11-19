@@ -1,0 +1,304 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1104,6 +1104,69 @@
+             selected = f'(({pointer}) == &({candidate})->value ? ({candidate}) : ({selected}))'
+         return selected
+ 
++    def prepare_field_changes(summary, callee_parameters, argument_loans, line):
++        field_changes = []
++        for index, changes in summary.structure_fields:
++            typ = callee_parameters[index][2]
++            holders = []
++            for target, _ in argument_loans[index]:
++                root, path = target if isinstance(target,tuple) else (target,())
++                if root in received_refs:
++                    continue
++                if path or parameter_modes.get(root) != 'mut' or reference_types.get(root) != typ:
++                    fail(line,'prototype : dépendances de champs async exigent un porteur injecté')
++                holders.append(root)
++            if not holders:
++                fail(line,'prototype : dépendances de champs async sans porteur suivi')
++            for field, targets in changes:
++                path = tuple(field.lstrip('.').split('.'))
++                if dict(reference_structs.get(typ,())).get('.'.join(path)) != '&Int':
++                    fail(line,'prototype : dépendances de champs mutables async non raccordées')
++                retained = []
++                for target in targets:
++                    if target.kind == 'parameter':
++                        origins = argument_loans[target.parameter]
++                    elif target.kind in ('field_parameter', 'detached_field_parameter'):
++                        source_type = callee_parameters[target.parameter][2]
++                        source_path = tuple(target.field.lstrip('.').split('.'))
++                        if dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) != '&Int':
++                            fail(line, 'prototype : dépendances de champs sources non partagées non raccordées')
++                        origins = project_result_field_loans(argument_loans[target.parameter], source_type, source_path)
++                    else:
++                        fail(line,'prototype : dépendances de champs async projetées non raccordées')
++                    for origin, mode in origins:
++                        root, source_path = origin if isinstance(origin,tuple) else (origin,())
++                        if root in received_refs:
++                            continue
++                        source_type = reference_types.get(root)
++                        durable_type = (source_type == 'Int' if not source_path else
++                                        dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) == '&Int')
++                        if parameter_modes.get(root) not in ('ref','mut') or not durable_type:
++                            fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
++                        retained.append((origin,mode))
++                if not retained:
++                    fail(line,'remplacement de champ async : cible sans provenance durable')
++                for holder in holders:
++                    key = ('stored_field',holder,path)
++                    old = active_loans.get(key,[((holder,path),'shared_target')]) if len(holders)>1 else []
++                    field_changes.append((key,list(dict.fromkeys((*old,*retained)))))
++        return tuple((key, tuple(held)) for key, held in field_changes)
++
++    def apply_child_field_changes(alternatives, line, *, launched):
++        if not any(alternatives):
++            return
++        if (node.field_effect_summary is None or not node.field_effect_summary.complete
++                or result[0] not in ('scalar', 'bool', 'byte', 'char', 'void')):
++            fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
++        alternatives = [dict(changes) for changes in alternatives]
++        for key in set().union(*(changes.keys() for changes in alternatives)):
++            _, holder, path = key
++            initial = active_loans.get(key, [((holder, path), 'shared_target')])
++            held = list(initial) if launched else []
++            for changes in alternatives:
++                held.extend(changes.get(key, initial))
++            active_loans[key] = list(dict.fromkeys(held))
++
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False):
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+@@ -1192,43 +1255,8 @@
+             pending_capture_groups.pop()
+             active_loans.pop(id(loans), None)
+         symbol, diverges = sync_bridge(expr[1], node.args[0])
+-        if contract.result.structure_fields:
+-            field_changes = []
+-            for index, changes in contract.result.structure_fields:
+-                typ = contract.parameters[index][2]
+-                holders = []
+-                for target, _ in argument_loans[index]:
+-                    root, path = target if isinstance(target,tuple) else (target,())
+-                    if root in received_refs:
+-                        continue
+-                    if path or parameter_modes.get(root) != 'mut' or reference_types.get(root) != typ:
+-                        fail(line,'prototype : dépendances de champs async exigent un porteur injecté')
+-                    holders.append(root)
+-                if not holders:
+-                    fail(line,'prototype : dépendances de champs async sans porteur suivi')
+-                for field, targets in changes:
+-                    path = tuple(field.lstrip('.').split('.'))
+-                    if dict(reference_structs.get(typ,())).get('.'.join(path)) != '&Int':
+-                        fail(line,'prototype : dépendances de champs mutables async non raccordées')
+-                    retained = []
+-                    for target in targets:
+-                        if target.kind != 'parameter':
+-                            fail(line,'prototype : dépendances de champs async projetées non raccordées')
+-                        for origin, mode in argument_loans[target.parameter]:
+-                            root, source_path = origin if isinstance(origin,tuple) else (origin,())
+-                            if root in received_refs:
+-                                continue
+-                            if source_path or parameter_modes.get(root) not in ('ref','mut') or reference_types.get(root) != 'Int':
+-                                fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
+-                            retained.append((origin,mode))
+-                    if not retained:
+-                        fail(line,'remplacement de champ async : cible sans provenance durable')
+-                    for holder in holders:
+-                        key = ('stored_field',holder,path)
+-                        old = active_loans.get(key,[((holder,path),'shared_target')]) if len(holders)>1 else []
+-                        field_changes.append((key,list(dict.fromkeys((*old,*retained)))))
+-            for key, held in field_changes:
+-                active_loans[key] = held
++        for key, held in prepare_field_changes(contract.result, contract.parameters, argument_loans, line):
++            active_loans[key] = list(held)
+         call = symbol + '(' + ', '.join(prepared) + ')'
+         if signature == ('void', 'Void') or diverges:
+             steps.append(call + ';')
+@@ -1266,7 +1294,7 @@
+             enable_threads()
+             handle = temporary('CrustAsyncExecution')
+             steps.append(f'task_async_adopt(&{handle}, &{value});')
+-            return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned
++            return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, ((),)
+         if signature in owned_sync_types:
+             owned_result_types[value] = signature[1]
+             for candidate in contract.result.candidates:
+@@ -1427,11 +1455,9 @@
+         if declaration is None:
+             fail(line, f"fonction async inconnue '{callee}'")
+         effects = declaration.field_effect_summary
+-        if effects is not None and effects.complete and effects.structure_fields:
+-            fail(line,'prototype : propagation des dépendances de champs depuis une tâche enfant non raccordée')
+         if len(arguments) != len(declaration.args[1]):
+             fail(line, f"'{callee}' attend {len(declaration.args[1])} argument(s), reçu {len(arguments)}")
+-        captures, loans, returned_loans = [], [], []
++        captures, loans, returned_loans, argument_loans = [], [], [], []
+         owner_indexes = owned_result_parameters(declaration, functions,
+                                                 sync_result=lambda name: sync_contracts[name].result if name in sync_contracts else None)
+         result_paths = {}
+@@ -1674,10 +1700,13 @@
+                     prepared_owners.append(f'{captured}.{JOIN_CELLS[mode]}')
+                 if declaration.native_block:
+                     consumed.add(argument[1])
++                argument_loans.append(tuple(loans[argument_loan_start:]))
+                 argument_tails.pop()
+             task = temporary('CrustTask *')
+             steps.append(f'{task} = crust_async_{callee}_create({", ".join(captures)});')
+-            return task, declaration.args[2] == ('scalar', 'Int'), loans, callee, returned_loans
++            changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line)
++                       if effects is not None and effects.complete else ())
++            return task, declaration.args[2] == ('scalar', 'Int'), loans, callee, returned_loans, (changes,)
+         except NoAsyncContinuation:
+             active_loans.pop(id(loans), None)
+             raise
+@@ -1693,7 +1722,7 @@
+         return task
+ 
+     def discard_task(name, line):
+-        task, _, loans, _, _ = consume_task(name, line)
++        task, _, loans, _, _, _ = consume_task(name, line)
+         steps.append(f'task_discard({task});')
+         del active_loans[id(loans)]
+ 
+@@ -1704,16 +1733,16 @@
+             fail(line, 'résultat faillible du handle sans usage explicite')
+         operand = expr[1]
+         if prepared is not None:
+-            task, returns_int, loans, nominal, returned_loans = prepared
++            task, returns_int, loans, nominal, returned_loans, field_changes = prepared
+         elif operand[0] == 'call':
+-            task, returns_int, loans, nominal, returned_loans = create_task(operand, line)
++            task, returns_int, loans, nominal, returned_loans, field_changes = create_task(operand, line)
+         elif operand[0] == 'name':
+-            task, returns_int, loans, nominal, returned_loans = consume_task(operand[1], line)
++            task, returns_int, loans, nominal, returned_loans, field_changes = consume_task(operand[1], line)
+         else:
+             kind, record = emit_computed_transfer(operand, line)
+             if kind != 'task':
+                 fail(line, '.await exige une tâche inactive')
+-            task, returns_int, loans, nominal, returned_loans = record
++            task, returns_int, loans, nominal, returned_loans, field_changes = record
+         result_mode, result_type = functions[nominal].args[2]
+         actual_shape, array_element_type = scalar_array_layout(result_type) if result_mode == 'array' else ((), None)
+         if actual_shape != array_shape:
+@@ -1741,6 +1770,7 @@
+             f'{task} = NULL;',
+         ))
+         del active_loans[id(loans)]
++        apply_child_field_changes(field_changes, line, launched=False)
+         if owned or joined:
+             owned_result_types[result] = result_type
+             keep_storage(result, (target for target, mode in returned_loans if mode == 'storage'))
+@@ -1834,7 +1864,7 @@
+         nonlocal resume_point
+         record = (sync_call(expr[1], line, execution=True) if sync_signature(expr[1]) in handle_sync_types else
+                   consume_execution(expr[1][1], line)) if prepared is None else prepared
+-        handle, returns_int, loans, nominal, returned_loans = record
++        handle, returns_int, loans, nominal, returned_loans, field_changes = record
+         mode, typ = functions[nominal].args[2]
+         outer = PLAIN_RETURN_JOINS.get((mode, typ)) if mode in PLAIN_JOIN_TYPES else None
+         result = temporary(PLAIN_JOIN_C_TYPES[outer] if outer else 'CrustNestedJoinResult' if mode == 'join_owned' else 'CrustJoinResult')
+@@ -1880,6 +1910,7 @@
+         if status_result is not None:
+             steps.append(f'{result}.status = {status_result}.status;')
+         del active_loans[id(loans)]
++        apply_child_field_changes(field_changes, line, launched=True)
+         if mode in ('owned', *JOIN_PAYLOADS):
+             owned_result_types[result] = typ
+             keep_storage(result, (target for target, access in returned_loans if access == 'storage'))
+@@ -3463,14 +3494,14 @@
+             if kind != 'task':
+                 fail(line, 'spawn exige une tâche inactive')
+         enable_threads()
+-        task, returns_int, loans, nominal, returned_loans = record
++        task, returns_int, loans, nominal, returned_loans, field_changes = record
+         if functions[nominal].args[2][0] == 'join_nested':
+             fail(line, 'spawn avec trois niveaux de Result non pris en charge')
+         handle = temporary('CrustAsyncExecution')
+         start = ('task_native_async_start' if native else
+                  'task_async_start_blocking' if blocking else 'task_async_start')
+         steps.append(f'{start}(&{handle}, {task});')
+-        return f'&{handle}', returns_int, loans, nominal, returned_loans
++        return f'&{handle}', returns_int, loans, nominal, returned_loans, field_changes
+ 
+     def prepare_utf8_loop(body, following, line):
+         names = mutable_utf8_bindings & fields.keys()
+@@ -3514,7 +3545,7 @@
+         names, exit_live, head_live = prepare_utf8_loop(body, following, line)
+         entry = control_state()
+         loop = {'entry': entry, 'depth': len(scopes), 'fields': set(fields),
+-                'valued': valued, 'result': None, 'loans': [], 'returned_loans': [], 'exit': None,
++                'valued': valued, 'result': None, 'loans': [], 'returned_loans': [], 'field_changes': [], 'exit': None,
+                 'following': following, 'body': body, 'utf8_loans': [], 'reference_loans': [], 'key': id(body),
+                 'utf8_bindings': names, 'utf8_exit_live': exit_live, 'utf8_head_live': head_live}
+         steps.append('for (;;) {')
+@@ -3560,7 +3591,7 @@
+         loans = list(dict.fromkeys(loop['loans']))
+         active_loans[id(loans)] = loans
+         record = (target, returns_int, loans, nominal)
+-        return kind, (*record, list(dict.fromkeys(loop['returned_loans'])))
++        return kind, (*record, list(dict.fromkeys(loop['returned_loans'])), tuple(loop['field_changes']))
+ 
+     def cleanup_async_values(names, returned, line):
+         for name in reversed(names):
+@@ -3713,6 +3744,7 @@
+             else:
+                 result, returns_int, loans, nominal = record[:4]
+                 loop['returned_loans'].extend(record[4])
++                loop['field_changes'].extend(record[5])
+                 del active_loans[id(loans)]
+                 loop['loans'].extend(loans)
+                 ctype = 'CrustTask *' if kind == 'task' else 'CrustAsyncExecution *'
+@@ -3776,7 +3808,7 @@
+         target = temporary('int') if valued and not transfer_result and boolean is not None else None
+         scalar_type = None
+         selected_signature = None
+-        selected_loans, selected_returned_loans = [], []
++        selected_loans, selected_returned_loans, selected_field_changes = [], [], []
+         selected_utf8_loans = []
+         selected_reference_loans = []
+         reference_signature = None
+@@ -4026,12 +4058,13 @@
+                             signature = kind, payload, owned_result_types.get(result, 'Int')
+                             ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
+                         else:
+-                            result, child_returns_int, loans, nominal, returned_loans = record
++                            result, child_returns_int, loans, nominal, returned_loans, field_changes = record
+                             signature = kind, child_returns_int, nominal
+                             ctype = 'CrustTask *' if kind == 'task' else 'CrustAsyncExecution *'
+                             del active_loans[id(loans)]
+                             selected_loans.extend(loans)
+                             selected_returned_loans.extend(returned_loans)
++                            selected_field_changes.extend(field_changes)
+                         if selected_signature is None:
+                             selected_signature = signature
+                             target = temporary(ctype, array_dimensions(shape) if kind == 'array' else '')
+@@ -4155,7 +4188,7 @@
+             _, child_returns_int, nominal = selected_signature
+             loans = list(dict.fromkeys(selected_loans))
+             active_loans[id(loans)] = loans
+-            return kind, (target, child_returns_int, loans, nominal, list(dict.fromkeys(selected_returned_loans)))
++            return kind, (target, child_returns_int, loans, nominal, list(dict.fromkeys(selected_returned_loans)), tuple(selected_field_changes))
+         if reference_result:
+             loans = list(dict.fromkeys(selected_reference_loans))
+             active_loans[id(loans)] = loans
+@@ -4203,7 +4236,7 @@
+                 moving.update(returning)
+         departing = (mutable_slices | pool_alias_origins.keys()).intersection(local_names)
+         departing.update(name for name in local_names if name in received_refs)
+-        task, returns_int, loans, nominal, returned_loans = value
++        task, returns_int, loans, nominal, returned_loans, field_changes = value
+         if any(loan_root(target) in local_names and loan_root(target) not in departing for target, _ in loans):
+             fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')
+         if any(loan_root(target) in moving for target, _ in loans):
+@@ -4213,7 +4246,7 @@
+             del active_loans[id(loans)]
+             active_loans[id(retained)] = retained
+             returned_loans = [loan for loan in returned_loans if loan_root(loan[0]) not in departing]
+-            value = task, returns_int, retained, nominal, returned_loans
++            value = task, returns_int, retained, nominal, returned_loans, field_changes
+         return kind, value
+ 
+     def match_statement(statement, statements, *, following=None):

@@ -1,0 +1,30 @@
+struct View { data: &Int }
+
+async fn child(view: &mut View, next: &Int, memory: &mut Pool<Int>) -> <-Int {
+    view.data = &*next;
+    loop { yield; }
+}
+
+async fn work(view: &mut View, next: &Int, memory: &mut Pool<Int>) -> Int {
+    let execution = runtime::spawn(-> child(view, next, memory));
+    match execution.await {
+        Ok(value) => { print(*value); drop(-> value); },
+        Err(_) => {},
+    }
+    view.data = &*next;
+    return *view.data;
+}
+
+fn main() {
+    let mut memory = pool<Int>(2);
+    let first = memory.new(1);
+    let second = memory.new(2);
+    let mut output = pool<Int>(1);
+    let mut view = View { data: &first };
+    let execution = runtime::spawn(-> work(&mut view, &second, &mut output));
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(99); },
+    }
+    print(*view.data);
+}

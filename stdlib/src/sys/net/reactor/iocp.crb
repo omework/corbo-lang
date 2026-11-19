@@ -1,0 +1,401 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows I/O completion port operations and runtime wakeup integration.
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Creates the native I/O completion port and returns its handle.
+    fn completion_create() -> usize {
+        let mut port: usize = 0;
+        @unchecked {
+            @asm {
+                mov x0, #-1
+                mov x1, #0
+                mov x2, #0
+                mov x3, #1
+                bl CreateIoCompletionPort
+                mov ${port}, x0
+            }
+        }
+        port
+    }
+
+    /// Associates a native socket with the completion port.
+    fn completion_attach(port: usize, socket: u64) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${socket}
+                mov x1, ${port}
+                mov x2, #0
+                mov x3, #0
+                bl CreateIoCompletionPort
+                cbnz x0, 1f
+                bl GetLastError
+                neg x0, x0
+                mov ${status}, x0
+                1:
+            }
+        }
+        status
+    }
+
+    /// Submits a socket I/O request to the Windows completion backend.
+    fn completion_submit(request: usize) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #48
+                mov x9, ${request}
+                ldr x0, [x9, #40]
+                add x1, x9, #56
+                mov w2, #1
+                mov x3, #0
+                mov x6, #0
+                ldr x10, [x9, #48]
+                cmp x10, #5
+                b.ge 6f
+                cmp x10, #1
+                b.eq 1f
+                cmp x10, #2
+                b.eq 2f
+                add x5, x9, #96
+                mov x7, x9
+                str xzr, [sp]
+                cmp x10, #3
+                b.eq 3f
+                mov w4, #0
+                mov w6, #16
+                bl WSASendTo
+                b 4f
+                1:
+                add x4, x9, #88
+                mov x5, x9
+                bl WSARecv
+                b 4f
+                2:
+                mov w4, #0
+                mov x5, x9
+                bl WSASend
+                b 4f
+                3:
+                add x4, x9, #88
+                add x6, x9, #112
+                bl WSARecvFrom
+                4:
+                cbz w0, 5f
+                9:
+                bl WSAGetLastError
+                cmp w0, #997
+                b.eq 5f
+                neg x0, x0
+                mov ${status}, x0
+                b 5f
+                6:
+                cmp x10, #5
+                b.eq 7f
+                movz x11, #0x7df1
+                movk x11, #0xb536, lsl #16
+                movk x11, #0xcbac, lsl #32
+                movk x11, #0x11cf, lsl #48
+                movz x12, #0xca95
+                movk x12, #0x8000, lsl #16
+                movk x12, #0x485f, lsl #32
+                movk x12, #0x92a1, lsl #48
+                b 8f
+                7:
+                movz x11, #0x07b9
+                movk x11, #0x25a2, lsl #16
+                movk x11, #0xddf3, lsl #32
+                movk x11, #0x4660, lsl #48
+                movz x12, #0xe98e
+                movk x12, #0xe576, lsl #16
+                movk x12, #0x748c, lsl #32
+                movk x12, #0x3e06, lsl #48
+                8:
+                stp x11, x12, [sp, #16]
+                movz w1, #6
+                movk w1, #0xc800, lsl #16
+                add x2, sp, #16
+                mov w3, #16
+                add x4, x9, #192
+                mov w5, #8
+                add x6, sp, #32
+                mov x7, #0
+                str xzr, [sp]
+                bl WSAIoctl
+                cbnz w0, 9b
+                mov x9, ${request}
+                ldr x11, [x9, #192]
+                ldr x0, [x9, #40]
+                ldr x10, [x9, #48]
+                cmp x10, #5
+                b.eq 7f
+                ldr x1, [x9, #120]
+                add x2, x9, #128
+                mov w3, #0
+                mov w4, #32
+                mov w5, #32
+                add x6, x9, #72
+                mov x7, x9
+                blr x11
+                cbz w0, 9b
+                b 5f
+                7:
+                add x1, x9, #96
+                mov w2, #16
+                mov x3, #0
+                mov w4, #0
+                add x5, x9, #72
+                mov x6, x9
+                blr x11
+                cbz w0, 9b
+                5:
+                add sp, sp, #48
+            }
+        }
+        status
+    }
+
+    /// Obtains the next completed request from the native completion port.
+    fn completion_next(port: usize) -> usize {
+        let mut request: usize = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #32
+                str xzr, [sp, #16]
+                mov x0, ${port}
+                mov x1, sp
+                add x2, sp, #8
+                add x3, sp, #16
+                mov w4, #0xffffffff
+                bl GetQueuedCompletionStatus
+                cbnz w0, 1f
+                bl GetLastError
+                b 2f
+                1:
+                mov x0, #0
+                2:
+                ldr x9, [sp, #16]
+                cbz x9, 3f
+                str x0, [x9, #80]
+                ldr w10, [sp]
+                str x10, [x9, #72]
+                mov ${request}, x9
+                3:
+                add sp, sp, #32
+            }
+        }
+        request
+    }
+
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Creates the native I/O completion port and returns its handle.
+    fn completion_create() -> usize {
+        let mut port: usize = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, -1
+                xor edx, edx
+                xor r8d, r8d
+                mov r9d, 1
+                call CreateIoCompletionPort
+                mov ${port}, rax
+                add rsp, 32
+            }
+        }
+        port
+    }
+
+    /// Associates a native socket with the completion port.
+    fn completion_attach(port: usize, socket: u64) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${socket}
+                mov rdx, ${port}
+                xor r8d, r8d
+                xor r9d, r9d
+                call CreateIoCompletionPort
+                test rax, rax
+                jnz 1f
+                call GetLastError
+                neg rax
+                mov ${status}, rax
+                1:
+                add rsp, 32
+            }
+        }
+        status
+    }
+
+    /// Submits a socket I/O request to the Windows completion backend.
+    fn completion_submit(request: usize) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 112
+                mov rax, ${request}
+                mov rcx, QWORD PTR [rax + 40]
+                lea rdx, [rax + 56]
+                mov r8d, 1
+                xor r9d, r9d
+                mov r10, QWORD PTR [rax + 48]
+                cmp r10, 5
+                jge 6f
+                cmp r10, 1
+                je 1f
+                cmp r10, 2
+                je 2f
+                lea r11, [rax + 96]
+                mov QWORD PTR [rsp + 40], r11
+                mov QWORD PTR [rsp + 56], rax
+                mov QWORD PTR [rsp + 64], 0
+                cmp r10, 3
+                je 3f
+                mov QWORD PTR [rsp + 32], 0
+                mov QWORD PTR [rsp + 48], 16
+                call WSASendTo
+                jmp 4f
+                1:
+                lea r11, [rax + 88]
+                mov QWORD PTR [rsp + 32], r11
+                mov QWORD PTR [rsp + 40], rax
+                mov QWORD PTR [rsp + 48], 0
+                call WSARecv
+                jmp 4f
+                2:
+                mov QWORD PTR [rsp + 32], 0
+                mov QWORD PTR [rsp + 40], rax
+                mov QWORD PTR [rsp + 48], 0
+                call WSASend
+                jmp 4f
+                3:
+                lea r11, [rax + 88]
+                mov QWORD PTR [rsp + 32], r11
+                lea r11, [rax + 112]
+                mov QWORD PTR [rsp + 48], r11
+                call WSARecvFrom
+                4:
+                test eax, eax
+                jz 5f
+                9:
+                call WSAGetLastError
+                cmp eax, 997
+                je 5f
+                neg rax
+                mov ${status}, rax
+                jmp 5f
+                6:
+                cmp r10, 5
+                je 7f
+                mov r10, 0x11cfcbacb5367df1
+                mov r11, 0x92a1485f8000ca95
+                jmp 8f
+                7:
+                mov r10, 0x4660ddf325a207b9
+                mov r11, 0x3e06748ce576e98e
+                8:
+                mov QWORD PTR [rsp + 72], r10
+                mov QWORD PTR [rsp + 80], r11
+                mov edx, 0xc8000006
+                lea r8, [rsp + 72]
+                mov r9d, 16
+                lea r10, [rax + 192]
+                mov QWORD PTR [rsp + 32], r10
+                mov QWORD PTR [rsp + 40], 8
+                lea r10, [rsp + 88]
+                mov QWORD PTR [rsp + 48], r10
+                mov QWORD PTR [rsp + 56], 0
+                mov QWORD PTR [rsp + 64], 0
+                call WSAIoctl
+                test eax, eax
+                jnz 9b
+                mov rax, ${request}
+                mov rcx, QWORD PTR [rax + 40]
+                cmp QWORD PTR [rax + 48], 5
+                je 7f
+                mov rdx, QWORD PTR [rax + 120]
+                lea r8, [rax + 128]
+                xor r9d, r9d
+                mov QWORD PTR [rsp + 32], 32
+                mov QWORD PTR [rsp + 40], 32
+                lea r10, [rax + 72]
+                mov QWORD PTR [rsp + 48], r10
+                mov QWORD PTR [rsp + 56], rax
+                call QWORD PTR [rax + 192]
+                test eax, eax
+                jz 9b
+                jmp 5f
+                7:
+                lea rdx, [rax + 96]
+                mov r8d, 16
+                xor r9d, r9d
+                mov QWORD PTR [rsp + 32], 0
+                lea r10, [rax + 72]
+                mov QWORD PTR [rsp + 40], r10
+                mov QWORD PTR [rsp + 48], rax
+                call QWORD PTR [rax + 192]
+                test eax, eax
+                jz 9b
+                5:
+                add rsp, 112
+            }
+        }
+        status
+    }
+
+    /// Obtains the next completed request from the native completion port.
+    fn completion_next(port: usize) -> usize {
+        let mut request: usize = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 64
+                mov QWORD PTR [rsp + 56], 0
+                mov rcx, ${port}
+                lea rdx, [rsp + 40]
+                lea r8, [rsp + 48]
+                lea r9, [rsp + 56]
+                mov DWORD PTR [rsp + 32], -1
+                call GetQueuedCompletionStatus
+                test eax, eax
+                jnz 1f
+                call GetLastError
+                jmp 2f
+                1:
+                xor eax, eax
+                2:
+                mov rcx, QWORD PTR [rsp + 56]
+                test rcx, rcx
+                jz 3f
+                mov QWORD PTR [rcx + 80], rax
+                mov eax, DWORD PTR [rsp + 40]
+                mov QWORD PTR [rcx + 72], rax
+                mov ${request}, rcx
+                3:
+                add rsp, 64
+            }
+        }
+        request
+    }
+
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    /// Registers a socket with the completion port used by the runtime.
+    pub fn attach(socket: u64) -> i64 {
+        runtime::attach_socket(socket)
+    }
+
+    /// Awaits the completion of the supplied request on the registered socket.
+    pub async fn complete(socket: u64, request: &mut [u64]) -> i64 {
+        let mut status: i64 = 0;
+        @unchecked {
+            let address = addr(&mut request[0]);
+            status = runtime::complete_socket(socket, address);
+        }
+        status
+    }
+#(endif)

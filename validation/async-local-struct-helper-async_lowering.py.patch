@@ -1,0 +1,150 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1014,11 +1014,13 @@
+     def sync_method_call(expr):
+         if expr[0] == 'method_call' and expr[1][0] == 'name':
+             receiver = expr[1][1]
+-            typ = reference_types.get(receiver)
++            typ = reference_types.get(receiver, collection_types.get(receiver))
+             if typ in reference_structs:
+                 symbol = typ + '.' + expr[2]
+                 if symbol in sync_contracts:
+-                    return ('call', symbol, [expr[1], *expr[3]])
++                    mode = sync_contracts[symbol].parameters[0][1]
++                    argument = (mode, receiver) if references.get(receiver) == 'owned' and mode in ('ref', 'mut') else expr[1]
++                    return ('call', symbol, [argument, *expr[3]])
+         return expr
+ 
+     def sync_signature(expr):
+@@ -1037,7 +1039,8 @@
+                     or argument[0] != mode or actual_type != typ or mode == 'mut' and name not in mutable):
+                 fail(line, 'argument emprunté : type, mode ou mutabilité incompatible ; réemprunter une référence avec &* ou &mut *')
+             check_access(name, line, write=mode == 'mut')
+-            pointer, loans = f'&({value_place(name)})', [(name, mode)]
++            pointer = f'frame->{fields[name]}' if typ in struct_layouts else f'&({value_place(name)})'
++            loans = [(name, mode)]
+         else:
+             pointer, loans, shape = reference_value(argument, line)
+             if (shape[1] != typ or mode == 'mut' and shape[0] != 'mut'
+@@ -1287,9 +1290,8 @@
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+         signature = contract.result_type
+-        if any(candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
+-               for candidate in contract.result.candidates):
+-            fail(line, 'prototype : retour de structure locale depuis un auxiliaire async : stockage du receveur non raccordé')
++        local_result = any(candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
++                           for candidate in contract.result.candidates)
+         if (signature not in sync_types and signature not in handle_sync_types and signature != ('void', 'Void')
+                 or any((mode, typ) not in sync_types for _, mode, typ in contract.parameters)):
+             fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+@@ -1302,6 +1304,7 @@
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+         prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
++        local_parameters = set()
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, prepared_owners, loans))
+         argument_depth = len(argument_tails)
+@@ -1317,6 +1320,10 @@
+                     value = sync_owned_value(operand, line)
+                     if owned_result_types.get(value, 'Int') != typ:
+                         fail(line, f'argument propriétaire : allocation {typ} attendue')
++                    if contract.parameters[index][0] in contract.handle_parameters and storage_of(value) & implicit_stacks:
++                        fail(line, 'une valeur locale T ne peut pas devenir une allocation A<T>')
++                    if storage_of(value) & implicit_stacks:
++                        local_parameters.add(index)
+                 elif (mode, typ) in owned_join_sync_types:
+                     if argument[0] not in ('down', 'transfer'):
+                         fail(line, 'argument Result propriétaire : transfert -> explicite requis')
+@@ -1344,6 +1351,9 @@
+                 elif mode in ('ref', 'mut'):
+                     value, held = sync_borrow_argument(argument, mode, typ, line)
+                     loans.extend(held)
++                    if typ in struct_layouts and any(storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
++                                                     for target, _ in held):
++                        local_parameters.add(index)
+                     # The existing sync ABI uses non-const C pointers for
+                     # read loans too; Crust's contract forbids their mutation.
+                     if index in contract.result.stored_reference_parameters:
+@@ -1382,7 +1392,21 @@
+             del argument_tails[argument_depth:]
+             pending_capture_groups.pop()
+             active_loans.pop(id(loans), None)
+-        symbol, diverges = sync_bridge(expr[1], node.args[0])
++        symbol, diverges = (sync_bridge(expr[1], node.args[0], local_parameters=frozenset(local_parameters))
++                            if local_parameters else sync_bridge(expr[1], node.args[0]))
++        local_result |= any(candidate.kind == 'fresh' and candidate.source.kind == 'allocation_parameter'
++                            and candidate.source.index in local_parameters for candidate in contract.result.candidates)
++        local_source = None
++        if local_result:
++            local_source = next((name for name in scopes[-1][0] if name in implicit_stacks), None)
++            if local_source is None:
++                storage = temporary('Source')
++                local_source = '\0local-stack-' + storage
++                local_pools[local_source] = storage
++                implicit_stacks.add(local_source)
++                scopes[-1][0][local_source] = None
++                steps.append(f'{storage} = source_stack(16 * 1024 * 1024);')
++            prepared.append('&' + local_pools[local_source])
+         for key, held in prepare_field_changes(contract.result, contract.parameters, argument_loans, line):
+             active_loans[key] = list(held)
+         call = symbol + '(' + ', '.join(prepared) + ')'
+@@ -1428,6 +1452,8 @@
+             return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+         if signature in owned_sync_types | owned_join_sync_types:
+             owned_result_types[value] = signature[1]
++            if local_source is not None:
++                keep_storage(value, (local_source,))
+             def storage_candidates(summary):
+                 yield from summary.candidates
+                 for _, child in summary.owned_fields:
+@@ -1482,6 +1508,7 @@
+                        or mode == 'owned' and typ in owned_structures}
+     pool_types = {name: typ for name, mode, typ in parameters if (mode, typ) in pool_sync_types}
+     local_pools = {}
++    implicit_stacks = set()
+     pool_alias_origins = {}
+     region_limits = [0]
+     storage_bindings = {}
+@@ -1821,7 +1848,13 @@
+                     # caller-side loan alive by requiring the child to finish.
+                     loans.append(('\0utf8-capture', 'ref'))
+                 captured = temporary(capture_ctype(mode, typ))
++                if typ in struct_layouts and mode in ('ref', 'mut') and any(
++                        storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
++                        for target, _ in loans[argument_loan_start:]):
++                    fail(line, 'prototype : capture de structure locale dans un état enfant : provenance de data stack non raccordée')
+                 if mode in ('owned', *JOIN_PAYLOADS):
++                    if storage_of(value) & implicit_stacks:
++                        fail(line, 'prototype : capture de structure locale dans un état enfant : provenance de data stack non raccordée')
+                     held_storage = [(origin, 'storage') for origin in storage_of(value)]
+                     loans.extend(held_storage)
+                     if index in owner_indexes:
+@@ -2234,7 +2267,8 @@
+     def bind_transferred_value(name, kind, value, statement):
+         if statement.annotation is not None and kind != 'array':
+             expected = (public_handle_type(functions[value[3]].args[2]) if kind == 'execution' else
+-                        f'A<{owned_result_types.get(value, "Int")}>' if kind == 'owned' else None)
++                        (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
++                         f'A<{owned_result_types.get(value, "Int")}>') if kind == 'owned' else None)
+             if statement.annotation != expected:
+                 if kind == 'execution':
+                     fail(statement.line, f'annotation de handle : attendu {statement.annotation}, reçu {expected}')
+@@ -5394,6 +5428,7 @@
+         if references.get(receiver) == 'owned':
+             if receiver in consumed:
+                 fail(line, f"'{receiver}' n’est plus utilisable après drop ou transfert")
++            receiver_is_local = bool(storage_bindings.get(receiver, frozenset()) & implicit_stacks)
+             operator = expr[0]
+             if operator == 'move':
+                 source = expr[1]
+@@ -5436,6 +5471,8 @@
+                 if (kind != 'owned' or owned_result_types.get(replacement, 'Int')
+                         != collection_types.get(receiver, 'Int')):
+                     fail(line, 'remplacement async : une allocation du même type est requise')
++                if receiver_is_local != bool(storage_of(replacement) & implicit_stacks):
++                    fail(line, 'remplacement async : une valeur locale T et une allocation A<T> sont de types distincts')
+                 if not utf8_current_live(following, receiver, owned=True):
+                     fail(line, f"résultat propriétaire '{receiver}' sans usage explicite")
+                 release_statement_loans(following)

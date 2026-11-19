@@ -1,0 +1,208 @@
+--- /tmp/crust-before-inline-vector-replace/constraints.py
++++ constraints.py
+@@ -1108,7 +1108,7 @@
+                 if op in ('array_buffered_replace', 'array_buffered_try_push'):
+                     self.publish_handle_exchange(current, exchange, exact=False)
+                     old = frozenset() if append else handle_items_at(items, index) or frozenset()
+-                    typ = exchange_type(handle_vector_element(vector.typ), append)
++                    typ = exchange_type(vector_payload_element(vector.typ), append, "local" if vector.typ in INLINE_VECTOR_ELEMENTS else "pool")
+                     return paths, Value('buffered_handle_exchange', typ, incoming | old,
+                                        exchange_payloads=(old, incoming), handle_payloads=vector.handle_payloads)
+                 return paths, Value('handle_exchange', handle_vector_element(vector.typ), incoming,
+--- /tmp/crust-before-inline-vector-replace/crust.py
++++ crust.py
+@@ -23,7 +23,7 @@
+ from contextlib import ExitStack, contextmanager
+ import json
+ from handle_option_types import option_type, option_element, local_option_element, option_storage
+-from handle_exchange_types import exchange_type, exchange_element, exchange_optional
++from handle_exchange_types import exchange_type, exchange_element, exchange_optional, exchange_storage
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import INLINE_VECTOR_ELEMENTS, register_vector_type, is_payload_vector, vector_payload_element
+ from array_syntax import consumed_result_expression
+@@ -82,7 +82,7 @@
+ 
+ def join_allocation_signature(typ):
+     if (mode := exchange_type_mode(typ)) is not None:
+-        return mode, exchange_payload_type(mode), 'pool'
++        return mode, exchange_payload_type(mode), exchange_storage(typ)
+     if (mode := option_type_mode(typ)) is not None:
+         return mode, option_payload_type(mode), option_storage(typ)
+     return owned_join_signature(typ)
+@@ -8583,7 +8583,7 @@
+ 
+     @staticmethod
+     def exchange_result_type(allocation):
+-        return exchange_type(allocation.typ, allocation.optional_payload)
++        return exchange_type(allocation.typ, allocation.optional_payload, allocation.payload_storage or "pool")
+ 
+     def join_buffered_exchange(self, name, states, scope, label):
+         payloads = tuple((source_union(*(sources for sources, _ in arm)),
+@@ -8981,19 +8981,13 @@
+             self.fail('prototype : layout de structure en Vector non représenté')
+         return element, self.field_offset(fields, len(fields)) or '0'
+ 
+-    def inline_vector_operation(self, expr, binding, method, args, scope, label):
+-        element, size = self.inline_vector_layout(binding.alloc.typ)
+-        if method == 'index':
+-            self.fail('copie de structure explicite requise : copy(v[indice])')
+-        if method == 'remove':
+-            self.fail('remove de structure exige un transfert <- explicite')
+-        if method != 'push':
+-            self.fail(f'prototype : {method} sur Vector<{element}> à raccorder')
+-        argument = args[0]
++    def evaluate_inline_vector_transfer(self, argument, binding, scope, label, *, reserve=True):
++        element, _ = self.inline_vector_layout(binding.alloc.typ)
+         if argument[0] not in ('down', 'transfer'):
+             self.fail('push de structure : transfert -> explicite requis')
+         reservation = Binding(binding.name, 'mut', binding.c, binding.alloc, borrow_parents=(binding,))
+-        self.argument_frames.append([reservation])
++        if reserve:
++            self.argument_frames.append([reservation])
+         try:
+             if argument[0] == 'down':
+                 self.expression_clock(argument)
+@@ -9013,7 +9007,69 @@
+             destination = next(active for active in self.scopes if active.id == binding.alloc.scope)
+             self.check_borrow_destination(incoming, destination)
+         finally:
++            if reserve:
++                self.argument_frames.pop()
++        return value, incoming
++
++    def replace_inline_vector_item(self, expr, binding, scope, label):
++        element, size = self.inline_vector_layout(binding.alloc.typ)
++        self.access(binding, write=True)
++        reservation = Binding(binding.name, 'mut', binding.c, binding.alloc, borrow_parents=(binding,))
++        self.argument_frames.append([reservation])
++        try:
++            kind, index, _ = self.expression(expr[2], scope, label)
++            if kind != 'scalar':
++                self.fail('un indice de Vector doit être Int')
++            saved = f'index{self.uid()}'
++            self.lines.append(f'int {saved} = {index};')
++            value, incoming = self.evaluate_inline_vector_transfer(expr[-1], binding, scope, label, reserve=False)
++        finally:
+             self.argument_frames.pop()
++        self.expression_clock(expr)
++        self.access(binding, write=True, after=True)
++        vector = binding.alloc
++        literal = expr[2][1] if expr[2][0] == 'int' else None
++        positions = vector.item_position_origins
++        old_origins = (positions[literal] if positions is not None and literal is not None and 0 <= literal < len(positions)
++                       else frozenset() if positions == () or literal is not None and positions is not None
++                       else vector.item_origins)
++        old = self.extracted_payload(vector, old_origins)
++        incoming_prototype = self.copy_owned_tree(incoming, scope.id)
++        for origin in incoming.origins:
++            self.origin_sources[origin] = vector.sources[0]
++        if incoming.dependencies or incoming.owned_fields or incoming.item_payloads:
++            item = replace(self.copy_owned_tree(incoming, vector.scope), sources=vector.sources)
++            vector.item_payloads = self.merge_item_payloads(vector.item_payloads, (item,))
++        self.update_handle_positions(vector, literal, incoming.origins, weak=literal is None)
++        if positions is None:
++            vector.item_origins |= incoming.origins
++        name = f'value_exchange{self.uid()}'
++        self.lines.append(f'VectorHandleResult {name} = {{0, {value}}};')
++        data = f'{value}->fields' if size != '0' else '&(int){0}'
++        self.lines.append(f'{name}.status = vector_replace({binding.c}, {saved}, {data});')
++        if self.has_owned_fields(element):
++            self.lines.append(f'if ({name}.status == CRUST_VECTOR_OK) vector_items({binding.c})->element_layout = {value}->layout;')
++        if incoming.guard:
++            self.lines.append(f'*({incoming.guard}) = 0;')
++        incoming.alive = incoming.definite = False
++        _, _, result = self.receive_extracted_handle(f'{name}.value', incoming.sources, scope, label,
++            typ=element, prototype=self.merge_payload_prototypes((old, incoming_prototype)))
++        result.payload_storage = 'local'
++        result.exchange_prototypes = (old, incoming_prototype)
++        success_sources = () if positions is not None and (not positions or literal is not None and not 0 <= literal < len(positions)) else incoming.sources
++        result.exchange_payloads = ((success_sources, result.origins if success_sources else frozenset()),
++                                    (incoming.sources, result.origins))
++        return 'buffered_handle_exchange', name, result
++
++    def inline_vector_operation(self, expr, binding, method, args, scope, label):
++        element, size = self.inline_vector_layout(binding.alloc.typ)
++        if method == 'index':
++            self.fail('copie de structure explicite requise : copy(v[indice])')
++        if method in ('remove', 'replace'):
++            self.fail(f'{method} de structure exige les transferts explicites <- et -> appropriés')
++        if method != 'push':
++            self.fail(f'prototype : {method} sur Vector<{element}> à raccorder')
++        value, incoming = self.evaluate_inline_vector_transfer(args[0], binding, scope, label)
+         self.expression_clock(expr)
+         self.access(binding, write=True, after=True)
+         # Only the payload occupies the vector case, never a Cell pointer.
+@@ -9836,6 +9892,8 @@
+                 if op in ('array_handle_exchange', 'array_buffered_replace'):
+                     return self.replace_mutable_vector_reference(expr, binding, expr[2], expr[-1], scope, source_name)
+                 return self.try_push_mutable_vector_reference(expr, binding, expr[-1], source_name)
++            if binding.alloc is not None and binding.alloc.typ in INLINE_VECTOR_ELEMENTS and op == 'array_buffered_replace':
++                return self.replace_inline_vector_item(expr, binding, scope, source_name)
+             if binding.alloc is None or not is_handle_vector(binding.alloc.typ):
+                 self.fail('match d’une opération transférée exige un vecteur compatible')
+             index = expr[2] if op in ('array_handle_exchange', 'array_buffered_replace') else None
+--- /tmp/crust-before-inline-vector-replace/exchange_join_types.py
++++ exchange_join_types.py
+@@ -1,6 +1,6 @@
+ """Runtime envelopes whose leaf is a replace/try_push ownership result."""
+ from result_envelopes import ResultLeaf, RuntimeResultEnvelopes
+-from handle_exchange_types import exchange_element, exchange_optional
++from handle_exchange_types import exchange_element, exchange_optional, exchange_storage
+ 
+ EXCHANGE_LEAVES = ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')
+ _registry = RuntimeResultEnvelopes({
+@@ -24,7 +24,7 @@
+     element = exchange_element(typ)
+     if element is not None and typ not in _registry.leaves:
+         optional = exchange_optional(typ)
+-        suffix = element.encode('utf-8').hex()
++        suffix = ('local_' if exchange_storage(typ) == 'local' else '') + element.encode('utf-8').hex()
+         family = 'join_try_push' if optional else 'join_exchange'
+         payload = 'rejected' if optional else 'exchange'
+         _registry.leaves[typ] = ResultLeaf(family + '_t' + suffix,
+--- /tmp/crust-before-inline-vector-replace/handle_exchange_types.py
++++ handle_exchange_types.py
+@@ -1,8 +1,8 @@
+ """Types of the two ownership results produced by handle-vector operations."""
+ 
+ 
+-def exchange_type(element, optional=False):
+-    handle = f'A<{element}>'
++def exchange_type(element, optional=False, storage="pool"):
++    handle = element if storage == "local" else f'A<{element}>'
+     return f'Result<{"()" if optional else handle},{handle}>'
+ 
+ 
+@@ -20,9 +20,21 @@
+             first, second = body[:index], body[index + 1:]
+             if second.startswith('A<') and second.endswith('>') and first in ('()', second):
+                 return second[2:-1]
++            from handle_option_types import local_option_element
++            if first in ('()', second) and local_option_element(f'Option<{second}>') is not None:
++                return second
+             return None
+     return None
+ 
+ 
+ def exchange_optional(typ):
+     return exchange_element(typ) is not None and typ.startswith('Result<(),')
++
++
++def exchange_storage(typ):
++    while typ.startswith('Result<') and typ.endswith(',runtime::Error>'):
++        typ = typ[len('Result<'):-len(',runtime::Error>')]
++    element = exchange_element(typ)
++    if element is None:
++        return None
++    return 'pool' if typ.endswith(',A<' + element + '>>') else 'local'
+--- /tmp/crust-before-inline-vector-replace/results.py
++++ results.py
+@@ -2246,7 +2246,7 @@
+                 if op in ('array_buffered_replace', 'array_buffered_try_push'):
+                     self.publish_handle_exchange(environment, exchange, exact=False)
+                     old = frozenset() if append else handle_items_at(old_items, index) or frozenset()
+-                    typ = exchange_type(handle_vector_element(vector.typ), append)
++                    typ = exchange_type(vector_payload_element(vector.typ), append, "local" if vector.typ in INLINE_VECTOR_ELEMENTS else "pool")
+                     return flow, Value('buffered_handle_exchange', typ, incoming | old,
+                                        exchange_payloads=(old, incoming), handle_payloads=vector.handle_payloads)
+                 return flow, Value('handle_exchange', handle_vector_element(vector.typ), incoming,

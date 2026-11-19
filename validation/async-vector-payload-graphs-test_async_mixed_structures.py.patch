@@ -1,0 +1,12 @@
+--- tests/test_async_mixed_structures.py (before)
++++ tests/test_async_mixed_structures.py
+@@ -62,7 +62,8 @@
+                 inner = ''.join(text for text, survives in zip(declarations, durable) if not survives)
+                 source = self.program(outer + 'let result={' + inner + '''
+ let a=ns.new(7);let v=rs.new(item:<-a,view:&b);
+-let r=CALL(->v).await;<-r};yield;return *result.item+*result.view;'''.replace('CALL', call))
++let r=CALL(->v).await;<-r};yield;return *result.item+*result.view;'''.replace('CALL', call),
++                    prefix=PREFIX.replace('v:->Mixed', 'v:->A<Mixed>').replace('-><-Mixed', '-><-A<Mixed>'))
+                 with self.subTest(call=call, durable=durable):
+                     if all(durable):
+                         self.assertEqual(self.run_source(source).stdout, '16\n')

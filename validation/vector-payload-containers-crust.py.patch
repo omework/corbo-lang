@@ -1,0 +1,71 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10434,6 +10434,7 @@
+             'fresh_item_sources': self.fresh_vector_item_sources(summary, params, bindings),
+             'fresh_positions': fresh_positions,
+             'returned_item_origins': frozenset(),
++            'returned_item_payloads': (),
+             'returned_item_positions': [],
+             'item_position_origins': item_position_origins,
+             'dependencies': dependencies,
+@@ -10591,6 +10592,10 @@
+                 self.fail('invariant interne : cible de case absente du contrat')
+ 
+     def check_result_contract(self, contract, allocation, state):
++        if is_handle_vector(allocation.typ):
++            contract['returned_item_payloads'] = self.merge_item_payloads(
++                contract['returned_item_payloads'], tuple(self.copy_owned_tree(item, allocation.scope)
++                    for item in state['item_payloads'] if item.origins & state['item_origins']))
+         if any(not any(source is expected for expected in contract['item_sources'])
+                for source in state['item_sources']):
+             self.fail('invariant interne : pool d’élément absent du contrat de résultat')
+@@ -12565,6 +12570,7 @@
+                                     item_positions=result_contract['item_positions'],
+                                     item_origins=result_contract['item_origins'],
+                                     item_position_origins=result_contract['item_position_origins'],
++                                    item_payloads=result_contract['returned_item_payloads'],
+                                     borrow_parents=result_contract['borrow_parents'])
+             self.allocations.append(allocation)
+             caller.allocations.append(allocation)
+@@ -12592,6 +12598,8 @@
+             result[2].item_positions = result_contract['item_positions']
+             result[2].item_origins = result_contract['item_origins']
+             result[2].item_position_origins = result_contract['item_position_origins']
++            if is_handle_vector(result[2].typ):
++                result[2].item_payloads = result_contract['returned_item_payloads']
+             result[2].variants = result_contract['variants']
+             result[2].borrow_parents = result_contract['borrow_parents']
+         return result[0], c, result[2]
+@@ -12973,6 +12981,14 @@
+         # Publishing removals first would erase the descendant paths in the contract.
+         result_owned_fields = (self.resolve_fresh_owned_fields(result, params, bindings, caller)
+                                if result.mode in ('owned', 'handle_option', *JOIN_RESULT_TYPES) else ())
++        result_item_payloads = []
++        for value in result.vector_values:
++            prototypes = dict(self.resolve_owned_fields((('', value),), params, bindings, caller)).get('', ())
++            for prototype in prototypes:
++                selected = frozenset(origin for origin in item_origins
++                    if any(self.origin_sources.get(origin) is source for source in prototype.sources))
++                if selected:
++                    result_item_payloads.append(replace(prototype, origins=selected))
+         self.apply_vector_writes(result, params, bindings)
+         c = f'contract_result_{self.uid()}'
+         borrowed_result = None
+@@ -13061,6 +13077,8 @@
+         target.item_sources, target.item_positions = item_sources, item_positions
+         target.item_origins = item_origins
+         target.item_position_origins = item_position_origins
++        if is_handle_vector(result.typ):
++            target.item_payloads = tuple(result_item_payloads)
+         target.borrow_parents = parents
+         self.check_borrow_destination(target, caller)
+         caller.allocations = [a for a in caller.allocations if a is not target] + [target]
+@@ -15243,7 +15261,7 @@
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             content = result[1][2:-1] if result[1].startswith('A<') else result[1]
+             if is_handle_vector(content):
+-                self.check_handle_vector_payload(content)
++                self.check_handle_vector_payload(content, local=True)
+             if result[0] in ('handle_option', 'buffered_handle_exchange'):
+                 element = result[1] if result[0] == 'handle_option' else exchange_element(result[1])
+                 self.check_handle_vector_payload(f'Vector<A<{element}>>', local=result[0] in ('handle_option', 'buffered_handle_exchange'))

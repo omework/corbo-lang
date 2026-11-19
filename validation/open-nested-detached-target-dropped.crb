@@ -1,0 +1,7 @@
+struct Inner{view:&Int}struct Outer{inner:A<Inner>}
+fn read(value:&Inner)->&Int{return value.view;}
+async fn detach(value:->Outer)->&Int{yield;return read(&*value.inner);}
+fn make(value:->Outer)-><-detach{return <-detach(->value);}async fn work()->Int{let mut ns=pool<Int>(1);let n=ns.new(9);
+let mut ins=pool<Inner>(1);let inner=ins.new(view:&n);
+let outer=Outer{inner:<-inner};let view=detach(->outer).await;drop(->n);yield;print(*view);return 1;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}}

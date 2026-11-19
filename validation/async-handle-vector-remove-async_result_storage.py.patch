@@ -1,0 +1,35 @@
+--- before/async_result_storage.py
++++ async_result_storage.py
+@@ -41,7 +41,7 @@
+     kinds, parameters, destination, unknown = set(), set(), False, False
+     for candidate in summary.candidates:
+-        if candidate.kind == 'parameter':
++        if candidate.kind in ('parameter', 'vector_element'):
+             parameters.add(candidate.parameter)
+-            kinds.add('local' if candidate.parameter in local_parameters else 'pool')
++            kinds.add('local' if candidate.kind == 'parameter' and candidate.parameter in local_parameters else 'pool')
+         elif candidate.kind == 'fresh':
+             source = candidate.source
+@@ -90,4 +90,13 @@
+         elif candidate.kind == 'parameter':
+             sources.update(item.storage() for item in actuals[candidate.parameter].candidates)
++        elif candidate.kind == 'vector_element':
++            from results import vector_result_candidates
++            from array_syntax import VECTOR_LAST_ITEM
++            items = vector_result_candidates(actuals[candidate.parameter], candidate.item_index,
++                last=candidate.item_index == VECTOR_LAST_ITEM, excluded=candidate.excluded_items,
++                tail_offset=candidate.tail_offset)
++            if items is None:
++                return None
++            sources.update(item.storage() for item in items)
+         else:
+             return None
+@@ -110,4 +119,8 @@
+         return None
+     summary = effect.completion_result
++    if (not summary.owned_fields and any(candidate.kind == 'vector_element' for candidate in summary.candidates)
++            and all(candidate.kind in ('parameter', 'vector_element') or candidate.kind == 'fresh'
++                    and candidate.source.kind == 'source_parameter' for candidate in summary.candidates)):
++        return frozenset(candidate.storage() for candidate in summary.candidates), ()
+     if summary.candidates and all(candidate.kind == 'owned_projection' for candidate in summary.candidates):
+         from array_syntax import aggregate_owned_paths

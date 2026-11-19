@@ -1,0 +1,190 @@
+--- before/array_syntax.py
++++ after/array_syntax.py
+@@ -67,6 +67,9 @@
+ 
+ def consumed_result_expression(expr, nominal):
+     """Resolve the explicit -> inside drop without adding moves to ordinary calls."""
++    if (expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in INLINE_VECTOR_ELEMENTS
++            and expr[2] == 'remove'):
++        return ('array_transfer', expr)
+     if expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+         if expr[2] == 'remove':
+             return ('array_transfer', expr)
+--- before/constraints.py
++++ after/constraints.py
+@@ -1247,6 +1247,12 @@
+                     return paths, Value('bool', 'Bool')
+                 if values[0].mode in ('byte_option', 'byte_replace', 'byte_try_push', 'join_byte'):
+                     return paths, Value('byte', 'u8')
++            if op == 'array_vector_remove' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
++                element = INLINE_VECTOR_ELEMENTS[values[0].typ]
++                origin = id(expr[1])
++                source = Source('local', origin, 'data stack implicite', element)
++                assets = frozenset({self.born(('remove', origin), source, paths['next'])})
++                return paths, Value('owned', element, assets)
+             if op == 'array_index' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
+                 return paths, Value('inline_vector_slot', INLINE_VECTOR_ELEMENTS[values[0].typ],
+                                     values[0].all_assets, projection_assets=values[0].all_assets)
+--- before/crust.py
++++ after/crust.py
+@@ -4205,7 +4205,11 @@
+         if kind in ('array', 'array_refs') and expr[0] not in ('move', 'array_transfer'):
+             self.fail('break : transfert de tableau par <- requis')
+         copied_result = expr[0] == 'array_transfer' and expr[1][0] == 'array_copy'
+-        if (kind == 'void' or (kind == 'owned' and expr[0] != 'move' and not copied_result)
++        extracted_result = (expr[0] == 'array_transfer' and expr[1][0] == 'method_call'
++                            and expr[1][2] == 'remove' and expr[1][1][0] == 'name'
++                            and self.lookup(expr[1][1][1]).alloc is not None
++                            and self.lookup(expr[1][1][1]).alloc.typ in INLINE_VECTOR_ELEMENTS)
++        if (kind == 'void' or (kind == 'owned' and expr[0] != 'move' and not copied_result and not extracted_result)
+                 or (kind in ('join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES, 'task', 'execution') and expr[0] != 'move')
+                 or (kind in ('handle_option', 'buffered_handle_exchange') and expr[0] not in (
+                     'move', 'array_handle_option_pop', 'array_buffered_replace', 'array_buffered_try_push'))):
+@@ -8957,6 +8961,8 @@
+         element, size = self.inline_vector_layout(binding.alloc.typ)
+         if method == 'index':
+             self.fail('copie de structure explicite requise : copy(v[indice])')
++        if method == 'remove':
++            self.fail('remove de structure exige un transfert <- explicite')
+         if method != 'push':
+             self.fail(f'prototype : {method} sur Vector<{element}> à raccorder')
+         argument = args[0]
+@@ -8983,10 +8989,11 @@
+         self.destroy(incoming)
+         return 'void', '', None
+ 
+-    def copy_inline_vector_item(self, expr, binding, index_expr, scope, label):
++    def receive_inline_vector_item(self, expr, binding, index_expr, scope, label, *, remove=False):
+         element, size = self.inline_vector_layout(binding.alloc.typ)
+-        self.access(binding)
+-        reservation = Binding(binding.name, 'ref', binding.c, binding.alloc, borrow_parents=(binding,))
++        self.access(binding, write=remove)
++        reservation = Binding(binding.name, 'mut' if remove else 'ref', binding.c, binding.alloc,
++                              borrow_parents=(binding,))
+         self.argument_frames.append([reservation])
+         try:
+             kind, index, _ = self.expression(index_expr, scope, label)
+@@ -8995,7 +9002,7 @@
+         if kind != 'scalar':
+             self.fail('un indice de Vector doit être Int')
+         self.expression_clock(expr)
+-        self.access(binding, after=True)
++        self.access(binding, write=remove, after=True)
+         reservation = self.local_reservations.get(id(expr))
+         if reservation:
+             destination, layout, reserved = reservation
+@@ -9008,7 +9015,8 @@
+                    if reservation else f'local_cell_new({destination.c}, &{layout}, {size}, "{label}")')
+         self.lines.append(f'Cell *{allocation.c} = {factory};')
+         data = f'{allocation.c}->fields' if size != '0' else '&(int){0}'
+-        self.lines.append(f'vector_read({binding.c}, {index}, {data});')
++        operation = 'vector_remove' if remove else 'vector_read'
++        self.lines.append(f'{operation}({binding.c}, {index}, {data});')
+         self.allocations.append(allocation)
+         scope.allocations.append(allocation)
+         self.origin_sources[allocation.id] = destination
+@@ -9290,6 +9298,8 @@
+         if id(expr) in visited:
+             return None
+         visited = visited | {id(expr)}
++        if expr[0] == 'method_call' and expr[2] == 'remove':
++            return self.local_copy_type(('array_index', expr[1], ('int', 0)), producers, visited)
+         if expr[0] == 'array_index' and expr[1][0] == 'name':
+             name = expr[1][1]
+             producer = producers.get(name)
+@@ -9363,7 +9373,7 @@
+                             source.kind == 'local_stack' for source in binding.alloc.sources):
+                         known[name] = binding.alloc.typ
+             return result_constructors(expr, self.function_contracts, known)
+-        if expr[0] == 'array_copy':
++        if expr[0] == 'array_copy' or (expr[0] == 'method_call' and expr[2] == 'remove'):
+             typ = self.local_copy_type(expr, producers)
+             if typ is not None:
+                 self.local_copy_types[id(expr)] = typ
+@@ -9437,7 +9447,7 @@
+             source, layout, reserved = existing[0]
+         else:
+             types = {self.function_results[item[1]].typ if item[0] == 'call'
+-                     else self.local_copy_types[id(item)] if item[0] == 'array_copy' else item[2]
++                     else self.local_copy_types[id(item)] if id(item) in self.local_copy_types else item[2]
+                      for item in constructors}
+             if len(types) != 1:
+                 self.fail('un résultat local conditionnel doit conserver le même type')
+@@ -9627,7 +9637,7 @@
+         if op == 'array_copy' and expr[1][0] == 'array_index' and expr[1][1][0] == 'name':
+             binding = self.lookup(expr[1][1][1])
+             if binding.alloc and binding.alloc.typ in INLINE_VECTOR_ELEMENTS:
+-                return self.copy_inline_vector_item(expr, binding, expr[1][2], scope, source_name)
++                return self.receive_inline_vector_item(expr, binding, expr[1][2], scope, source_name)
+         if op == 'array_copy' and expr[1][0] == 'name':
+             binding = self.lookup(expr[1][1])
+             if binding.alloc and binding.alloc.typ in self.struct_fields:
+@@ -9638,6 +9648,13 @@
+             receiver, method, arguments = call[1:]
+             if receiver[0] == 'name' and method == 'remove':
+                 binding = self.lookup(receiver[1])
++                if binding.alloc is not None and binding.alloc.typ in INLINE_VECTOR_ELEMENTS:
++                    if len(arguments) != 1:
++                        self.fail('remove exige un indice')
++                    result = self.receive_inline_vector_item(call, binding, arguments[0], scope, source_name,
++                                                          remove=True)
++                    self.expression_clock(expr)
++                    return result
+                 if binding.alloc is not None and binding.alloc.typ == MUT_REF_VECTOR:
+                     result = self.remove_mutable_vector_reference(call, binding, arguments, scope, source_name)
+                     self.expression_clock(expr)
+@@ -14115,7 +14132,7 @@
+                     if (expr[0] == 'array_transfer' and operand[0] == 'method_call'
+                             and operand[1][0] == 'name' and operand[2] == 'remove'
+                             and self.lookup(operand[1][1]).alloc is not None
+-                            and self.lookup(operand[1][1]).alloc.typ in (*HANDLE_VECTORS, MUT_REF_VECTOR)):
++                            and self.lookup(operand[1][1]).alloc.typ in (*HANDLE_VECTORS, MUT_REF_VECTOR, *INLINE_VECTOR_ELEMENTS)):
+                         operand = expr
+                     value = self.expression(operand, scope, 'return')
+                     self.expression_clock(expr)
+--- before/effects.py
++++ after/effects.py
+@@ -13,7 +13,7 @@
+ from utf8_syntax import VECTOR_SPLIT_TYPES, VECTOR_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, VECTOR_PAYLOAD_TYPES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, VALUE_MODES
+ from dataclasses import dataclass
+ 
+-from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
++from array_syntax import HANDLE_VECTORS, INLINE_VECTOR_ELEMENTS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression, SHARED_REF_VECTOR, REFERENCE_VECTORS, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, fixed_array_shape, reference_type
+ 
+ 
+@@ -348,7 +348,8 @@
+                 if expr[2] == 'pop':
+                     return 'Option<&Int>' if typ == SHARED_REF_VECTOR else VALUE_MODES[VECTOR_OPTION_MODES[VECTOR_ELEMENTS[typ]]]
+                 if expr[2] == 'remove':
+-                    return handle_vector_element(typ) if is_handle_vector(typ) else 'Int' if typ in REFERENCE_VECTORS else VECTOR_ELEMENTS[typ]
++                    return (handle_vector_element(typ) if is_handle_vector(typ) else 'Int' if typ in REFERENCE_VECTORS
++                            else INLINE_VECTOR_ELEMENTS[typ] if typ in INLINE_VECTOR_ELEMENTS else VECTOR_ELEMENTS[typ])
+                 return 'Int' if expr[2] == 'len' else 'Void'
+             builtin = UTF8_METHODS.get((typ, expr[2]))
+             if builtin is not None:
+@@ -382,7 +383,6 @@
+             shape = fixed_array_shape(nominal) if nominal else None
+             if op == 'array_index' and is_handle_vector(nominal):
+                 return f'A<{handle_vector_element(nominal)}>'
+-            from array_syntax import INLINE_VECTOR_ELEMENTS
+             if op == 'array_index' and nominal in INLINE_VECTOR_ELEMENTS:
+                 return INLINE_VECTOR_ELEMENTS[nominal]
+             if op == 'array_index' and nominal == '[Int]':
+--- before/results.py
++++ after/results.py
+@@ -2363,6 +2363,14 @@
+                     return flow, Value('bool', 'Bool')
+                 if values[0].mode in ('byte_option', 'byte_replace', 'byte_try_push', 'join_byte'):
+                     return flow, Value('byte', 'u8')
++            if op == 'array_vector_remove' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
++                element = INLINE_VECTOR_ELEMENTS[values[0].typ]
++                # The lowered operation tuple is rebuilt at each inference pass.
++                # Its receiver is the stable source AST node for this operation.
++                origin = id(expr[1])
++                candidate = ResultCandidate('fresh', source=SourceOrigin('local_value', origin, 'data stack implicite', element))
++                return flow, Value('owned', element, frozenset({candidate}), fresh_variants=frozenset({''}),
++                                   structure_origins=frozenset({origin}))
+             if op == 'array_index' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
+                 element = INLINE_VECTOR_ELEMENTS[values[0].typ]
+                 candidate = ResultCandidate('fresh', source=SourceOrigin('local_value', id(expr), 'data stack implicite', element))

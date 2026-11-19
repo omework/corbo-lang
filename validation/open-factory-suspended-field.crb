@@ -1,0 +1,8 @@
+struct View{data:&Int}
+async fn leaf(v:&mut View,n:&Int)->Int{let old=v.data;v.data=&*n;yield;v.data=old;return 7;}
+fn prepare(v:&mut View,n:&Int)-><-leaf{let t=leaf(v,n);return <-t;}
+async fn relay(v:&mut View,n:&Int)->Int{let t=prepare(v,n);return t.await;}
+async fn ready()->Int{return 99;}
+async fn work()->Int{let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(9);let mut v=View{data:&a};
+let mut s=runtime::select(->relay(&mut v,&b),->ready());let n=s.await;print(n);drop(->s);print(*v.data);return 1;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

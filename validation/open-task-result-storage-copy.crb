@@ -1,0 +1,3 @@
+struct Point{x:Int} fn duplicate(p:&Point)-><-Point{let q=copy(p);return <-q;} async fn own(p:&Point)-><-Point{yield;let q=duplicate(p);return <-q;}
+fn consume(t:->own)->Int{let h=runtime::spawn(->t);let p:Point=match h.join(){Ok(v)=>{<-v},Err(_)=>{return 99;}};let x=p.x;drop(->p);return x;}
+fn main(){let p=Point{x:7};print(consume(->own(&p)));drop(->p);}

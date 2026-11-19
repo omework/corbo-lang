@@ -1,0 +1,42 @@
+--- tests/test_async_result_factories.py
++++ tests/test_async_result_factories.py
+@@ -49,7 +49,7 @@
+                          'let t=prepare(&p);drop(->p);let q=t.await;'), 'emprunt|réserv|référenc|capture')
+         source=output.AsyncResultStorageTests.program('let q={let p=make(7);let t=prepare(&p);let q=t.await;<-q};return q.x;',helpers)
+         self.assertEqual(self.run_source(source).stdout,'7\n')
+-        source=PREFIX+helpers+'''async fn work(p:->Point)->Int{let t=prepare(&p);let q=t.await;drop(->p);yield;return q.x;}
++        source=PREFIX+helpers.replace('-><-Point','-><-A<Point>')+'''async fn work(p:->Point)->Int{let t=prepare(&p);let q=t.await;drop(->p);yield;return q.x;}
+             fn main(){let mut points=pool<Point>(2);let p=points.new(x:7);let h=runtime::spawn(->work(->p));
+                 match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}'''
+         self.assertEqual(self.run_source(source).stdout,'7\n')
+@@ -103,7 +103,7 @@
+         helpers=output.DUPLICATE+'''async fn leaf(p:&Point)-><-Point{let q=duplicate(p);yield;return <-q;}
+             fn prepare(p:&Point)-><-leaf{return <-leaf(p);}fn again(p:&Point)-><-leaf{return <-prepare(p);}'''
+         for allocation in ('let p=make(7);','let mut points=pool<Point>(2);let p=points.new(x:7);'):
+-            source=PREFIX+helpers+'fn main(){'+allocation+'''let h=runtime::spawn(->again(&p));
++            source=PREFIX+(helpers if 'make(' in allocation else helpers.replace('-><-Point','-><-A<Point>'))+'fn main(){'+allocation+'''let h=runtime::spawn(->again(&p));
+                 let q=match h.join(){Ok(q)=>{<-q},Err(_)=>{return;}};drop(->p);print(q.x);drop(->q);}'''
+             self.assertEqual(self.run_source(source).stdout,'7\n')
+             check=verify_program(source)
+@@ -115,7 +115,7 @@
+     def test_short_pool_and_short_capture_still_refused(self):
+         helpers=output.DUPLICATE+'''async fn leaf(p:&Point)-><-Point{let q=duplicate(p);yield;return <-q;}
+             fn prepare(p:&Point)-><-leaf{return <-leaf(p);}'''
+-        source=PREFIX+helpers+'''fn main(){let q={let mut points=pool<Point>(2);let p=points.new(x:7);
++        source=PREFIX+helpers.replace('-><-Point','-><-A<Point>')+'''fn main(){let q={let mut points=pool<Point>(2);let p=points.new(x:7);
+             let h=runtime::spawn(->prepare(&p));let q=match h.join(){Ok(q)=>{<-q},Err(_)=>{return;}};<-q};print(q.x);drop(->q);}'''
+         self.refused(source,'pool|source|survi')
+         self.refused(PREFIX+helpers+'fn main(){let t={let p=make(7);let t=prepare(&p);<-t};'+
+@@ -128,10 +128,10 @@
+         for allocation in ('let a=make(7);let b=make(9);',
+                            'let mut points=pool<Point>(3);let a=points.new(x:7);let b=points.new(x:9);'):
+             for flag,expected in ((0,'7\n'),(1,'9\n')):
+-                source=PREFIX+helpers+'fn main(){'+allocation+MAIN[MAIN.index('let h='):].replace('EXPR',f'prepare(&a,&b,{flag})')
++                source=PREFIX+(helpers if 'make(' in allocation else helpers.replace('-><-Point','-><-A<Point>'))+'fn main(){'+allocation+MAIN[MAIN.index('let h='):].replace('EXPR',f'prepare(&a,&b,{flag})')
+                 self.assertEqual(self.run_source(source).stdout,expected)
+         mixed=PREFIX+helpers+'fn main(){let a=make(7);let mut points=pool<Point>(2);let b=points.new(x:9);'+MAIN[MAIN.index('let h='):].replace('EXPR','prepare(&a,&b,0)')
+-        self.refused(mixed,'locale T.*A<T>')
++        self.refused(mixed,'stockage|local|allocation')
+ 
+     def test_inactive_cleanup_and_launch_failure(self):
+         source=PREFIX+LEAF+FACTORY+'fn main(){let t=prepare(7);drop(->t);}'

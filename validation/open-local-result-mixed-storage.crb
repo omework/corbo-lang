@@ -1,0 +1,5 @@
+struct Point{x:Int}
+async fn local()-><-Point{let p=Point{x:7};return <-p;}
+async fn pooled(ps:&mut Pool<Point>)-><-A<Point>{let p=ps.new(x:9);return <-p;}
+fn main(){let mut ps=pool<Point>(1);let a=runtime::spawn(->local());let b=runtime::spawn(->pooled(&mut ps));
+let left=a.join();let right=b.join();let r=if true{left ->;right ->;drop(->right);<-left}else{left ->;right ->;drop(->left);<-right};drop(->r);}

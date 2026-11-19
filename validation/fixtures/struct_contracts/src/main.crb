@@ -1,0 +1,26 @@
+use external_contracts::source::Counter;
+use std::iter::Iter;
+use std::io::buffered::{BufReader, BufWriter};
+fn main() -> i32 {
+    let mut counter = Counter::new();
+    let mut memory = pool<Vector<i64>>(1);
+    let mut values = memory.new();
+    Iter::new(&mut counter).map(|value: i64| { value + 5 }).collect(&mut values);
+    print(values[0]);
+    print(values[1]);
+    let mut scratch: [u8; 2] = [0; 2];
+    let mut output: [u8; 1] = [0];
+    {
+        let mut reader = BufReader::new(&mut counter, &mut scratch[..]);
+        match reader.read(&mut output[..]) {
+            Ok(count) => { print(count); }, Err(error) => { drop(error); return 1; },
+        }
+    }
+    print(output[0]);
+    {
+        let mut writer = BufWriter::new(&mut counter, &mut scratch[..]);
+        match writer.write(&output[..]) { Ok(count) => { drop(count); }, Err(error) => { drop(error); return 2; } }
+        match writer.flush() { Ok(()) => {}, Err(error) => { drop(error); return 3; } }
+    }
+    0
+}

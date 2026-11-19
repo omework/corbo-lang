@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Each request keeps its task link until dequeue; clear that link before publishing readiness.
+/// Receives per-operation completion records and resumes their task roots under the scheduler lock.
+fn completion_events(unused:usize)->usize {
+    drop(copy(unused));
+    if get_base()==0 {
+        reserve(1);
+        worker_regions();
+    }
+    loop {
+        let address=completion_next(get_completion_port());
+        if copy(address)==0 {
+            continue;
+        }
+        lock();
+        let child=read_word(copy(address)+32);
+        if copy(child)!=0 && g_Task_io_registered(copy(child)) && g_Task_io_token(copy(child))==copy(address) {
+            write_word(copy(address)+32,0);
+            s_Task_io_ready(copy(child),true);
+            let parent=g_Task_root(copy(child));
+            let root:usize=if copy(parent)!=0 {
+                copy(parent)
+            } else {
+                copy(child)
+            };
+            s_Task_waiting(copy(root),false);
+            if g_Task_parked(copy(root)) {
+                s_Task_parked(copy(root),false);
+                if !g_Task_blocking(copy(root)) {
+                    task_enqueue(copy(root));
+                }
+            }
+            broadcast();
+        }
+        unlock();
+    }
+    0
+}
+/// Creates the completion port and its event thread once, recording initialization errors.
+fn completion_initialize() {
+    let port=completion_create();
+    set_completion_port(copy(port));
+    if copy(port)==0 {
+        return;
+    }
+    let slot=temporary_thread_slot();
+    if thread_create(copy(slot),pointer_completion_events(),0)!=0 {
+        completion_close(copy(port));
+        set_completion_port(0);
+        return;
+    }
+    thread_detach(copy(slot));
+    set_completion_init_error(0);
+}
+/// Associates a socket with the runtime completion port and returns the platform status.
+fn corbo_socket_attach(descriptor:u64)->i64 {
+    once_completion();
+    let error=get_completion_init_error();
+    if copy(error)!=0 {
+        return copy(error);
+    }
+    completion_attach(get_completion_port(),copy(descriptor))
+}
+/// Submits or observes one operation-specific completion request and coordinates its task wakeup without sharing request state.
+fn corbo_socket_complete(child:usize,descriptor:u64,address:usize,out:usize)->bool {
+    once_completion();
+    let error=get_completion_init_error();
+    if copy(error)!=0 {
+        write_word(copy(out),unsigned_bits(copy(error)));
+        return true;
+    }
+    let parent=g_Task_root(copy(child));
+    let root:usize=if copy(parent)!=0 {
+        copy(parent)
+    } else {
+        copy(child)
+    };
+    lock();
+    if g_Task_io_registered(copy(child)) && g_Task_io_ready(copy(child)) {
+        s_Task_io_registered(copy(child),false);
+        s_Task_io_ready(copy(child),false);
+        write_word(copy(out),0);
+        unlock();
+        return true;
+    }
+    s_Task_waiting(copy(root),true);
+    if !g_Task_io_registered(copy(child)) {
+        write_word(copy(address)+32,copy(child));
+        write_word(copy(address)+40,copy(descriptor));
+        s_Task_io_token(copy(child),copy(address));
+        s_Task_io_registered(copy(child),true);
+        s_Task_io_ready(copy(child),false);
+        let status=completion_submit(copy(address));
+        if copy(status)<0 {
+            write_word(copy(address)+32,0);
+            s_Task_io_registered(copy(child),false);
+            s_Task_waiting(copy(root),false);
+            write_word(copy(out),unsigned_bits(copy(status)));
+            unlock();
+            return true;
+        }
+    }
+    unlock();
+    false
+}

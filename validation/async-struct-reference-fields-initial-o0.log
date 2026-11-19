@@ -1,0 +1,84 @@
+test_alias_relay_and_root_after_alias_scope (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_alias_relay_and_root_after_alias_scope) ... ok
+test_escape_and_legacy_reset (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_escape_and_legacy_reset) ... 
+  test_escape_and_legacy_reset (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_escape_and_legacy_reset) (stage='verify_program') ... FAIL
+  test_escape_and_legacy_reset (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_escape_and_legacy_reset) (stage='compile_source') ... FAIL
+test_helpers_methods_and_mutable_pointee (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_helpers_methods_and_mutable_pointee) ... ERROR
+test_inactive_drop_and_launch_failure_release_targets (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_inactive_drop_and_launch_failure_release_targets) ... ok
+test_native_thread_field_dereference (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_native_thread_field_dereference) ... ok
+test_pool_reuse_only_after_wait_and_drop (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_pool_reuse_only_after_wait_and_drop) ... ok
+test_recorded_case_and_mixed_offsets (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_recorded_case_and_mixed_offsets) ... ok
+test_shared_tasks_and_shared_caller (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_shared_tasks_and_shared_caller) ... ok
+test_transitive_reservation_before_and_after_launch (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_transitive_reservation_before_and_after_launch) ... ok
+test_type_and_dependency_update_boundaries (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_type_and_dependency_update_boundaries) ... ok
+test_array_targets_survive_native_wait_and_then_mutate (test_native_blocks.NativeBlockTests.test_array_targets_survive_native_wait_and_then_mutate) ... ok
+test_conditional_reference_result_preserves_both_sources (test_native_blocks.NativeBlockTests.test_conditional_reference_result_preserves_both_sources) ... ok
+test_generated_native_launch_bypasses_rejecting_scheduler (test_native_blocks.NativeBlockTests.test_generated_native_launch_bypasses_rejecting_scheduler) ... ok
+test_mutable_capture_and_return_keep_target_reserved (test_native_blocks.NativeBlockTests.test_mutable_capture_and_return_keep_target_reserved) ... ok
+test_nested_thread_join_stays_synchronous (test_native_blocks.NativeBlockTests.test_nested_thread_join_stays_synchronous) ... ok
+test_owned_capture_cleanup_failure_and_reuse (test_native_blocks.NativeBlockTests.test_owned_capture_cleanup_failure_and_reuse) ... ok
+test_owned_result_is_transferred_before_frame_release (test_native_blocks.NativeBlockTests.test_owned_result_is_transferred_before_frame_release) ... ok
+test_recorded_program_tail_early_and_primitive_results (test_native_blocks.NativeBlockTests.test_recorded_program_tail_early_and_primitive_results) ... ok
+test_scalar_capture_consumes_binding_in_both_callers (test_native_blocks.NativeBlockTests.test_scalar_capture_consumes_binding_in_both_callers) ... ok
+test_sync_function_contract_captures_its_reference_parameter (test_native_blocks.NativeBlockTests.test_sync_function_contract_captures_its_reference_parameter) ... ok
+test_type_capture_mutability_and_lifetime_rejections (test_native_blocks.NativeBlockTests.test_type_capture_mutability_and_lifetime_rejections) ... ok
+test_wait_obligation_on_both_return_paths (test_native_blocks.NativeBlockTests.test_wait_obligation_on_both_return_paths) ... ok
+test_whole_array_capture_moves_and_preserves_contents (test_native_blocks.NativeBlockTests.test_whole_array_capture_moves_and_preserves_contents) ... ok
+
+======================================================================
+ERROR: test_helpers_methods_and_mutable_pointee (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_helpers_methods_and_mutable_pointee)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_reference_fields.py", line 64, in test_helpers_methods_and_mutable_pointee
+    self.assertEqual(self.run_native(source).stdout,'17\n13\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15042, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15035, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13536, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13336, in verify
+    self.function_effects = EffectAnalyzer(self.functions, self.enums, Error, async_functions).infer_all()
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 147, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 174, in infer
+    outcomes = self.nodes(body, environment, resets, allocations, pools)
+  File "/Users/jabarkarim/sources/crust/effects.py", line 569, in nodes
+    builtin = builtin_method_statement(expr, structure, lambda message: self.fail(line, message))
+  File "/Users/jabarkarim/sources/crust/effects.py", line 83, in builtin_method_statement
+    fail('set exige un entier Int32')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 569, in <lambda>
+    builtin = builtin_method_statement(expr, structure, lambda message: self.fail(line, message))
+                                                                        ~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 143, in fail
+    raise self.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: set exige un entier Int32
+
+======================================================================
+FAIL: test_escape_and_legacy_reset (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_escape_and_legacy_reset) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_reference_fields.py", line 28, in assert_refused
+    with self.assertRaises(Error):check(source, **options)
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_escape_and_legacy_reset (test_async_struct_reference_fields.AsyncStructReferenceFieldTests.test_escape_and_legacy_reset) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_reference_fields.py", line 28, in assert_refused
+    with self.assertRaises(Error):check(source, **options)
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 23 tests in 14.520s
+
+FAILED (failures=2, errors=1)

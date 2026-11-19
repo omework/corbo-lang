@@ -1,0 +1,95 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -704,7 +704,9 @@
+     name, parameters, result, body = node.args
+     if result[0] not in ('owned', *JOIN_PAYLOADS):
+         return frozenset()
+-    if getattr(node, 'result_storage', False):
++    effect = getattr(node, 'field_effect_summary', None)
++    if (getattr(node, 'result_storage', False)
++            or effect and effect.complete and effect.completion_result.candidates):
+         from async_result_storage import result_storage
+         plan = result_storage(node)
+         if plan.parameters is not None:
+@@ -2337,6 +2339,17 @@
+         clear_stored_fields(task)
+         del active_loans[id(loans)]
+ 
++    def task_result_signature(record):
++        """The source type includes T versus A<T>, even with the same Cell ABI.
++
++        Only result storage participates: unrelated local captures and pools
++        of owned descendants must not reclassify the returned root.
++        """
++        mode, typ = functions[record[3]].args[2]
++        local = (any(origin in implicit_stacks for origin, access in record[4] if access == 'storage')
++                 if mode in ('owned', *JOIN_PAYLOADS) and typ in struct_layouts else None)
++        return mode, typ, local
++
+     def create_selection(expr, line):
+         enable_threads()
+         records, hidden, signatures = [], [], set()
+@@ -2352,9 +2365,9 @@
+                     fail(line, 'Select exige des tâches inactives')
+             else:
+                 fail(line, 'prototype : branche Select calculée non raccordée')
+-            signatures.add(functions[record[3]].args[2])
++            signatures.add(task_result_signature(record))
+             if len(signatures) != 1:
+-                fail(line, 'Select exige le même type de résultat dans chaque branche')
++                fail(line, 'Select exige le même type de résultat et de stockage (T local / allocation A<T>) dans chaque branche')
+             # Earlier constructed branches must also be destroyed if evaluating
+             # a later argument suspends or leaves the enclosing scope.
+             binding = '\0select_branch:' + record[0]
+@@ -4475,7 +4488,7 @@
+         entry = control_state()
+         loop = {'entry': entry, 'depth': len(scopes), 'fields': set(fields),
+                 'valued': valued, 'result': None, 'loans': [], 'returned_loans': [], 'field_changes': [], 'exit': None,
+-                'selection_branches': [], 'selection_paths': [], 'task_prefixes': [],
++                'selection_branches': [], 'selection_paths': [], 'task_prefixes': [], 'task_result_types': set(),
+                 'following': following, 'body': body, 'utf8_loans': [], 'reference_loans': [], 'key': id(body),
+                 'utf8_bindings': names, 'utf8_exit_live': exit_live, 'utf8_head_live': head_live}
+         steps.append('for (;;) {')
+@@ -4690,7 +4703,7 @@
+                 ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
+             elif kind == 'selection':
+                 result = f'&{record.c}'
+-                returns_int, nominal = record.awaited, functions[record.branches[0][3]].args[2]
++                returns_int, nominal = record.awaited, task_result_signature(record.branches[0])
+                 ctype = 'CrustSelect *'
+                 loop['selection_branches'].extend(record.branches)
+                 loop['selection_paths'].extend(record.paths or (record.branches,))
+@@ -4698,6 +4711,9 @@
+                 loop['loans'].extend(record.loans)
+             else:
+                 result, returns_int, loans, nominal = record[:4]
++                loop['task_result_types'].add(task_result_signature(record))
++                if len(loop['task_result_types']) > 1:
++                    fail(line, 'les break de tâches exigent le même type et le même stockage de résultat')
+                 if kind == 'task':
+                     loop['task_prefixes'].extend(task_prefix_changes.get(result, ((None, (), ()),)))
+                 loop['returned_loans'].extend(record[4])
+@@ -5031,7 +5047,7 @@
+                             ctype = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
+                         elif kind == 'selection':
+                             result, ctype = f'&{record.c}', 'CrustSelect *'
+-                            signature = kind, record.awaited, functions[record.branches[0][3]].args[2]
++                            signature = kind, record.awaited, task_result_signature(record.branches[0])
+                             active_loans.pop(id(record.loans), None)
+                             selected_loans.extend(record.loans)
+                             selected_branches.extend(record.branches)
+@@ -5046,11 +5062,11 @@
+                             selected_loans.extend(loans)
+                             selected_returned_loans.extend(returned_loans)
+                             selected_field_changes.extend(field_changes)
+-                            if kind == 'execution' and functions[nominal].args[2][1] in struct_layouts:
+-                                local = any(origin in implicit_stacks for origin, access in returned_loans if access == 'storage')
++                            if kind in ('task', 'execution') and task_result_signature(record)[2] is not None:
++                                local = task_result_signature(record)[2]
+                                 selected_execution_storage.add(local)
+                                 if len(selected_execution_storage) > 1:
+-                                    fail(terminal.line, 'branches de handles : stockage incompatible (T local / allocation A<T>)')
++                                    fail(terminal.line, 'branches de tâches ou handles : stockage incompatible (T local / allocation A<T>)')
+                         if selected_signature is None:
+                             selected_signature = signature
+                             target = temporary(ctype, array_dimensions(shape) if kind == 'array' else '')

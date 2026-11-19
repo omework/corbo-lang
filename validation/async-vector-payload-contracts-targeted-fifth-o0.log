@@ -1,0 +1,84 @@
+test_extraction_uses_input_payload (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_extraction_uses_input_payload) ... ok
+test_insertion_and_relay (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_insertion_and_relay) ... ok
+test_mutable_payload_stays_exclusive (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_mutable_payload_stays_exclusive) ... ok
+test_nested_owned_graph_through_sync_helpers (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_nested_owned_graph_through_sync_helpers) ... 
+  test_nested_owned_graph_through_sync_helpers (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_nested_owned_graph_through_sync_helpers) (checker='verify_program') ... FAIL
+  test_nested_owned_graph_through_sync_helpers (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_nested_owned_graph_through_sync_helpers) (checker='compile_source') ... FAIL
+test_optional_extraction_and_empty_input (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_optional_extraction_and_empty_input) ... ok
+test_owned_vector_extraction_cleans_container (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_owned_vector_extraction_cleans_container) ... FAIL
+
+======================================================================
+FAIL: test_nested_owned_graph_through_sync_helpers (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_nested_owned_graph_through_sync_helpers) (checker='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 10: 'n' n’est plus utilisable après drop ou transfert
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "emprunt|réserv|référenc|captur" does not match "ligne 10: 'n' n’est plus utilisable après drop ou transfert"
+
+======================================================================
+FAIL: test_nested_owned_graph_through_sync_helpers (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_nested_owned_graph_through_sync_helpers) (checker='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 10: 'n' n’est plus utilisable après drop ou transfert
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "emprunt|réserv|référenc|captur" does not match "ligne 10: 'n' n’est plus utilisable après drop ou transfert"
+
+======================================================================
+FAIL: test_owned_vector_extraction_cleans_container (test_async_vector_payload_contracts.AsyncVectorPayloadContractTests.test_owned_vector_extraction_cleans_container)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17411, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17404, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15895, in compile
+    self.emit_async_sync_bridge(key)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15807, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10691, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12340, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13828, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13889, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3436, in verify_state
+    self.fail('invariant interne : rattachement de scope invalide')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2023, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: invariant interne : rattachement de scope invalide
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_payload_contracts.py", line 36, in test_owned_vector_extraction_cleans_container
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: invariant interne : rattachement de scope invalide
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.150s
+
+FAILED (failures=3)

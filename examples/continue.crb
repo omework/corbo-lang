@@ -1,0 +1,16 @@
+fn main() {
+    let mut memory = pool<i32>(1);
+    let mut controls = pool<i32>(1);
+    let mut state = controls.new(0);
+
+    loop {
+        let mut temporary = memory.new(42);
+        address(temporary);
+        if *state == 0 {
+            state.set(1);
+            continue; // temporary est détruit, son slot redevient disponible.
+        }
+        print(*temporary);
+        break;
+    }
+}

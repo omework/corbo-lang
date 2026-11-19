@@ -1,0 +1,15 @@
+--- before/native_threads.py
++++ after/native_threads.py
+@@ -96,7 +96,11 @@
+                     break
+             definition = self.Node('async_fn', (name, parameters, result, body), line,
+                                    mutable_parameters=frozenset(mutable), native_block=True,
+-                                   handle_parameters=frozenset(n for n, m, _ in parameters if m == 'owned'),
++                                   # The native header transfers existing values;
++                                   # it does not declare a new A<T> requirement.
++                                   # Concrete storage is selected by the caller.
++                                   handle_parameters=frozenset(n for n, m, t in parameters
++                                                               if m == 'owned' and t not in self.structures),
+                                    handle_result=result[0] == 'owned')
+             self.generated.append(definition)
+             self.functions[name] = definition

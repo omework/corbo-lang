@@ -1,0 +1,339 @@
+--- before/crust.py
++++ after/crust.py
+@@ -1649,6 +1649,8 @@
+     async_reference_slot: tuple | None = None
+     optional_utf8_parameter: int | None = None
+     pool_capture: MemorySource | None = None
++    inline_root: Allocation | None = None
++    inline_path: str = ''
+ 
+     def __post_init__(self):
+         if not self.origins:
+@@ -1944,9 +1946,11 @@
+         # Generated single-assignment temporaries, keyed by mode and C name.
+         self.static_utf8_temporaries = set()
+         self.body_call_contracts = {}
+-        self.enums = {}
++        from structure_views import StructureSchemas
++        self.enums = StructureSchemas()
+         self.struct_fields = {}
+         self.inline_structures = {}
++        self.inline_views = {}
+         self.async_definitions.structures = self.enums
+         self.definitions = []
+         self.call_stack = []
+@@ -2154,6 +2158,8 @@
+ 
+     def has_array_result(self, summary, params, bindings):
+         if summary.mode not in ('ref', 'mut'):
++            return False
++        if summary.typ in self.struct_fields:
+             return False
+         if fixed_array_shape(summary.typ) is not None or summary.payload_reference:
+             return True
+@@ -2430,6 +2436,11 @@
+         targets, parents, reservations = {}, {}, {}
+         for target in summary.reference_targets:
+             binding = bindings[params[target.parameter][0]]
++            if target.kind == 'inline_field_parameter' and summary.typ in self.struct_fields:
++                projection = self.inline_structure_projection(binding, target.field, summary.mode, c)
++                targets.update((a.id, a) for a in projection.reference_targets)
++                parents.update((id(p), p) for p in projection.borrow_parents)
++                continue
+             if target.kind == 'indirect_field_parameter':
+                 # Dereferencing a stored Int reference still points at its
+                 # allocation. Preserve that representation through contracts;
+@@ -3295,8 +3306,9 @@
+                 for second in loans:
+                     if first is second:
+                         continue
++                    from structure_views import paths_overlap
+                     if (first.reserved_field is not None and second.reserved_field is not None
+-                            and first.reserved_field != second.reserved_field):
++                            and not paths_overlap(first.reserved_field, second.reserved_field)):
+                         continue
+                     if (first.vector_projection_targets and second.vector_projection_targets
+                             and {target.id for target in first.vector_projection_targets}.isdisjoint(
+@@ -3496,6 +3508,17 @@
+             # Other paths to the allocation still see the inherited reservation.
+             for root, _ in self.array_paths(loan):
+                 if root.alloc is allocation:
++                    # A leaf reborrow through an inline view is already
++                    # represented by that view's subtree reservation. Keep
++                    # checking the leaf separately in array_access, but do
++                    # not count a second independent capability here.
++                    from structure_views import paths_overlap
++                    if any(id(reservation) in represented
++                           and reservation.alloc is allocation
++                           and reservation.reserved_field is not None
++                           and paths_overlap(reservation.reserved_field, root.name)
++                           for reservation in self.array_reservations(loan)):
++                        continue
+                     modes.append(self.array_loan_is_exclusive(loan, root, parent_access))
+             for reservation in self.array_reservations(loan):
+                 if id(reservation) in represented:
+@@ -3512,6 +3535,9 @@
+         if write and (binding.kind == 'owned' or binding.kind in COPY_VALUE_TYPES) and not binding.mutable:
+             self.fail(f"'{binding.name}' est immuable : déclarer let mut")
+         if binding.alloc:
++            if self.is_structure_view(binding.alloc):
++                for field, _ in self.enums[binding.alloc.typ]['']:
++                    self.array_access(self.struct_int_view(('field', binding.name, field), binding), write=write, after=after)
+             if any(not allocation.alive or not allocation.definite
+                    for allocation in self.reservation_allocations(binding)):
+                 self.fail(f"accès à '{binding.name}' : allocation empruntée libérée")
+@@ -3904,7 +3930,10 @@
+             self.lines = output
+         if frame['values']:
+             kind, typ, _ = frame['values'][0]
+-            if kind in ('array_ref', 'array_mut'):
++            if kind in ('ref', 'mut'):
++                c_type = self.reference_c_type(target for _, _, value in frame['values']
++                    for target in (value.reference_targets or (value,)))
++            elif kind in ('array_ref', 'array_mut'):
+                 c_type = f'{typ} *'
+             elif kind in ('handle_option', 'buffered_handle_exchange'):
+                 c_type = 'VectorHandleResult'
+@@ -4959,6 +4988,7 @@
+                 for code, index, pointer in selected_reference_writes:
+                     code[index] = f'{result_c} = {pointer};'
+             c_type = (f'{selected_type} *' if selected_kind in ('array_ref', 'array_mut') else
++                      self.reference_c_type(selected_reference_targets.values()) if selected_kind in ('ref', 'mut') else
+                       selected_type[0] if selected_kind == 'array_refs' else
+                       selected_type if selected_kind == 'array' else
+                       'VectorSplit' if selected_kind == 'vector_split' else
+@@ -5353,6 +5383,62 @@
+                 return binding, self.field_offset(fields, index), typ
+         self.fail(f"champ inconnu '{path}' dans {binding.alloc.typ}")
+ 
++    @staticmethod
++    def is_structure_view(allocation):
++        return bool(allocation and all(target.inline_root is not None
++            for target in (allocation.reference_targets or (allocation,))))
++
++    def reference_c_type(self, targets):
++        representations = {target.inline_root is not None for target in targets}
++        if len(representations) > 1:
++            self.fail('prototype : résultat mêlant une référence entière et une vue de sous-structure non encore raccordé')
++        return 'CrustStructureView' if representations == {True} else 'Cell *'
++
++    def inline_structure_projection(self, binding, path, mode, c=''):
++        from structure_views import contained_field
++        layout = contained_field(self.enums, binding.alloc.typ, path)
++        if layout is None:
++            self.fail(f"sous-structure inconnue '{path}' dans {binding.alloc.typ}")
++        if any(typ != 'Int' for _, typ in self.enums[layout.typ]['']):
++            self.fail('prototype : vue de sous-structure à champs non Int non encore raccordée')
++        targets, parents = [], []
++        for holder in binding.referents or (binding.alloc,):
++            root = holder.inline_root or holder
++            full_path = holder.inline_path + '.' + path if holder.inline_root else path
++            key = root.id, full_path
++            if key not in self.inline_views:
++                self.inline_views[key] = Allocation(self.uid(), root.scope, full_path, root.sources,
++                    typ=layout.typ, variants=frozenset({''}), inline_root=root, inline_path=full_path)
++            view = self.inline_views[key]
++            view.scope, view.sources = root.scope, root.sources
++            targets.append(view)
++            parents.append(Binding(binding.name, mode, binding.c, root,
++                borrow_parents=(binding,), match_reservation=True, reserved_field=full_path))
++        return self.reference_descriptor(c, targets, parents)
++
++    def borrow_inline_structure(self, place, scope, *, write):
++        from structure_views import contained_field
++        binding = self.lookup(place[1])
++        layout = contained_field(self.enums, binding.alloc.typ, place[2]) if binding.alloc else None
++        if layout is None:
++            return None
++        mode = 'mut' if write else 'ref'
++        if write and not (binding.kind == 'mut' or binding.kind == 'owned' and binding.mutable):
++            self.fail(f"'{binding.name}' est immuable ou emprunté en lecture")
++        for field, _ in self.enums[layout.typ]['']:
++            leaf = ('field', place[1], place[2] + '.' + field)
++            self.array_access(self.struct_int_view(leaf, binding), write=write)
++        descriptor = self.inline_structure_projection(binding, place[2], mode)
++        fields = self.enums[binding.alloc.typ]['']
++        offset = self.field_offset(fields, layout.first)
++        size = self.field_offset(self.enums[layout.typ][''], layout.count)
++        metadata = self.structure_layout_definition(layout.typ)
++        value = f'inline_view{self.uid()}'
++        helper = 'structure_subview' if self.is_structure_view(binding.alloc) else 'structure_view'
++        self.lines.append(f'CrustStructureView {value} = {helper}({binding.c}, {offset}, {size}, &{metadata});')
++        descriptor.c = value
++        return mode, value, descriptor
++
+     def struct_int_place(self, expr):
+         binding, offset, typ = self.struct_place(expr)
+         if typ == 'Int':
+@@ -5424,9 +5510,11 @@
+ 
+     def struct_int_roots(self, binding, path):
+         for allocation in binding.referents or (binding.alloc,):
+-            key = allocation.id, path
++            actual_path = allocation.inline_path + '.' + path if allocation.inline_root else path
++            allocation = allocation.inline_root or allocation
++            key = allocation.id, actual_path
+             if key not in self.struct_field_roots:
+-                self.struct_field_roots[key] = Binding(path, 'array', '', alloc=allocation, static_type='int')
++                self.struct_field_roots[key] = Binding(actual_path, 'array', '', alloc=allocation, static_type='int')
+             yield self.struct_field_roots[key]
+ 
+     def struct_int_view(self, place, binding):
+@@ -5584,6 +5672,8 @@
+         return tuple(paths)
+ 
+     def copy_structure(self, binding, scope, label, source=None, source_c=None, expr=None):
++        if self.is_structure_view(binding.alloc):
++            self.fail('prototype : copie de sous-structure empruntée non encore raccordée')
+         original = binding.alloc
+         if original is None or original.typ not in self.struct_fields:
+             self.fail('pool.copy exige une structure allouée')
+@@ -5650,6 +5740,9 @@
+ 
+     def local_structure_storage(self, scope, typ):
+         source = self.local_stack_storage(scope)
++        return source, self.structure_layout_definition(typ)
++
++    def structure_layout_definition(self, typ):
+         fields = self.enums[typ]['']
+         layout = f'layout{self.uid()}'
+         offsets = ', '.join(self.field_offset(fields, i) for i in range(len(fields))) or '0'
+@@ -5660,7 +5753,7 @@
+         self.lines.append(f'static const Source {layout} = {{.enum_name = "{typ}", .arm_name = "", '
+                           f'.field_count = {len(fields)}, .field_offsets = {layout}_offsets, '
+                           f'.field_kinds = {layout}_kinds}};')
+-        return source, layout
++        return layout
+ 
+     def construct_enum(self, expr, scope, source_name, structure=None):
+         if structure is None:
+@@ -5721,6 +5814,8 @@
+                     ctype = 'Cell *'
+                 elif capability:
+                     field_mode, pointee = capability
++                    if self.is_structure_view(target):
++                        self.fail('prototype : stockage d’une référence de sous-structure non encore raccordé')
+                     if kind != field_mode or target is None or target.typ != pointee:
+                         self.fail(f"champ '{name}' : {types[name]} requis")
+                     if not targets:
+@@ -6113,6 +6208,7 @@
+                 for holder in common}
+ 
+     def array_access(self, binding, write=False, after=False, *, inline_path=None):
++        from structure_views import paths_overlap
+         if write and not (binding.kind in ('array_mut', *VECTOR_MUT_VIEW_KINDS) or binding.kind in ('array', 'array_refs') and binding.mutable):
+             self.fail(f"'{binding.name}' est immuable ou emprunté en lecture")
+         active = tuple(self.active_array_loans(after))
+@@ -6140,7 +6236,7 @@
+                 permitted = self.array_legacy_parents(parent, root)
+                 legacy_loans = [loan for loan in self.loans(root.alloc, exclude=binding, after=after, include_array_loans=False)
+                                 if id(loan) not in permitted and not (
+-                                    loan.reserved_field is not None and loan.reserved_field != root.name
++                                    loan.reserved_field is not None and not paths_overlap(loan.reserved_field, root.name)
+                                     and struct_field)]
+                 if (write and legacy_loans) or any(loan.kind == 'mut' for loan in legacy_loans):
+                     self.fail(f"accès à '{binding.name}' incompatible avec un emprunt actif")
+@@ -9259,11 +9355,16 @@
+                 return view.kind, view.c, ('int', self.array_paths(view))
+             if expr[1][0] == 'field':
+                 self.expression_clock(expr)
++                projected = self.borrow_inline_structure(expr[1], scope, write=op == 'mut_expr')
++                if projected is not None:
++                    return projected
+                 binding, offset = self.struct_int_place(expr[1])
+                 view = self.struct_int_view(expr[1], binding)
+                 mutable = op == 'mut_expr'
+                 self.array_access(view, write=mutable)
+-                pointer = f'(int *)((unsigned char *){binding.c}->fields + {offset})'
++                pointer = (f'(int *)structure_view_address({binding.c}, {offset}, sizeof(int))'
++                           if self.is_structure_view(binding.alloc) else
++                           f'(int *)((unsigned char *){binding.c}->fields + {offset})')
+                 return ('array_mut' if mutable else 'array_ref'), pointer, ('int', self.array_paths(view))
+             if expr[1][0] == 'array_deref_slot':
+                 place = expr[1][1]
+@@ -10444,6 +10545,8 @@
+                         target = self.reference_descriptor(value, binding.referents or (binding.alloc,), parents)
+                 else:
+                     kind, value, target = self.expression(argument, scope, label)
++                if kind in ('ref', 'mut') and self.is_structure_view(target):
++                    self.fail('prototype : capture async de sous-structure non encore raccordée')
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
+                 if not array_capture and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
+                     targets_by_parameter[index] = target
+@@ -11041,7 +11144,7 @@
+             pc = f'p{self.uid()}'
+             actual = None
+             evaluated = None
+-            if mode in ('ref', 'mut') and arg[0] in ('ref_expr', 'mut_expr') and arg[1][0] == 'field_deref':
++            if mode in ('ref', 'mut') and arg[0] in ('ref_expr', 'mut_expr') and arg[1][0] in ('field', 'field_deref'):
+                 evaluated = self.expression(arg, caller, pname)
+             elif (mode in ('ref', 'mut') and (typ == 'Int' or typ.startswith('A<'))) or (mode, typ) == ('mut', 'u8'):
+                 if argument_op in ('call', 'loop_expr', 'reborrow', 'array_index') or (
+@@ -11260,7 +11363,7 @@
+                     binding.read_parent = actual if actual.kind == 'mut' else actual.read_parent
+                     if mode in ('ref', 'mut') and self.has_mutable_fields(actual.alloc):
+                         binding.borrow_parents = (*binding.borrow_parents, actual)
+-                    ctype = 'Cell *'
++                    ctype = 'CrustStructureView' if self.is_structure_view(actual.alloc) else 'Cell *'
+                 used.append((key, mode))
+                 c = actual.c
+                 if actual.kind in ('ref', 'mut') or actual.kind == 'source' and actual.source_borrowed:
+@@ -11581,6 +11684,9 @@
+                                'vector_split': 'VectorSplit', 'task': 'CrustTask *', 'execution': 'CrustExecution',
+                                **JOIN_RESULT_C_TYPES,
+                                'void': 'void', **COPY_VALUE_TYPES}[result[0]]
++                if declared[0] in ('ref', 'mut') and declared[1] in self.struct_fields:
++                    descriptor = self.direct_result(summary, params, result_bindings, '')
++                    result_type = self.reference_c_type(descriptor.reference_targets)
+             if result[0] != 'void' and not complete:
+                 if result[0] in ('task', 'execution'):
+                     self.check_return_sources(exit_frame, result[2])
+@@ -12811,7 +12917,9 @@
+                     kind, typ = 'array_' + kind, 'int'
+                     for code, index, value in reference_writes:
+                         code[index] = f'{result_c} = {value};'
+-                if kind in ('array_ref', 'array_mut'):
++                if kind in ('ref', 'mut'):
++                    c_type = self.reference_c_type(selected_targets.values())
++                elif kind in ('array_ref', 'array_mut'):
+                     c_type = f'{typ} *'
+                 elif kind == 'vector_split':
+                     c_type = 'VectorSplit'
+@@ -13160,6 +13268,8 @@
+                     self.lines.append(f'cell_store_int({binding.c}, {offset}, {value});')
+                 else:
+                     expected, pointee = reference_type(typ)
++                    if self.is_structure_view(descriptor):
++                        self.fail('prototype : stockage d’une référence de sous-structure non encore raccordé')
+                     if kind != expected or descriptor is None or descriptor.typ != pointee:
+                         self.fail(f'une écriture de champ référence exige {typ}')
+                     holders = binding.referents or (allocation,)
+@@ -13771,7 +13881,8 @@
+                 # Materialize the complete RHS before running the old value's
+                 # cleanup, including when the RHS is only a pointer move.
+                 cname = f'v{self.uid()}'
+-                ctype = COPY_VALUE_TYPES.get(kind, 'Cell *')
++                ctype = ('CrustStructureView' if kind in ('ref', 'mut') and self.is_structure_view(allocation)
++                         else COPY_VALUE_TYPES.get(kind, 'Cell *'))
+                 self.lines.append(f'{ctype} {cname} = {c};')
+                 # A legal source use may be in a statically excluded enum arm.
+                 # Silence only C's unused alias warning; the explicit-use
+@@ -14028,7 +14139,9 @@
+                 if op == 'address':
+                     if binding.alloc is None and binding.static_type != 'Int':
+                         self.fail('address exige une allocation ou un emprunt vers une allocation')
+-                    self.lines.append(f'printf("%p\\n", (void *){binding.c});')
++                    address = (f'structure_view_address({binding.c}, 0, 0)'
++                               if self.is_structure_view(binding.alloc) else binding.c)
++                    self.lines.append(f'printf("%p\\n", (void *){address});')
+                 elif op == 'print':
+                     if binding.alloc and binding.alloc.typ != 'Int':
+                         if self.has_typed_reference_fields(binding.alloc.typ):
+@@ -14141,6 +14254,7 @@
+             self.enums[typ][''] = layout(typ)
+         from structure_views import contained_layouts
+         self.inline_structures = contained_layouts(self.struct_fields)
++        self.enums.inline_structures = self.inline_structures
+         for typ, variants in self.enums.items():
+             self.line = lines[typ]
+             for fields in variants.values():

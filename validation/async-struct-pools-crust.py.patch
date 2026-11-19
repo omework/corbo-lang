@@ -1,0 +1,46 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10047,6 +10047,7 @@
+                     dependencies.append((f'{mode}.{index}', (target,)))
+                     pool_sources.append(source)
+                     captured_sources[index] = source
++                    field_bindings[parameters[index][0]] = binding
+                     if index in result_indexes:
+                         pool_result_sources.append(source)
+                         origin = self.uid()
+@@ -10099,6 +10100,7 @@
+                     if kind != mode or target.typ != typ or target.scope != scope.id:
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
++                    field_bindings[parameters[index][0]] = Binding(parameters[index][0], 'owned', value, target)
+                     if index in result_indexes:
+                         result_targets.append(target)
+                     loans.append(Binding(label, 'owned', value, target))
+@@ -10286,6 +10288,18 @@
+             if target.guard:
+                 self.lines.append(f'*({target.guard}) = 0;')
+             target.alive = target.definite = False
++        result_fields = self.task_owned_result_fields(result_targets)
++        from async_result_storage import pool_result_graph
++        graph = pool_result_graph(node)
++        if graph is not None:
++            fresh_origins = {}
++            root_sources, root_origins = self.resolve_async_sources(graph[0], parameters, field_bindings, fresh_origins)
++            result_fields = tuple((path, *self.resolve_async_sources(symbols, parameters, field_bindings, fresh_origins))
++                                  for path, symbols in graph[1])
++            # Captured owners remain in item_sources, but are not the root's pool.
++            result_targets = []
++            pool_result_sources = list(root_sources)
++            pool_origins = set(root_origins)
+         allocation = Allocation(uid, scope.id, label, (), c=c, typ=f'Task<{name}>',
+                                 dependencies=tuple(dependencies),
+                                 item_sources=source_union(tuple(pool_sources), *(source_union(target.sources, self.owned_sources(target)) for target in transferred)),
+@@ -10293,7 +10307,7 @@
+                                     for child in self.dependency_carriers(target, ownership_only=True) for origin in child.origins),
+                                 task_result_sources=source_union(tuple(pool_result_sources), *(target.sources for target in result_targets)),
+                                 task_result_origins=frozenset(pool_origins) | frozenset(origin for target in result_targets for origin in target.origins),
+-                                task_result_fields=self.task_owned_result_fields(result_targets),
++                                task_result_fields=result_fields,
+                                 borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents))
+         if field_updates:
+             allocation.async_field_updates = tuple(self.prepare_structure_updates(

@@ -1,0 +1,349 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows access-control helpers for explicit file creation permissions.
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Opens the process token used to obtain file security identities.
+    fn open_file_token() -> (i64, u64) {
+        let mut token: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #16
+                bl GetCurrentThread
+                mov w1, #8
+                mov w2, #1
+                mov x3, sp
+                bl OpenThreadToken
+                cbnz w0, 2f
+                bl GetLastError
+                cmp w0, #1008
+                b.ne 1f
+                bl GetCurrentProcess
+                mov w1, #8
+                mov x2, sp
+                bl OpenProcessToken
+                cbnz w0, 2f
+                bl GetLastError
+                1:
+                mov w0, w0
+                mov ${error}, x0
+                b 3f
+                2:
+                ldr x0, [sp]
+                mov ${token}, x0
+                3:
+                add sp, sp, #16
+            }
+        }
+        (error, token)
+    }
+
+    /// Reads a requested user or group security identifier from the process token.
+    fn read_file_sid(token: u64, kind: u32, sid: &mut [u32]) -> i64 {
+        let mut error: i64 = 0;
+        @unchecked {
+            let sid_address = addr(&mut sid[0]);
+            @asm {
+                sub sp, sp, #112
+                mov x0, ${token}
+                mov w1, ${kind}
+                mov x2, sp
+                mov w3, #96
+                add x4, sp, #96
+                bl GetTokenInformation
+                cbz w0, 1f
+                mov w0, #68
+                mov x1, ${sid_address}
+                ldr x2, [sp]
+                bl CopySid
+                cbnz w0, 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                2:
+                add sp, sp, #112
+            }
+        }
+        error
+    }
+
+    /// Reads the security descriptor associated with an open file.
+    fn query_file_security(handle: u64, output: &mut [u32]) -> i64 {
+        let mut error: i64 = 0;
+        @unchecked {
+            let output_address = addr(&mut output[0]);
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${handle}
+                mov w1, #1
+                mov w2, #7
+                mov x3, #0
+                mov x4, #0
+                mov x5, #0
+                mov x6, #0
+                mov x7, sp
+                bl GetSecurityInfo
+                cbnz w0, 1f
+                ldr x0, [sp]
+                bl GetSecurityDescriptorLength
+                cmp w0, #640
+                b.hi 2f
+                mov w2, w0
+                ldr x1, [sp]
+                mov x0, ${output_address}
+                bl memcpy
+                b 3f
+                2:
+                mov x0, #50
+                mov ${error}, x0
+                3:
+                ldr x0, [sp]
+                bl LocalFree
+                b 4f
+                1:
+                mov w0, w0
+                mov ${error}, x0
+                4:
+                add sp, sp, #16
+            }
+        }
+        error
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Opens the process token used to obtain file security identities.
+    fn open_file_token() -> (i64, u64) {
+        let mut token: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 48
+                call GetCurrentThread
+                mov rcx, rax
+                mov edx, 8
+                mov r8d, 1
+                lea r9, [rsp + 32]
+                call OpenThreadToken
+                test eax, eax
+                jnz 2f
+                call GetLastError
+                cmp eax, 1008
+                jne 1f
+                call GetCurrentProcess
+                mov rcx, rax
+                mov edx, 8
+                lea r8, [rsp + 32]
+                call OpenProcessToken
+                test eax, eax
+                jnz 2f
+                call GetLastError
+                1:
+                mov eax, eax
+                mov ${error}, rax
+                jmp 3f
+                2:
+                mov rax, QWORD PTR [rsp + 32]
+                mov ${token}, rax
+                3:
+                add rsp, 48
+            }
+        }
+        (error, token)
+    }
+
+    /// Reads a requested user or group security identifier from the process token.
+    fn read_file_sid(token: u64, kind: u32, sid: &mut [u32]) -> i64 {
+        let mut error: i64 = 0;
+        @unchecked {
+            let sid_address = addr(&mut sid[0]);
+            @asm {
+                sub rsp, 160
+                mov rcx, ${token}
+                mov edx, ${kind}
+                lea r8, [rsp + 48]
+                mov r9d, 96
+                lea rax, [rsp + 144]
+                mov QWORD PTR [rsp + 32], rax
+                call GetTokenInformation
+                test eax, eax
+                jz 1f
+                mov ecx, 68
+                mov rdx, ${sid_address}
+                mov r8, QWORD PTR [rsp + 48]
+                call CopySid
+                test eax, eax
+                jnz 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                2:
+                add rsp, 160
+            }
+        }
+        error
+    }
+
+    /// Reads the security descriptor associated with an open file.
+    fn query_file_security(handle: u64, output: &mut [u32]) -> i64 {
+        let mut error: i64 = 0;
+        @unchecked {
+            let output_address = addr(&mut output[0]);
+            @asm {
+                sub rsp, 80
+                mov rcx, ${handle}
+                mov edx, 1
+                mov r8d, 7
+                xor r9d, r9d
+                mov QWORD PTR [rsp + 32], 0
+                mov QWORD PTR [rsp + 40], 0
+                mov QWORD PTR [rsp + 48], 0
+                lea rax, [rsp + 64]
+                mov QWORD PTR [rsp + 56], rax
+                call GetSecurityInfo
+                test eax, eax
+                jnz 1f
+                mov rcx, QWORD PTR [rsp + 64]
+                call GetSecurityDescriptorLength
+                cmp eax, 640
+                ja 2f
+                mov r8d, eax
+                mov rdx, QWORD PTR [rsp + 64]
+                mov rcx, ${output_address}
+                call memcpy
+                jmp 3f
+                2:
+                mov eax, 50
+                mov ${error}, rax
+                3:
+                mov rcx, QWORD PTR [rsp + 64]
+                call LocalFree
+                jmp 4f
+                1:
+                mov eax, eax
+                mov ${error}, rax
+                4:
+                add rsp, 80
+            }
+        }
+        error
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    /// Converts one set of permission bits to Windows access rights.
+    fn file_access_mask(bits: u32) -> u32 {
+        let read: u32 = if (copy(bits) & 4) != 0 { 0x009 } else { 0 };
+        let write: u32 = if (copy(bits) & 2) != 0 { 0x116 } else { 0 };
+        let execute: u32 = if (bits & 1) != 0 { 0x020 } else { 0 };
+        read | write | execute
+    }
+
+    /// Copies the requested SID words into a descriptor at the supplied offset.
+    fn copy_file_sid(output: &mut [u32], offset: u32, sid: &[u32], words: u32) {
+        let mut index: u32 = 0;
+        while index < words {
+            output[copy(offset) + copy(index)] = sid[copy(index)];
+            index += 1;
+        }
+    }
+
+    /// Appends an access control entry to a descriptor and returns the next offset.
+    fn append_file_ace(output: &mut [u32], offset: u32, sid: &[u32], mask: u32, kind: u32) -> u32 {
+        let words = ((sid[0] >> 8) & 0xff) + 2;
+        let size = copy(words) + 2;
+        output[copy(offset)] = (copy(size) << 18) | kind;
+        output[copy(offset) + 1] = mask;
+        copy_file_sid(&mut output[0..output.len()], copy(offset) + 2, sid, words);
+        offset + size
+    }
+
+    /// Builds a Windows security descriptor from the requested permission bits.
+    fn file_security_descriptor(output: &mut [u32], perm: u32) -> i64 {
+        let (error, token) = open_file_token();
+        if copy(error) != 0 { return error; }
+        let mut owner: [u32; 17] = [0; 17];
+        let mut group: [u32; 17] = [0; 17];
+        let owner_error = read_file_sid(copy(token), 1, &mut owner[..]);
+        let group_error = if copy(owner_error) == 0 {
+            read_file_sid(copy(token), 5, &mut group[..])
+        } else { 0 };
+        close(token);
+        if copy(owner_error) != 0 { return owner_error; }
+        if copy(group_error) != 0 { return group_error; }
+
+        let owner_words = ((owner[0] >> 8) & 0xff) + 2;
+        let group_words = ((group[0] >> 8) & 0xff) + 2;
+        let owner_offset: u32 = 5;
+        let group_offset = copy(owner_offset) + copy(owner_words);
+        let acl_offset = copy(group_offset) + copy(group_words);
+        // Self-relative SECURITY_DESCRIPTOR with a protected DACL.
+        output[0] = 0x90040001;
+        output[1] = copy(owner_offset) * 4;
+        output[2] = copy(group_offset) * 4;
+        output[3] = 0;
+        output[4] = copy(acl_offset) * 4;
+        copy_file_sid(&mut output[0..output.len()], owner_offset, &owner[..], owner_words);
+        copy_file_sid(&mut output[0..output.len()], group_offset, &group[..], group_words);
+
+        let everyone: [u32; 3] = [0x101, 0x01000000, 0]; // S-1-1-0
+        let owner_access = file_access_mask((copy(perm) >> 6) & 7);
+        let group_access = file_access_mask((copy(perm) >> 3) & 7);
+        let other_access = file_access_mask(perm & 7);
+        let data_rights: u32 = 0x13f;
+
+        // Windows checks ACEs in order. Each specific class decides all
+        // data rights before the next class can grant any of them.
+        let end = append_file_ace(&mut output[0..output.len()], copy(acl_offset) + 2, &owner[..], copy(data_rights) ^ copy(owner_access), 1);
+        let end = append_file_ace(&mut output[0..output.len()], end, &owner[..], owner_access, 0);
+        let end = append_file_ace(&mut output[0..output.len()], end, &group[..], data_rights ^ copy(group_access), 1);
+        let end = append_file_ace(&mut output[0..output.len()], end, &group[..], group_access, 0);
+        // These standard rights cover metadata and synchronization only.
+        let end = append_file_ace(&mut output[0..output.len()], end, &everyone[..], other_access | 0x00120080, 0);
+        let acl_bytes = (end - copy(acl_offset)) * 4;
+        output[copy(acl_offset)] = (acl_bytes << 16) | 2;
+        output[acl_offset + 1] = 5;
+        0
+    }
+
+    /// Compares equal-length word ranges within two security descriptors.
+    fn security_words_equal(expected: &[u32], expected_start: u32, actual: &[u32], actual_start: u32, words: u32) -> bool {
+        let descriptor_words: u32 = 160;
+        if copy(actual_start) > copy(descriptor_words) || copy(words) > descriptor_words - copy(actual_start) { return false; }
+        let mut index: u32 = 0;
+        while index < words {
+            if expected[copy(expected_start) + copy(index)] != actual[copy(actual_start) + copy(index)] { return false; }
+            index += 1;
+        }
+        true
+    }
+
+    /// Checks the opened file's security descriptor against the requested descriptor.
+    fn check_file_security(handle: u64, expected: &[u32]) -> i64 {
+        let mut actual: [u32; 160] = [0; 160];
+        let error = query_file_security(handle, &mut actual[..]);
+        if copy(error) != 0 { return error; }
+        // Validate the protection flag and compare the owner, group and ordered
+        // ACEs. The kernel may lay out the self-relative descriptor differently.
+        if (actual[0] & 0x900400ff) != 0x90040001 { return 50; }
+        let mut field: u32 = 1;
+        while field <= 2 {
+            let start = expected[copy(field)] / 4;
+            let bytes = actual[copy(field)];
+            if copy(bytes) < 20 || (copy(bytes) & 3) != 0 { return 50; }
+            let words = ((expected[copy(start)] >> 8) & 0xff) + 2;
+            if !security_words_equal(&expected[0..expected.len()], start, &actual[..], bytes / 4, words) { return 50; }
+            field += 1;
+        }
+        let start = expected[4] / 4;
+        let bytes = actual[4];
+        if copy(bytes) < 20 || (copy(bytes) & 3) != 0 || copy(bytes) > 632 { return 50; }
+        let acl = bytes / 4;
+        let size = expected[copy(start)] >> 16;
+        if (actual[copy(acl)] >> 16) < size || (actual[copy(acl)] & 0xff) != 2 { return 50; }
+        if !security_words_equal(expected, start + 1, &actual[..], acl + 1, (size / 4) - 1) { return 50; }
+        0
+    }
+#(endif)

@@ -1,0 +1,4 @@
+async fn leaf()->Int{yield;return 7;}
+async fn work()->Int{let mut s={let local=runtime::select(->leaf());<-local};
+let r=s.await;drop(->s);return r;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(r)=>{print(r);},Err(_)=>{}}}

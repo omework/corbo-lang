@@ -1,0 +1,276 @@
+--- before/crust.py
++++ after/crust.py
+@@ -56,13 +56,17 @@
+ 
+ 
+ def join_allocation_signature(typ):
+-    for mode, prefix, suffix in (
+-            ('join_owned', 'Result<A<', '>,runtime::Error>'),
+-            ('join_nested', 'Result<Result<A<', '>,runtime::Error>,runtime::Error>')):
++    for mode, prefix, suffix, storage in (
++            ('join_owned', 'Result<A<', '>,runtime::Error>', 'pool'),
++            ('join_nested', 'Result<Result<A<', '>,runtime::Error>,runtime::Error>', 'pool'),
++            ('join_owned', 'Result<', ',runtime::Error>', 'local'),
++            ('join_nested', 'Result<Result<', ',runtime::Error>,runtime::Error>', 'local')):
+         if typ.startswith(prefix) and typ.endswith(suffix):
+             payload = typ[len(prefix):-len(suffix)]
++            if storage == 'local' and payload in ('Int', 'Bool', 'bool', 'u8', 'char', 'Void', 'runtime::Error'):
++                continue
+             if payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload):
+-                return mode, payload
++                return mode, payload, storage
+     return None
+ COPY_VALUE_TYPES = ChainMap(PLAIN_JOIN_C_TYPES, {
+     **dict.fromkeys(ERROR_VALUE_TYPES, 'int'),
+@@ -135,6 +139,8 @@
+     mutable_parameters: frozenset[str] = frozenset()
+     handle_parameters: frozenset[str] = frozenset()
+     handle_result: bool = False
++    join_storage_parameters: tuple[tuple[str, str], ...] = ()
++    join_storage_result: str | None = None
+     storage_requirements: tuple[tuple[int, str], ...] = ()
+     result_storage: bool = False
+     terminated: bool = False
+@@ -459,6 +465,7 @@
+         self.take('(')
+         params, mutable_parameters = [], set()
+         handle_parameters = set()
++        join_storage_parameters = []
+         while self.peek() != ')':
+             if feature is not None and not params:
+                 mode = {'&': 'ref', '->': 'owned'}.get(self.take())
+@@ -506,7 +513,8 @@
+             elif mode == 'owned' and typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>'):
+                 mode = 'buffered_handle_exchange'
+             if mode == 'owned' and (joined := join_allocation_signature(typ)) is not None:
+-                mode, typ = joined
++                mode, typ, storage = joined
++                join_storage_parameters.append((pname, storage))
+             params.append((pname, mode, typ))
+             if self.peek() != ',':
+                 break
+@@ -516,6 +524,7 @@
+             raise Error('une méthode de feature exige un receveur self')
+         result = ('void', 'Void')
+         handle_result = False
++        join_storage_result = None
+         if self.peek() == '->':
+             self.take()
+             mode = 'scalar'
+@@ -541,7 +550,8 @@
+             if mode == 'owned' and typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>'):
+                 result = 'buffered_handle_exchange', typ
+             if mode == 'owned' and (joined := join_allocation_signature(typ)) is not None:
+-                result = joined
++                result = joined[:2]
++                join_storage_result = joined[2]
+             if mode == 'scalar' and typ in VECTOR_SPLIT_TYPES:
+                 result = 'vector_split', typ
+         if asynchronous and result[0] in PLAIN_JOIN_TYPES:
+@@ -558,7 +568,8 @@
+             self.async_body = previous
+         return Node('async_fn' if asynchronous else 'fn', (name, params, result, body), line,
+                     mutable_parameters=frozenset(mutable_parameters),
+-                    handle_parameters=frozenset(handle_parameters), handle_result=handle_result)
++                    handle_parameters=frozenset(handle_parameters), handle_result=handle_result,
++                    join_storage_parameters=tuple(join_storage_parameters), join_storage_result=join_storage_result)
+ 
+     def enum(self, line):
+         name = self.name()
+@@ -1624,6 +1635,7 @@
+     handle_revision: int = 0
+     optional_payload: bool = False
+     absent_owned_payload: bool = False
++    payload_storage: str | None = None
+     exchange_payloads: tuple = ()
+     reference_positions: tuple | None = None
+     optional_reference_targets: tuple = ()
+@@ -4024,7 +4036,12 @@
+             return self.join_allocation_result(c, source_union(*(a.sources for a in values)),
+                                                frame['destination'], name,
+                                                frozenset(origin for a in values for origin in a.origins),
+-                                               nested=kind == 'join_nested', typ=typ, owned_fields=self.task_owned_result_fields(values))
++                                               nested=kind == 'join_nested', typ=typ,
++                                               absent=all(a.absent_owned_payload for a in values),
++                                               storage=self.join_payload_storage(vars(a) for a in values),
++                                               owned_fields=self.task_owned_result_fields(values),
++                                               borrowed_fields=self.merge_dependencies(*(a.dependencies for a in values)),
++                                               borrow_parents=tuple({id(p): p for a in values for p in a.borrow_parents}.values()))
+         if kind == 'handle_option':
+             payloads = [allocation for allocation in values if allocation is not None]
+             return self.buffered_handle_result(c, source_union(*(a.sources for a in payloads)),
+@@ -4558,6 +4575,11 @@
+             self.fail(f"retour conditionnel : allocation {frame['declared'][1]} attendue, reçu {allocation.typ}")
+         if frame.get('handle_result'):
+             self.check_allocation_handle_type(f'A<{allocation.typ}>', 'owned', allocation)
++        required = frame.get('join_storage_result')
++        if required and allocation.absent_owned_payload and allocation.payload_storage != required:
++            self.fail(f'retour Result : stockage {required} requis (T local / allocation A<T>)')
++        if required and any((source.kind == 'local_stack') != (required == 'local') for source in allocation.sources):
++            self.fail(f'retour Result : stockage {required} requis (T local / allocation A<T>)')
+         frame['return_sources'] = source_union(frame.get('return_sources', ()), allocation.sources)
+         self.check_borrow_destination(allocation, frame['caller_scope'])
+ 
+@@ -4906,6 +4928,10 @@
+             if selected_kind in ('join_owned', 'join_nested'):
+                 return self.join_allocation_result(result_c, selected_sources, self.scopes[-1],
+                                                    source_name, selected_origins, nested=selected_kind == 'join_nested', typ=selected_type,
++                                                   absent=all(state['absent_owned_payload'] for state in selected_item_states),
++                                                   storage=self.join_payload_storage(selected_item_states),
++                                                   borrowed_fields=selected_dependencies,
++                                                   borrow_parents=tuple({id(p): p for state in selected_item_states for p in state['borrow_parents']}.values()),
+                                                    owned_fields=self.merge_async_result_fields(*(
+                                                        self.owned_field_storage(state['owned_fields']) for state in selected_item_states)))
+             if selected_kind == 'handle_option':
+@@ -7046,6 +7072,7 @@
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                                                        label, descriptor.origins, typ=descriptor.typ,
+                                                        absent=descriptor.absent_owned_payload,
++                                                       storage=descriptor.payload_storage,
+                                                        owned_fields=self.task_owned_result_fields((descriptor,)),
+                                                        borrowed_fields=descriptor.dependencies, borrow_parents=descriptor.borrow_parents)
+                 if descriptor.absent_owned_payload:
+@@ -7769,11 +7796,28 @@
+                 allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+         return allocation
+ 
+-    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, owned_fields=(), borrowed_fields=(), borrow_parents=()):
++    def join_payload_storage(self, states):
++        kinds = set()
++        for state in states:
++            kinds.update('local' if source.kind == 'local_stack' else 'pool' for source in state['sources'])
++            if state.get('payload_storage') is not None:
++                kinds.add(state['payload_storage'])
++        if len(kinds) > 1:
++            self.fail('branches Result : stockage incompatible (T local / allocation A<T>)')
++        return next(iter(kinds), None)
++
++    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, storage=None, owned_fields=(), borrowed_fields=(), borrow_parents=()):
+         cell = f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+         payload.absent_owned_payload = absent
++        payload.payload_storage = self.join_payload_storage(({'sources': sources, 'payload_storage': storage},))
++        if absent:
++            # Allocation normally assigns an identity even for a descriptor
++            # without sources. A proven error-only envelope has no payload.
++            payload.origins = frozenset()
++            payload.sources = payload.item_sources = ()
++            borrowed_fields, borrow_parents = (), ()
+         self.restore_async_owned_fields(payload, owned_fields)
+         payload.dependencies = borrowed_fields
+         payload.borrow_parents = borrow_parents
+@@ -9669,7 +9713,7 @@
+             'inputs': frozenset(o for a in inputs if a is not None for o in a.origins) |
+                       frozenset(o for _, origins in vectors for o in origins),
+             'entry': frozenset(o for _, state in (*base['allocations'], *base['embedded'])
+-                               for o in state['origins'] | state['item_origins']) |
++                               for o in state['origins'] | state['item_origins'] | state['task_result_origins']) |
+                      frozenset(o for a in self.symbolic_owned_projections.values() for o in a.origins),
+             'fresh_sources': tuple(fresh_sources),
+             'item_sources': item_sources,
+@@ -10436,6 +10480,8 @@
+         effects = getattr(node, 'field_effect_summary', None)
+         absent_payload = bool(effects is not None and effects.complete and
+                               (effects.may_complete is False or effects.completion_result.absent_owned_payload))
++        payload_storage = (node.join_storage_result or ('pool' if node.handle_result else
++                           'local' if typ in self.struct_fields else 'pool')) if absent_payload else None
+         # Project the input snapshot before publishing the completed stores.
+         reference_result = (self.project_task_result_captures(task_name, allocation.dependencies,
+                             allocation.borrow_parents) if mode in ('ref', 'mut') else None)
+@@ -10459,12 +10505,14 @@
+             self.lines.append(f'{c} = task_join_nested(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+                                                allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields,
++                                               storage=payload_storage,
+                                                borrowed_fields=result_borrows, borrow_parents=result_parents)
+         if mode == 'owned':
+             self.flag_declarations.append(f'CrustJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins,
+                                                typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields,
++                                               storage=payload_storage,
+                                                borrowed_fields=result_borrows, borrow_parents=result_parents)
+         if mode in ('ref', 'mut'):
+             dependencies, parents = reference_result
+@@ -10998,6 +11046,8 @@
+             binding = bindings[params[index][0]]
+             targets = binding.referents or ((binding.alloc,) if binding.alloc else ())
+             kinds = {source.kind == 'local_stack' for target in targets for source in target.sources}
++            kinds.update(target.payload_storage == 'local' for target in targets
++                         if target.absent_owned_payload and target.payload_storage is not None)
+             if kinds != {required == 'local'}:
+                 self.fail(f"exigence de stockage {required} (T local / allocation A<T>) non satisfaite pour '{params[index][0]}'")
+         # Prepared arguments now become the callee's parameters. Other frames
+@@ -11216,6 +11266,7 @@
+                       'owned_entry_holders': {id(holder) for holder, _ in
+                                               (*effects_base['allocations'], *effects_base['embedded'])},
+                       'handle_result': signature.handle_result,
++                      'join_storage_result': signature.join_storage_result,
+                       'caller_scope': caller,
+                       'utf8_return_roots': {id(root) for root, _ in utf8_result[1][1]} if utf8_result else set(),
+                       'stored_array_result': self.stored_array_result(summary, params, bindings, structure_updates=structure_updates)
+@@ -11450,6 +11501,8 @@
+         if result[0] in JOIN_RESULT_TYPES:
+             return self.join_allocation_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins, nested=result[0] == 'join_nested', typ=declared[1],
++                                               absent=all(candidate[2].absent_owned_payload for candidate in results),
++                                               storage=signature.join_storage_result,
+                                                owned_fields=self.owned_field_storage(result_contract['owned_fields']),
+                                                borrowed_fields=result_contract['dependencies'],
+                                                borrow_parents=result_contract['borrow_parents'])
+@@ -11698,7 +11751,7 @@
+             for key in fields:
+                 self.check_external_owned_write((holder,), key)
+         updated_arrays = self.apply_array_parameter_updates(result, params, bindings, updates)
+-        dependencies, variants, parents = self.resolve_borrowed_result(result, params, bindings) if result.mode == 'owned' else ((), frozenset(), ())
++        dependencies, variants, parents = self.resolve_borrowed_result(result, params, bindings) if result.mode in ('owned', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+         owned = {b.alloc.id: b.alloc for b in bindings.values()
+                  if b.kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', *JOIN_RESULT_TYPES) and b.alloc is not None}
+         resets = {bindings[params[i][0]].source.id for i in effects.resets}
+@@ -11828,7 +11881,13 @@
+                 fields = bindings[params[result.same_parameter][0]].alloc.owned_fields
+             return self.join_allocation_result(c, sources, caller, f'retour {name}',
+                                                frozenset(origins), nested=result.mode == 'join_nested', typ=result.typ,
+-                                               owned_fields=self.owned_field_storage(fields))
++                                               absent=result.absent_owned_payload or bool(result.candidates) and all(
++                                                   candidate.kind == 'parameter' and
++                                                   bindings[params[candidate.parameter][0]].alloc.absent_owned_payload
++                                                   for candidate in result.candidates),
++                                               storage=contract.join_storage_result,
++                                               owned_fields=self.owned_field_storage(fields),
++                                               borrowed_fields=dependencies, borrow_parents=parents)
+         if result.mode == 'handle_option':
+             return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins))
+         if result.mode == 'buffered_handle_exchange':
+@@ -13141,10 +13200,18 @@
+                                                    last=self.last_use(name, nodes[i + 1:], kind))
+                     continue
+                 if kind in ('join_owned', 'join_nested'):
+-                    if (op != 'var' or annotation is not None or node.compact_transfer
++                    if (op != 'var' or node.compact_transfer
+                             or expr[0] not in ('task_join', 'task_join_value', 'name', 'move', 'scope',
+                                                'loop_expr', 'if_expr', 'value_match', 'call', 'utf8_value')):
+                         self.fail('un résultat alloué de join exige une liaison locale')
++                    if annotation is not None:
++                        expected = join_allocation_signature(annotation)
++                        if expected is None or expected[:2] != (kind, allocation.typ):
++                            self.fail('annotation de Result : type de charge incompatible')
++                        if allocation.absent_owned_payload and allocation.payload_storage != expected[2]:
++                            self.fail('annotation de Result : stockage T local / allocation A<T> incompatible')
++                        if any((source.kind == 'local_stack') != (expected[2] == 'local') for source in allocation.sources):
++                            self.fail('annotation de Result : stockage T local / allocation A<T> incompatible')
+                     if expr[0] == 'name':
+                         if not node.utf8_match_subject:
+                             self.fail('un résultat alloué de join ne peut pas être copié')
+@@ -14365,7 +14432,9 @@
+                     self.fail(f"la méthode '{typ}.{name}' exige un receveur self : &{typ}, &mut {typ} ou -> {typ}")
+                 yield Node('fn', (f'{typ}.{name}', parameters, result, body), method.line,
+                            mutable_parameters=method.mutable_parameters,
+-                           handle_parameters=method.handle_parameters, handle_result=method.handle_result)
++                           handle_parameters=method.handle_parameters, handle_result=method.handle_result,
++                           join_storage_parameters=method.join_storage_parameters,
++                           join_storage_result=method.join_storage_result)
+ 
+     def compile(self, nodes):
+         main = self.verify(nodes)

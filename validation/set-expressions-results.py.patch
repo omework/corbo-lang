@@ -1,0 +1,13 @@
+--- before/results.py
++++ after/results.py
+@@ -2669,7 +2669,9 @@
+                 if builtin is not None:
+                     op, args = builtin
+             part = {'next'}
+-            if op in ('var', 'assign'):
++            if op == 'set_expr':
++                part, _ = self.expression(args[1], environment, line)
++            elif op in ('var', 'assign'):
+                 name, expr = args
+                 if expr[0] == 'source':
+                     value = SourceOrigin('local', id(node), name, expr[3] if expr[1] == 'pool' else None)

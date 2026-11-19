@@ -1,0 +1,89 @@
+--- before/crust.py
++++ after/crust.py
+@@ -136,6 +136,7 @@
+     handle_parameters: frozenset[str] = frozenset()
+     handle_result: bool = False
+     storage_requirements: tuple[tuple[int, str], ...] = ()
++    result_storage: bool = False
+     terminated: bool = False
+     consuming: bool = False
+     annotation: str | None = None
+@@ -5490,13 +5491,17 @@
+         self.origin_sources.update(origins)
+         return 'owned', allocation.c, allocation
+ 
+-    def local_structure_storage(self, scope, typ):
++    def local_stack_storage(self, scope):
+         source = next((item for item in scope.sources if item.kind == 'local_stack'), None)
+         if source is None:
+             sid = self.uid()
+             source = MemorySource(sid, scope.id, 'local_stack', 'data stack implicite', f'&s{sid}')
+             scope.sources.append(source)
+             self.lines.append(f'Source s{sid} = source_stack(16 * 1024 * 1024);')
++        return source
++
++    def local_structure_storage(self, scope, typ):
++        source = self.local_stack_storage(scope)
+         fields = self.enums[typ]['']
+         layout = f'layout{self.uid()}'
+         offsets = ', '.join(self.field_offset(fields, i) for i in range(len(fields))) or '0'
+@@ -9991,6 +9996,7 @@
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+         captures, loans, transferred, dependencies = [], [], [], []
+         local_captures = set()
++        targets_by_parameter, captured_sources = {}, {}
+         pool_sources, pool_result_sources, pool_origins = [], [], set()
+         definitions = {name: declaration for name, (declaration, _) in self.async_definitions.items()}
+         result_indexes = owned_result_parameters(node, definitions, sync_result=self.function_results.get)
+@@ -10012,6 +10018,7 @@
+                     target = self.pool_capture_target(source)
+                     dependencies.append((f'{mode}.{index}', (target,)))
+                     pool_sources.append(source)
++                    captured_sources[index] = source
+                     if index in result_indexes:
+                         pool_result_sources.append(source)
+                         origin = self.uid()
+@@ -10091,6 +10098,8 @@
+                 else:
+                     kind, value, target = self.expression(argument, scope, label)
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
++                if not array_capture and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
++                    targets_by_parameter[index] = target
+                 if (not array_capture and mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES)
+                         and typ in self.struct_fields and target is not None
+                         and any(source.kind == 'local_stack' for source in target.sources)):
+@@ -10222,6 +10231,25 @@
+         uid = self.uid()
+         c = f'task{uid}'
+         target_name = self.reserve_async_local_variant(name, frozenset(local_captures))
++        if node.result_storage:
++            from async_result_storage import result_storage
++            plan = result_storage(node, local_captures)
++            if plan.mixed:
++                self.fail('retours incompatibles : valeur locale T et allocation A<T>')
++            if plan.parameters is not None:
++                result_targets = [targets_by_parameter[index] for index in plan.parameters if index in targets_by_parameter]
++                pool_result_sources = [captured_sources[index] for index in plan.parameters if index in captured_sources]
++            destination = None
++            if plan.destination:
++                destination = self.local_stack_storage(scope)
++                pool_sources.append(destination)
++                pool_result_sources.append(destination)
++            captures.append(destination.c if destination else 'NULL')
++            pool_origins.clear()
++            for source in pool_result_sources:
++                origin = self.uid()
++                self.origin_sources[origin] = source
++                pool_origins.add(origin)
+         self.lines.append(f'CrustTask *{c} = crust_async_{target_name}_create({", ".join(captures)});')
+         for target in transferred:
+             if target.guard:
+@@ -13840,6 +13868,8 @@
+                 async_functions, inference_contracts, self.enums, Error).infer_all()
+             for name, node in async_functions.items():
+                 node.field_effect_summary = self.async_structure_effects[name]
++                from async_result_storage import may_need_destination
++                node.result_storage = may_need_destination(node, self.struct_fields)
+             self.function_results = ResultAnalyzer(self.functions, self.function_effects, Error, self.enums,
+                                                    async_functions).infer_all()
+             inference_contracts = function_contracts(self.functions, self.function_effects,

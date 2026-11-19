@@ -1,0 +1,40 @@
+--- before/structure_shapes.py
++++ structure_shapes.py
+@@ -1,17 +1,26 @@
+-"""Finite layouts represented by async owned graphs and borrowed descriptors."""
++"""Layouts represented by async owned graphs and borrowed descriptors.
++
++Owned edges store handles, so a recursive type does not require an infinite
++frame. Typed reference edges keep the existing acyclic representation rule.
++This classifies layouts only; lifetime and ownership checking remain separate.
++"""
+ 
+ 
+ def async_structure_shapes(layouts):
+     represented = set()
+     leaves = {'Int', 'String', 'Vector<Int>', 'Vector<u8>'}
+     while True:
+-        available = leaves | represented
+-        additions = {typ for typ, fields in layouts.items() if all(
+-            declared in ('Int', '&Int', '&mut Int')
+-            or declared.startswith('A<') and declared[2:-1] in available
+-            or declared.startswith('&') and declared.removeprefix('&').removeprefix('mut ') in represented
+-            for _, declared in fields)}
+-        if additions <= represented:
+-            break
+-        represented.update(additions)
+-    return represented, represented.copy()
++        candidates = set(layouts)
++        while True:
++            available = leaves | candidates
++            supported = {typ for typ in candidates if all(
++                declared in ('Int', '&Int', '&mut Int')
++                or declared.startswith('A<') and declared[2:-1] in available
++                or declared.startswith('&') and declared.removeprefix('&').removeprefix('mut ') in represented
++                for _, declared in layouts[typ])}
++            if supported == candidates:
++                break
++            candidates = supported
++        if candidates <= represented:
++            return represented, represented.copy()
++        represented.update(candidates)

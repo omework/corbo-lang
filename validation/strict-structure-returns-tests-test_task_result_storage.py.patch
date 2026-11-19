@@ -1,0 +1,51 @@
+--- tests/test_task_result_storage.py
++++ tests/test_task_result_storage.py
+@@ -32,7 +32,7 @@
+ fn outer(t:->own)->Int{return relay(->t);}'''
+             for actual in ('local', 'pool'):
+                 value = 'Point{x:7}' if actual == 'local' else 'ps.new(x:7)'
+-                source = PREFIX + helpers + 'fn main(){let mut ps=pool<Point>(1);let p='+value+''';
++                source = (PREFIX if required == 'local' else PREFIX.replace('-><-Point','-><-A<Point>')) + helpers + 'fn main(){let mut ps=pool<Point>(1);let p='+value+''';
+ let t=own(->p);print(outer(->t));}'''
+                 with self.subTest(required=required, actual=actual):
+                     if actual != required:
+@@ -74,7 +74,7 @@
+             value = 'Point{x:7}' if kind == 'local' else 'ps.new(x:7)'
+             helpers = helper(kind).replace('t:->own', 'h:->Execution<own>').replace('let h=runtime::spawn(->t);', '')
+             helpers += 'fn relay(h:->Execution<own>)->Int{return consume(->h);}'
+-            source = PREFIX+helpers+'fn main(){let mut ps=pool<Point>(1);let p='+value+''';
++            source = (PREFIX if kind == 'local' else PREFIX.replace('-><-Point','-><-A<Point>'))+helpers+'fn main(){let mut ps=pool<Point>(1);let p='+value+''';
+ let h=runtime::spawn(->own(->p));print(relay(->h));}'''
+             self.assertEqual(self.run_source(source).stdout, '7\n')
+             check = verify_program(source)
+@@ -88,7 +88,7 @@
+         for kind in ('local', 'pool'):
+             returned = 'Point{x:7}' if kind == 'local' else 'ps.new(x:7)'
+             other = 'ps.new(x:9)' if kind == 'local' else 'Point{x:9}'
+-            source = prefix+helper(kind)+'fn main(){let mut ps=pool<Point>(2);let p='+returned+';let other='+other+''';
++            source = (prefix if kind == 'local' else prefix.replace('-><-Point','-><-A<Point>'))+helper(kind)+'fn main(){let mut ps=pool<Point>(2);let p='+returned+';let other='+other+''';
+ print(consume(->own(->p,->other)));}'''
+             self.assertEqual(self.run_source(source).stdout, '7\n')
+             self.refused(source.replace('let p='+returned, 'let p='+other), 'stockage|local|allocation')
+@@ -107,7 +107,7 @@
+     def test_copy_from_borrowed_capture(self):
+         source = (ROOT/'validation/open-task-result-storage-copy.crust').read_text()
+         for kind in ('local', 'pool'):
+-            typed = source if kind == 'local' else source.replace('let p:Point=', 'let p:A<Point>=')
++            typed = source if kind == 'local' else source.replace('let p:Point=', 'let p:A<Point>=').replace('-><-Point','-><-A<Point>')
+             inputs = ('let mut ps=pool<Point>(2);let p=Point{x:7};' if kind == 'local'
+                       else 'let mut ps=pool<Point>(2);let p=ps.new(x:7);')
+             typed = typed.replace('let p=Point{x:7};', inputs)
+@@ -127,10 +127,10 @@
+ 
+     def test_declared_pool_result_cannot_be_given_local_requirement(self):
+         # Even an uncalled helper cannot require an impossible instantiation.
+-        source = PREFIX.replace('p:->Point', 'p:->A<Point>')+helper()
++        source = PREFIX.replace('p:->Point', 'p:->A<Point>').replace('-><-Point','-><-A<Point>')+helper()
+         self.refused(source, 'stockage.*incompatible')
+         source = '''struct Point{x:Int}
+-async fn own(ps:&mut Pool<Point>)-><-Point{yield;return <-ps.new(x:7);}'''+helper()
++async fn own(ps:&mut Pool<Point>)-><-A<Point>{yield;return <-ps.new(x:7);}'''+helper()
+         self.refused(source, 'stockage.*incompatible')
+ 
+ 

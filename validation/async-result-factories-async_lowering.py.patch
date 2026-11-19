@@ -1,0 +1,151 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -998,6 +998,8 @@
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+                          and public_signature(contract.result_type[1]) is not None}
++    task_sync_types = {contract.result_type: 'CrustTask *' for contract in sync_contracts.values()
++                       if contract.result_type[0] == 'task' and contract.result_type[1] in functions}
+ 
+     def pool_argument(argument, mode, typ, line):
+         local = argument[1] in local_pools if argument[0] in ('name', 'ref', 'mut') else False
+@@ -1339,7 +1341,7 @@
+                 held.extend(changes.get(key, initial))
+             active_loans[key] = list(dict.fromkeys(held))
+ 
+-    def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False):
++    def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False, task=False):
+         from async_structure_effects import FIELD_RESULT_MODES
+         expression_id = id(expr)
+         expr = sync_method_call(expr)
+@@ -1352,7 +1354,7 @@
+         signature = contract.result_type
+         local_result = any(candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
+                            for candidate in contract.result.candidates)
+-        if (signature not in sync_types and signature not in handle_sync_types and signature != ('void', 'Void')
++        if (signature not in sync_types and signature not in handle_sync_types and signature not in task_sync_types and signature != ('void', 'Void')
+                 or any((mode, typ) not in sync_types for _, mode, typ in contract.parameters)):
+             fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+         if expected is not None and signature != expected:
+@@ -1361,6 +1363,8 @@
+             fail(line, 'résultat propriétaire : recevoir, transférer ou drop explicitement')
+         if signature in handle_sync_types and not execution:
+             fail(line, 'handle lancé : recevoir puis attendre explicitement le résultat')
++        if signature in task_sync_types and not task:
++            fail(line, 'tâche inactive : recevoir, attendre ou détruire explicitement')
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+         prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
+@@ -1445,7 +1449,9 @@
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
+                 argument_storage.append((pool_storage(argument[1]) if (mode, typ) in pool_sync_types
+-                                         else storage_of(value) if mode == 'owned' or (mode, typ) in owned_join_sync_types else frozenset()))
++                                         else storage_of(value) if mode == 'owned' or (mode, typ) in owned_join_sync_types
++                                         else frozenset(origin for target, _ in held
++                                             for origin in storage_bindings.get(loan_root(target), ()))))
+                 release_sync_argument_loans(following)
+                 argument_tails.pop()
+         finally:
+@@ -1460,7 +1466,14 @@
+         local_result |= any(candidate.kind == 'fresh' and candidate.source.kind == 'allocation_parameter'
+                             and candidate.source.index in local_parameters for candidate in contract.result.candidates)
+         local_source = None
+-        if local_result:
++        from async_result_storage import needs_task_output
++        output_sources = contract.result.task_result_sources
++        if any(source.kind in ('task_output', 'task_output_parameter') for source in output_sources):
++            storage_kinds = {source.kind == 'task_output' or source.kind == 'task_output_parameter'
++                             and source.index in local_parameters for source in output_sources}
++            if len(storage_kinds) > 1:
++                fail(line, 'retours incompatibles : valeur locale T et allocation A<T>')
++        if local_result or needs_task_output(contract.result.task_result_sources, lambda index: index in local_parameters):
+             local_source = local_destinations.get(expression_id) or implicit_stack()
+             prepared.append('&' + local_pools[local_source])
+         for key, held in prepare_field_changes(contract.result, contract.parameters, argument_loans, line):
+@@ -1471,10 +1484,17 @@
+             if diverges:
+                 raise NoAsyncContinuation()
+             return '', 'Void'
+-        value = temporary((sync_types | handle_sync_types)[signature])
++        value = temporary((sync_types | handle_sync_types | task_sync_types)[signature])
+         steps.append(f'{value} = {call};')
+-        if signature in handle_sync_types:
++        if signature in handle_sync_types or signature in task_sync_types:
+             retained, returned = [], []
++            capture_loans = {}
++            result_captures = (borrowed_result_parameters(functions[signature[1]], functions, fail, {},
++                              sync_contracts=sync_contracts)
++                               if signature in task_sync_types else {4, 5})
++            if signature in task_sync_types:
++                result_captures |= utf8_result_parameters(functions[signature[1]], functions,
++                                                          sync_contracts=sync_contracts)
+             for field, targets in contract.result.borrowed_fields:
+                 held = []
+                 for target in targets:
+@@ -1489,22 +1509,32 @@
+                     else:
+                         fail(line, 'prototype : capture du handle synchrone sans paramètre direct')
+                 retained.extend(held)
+-                if field.partition('.')[2] in ('4', '5'):
++                capture_index = int(field.partition('.')[2])
++                capture_loans.setdefault(capture_index, []).extend(held)
++                if capture_index in result_captures:
+                     returned.extend(held)
+             for sources, output in ((contract.result.task_sources, retained),
+                                     (contract.result.task_result_sources, returned)):
+                 for source in sources:
+-                    if source.kind not in ('source_parameter', 'allocation_parameter'):
++                    if source.kind == 'task_output' or source.kind == 'task_output_parameter' and source.index in local_parameters:
++                        output.append((local_source, 'storage'))
++                        continue
++                    if source.kind not in ('source_parameter', 'allocation_parameter', 'task_output_parameter'):
+                         fail(line, 'prototype : stockage du handle synchrone sans paramètre direct')
+                     output.extend((origin, 'storage') for origin in argument_storage[source.index])
+             retained.extend(returned)
+             active_loans[id(retained)] = retained
++            pending = prepare_field_changes(
++                replace(contract.result, structure_fields=contract.result.task_field_updates),
++                contract.parameters, argument_loans, line)
++            if signature in task_sync_types:
++                definition = functions[signature[1]]
++                task_prefix_changes[value] = ((definition.field_effect_summary, definition.args[1],
++                    tuple(tuple(capture_loans.get(index, ())) for index in range(len(definition.args[1])))),)
++                return value, definition.args[2] == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+             enable_threads()
+             handle = temporary('CrustAsyncExecution')
+             steps.append(f'task_async_adopt(&{handle}, &{value});')
+-            pending = prepare_field_changes(
+-                replace(contract.result, structure_fields=contract.result.task_field_updates),
+-                contract.parameters, argument_loans, line)
+             return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+         if signature in owned_sync_types | owned_join_sync_types:
+             owned_result_types[value] = signature[1]
+@@ -1685,6 +1715,8 @@
+ 
+     def create_task(expr, line):
+         _, callee, arguments = expr
++        if sync_signature(expr) in task_sync_types:
++            return sync_call(expr, line, task=True)
+         declaration = functions.get(callee)
+         if declaration is None:
+             fail(line, f"fonction async inconnue '{callee}'")
+@@ -2702,7 +2734,7 @@
+         if operator in ('array_split', 'array_split_half'):
+             bind_vector_split(statement, body, position)
+             return True
+-        task_creation = operator == 'call' and initializer[1] in functions
++        task_creation = operator == 'call' and (initializer[1] in functions or sync_signature(initializer) in task_sync_types)
+         handle_creation = sync_signature(initializer) in handle_sync_types
+         task_move = operator == 'move' and initializer[1] in tasks
+         handle_move = operator == 'move' and initializer[1] in executions
+@@ -6009,7 +6041,8 @@
+             return None
+         operand = expr[1]
+         if operand[0] == 'call':
+-            nominal = operand[1]
++            signature = sync_signature(operand)
++            nominal = signature[1] if signature in task_sync_types else operand[1]
+         elif operand[0] == 'name' and tasks.get(operand[1]) is not None:
+             nominal = tasks[operand[1]][3]
+         elif operand[0] == 'name' and selections.get(operand[1]) is not None:

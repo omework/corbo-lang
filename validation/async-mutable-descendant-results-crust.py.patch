@@ -1,0 +1,69 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2555,11 +2555,12 @@
+                 for holder in binding.referents or (binding.alloc,):
+                     if holder.variants and arm not in holder.variants:
+                         continue
+-                    field_mode = self.field_modes(holder.typ).get(target.field)
++                    owned = dict(holder.owned_fields).get(target.field, ())
++                    field_mode = 'mut' if owned else self.field_modes(holder.typ).get(target.field)
+                     if field_mode is None or (summary.mode == 'mut' and field_mode != 'mut'):
+                         self.fail('invariant interne : champ incompatible avec le contrat de retour')
+                     updated = (structure_updates or {}).get(holder.id) if field is not None else None
+-                    projected = dict((updated[1] if updated else holder).dependencies).get(target.field)
++                    projected = owned or dict((updated[1] if updated else holder).dependencies).get(target.field)
+                     if not projected:
+                         self.fail('invariant interne : cible de champ absente du contrat de retour')
+                     key = (holder.id, field) if field is not None else holder.id
+@@ -10142,6 +10143,17 @@
+                                               tuple(leaf.lstrip('.').split('.')))}))
+                         cell_dependencies.extend(nested)
+                         cell_parents.update((id(parent), parent) for parent in parents)
++                        if any(parent.match_reservation for parent in parents):
++                            # A mutable field capability also reserves the
++                            # owner's path to that field, not only its pointee.
++                            mode = key.split('.')[0]
++                            binding = Binding(target.label, mode, '', target,
++                                              borrow_parents=(*ancestry, *target.borrow_parents))
++                            head = prefix.split('/')[0]
++                            reservation = Binding(target.label, mode, '', target,
++                                borrow_parents=(binding,), match_reservation=True,
++                                reserved_field=head[1:] if head.startswith('.') else None)
++                            cell_parents[id(reservation)] = reservation
+                     paths = tuple(path for path in paths if path not in nested_paths)
+                     if not paths:
+                         continue
+@@ -10615,8 +10627,10 @@
+                                                tuple(parent for target in transferred for parent in self.retained_borrow_parents(target)))
+         if field_updates:
+             completed = field_summary.completion_result
+-            updates = self.prepare_structure_updates(completed, parameters, field_bindings)
+-            for holder, fields in self.prepare_owned_field_writes(completed, parameters, field_bindings):
++            owned_updates = self.prepare_owned_field_writes(completed, parameters, field_bindings)
++            updates = self.prepare_structure_updates(completed, parameters, field_bindings,
++                                                     owned_updates=owned_updates)
++            for holder, fields in owned_updates:
+                 proposed = updates.get(holder.id, (holder, holder))[1]
+                 proposed = replace(proposed, owned_fields=tuple((dict(proposed.owned_fields) | fields).items()))
+                 updates[holder.id] = holder, proposed
+@@ -11776,8 +11790,9 @@
+             result[2].borrow_parents = result_contract['borrow_parents']
+         return result[0], c, result[2]
+ 
+-    def prepare_structure_updates(self, result, params, bindings):
++    def prepare_structure_updates(self, result, params, bindings, *, owned_updates=()):
+         updates = {}
++        replacements = {id(holder): fields for holder, fields in owned_updates}
+         for index, fields in result.structure_fields:
+             binding = bindings[params[index][0]]
+             holders = binding.referents or (binding.alloc,)
+@@ -11794,7 +11809,8 @@
+                             declared = dict(self.enums.get(holder.typ, {}).get(arm, ())).get(member, '')
+                             if not declared.startswith('A<'):
+                                 break
+-                            owned = dict(holder.owned_fields).get(key, ())
++                            owned = replacements.get(id(holder), {}).get(key,
++                                dict(holder.owned_fields).get(key, ()))
+                             if not owned and holder.recursive_projection_sources:
+                                 owned = self.symbolic_owned_projection(holder, key, declared[2:-1])
+                                 holder.owned_fields += ((key, owned),)

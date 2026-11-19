@@ -1,0 +1,10 @@
+struct Inner{view:&Int}struct Pair{left:A<Inner>,right:A<Inner>}
+fn read(v:&Inner)->&Int{return v.view;}
+async fn detach(v:->Pair)->&Int{yield;return read(&*v.left);}
+fn make(v:->Pair)-><-detach{return <-detach(->v);}
+fn start(v:->Pair)-><-runtime::Handle<&Int>{return <-runtime::spawn(->make(->v));}async fn work()->Int{let mut ns=pool<Int>(2);let a=ns.new(7);let b=ns.new(9);
+let mut ins=pool<Inner>(2);let l=ins.new(view:&a);let r=ins.new(view:&b);
+let v=Pair{left:<-l,right:<-r};let h=start(->v);
+let view=match h.await{Ok(found)=>{found},Err(_)=>{return 99;}};
+drop(->a);print(*view);return 1;}
+fn main(){let h=runtime::spawn(->work());match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}}

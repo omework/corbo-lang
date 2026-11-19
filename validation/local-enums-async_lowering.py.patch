@@ -1,0 +1,70 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1276,7 +1276,7 @@
+         return value
+ 
+     def pool_new_value(expr, line, *, following=None, label='async allocation'):
+-        if expr[0] == 'new_enum' and expr[1] is None and expr[2] in pool_structures:
++        if expr[0] == 'new_enum' and expr[1] is None and expr[2] in (*pool_structures, *owned_enums):
+             return pool_structure_value(expr, line, following=following, label=label)
+         pool_type = pool_types.get(expr[1])
+         if pool_type is None:
+@@ -1369,8 +1369,6 @@
+         typ = expr[2] if local else pool_type[5:-1]
+         variant = expr[3] if expr[0] == 'new_enum' else ''
+         if typ in owned_enums:
+-            if local:
+-                fail(line, 'prototype : construction locale d’enum non raccordée')
+             if variant not in owned_enums[typ]:
+                 fail(line, 'construction enum : variante déclarée explicite requise')
+             layout = owned_enums[typ][variant]
+@@ -1460,7 +1458,8 @@
+             # Layout metadata must outlive the frame when its local result is
+             # received by the caller. Emit immutable static metadata, not a
+             # pointer into the producer's state slot.
+-            layout_name = local_layouts.setdefault(typ, f'{prefix}_local_layout_{len(local_layouts)}')
++            layout_key = (typ, variant) if typ in owned_enums else typ
++            layout_name = local_layouts.setdefault(layout_key, f'{prefix}_local_layout_{len(local_layouts)}')
+             steps.append(f'{cell} = local_cell_new({source}, &{layout_name}, '
+                          f'{structure_offset(layout, len(layout))}, "{label}");')
+         else:
+@@ -5031,7 +5030,7 @@
+         check_access(holder, line, write=statement.mutable or statement.consuming)
+         cell = f'frame->{fields[holder]}'
+         tag = temporary('int')
+-        steps.append(f'{tag} = {cell}->source->arm_tag;')
++        steps.append(f'{tag} = {cell}->layout->arm_tag;')
+         return emit_branches(tag, None, None, line, valued=valued, construct='match',
+             following=following, boolean=boolean, transfer_result=transfer_result,
+             reference_result=reference_result, enum_match=(statement, typ, cell))
+@@ -6753,6 +6752,10 @@
+     def emit_print(statement, following):
+         operand = statement.args[0]
+         expr = ('name', operand) if statement.op == 'print' else operand
++        if expr[0] == 'name' and references.get(expr[1]) == 'owned' and collection_types.get(expr[1]) in owned_aggregates:
++            check_access(expr[1], statement.line)
++            steps.append(f'cell_print(frame->{fields[expr[1]]});')
++            return
+         value, typ = infer_scalar_value(expr, statement.line, following=following)
+         if typ == '&str':
+             steps.append(f'text_print({value});')
+@@ -7471,14 +7474,16 @@
+             suspended_cleanup.extend(f'        {step}\n' for step in path)
+         suspended_cleanup.append('        break;\n')
+     layout_definitions = []
+-    for typ, symbol in local_layouts.items():
+-        layout = pool_structures[typ]
++    for key, symbol in local_layouts.items():
++        typ, variant = key if isinstance(key, tuple) else (key, '')
++        layout = owned_enums[typ][variant] if variant else pool_structures[typ]
++        tag = tuple(owned_enums[typ]).index(variant) if variant else 0
+         offsets = ', '.join(structure_offset(layout, i) for i in range(len(layout))) or '0'
+         kinds = ', '.join(str(field_kind(field_type))
+                           for _, field_type in layout) or '0'
+         layout_definitions.append(f'static const size_t {symbol}_offsets[] = {{{offsets}}};\n'
+             f'static const unsigned char {symbol}_kinds[] = {{{kinds}}};\n'
+-            f'static const Source {symbol} = {{.enum_name="{typ}", .arm_name="", '
++            f'static const Source {symbol} = {{.enum_name="{typ}", .arm_name="{variant}", .arm_tag={tag}, '
+             f'.field_count={len(layout)}, .field_offsets={symbol}_offsets, .field_kinds={symbol}_kinds}};')
+     return '\n'.join(layout_definitions) + f"""
+ typedef struct {{

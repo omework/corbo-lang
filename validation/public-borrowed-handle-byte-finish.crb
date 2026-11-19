@@ -1,0 +1,5 @@
+async fn work(v:&mut u8)->&mut u8{yield;return v;}
+fn launch(v:&mut u8)-><-runtime::Handle<&mut u8>{let h=runtime::spawn(->work(v));return <-h;}
+fn finish(h:->runtime::Handle<&mut u8>,backup:&mut u8)->&mut u8{match h.join(){Ok(v)=>{return v;},Err(_)=>{return backup;}}}
+fn main(){let mut values:[u8;2]=[7,9];let mut backup:[u8;1]=[99];let h=launch(&mut values[0]);
+let mut view=finish(->h,&mut backup[0]);print(*view as Int);let n:u8=11;*view=n;print(values[0] as Int);}

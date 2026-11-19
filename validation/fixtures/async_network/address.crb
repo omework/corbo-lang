@@ -1,0 +1,16 @@
+use std::net::ipv4::SocketAddr;
+
+fn main() {
+    match SocketAddr::parse("127.0.0.1:8042") {
+        Ok(address) => { print(address.port()); print(address.ipv4_bits()); },
+        Err(error) => { drop(error); print(1); },
+    };
+    match SocketAddr::parse("127.0.0.1:65536") {
+        Ok(address) => { drop(address); print(2); },
+        Err(error) => { drop(error); print(3); },
+    };
+    match SocketAddr::parse("127.0.0.1:80\u0000") {
+        Ok(address) => { drop(address); print(4); },
+        Err(error) => { drop(error); print(5); },
+    };
+}

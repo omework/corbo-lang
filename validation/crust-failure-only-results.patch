@@ -1,0 +1,124 @@
+--- before/crust.py
++++ crust.py
+@@ -1620,6 +1620,7 @@
+     item_removal_epoch: int = 0
+     handle_revision: int = 0
+     optional_payload: bool = False
++    absent_owned_payload: bool = False
+     exchange_payloads: tuple = ()
+     reference_positions: tuple | None = None
+     optional_reference_targets: tuple = ()
+@@ -3152,7 +3153,8 @@
+             owner = scopes.get(allocation.scope)
+             if owner is None or sum(a is allocation for a in owner.allocations) != 1:
+                 self.fail('invariant interne : rattachement de scope invalide')
+-            if not allocation.sources and not allocation.typ.startswith(('Task<', 'Execution<')):
++            if (not allocation.sources and not allocation.typ.startswith(('Task<', 'Execution<'))
++                    and not (allocation.optional_payload and allocation.absent_owned_payload)):
+                 self.fail('invariant interne : allocation vivante sans provenance')
+             for source in allocation.sources:
+                 if sources.get(source.id) is not source:
+@@ -6987,7 +6989,11 @@
+                 self.lines.append(f'*({descriptor.guard}) = 0;')
+                 if kind == 'join_nested':
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+-                                                       label, descriptor.origins, typ=descriptor.typ)
++                                                       label, descriptor.origins, typ=descriptor.typ,
++                                                       absent=descriptor.absent_owned_payload)
++                if descriptor.absent_owned_payload:
++                    self.lines.append('fail("join : charge propriétaire impossible");')
++                    raise PathsReturned()
+                 return self.receive_extracted_handle(f'({value}).allocation', descriptor.sources, scope, label,
+                                                      origins=descriptor.origins, typ=descriptor.typ)
+             if kind in JOIN_BORROWS:
+@@ -7650,10 +7656,11 @@
+         self.guard_buffered_handle(name, allocation, '==')
+         return 'handle_option', name, allocation
+ 
+-    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int'):
++    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False):
+         cell = f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
++        payload.absent_owned_payload = absent
+         payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested else None
+         self.guard_buffered_handle(name, payload, '==', payload_status=payload_status)
+         return ('join_nested' if nested else 'join_owned'), name, payload
+@@ -10189,6 +10196,9 @@
+         c = f'joined{uid}'
+         node, _ = self.async_definitions[task_name]
+         mode, typ = node.args[2]
++        effects = getattr(node, 'field_effect_summary', None)
++        absent_payload = bool(effects is not None and effects.complete and
++                              (effects.may_complete is False or effects.completion_result.absent_owned_payload))
+         # Project the input snapshot before publishing the completed stores.
+         reference_result = (self.project_task_result_captures(task_name, allocation.dependencies,
+                             allocation.borrow_parents) if mode in ('ref', 'mut') else None)
+@@ -10210,11 +10220,12 @@
+             self.flag_declarations.append(f'CrustNestedJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_nested(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+-                                               allocation.task_result_origins, nested=True, typ=typ)
++                                               allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload)
+         if mode == 'owned':
+             self.flag_declarations.append(f'CrustJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+-            return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins, typ=typ)
++            return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins,
++                                               typ=typ, absent=absent_payload)
+         if mode in ('ref', 'mut'):
+             dependencies, parents = reference_result
+             kind = 'join_' + mode
+@@ -13780,6 +13791,18 @@
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
++            elif mode in JOIN_RESULT_TYPES:
++                field = JOIN_RESULT_CELLS[mode]
++                pointer = f'{parameter}.{field}'
++                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                                      f'({pointer} ? {pointer}->source : NULL)', element_type=typ)
++                external.sources.append(source)
++                kind, _, allocation = check.join_allocation_result(parameter, (source,), root, parameter,
++                    frozenset(), nested=mode == 'join_nested', typ=typ)
++                check.lines.append(f'(void)*({allocation.guard});')
++                check.origin_sources[allocation.id] = source
++                root.bindings[parameter] = Binding(parameter, kind, parameter, allocation, mutable=True)
++                ctype = 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+             elif mode in ASYNC_CAPTURE_VIEW_MODES:
+                 element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(mode, mode), 'uint8_t')
+                 storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+@@ -13850,13 +13873,13 @@
+                 root.bindings[parameter] = Binding(parameter, mode, parameter)
+                 ctype = COPY_VALUE_TYPES[mode]
+             parameters.append(f'{ctype} {parameter}')
+-            arguments.append(('down' if mode == 'owned' else 'name', parameter))
++            arguments.append(('down' if mode == 'owned' or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
+         check.index_expression(call)
+         result = None
+         try:
+             result = check.invoke(call, root)
+-            if result is not None and result[0] in ('owned', 'execution'):
++            if result is not None and result[0] in ('owned', 'execution', *JOIN_RESULT_TYPES):
+                 root.exports.append(result[2])
+             check.finish_scope(root)
+         except PathsReturned:
+@@ -13864,7 +13887,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[name]
+         mode = contract.result_type[0]
+-        ctype = ('CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         qualifier = '_Noreturn ' if not contract.effects.may_return else ''
+         signature = f'static {qualifier}{ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+@@ -13873,6 +13896,8 @@
+             lines.append('fail("non-returning synchronous bridge returned");')
+         if result is not None and mode != 'void':
+             value = result[1]
++            if mode in JOIN_RESULT_TYPES and result[2] is not None and result[2].guard is not None:
++                lines.append(f'(void)*({result[2].guard});')
+             if result[0] in ('ref', 'mut') and contract.result_type[1] == 'Int':
+                 value = f'&({value})->value'
+             lines.append(f'return {value};')

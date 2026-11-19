@@ -1,0 +1,66 @@
+--- before/results.py
++++ after/results.py
+@@ -177,6 +177,7 @@
+     vector_slot: tuple[int, int | None] | None = None
+     vector_writes: tuple = ()
+     vector_write_payloads: tuple = field(default=(), kw_only=True)
++    vector_values: tuple = field(default=(), kw_only=True)
+     handle_writes: tuple[tuple[int, tuple[ResultCandidate, ...]], ...] = ()
+     handle_write_fields: tuple = ()
+     exchange_payloads: tuple = ()
+@@ -301,7 +302,7 @@
+                                   for position, slot in replacements},
+                  'removals': list(removals)}
+                 for index, slots, exact, replacements, removals in self.vector_writes]
+-        if self.vector_write_payloads or self.exchange_values:
++        if self.vector_write_payloads or self.exchange_values or self.vector_values:
+             def describe_payload(payload):
+                 return {'type': payload.typ,
+                         'alternatives': [item.describe(params) for item in sorted(payload.candidates)],
+@@ -314,6 +315,8 @@
+             if self.exchange_values:
+                 description['exchange_values'] = {
+                     arm: describe_payload(value) for arm, value in zip(('Ok', 'Err'), self.exchange_values)}
++            if self.vector_values:
++                description['vector_values'] = [describe_payload(value) for value in self.vector_values]
+         if self.vector_slot is not None:
+             parameter, index = self.vector_slot
+             description['vector_slot'] = {'parameter': params[parameter][0], 'index': index}
+@@ -789,6 +792,7 @@
+         self.shared_vector_passthroughs = set()
+         self.returned_exchange_payloads = ()
+         self.returned_exchange_values = ()
++        self.returned_vector_values = {}
+         self.fresh_variants = frozenset()
+         self.updated_parameters = {}
+         self.returned_payload = False
+@@ -1224,6 +1228,7 @@
+                               vector_write_payloads=tuple((index, tuple(payloads)) for index, payloads in sorted(self.vector_write_payloads.items())),
+                               exchange_payloads=self.returned_exchange_payloads,
+                               exchange_values=self.returned_exchange_values, shared_vector_layout=layout,
++                              vector_values=tuple(self.returned_vector_values),
+                               shared_vector_passthrough=next(iter(self.shared_vector_passthroughs))
+                               if len(self.shared_vector_passthroughs) == 1 else None,
+                               reference_appends=tuple(reference_appends),
+@@ -1599,7 +1604,11 @@
+             if candidate.kind == 'fresh' and candidate.source.kind == 'local':
+                 self.fail(line, f"transfert refusé : la source '{candidate.source.name}' ne survit pas à ce bloc")
+         self.returned.update(candidates)
+-        for name, child in value.owned_fields:
++        if is_handle_vector(typ):
++            items = possible_handle_items(value.handle_items)
++            self.returned_vector_values.update((item, None) for item in value.handle_payloads
++                if (items is None or item.candidates & items) and (item.fields or item.owned_fields))
++        for name, child in (() if is_handle_vector(typ) else value.owned_fields):
+             previous = self.returned_owned_fields.get(name)
+             self.returned_owned_fields[name] = merge_reference_values((previous, child)) if previous else child
+         if typ in REFERENCE_VECTORS:
+@@ -3442,6 +3451,8 @@
+                 vectors = self.apply_vector_result_candidates(summary.candidates, actuals, id(expr))
+                 return flow, Value('owned', summary.typ, frozenset(candidates), fresh_variants=fresh_variants,
+                                    handle_items=merge_handle_items(vectors),
++                                   handle_payloads=tuple(self.resolve_owned_child(value, actuals, map_fields=True)
++                                                         for value in summary.vector_values),
+                                    input_item_history=merge_input_item_history(vectors),
+                                    input_items_changed=any(vector.input_items_changed for vector in vectors),
+                                    input_items_written=any(vector.input_items_written for vector in vectors),

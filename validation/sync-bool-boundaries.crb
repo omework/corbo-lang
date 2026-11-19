@@ -1,0 +1,29 @@
+fn positive(a: &Int) -> bool {
+    return *a > 0;
+}
+
+async fn work(a: &Int) -> Bool {
+    yield;
+    return positive(a);
+}
+
+fn main() {
+    let result = {
+        let mut p = pool<Int>(1);
+        let a = p.new(7);
+        let h = runtime::spawn(->work(&a));
+        let b = match h.join() {
+            Ok(v) => { v },
+            Err(_) => { false }
+        };
+        drop(->a);
+        let next = p.new(9);
+        print(next);
+        b
+    };
+    if result {
+        print(1);
+    } else {
+        print(0);
+    }
+}

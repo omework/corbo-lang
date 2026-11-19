@@ -1,0 +1,47 @@
+test_detached_shared_field_outlives_carrier (test_sync_handle_fields.SyncHandleFieldTests.test_detached_shared_field_outlives_carrier) ... ok
+test_indirect_mutable_field_keeps_capability (test_sync_handle_fields.SyncHandleFieldTests.test_indirect_mutable_field_keeps_capability) ... ERROR
+test_inline_fields_and_named_or_direct_wait (test_sync_handle_fields.SyncHandleFieldTests.test_inline_fields_and_named_or_direct_wait) ... ok
+test_recorded_field_return (test_sync_handle_fields.SyncHandleFieldTests.test_recorded_field_return) ... ok
+
+======================================================================
+ERROR: test_indirect_mutable_field_keeps_capability (test_sync_handle_fields.SyncHandleFieldTests.test_indirect_mutable_field_keeps_capability)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_fields.py", line 59, in test_indirect_mutable_field_keeps_capability
+    self.assertEqual(self.run_c_oracle(compile_source(valid)).stdout,'9\n8\n9\n')
+                                       ~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15263, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15256, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13757, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13597, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2984, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9652, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10849, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12149, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12210, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3166, in verify_state
+    self.fail('invariant interne : emprunt mutable non exclusif')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: invariant interne : emprunt mutable non exclusif
+
+----------------------------------------------------------------------
+Ran 4 tests in 3.296s
+
+FAILED (errors=1)

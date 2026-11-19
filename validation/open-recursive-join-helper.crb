@@ -1,0 +1,7 @@
+enum Node{End{value:Int},Link{next:A<Node>}}async fn own(n:->Node)-><-Node{yield;return <-n;}
+fn finish(h:->runtime::Handle<A<Node>>)-><-Result<A<Node>,runtime::Error>{return <-h.join();}
+fn main(){let mut ends=pool<Node>(1);let mut links=pool<Node>(2);
+let end=new(ends) Node.End{value:7};let mid=new(links) Node.Link{next:<-end};
+let top=new(links) Node.Link{next:<-mid};let h=runtime::spawn(->own(->top));
+let r=finish(->h);match r{Ok(value)=>{drop(->value);},Err(_)=>{}}
+let again=new(ends) Node.End{value:9};print(again);}

@@ -1,0 +1,80 @@
+test_borrowed_fields_survive_vector_drop (test_inline_vector_replace.InlineVectorReplaceTests.test_borrowed_fields_survive_vector_drop) ... ok
+test_empty_struct_and_direct_drop (test_inline_vector_replace.InlineVectorReplaceTests.test_empty_struct_and_direct_drop) ... ok
+test_function_consumes_result_and_evaluation_order (test_inline_vector_replace.InlineVectorReplaceTests.test_function_consumes_result_and_evaluation_order) ... FAIL
+test_named_value_and_explicit_transfers (test_inline_vector_replace.InlineVectorReplaceTests.test_named_value_and_explicit_transfers) ... ok
+test_owned_fields_cleanup_once_and_pool_reuse (test_inline_vector_replace.InlineVectorReplaceTests.test_owned_fields_cleanup_once_and_pool_reuse) ... ok
+test_pool_value_and_borrowed_incoming_refused (test_inline_vector_replace.InlineVectorReplaceTests.test_pool_value_and_borrowed_incoming_refused) ... ok
+test_success_and_rejection_preserve_length (test_inline_vector_replace.InlineVectorReplaceTests.test_success_and_rejection_preserve_length) ... ok
+
+======================================================================
+FAIL: test_function_consumes_result_and_evaluation_order (test_inline_vector_replace.InlineVectorReplaceTests.test_function_consumes_result_and_evaluation_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17866, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17859, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16299, in compile
+    result = self.invoke(entry_call, root)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11053, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12722, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14241, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14790, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6804, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9894, in expression
+    return self.replace_inline_vector_item(expr, binding, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9023, in replace_inline_vector_item
+    value, incoming = self.evaluate_inline_vector_transfer(expr[-1], binding, scope, label)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9000, in evaluate_inline_vector_transfer
+    kind, value, incoming = self.expression(argument[1], scope, label)
+                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10261, in expression
+    return self.invoke(expr, scope)
+           ~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11053, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12722, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14241, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14302, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3467, in verify_state
+    self.fail('invariant interne : emprunt mutable non exclusif')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2024, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: invariant interne : emprunt mutable non exclusif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_vector_replace.py", line 60, in test_function_consumes_result_and_evaluation_order
+    self.assertEqual(self.run_source(helper+BASE.replace('replace(0, ->Point { x: 9 })','replace(index(), ->incoming())')).stdout,'1\n2\n7\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: invariant interne : emprunt mutable non exclusif
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.354s
+
+FAILED (failures=1)

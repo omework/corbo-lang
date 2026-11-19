@@ -1,0 +1,361 @@
+--- before/crust.py
++++ after/crust.py
+@@ -61,7 +61,7 @@
+             ('join_nested', 'Result<Result<A<', '>,runtime::Error>,runtime::Error>')):
+         if typ.startswith(prefix) and typ.endswith(suffix):
+             payload = typ[len(prefix):-len(suffix)]
+-            if payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
++            if payload in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or re.fullmatch(r'[A-Za-z_][A-Za-z_0-9:]*', payload):
+                 return mode, payload
+     return None
+ COPY_VALUE_TYPES = ChainMap(PLAIN_JOIN_C_TYPES, {
+@@ -1613,6 +1613,7 @@
+     item_sources: tuple = ()
+     task_result_sources: tuple = ()
+     task_result_origins: frozenset = frozenset()
++    task_result_fields: tuple = ()
+     async_field_updates: tuple = ()
+     item_positions: tuple | None = ()
+     item_origins: frozenset = frozenset()
+@@ -2828,11 +2829,27 @@
+                         add_field_dependencies(target, index, prefix=f'capture.{position}/')
+                         capability = 'mut' if is_public_handle(typ) and position in (3, 5) else capture
+                         dependencies.append((f'{capability}.{position}', (target,)))
++                    result_fields = []
++                    for path, child_type in aggregate_owned_paths(self.enums, definition.args[2][1]):
++                        group = find(('task_result_field_parameter', index, path))
++                        source = sources.get(group)
++                        if source is None:
++                            sid = check.uid()
++                            source = MemorySource(sid, root.id, 'symbolic', pname + path,
++                                                  f'symbolic_source_{sid}', child_type)
++                            sources[group] = source
++                            root.sources.append(source)
++                        origin = check.uid()
++                        check.origin_sources[origin] = source
++                        result_fields.append((path, (source,), frozenset({origin})))
++                        capture_sources.append(source)
++                        capture_origins.add(origin)
+                     allocation = Allocation(check.uid(), root.id, pname, (), c=actual,
+                                             typ=f'{mode.capitalize()}<{typ}>', dependencies=tuple(dependencies),
+                                             item_sources=tuple(capture_sources), item_origins=frozenset(capture_origins),
+                                             task_result_sources=tuple(result_sources),
+-                                            task_result_origins=frozenset(result_origins))
++                                            task_result_origins=frozenset(result_origins),
++                                            task_result_fields=tuple(result_fields))
+                     root.allocations.append(allocation)
+                     check.allocations.append(allocation)
+                     root.bindings[actual] = Binding(actual, mode, actual, allocation)
+@@ -2976,7 +2993,7 @@
+                     root.bindings[actual] = Binding(actual, kind, parameter_c, allocation, mutable=True)
+                     arguments.append(('down' if mode == 'owned' or transferred_result else mode, actual))
+                     add_field_dependencies(allocation, index)
+-                    if mode in ('ref', 'mut', 'owned') and self.has_owned_fields(typ):
++                    if mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
+                         add_owned_fields(allocation, index)
+                     if typ == HANDLE_VECTOR and mode in ('owned', 'mut'):
+                         add_vector_items(allocation, index)
+@@ -3979,7 +3996,7 @@
+             return self.join_allocation_result(c, source_union(*(a.sources for a in values)),
+                                                frame['destination'], name,
+                                                frozenset(origin for a in values for origin in a.origins),
+-                                               nested=kind == 'join_nested', typ=typ)
++                                               nested=kind == 'join_nested', typ=typ, owned_fields=self.task_owned_result_fields(values))
+         if kind == 'handle_option':
+             payloads = [allocation for allocation in values if allocation is not None]
+             return self.buffered_handle_result(c, source_union(*(a.sources for a in payloads)),
+@@ -3998,6 +4015,7 @@
+             item_sources=source_union(*(a.item_sources for a in values)),
+             task_result_sources=source_union(*(a.task_result_sources for a in values)),
+             task_result_origins=frozenset(o for a in values for o in a.task_result_origins),
++            task_result_fields=self.merge_async_result_fields(*(a.task_result_fields for a in values)),
+             async_field_updates=tuple(update for a in values for update in a.async_field_updates),
+             item_positions=self.merge_handle_positions([vars(a) for a in values]),
+             item_position_origins=self.merge_handle_positions([vars(a) for a in values], origins=True),
+@@ -4240,6 +4258,7 @@
+             allocation.item_sources = source_union(*(s['item_sources'] for s in live))
+             allocation.task_result_sources = source_union(*(s['task_result_sources'] for s in live))
+             allocation.task_result_origins = frozenset(o for state in live for o in state['task_result_origins'])
++            allocation.task_result_fields = self.merge_async_result_fields(*(state['task_result_fields'] for state in live))
+             allocation.async_field_updates = tuple(update for state in live for update in state['async_field_updates'])
+             allocation.owned_fields = self.merge_dependencies(*(s['owned_fields'] for s in live))
+             allocation.item_positions = self.merge_handle_positions(live)
+@@ -4858,7 +4877,9 @@
+                 return 'array_refs', result_c, (selected_type[0], self.merge_stored_array_loans(selected_array_loans))
+             if selected_kind in ('join_owned', 'join_nested'):
+                 return self.join_allocation_result(result_c, selected_sources, self.scopes[-1],
+-                                                   source_name, selected_origins, nested=selected_kind == 'join_nested', typ=selected_type)
++                                                   source_name, selected_origins, nested=selected_kind == 'join_nested', typ=selected_type,
++                                                   owned_fields=self.merge_async_result_fields(*(
++                                                       self.owned_field_storage(state['owned_fields']) for state in selected_item_states)))
+             if selected_kind == 'handle_option':
+                 return self.buffered_handle_result(result_c, selected_sources, self.scopes[-1],
+                                                    source_name, selected_origins)
+@@ -4872,6 +4893,8 @@
+                                     task_result_sources=source_union(*(state['task_result_sources'] for state in selected_item_states)),
+                                     task_result_origins=frozenset(o for state in selected_item_states
+                                                                   for o in state['task_result_origins']),
++                                    task_result_fields=self.merge_async_result_fields(
++                                        *(state['task_result_fields'] for state in selected_item_states)),
+                                     async_field_updates=tuple(update for state in selected_item_states
+                                                               for update in state['async_field_updates']),
+                                     item_positions=self.merge_handle_positions(selected_item_states),
+@@ -6990,12 +7013,13 @@
+                 if kind == 'join_nested':
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                                                        label, descriptor.origins, typ=descriptor.typ,
+-                                                       absent=descriptor.absent_owned_payload)
++                                                       absent=descriptor.absent_owned_payload,
++                                                       owned_fields=self.task_owned_result_fields((descriptor,)))
+                 if descriptor.absent_owned_payload:
+                     self.lines.append('fail("join : charge propriétaire impossible");')
+                     raise PathsReturned()
+                 return self.receive_extracted_handle(f'({value}).allocation', descriptor.sources, scope, label,
+-                                                     origins=descriptor.origins, typ=descriptor.typ)
++                                                     origins=descriptor.origins, typ=descriptor.typ, prototype=descriptor)
+             if kind in JOIN_BORROWS:
+                 binding = self.lookup(receiver[1])
+                 binding.valid = False
+@@ -7608,11 +7632,16 @@
+         return frozenset(origin for origin in origins
+                          if any(self.origin_sources.get(origin) is source for source in sources)) or None
+ 
+-    def receive_extracted_handle(self, name, sources, scope, label, *, origins=None, typ='Int'):
++    def receive_extracted_handle(self, name, sources, scope, label, *, origins=None, typ='Int', prototype=None):
+         if origins is None:
+             origins = tuple(self.uid() for _ in sources)
+             self.origin_sources.update(zip(origins, sources))
+         allocation = Allocation(self.uid(), scope.id, label, sources, c=name, typ=typ, origins=frozenset(origins))
++        if prototype is not None:
++            allocation.owned_fields = tuple((key, tuple(self.copy_owned_tree(child, scope.id) for child in children))
++                                           for key, children in prototype.owned_fields)
++            allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
++            allocation.variants = prototype.variants
+         self.allocations.append(allocation)
+         scope.allocations.append(allocation)
+         return 'owned', name, allocation
+@@ -7656,11 +7685,61 @@
+         self.guard_buffered_handle(name, allocation, '==')
+         return 'handle_option', name, allocation
+ 
+-    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False):
++    @staticmethod
++    def merge_async_result_fields(*groups):
++        fields = {}
++        for group in groups:
++            for path, sources, origins in group:
++                previous_sources, previous_origins = fields.get(path, ((), frozenset()))
++                fields[path] = source_union(previous_sources, sources), previous_origins | origins
++        return tuple((path, *value) for path, value in sorted(fields.items()))
++
++    def task_owned_result_fields(self, roots):
++        return self.merge_async_result_fields(*(self.owned_field_storage(root.owned_fields) for root in roots))
++
++    def owned_field_storage(self, fields, prefix=''):
++        output = []
++        for key, targets in fields:
++            path = prefix + key
++            output.append((path, source_union(*(child.sources for child in targets)),
++                           frozenset(origin for child in targets for origin in child.origins)))
++            for child in targets:
++                output.extend(self.owned_field_storage(child.owned_fields, path + '/'))
++        return self.merge_async_result_fields(output)
++
++    def restore_async_owned_fields(self, allocation, fields):
++        storage = {path: (sources, origins) for path, sources, origins in fields}
++        def restore(typ, prefix=''):
++            children = []
++            for arm, members in self.enums.get(typ, {}).items():
++                for name, declared in members:
++                    if not declared.startswith('A<'):
++                        continue
++                    key = f'{arm}.{name}'
++                    path = prefix + key
++                    sources, origins = storage.get(path, ((), frozenset()))
++                    if not sources:
++                        self.fail('résultat async : provenance du champ propriétaire absente')
++                    child_type = declared[2:-1]
++                    nested = restore(child_type, path + '/')
++                    child = Allocation(self.uid(), allocation.scope, name, sources, typ=child_type,
++                        origins=origins, owned_fields=nested, item_sources=self.owned_field_sources(nested),
++                        variants=frozenset(self.enums.get(child_type, {})))
++                    children.append((key, (child,)))
++            return tuple(children)
++        if not allocation.absent_owned_payload:
++            allocation.owned_fields = restore(allocation.typ)
++            allocation.variants = frozenset(self.enums.get(allocation.typ, {}))
++            if allocation.owned_fields:
++                allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
++        return allocation
++
++    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, owned_fields=()):
+         cell = f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+         payload.absent_owned_payload = absent
++        self.restore_async_owned_fields(payload, owned_fields)
+         payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested else None
+         self.guard_buffered_handle(name, payload, '==', payload_status=payload_status)
+         return ('join_nested' if nested else 'join_owned'), name, payload
+@@ -9306,6 +9385,8 @@
+             return binding.alloc.item_sources
+         if symbol.kind == 'task_result_parameter':
+             return binding.alloc.task_result_sources
++        if symbol.kind == 'task_result_field_parameter':
++            return next((sources for path, sources, _ in binding.alloc.task_result_fields if path == symbol.name), ())
+         if symbol.kind == 'allocation_field_parameter':
+             return source_union(*(child.sources for carrier in binding.referents or (binding.alloc,)
+                                   for child in self.aggregate_field_targets(carrier, symbol.name)))
+@@ -9483,11 +9564,13 @@
+                 fresh_sources.extend(self.parameter_storage(candidate.source, params, bindings))
+         target = (bindings[params[summary.same_parameter][0]].alloc
+                   if summary.same_parameter is not None and params[summary.same_parameter][1] not in JOIN_RESULT_TYPES else None)
+-        dependencies, variants, parents = self.resolve_borrowed_result(summary, params, bindings) if summary.mode == 'owned' else ((), frozenset(), ())
++        dependencies, variants, parents = self.resolve_borrowed_result(summary, params, bindings) if summary.mode in ('owned', *JOIN_RESULT_TYPES) else ((), frozenset(), ())
+         item_sources, item_positions, item_origins, item_position_origins, fresh_positions = self.handle_result_metadata(summary, params, bindings)
+         if target is not None and self.has_owned_fields(summary.typ):
+             item_sources = self.owned_sources(target)
+         owned_fields = self.resolve_fresh_owned_fields(summary, params, bindings, self.scopes[-1])
++        if summary.mode in JOIN_RESULT_TYPES:
++            owned_fields = self.merge_dependencies(owned_fields, *(a.owned_fields for a in inputs if a is not None))
+         if projected:
+             owned_fields = self.merge_dependencies(owned_fields, *(a.owned_fields for a in projected))
+             variants |= frozenset(arm for a in projected for arm in a.variants)
+@@ -10135,6 +10218,7 @@
+                                     for child in self.dependency_carriers(target, ownership_only=True) for origin in child.origins),
+                                 task_result_sources=source_union(tuple(pool_result_sources), *(target.sources for target in result_targets)),
+                                 task_result_origins=frozenset(pool_origins) | frozenset(origin for target in result_targets for origin in target.origins),
++                                task_result_fields=self.task_owned_result_fields(result_targets),
+                                 borrow_parents=tuple(parent for loan in loans for parent in loan.borrow_parents))
+         if field_updates:
+             allocation.async_field_updates = tuple(self.prepare_structure_updates(
+@@ -10192,6 +10276,7 @@
+                                 item_sources=allocation.item_sources, item_origins=allocation.item_origins,
+                                 task_result_sources=allocation.task_result_sources,
+                                 task_result_origins=allocation.task_result_origins,
++                                task_result_fields=allocation.task_result_fields,
+                                 async_field_updates=allocation.async_field_updates)
+             scope.allocations.append(handle)
+             self.allocations.append(handle)
+@@ -10223,12 +10308,12 @@
+             self.flag_declarations.append(f'CrustNestedJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_nested(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+-                                               allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload)
++                                               allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields)
+         if mode == 'owned':
+             self.flag_declarations.append(f'CrustJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins,
+-                                               typ=typ, absent=absent_payload)
++                                               typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields)
+         if mode in ('ref', 'mut'):
+             dependencies, parents = reference_result
+             kind = 'join_' + mode
+@@ -10425,6 +10510,8 @@
+                                 borrow_parents=tuple(parents.values()), item_sources=sources,
+                                 item_origins=origins, task_result_sources=result_sources,
+                                 task_result_origins=result_origins,
++                                task_result_fields=tuple((path, *self.resolve_async_sources(symbols, params, bindings, fresh_origins))
++                                    for path, symbols in summary.task_result_fields),
+                                 async_field_updates=tuple(update for index in summary.task_forward_parameters
+                                     for update in bindings[params[index][0]].alloc.async_field_updates)
+                                     + tuple(self.prepare_structure_updates(
+@@ -10442,6 +10529,12 @@
+             binding = bindings[params[symbol.index][0]]
+             if symbol.kind == 'allocation_parameter':
+                 origins.update(binding.alloc.origins)
++            elif symbol.kind == 'allocation_field_parameter':
++                origins.update(origin for carrier in binding.referents or (binding.alloc,)
++                    for child in self.aggregate_field_targets(carrier, symbol.name) for origin in child.origins)
++            elif symbol.kind == 'task_result_field_parameter':
++                origins.update(origin for path, _, values in binding.alloc.task_result_fields
++                               if path == symbol.name for origin in values)
+             elif symbol.kind == 'task_parameter':
+                 origins.update(binding.alloc.item_origins)
+             elif symbol.kind == 'task_result_parameter':
+@@ -11145,7 +11238,8 @@
+             return utf8_result[0], c, utf8_result[1]
+         if result[0] in JOIN_RESULT_TYPES:
+             return self.join_allocation_result(c, result_contract['sources'], caller,
+-                                               f'retour {name}', conditional_origins, nested=result[0] == 'join_nested', typ=declared[1])
++                                               f'retour {name}', conditional_origins, nested=result[0] == 'join_nested', typ=declared[1],
++                                               owned_fields=self.owned_field_storage(result_contract['owned_fields']))
+         if result[0] == 'handle_option':
+             return self.buffered_handle_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins)
+@@ -11516,8 +11610,12 @@
+         if result.mode == 'array':
+             return 'array', c, self.declared_array_type(result.typ)
+         if result.mode in JOIN_RESULT_TYPES:
++            fields = self.resolve_fresh_owned_fields(result, params, bindings, caller)
++            if result.same_parameter is not None:
++                fields = bindings[params[result.same_parameter][0]].alloc.owned_fields
+             return self.join_allocation_result(c, sources, caller, f'retour {name}',
+-                                               frozenset(origins), nested=result.mode == 'join_nested', typ=result.typ)
++                                               frozenset(origins), nested=result.mode == 'join_nested', typ=result.typ,
++                                               owned_fields=self.owned_field_storage(fields))
+         if result.mode == 'handle_option':
+             return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins))
+         if result.mode == 'buffered_handle_exchange':
+@@ -12214,6 +12312,7 @@
+             item_sources=source_union(*(item.item_sources for item in items)),
+             task_result_sources=source_union(*(item.task_result_sources for item in items)),
+             task_result_origins=frozenset(o for item in items for o in item.task_result_origins),
++            task_result_fields=self.merge_async_result_fields(*(item.task_result_fields for item in items)),
+             async_field_updates=tuple(update for item in items for update in item.async_field_updates),
+             item_positions=self.merge_handle_positions(states),
+             item_position_origins=self.merge_handle_positions(states, origins=True),
+@@ -13440,7 +13539,9 @@
+             declared[field] == f'A<{child.typ}>' and child.candidates
+             and all(candidate.kind in ('parameter', 'owned_projection')
+                     and params[candidate.parameter][1] == 'owned'
+-                    or candidate.kind == 'fresh' and candidate.source.kind == 'source_parameter'
++                    or candidate.kind == 'fresh' and (candidate.source.kind == 'source_parameter'
++                        or candidate.source.kind == 'allocation_field_parameter' and params[candidate.source.index][1] == 'owned'
++                        or candidate.source.kind == 'task_result_field_parameter' and params[candidate.source.index][1] in ('task', 'execution'))
+                     for candidate in child.candidates)
+             and self.supports_fresh_owned_result(child, params)
+             for field, child in actual.items())
+@@ -13574,13 +13675,15 @@
+                     seen.add(pname)
+                     continue
+                 content = typ[2:-1] if typ.startswith('A<') else typ
++                if mode in JOIN_RESULT_TYPES and typ not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
++                    self.fail('type de charge propriétaire inconnu dans Result')
+                 recursive = (self.has_owned_fields(content) and mode in ('ref', 'mut', 'owned') and typ == content
+                              and self.supports_owned_signature(content, allow_cycles=True)
+                              and not self.supports_owned_signature(content))
+                 if recursive:
+                     recursive_inputs.add(name)
+                 if self.has_owned_fields(content) and not (
+-                        recursive or mode in ('ref', 'mut', 'owned') and typ == content
++                        recursive or mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES) and typ == content
+                         and self.supports_owned_signature(content)):
+                     self.fail('prototype : contrat de champ propriétaire non pris en charge')
+                 if self.has_typed_reference_fields(content) and not (
+@@ -13636,8 +13739,11 @@
+                 result = ('execution', definition)
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             content = result[1][2:-1] if result[1].startswith('A<') else result[1]
++            if result[0] in JOIN_RESULT_TYPES and result[1] not in ('Int', 'String', *VECTOR_TYPES, *self.enums):
++                self.fail('type de charge propriétaire inconnu dans Result')
+             if self.has_owned_fields(content) and not (
+-                    result == ('owned', content) and self.supports_owned_signature(content, allow_cycles=True)):
++                    result[0] in ('owned', *JOIN_RESULT_TYPES) and result[1] == content
++                    and self.supports_owned_signature(content, allow_cycles=True)):
+                 self.fail('prototype : contrat de champ propriétaire non pris en charge')
+             if self.has_typed_reference_fields(content) and not (
+                     result[1] == content and self.supports_acyclic_reference_parameter(content)
+@@ -13689,8 +13795,9 @@
+             if not self.has_owned_fields(summary.typ) or not self.function_effects[name].may_return:
+                 continue
+             index = summary.same_parameter
+-            if index is None or params[index][1:] != ('owned', summary.typ):
+-                fresh = all(candidate.kind == 'fresh' or (candidate.kind == 'owned_projection'
++            if index is None or params[index][1] not in ('owned', *JOIN_RESULT_TYPES) or params[index][2] != summary.typ:
++                fresh = all(candidate.kind == 'fresh' or (candidate.kind == 'task_capture'
++                            and params[candidate.parameter][1] in ('task', 'execution')) or (candidate.kind == 'owned_projection'
+                             and params[candidate.parameter][1] == 'owned') for candidate in summary.candidates)
+                 if fresh and self.supports_fresh_owned_result(summary, params):
+                     continue

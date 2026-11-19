@@ -1,0 +1,162 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Native greedy LZ77 Zstandard encoding with raw literals and RLE sequence tables.
+
+/// Writes a checked-by-caller little-endian integer.
+fn put_little(output: &mut [u8], at: u64, value: u64, count: u64) {
+    let mut i: u64 = 0; while i < count { output[at + i] = byte(value >> (i * 8)); i = i + 1; }
+}
+
+/// Emits little-endian entropy bits into a prechecked output range.
+fn put_bits(output: &mut [u8], start: u64, value: u64, count: u64) -> u64 {
+    let mut i: u64 = 0;
+    while i < count {
+        let at = start + i;
+        if at % 8 == 0 { output[at / 8] = 0; }
+        let current = output[at / 8] as u64;
+        output[at / 8] = byte(current | (((value >> i) & 1) << (at % 8))); i = i + 1;
+    }
+    start + count
+}
+
+/// Returns the smallest literal/match code that represents a length.
+fn length_code(kind: u64, value: u64) -> u64 {
+    let maximum: u64 = if kind == 0 { 35 } else { 52 }; let mut code: u64 = 0;
+    while code < maximum {
+        let decoded_fields_0 = baseline(copy(kind), copy(code)); let base = decoded_fields_0 >> 32; let bits = decoded_fields_0 & 0xffffffff;
+        if value >= base && value - base < (1 << bits) { break; } code = code + 1;
+    }
+    code
+}
+
+/// Writes one compressed block using a literal prefix and a single LZ77 sequence.
+fn sequence_block(output: &mut [u8], start: u64, prefix: &[u8], matched: u64, distance: u64, last: bool) -> Result<u64, Error> {
+    let count = prefix.len() as u64;
+    let ll_code = length_code(0, copy(count)); let ml_code = length_code(2, copy(matched));
+    let off_code = log2(distance + 3);
+    let decoded_fields_1 = baseline(0, copy(ll_code)); let ll_base = decoded_fields_1 >> 32; let ll_bits = decoded_fields_1 & 0xffffffff;
+    let decoded_fields_2 = baseline(2, copy(ml_code)); let ml_base = decoded_fields_2 >> 32; let ml_bits = decoded_fields_2 & 0xffffffff;
+    let header: u64 = if count < 32 { 1 } else if count < 4096 { 2 } else { 3 };
+    let bits = ll_bits + ml_bits + off_code;
+    let payload = header + count + 5 + (bits + 1 + 7) / 8;
+    if payload > output.len() as u64 - start - 3 { return Err(Error.BufferTooSmall); }
+    let flag: u64 = if last { 1 } else { 0 };
+    put_little(&mut output[0..output.len()], copy(start), (payload << 3) | 4 | flag, 3);
+    let mut at = start + 3;
+    let literal_header: u64 = if header == 1 { count << 3 } else if header == 2 { (count << 4) | 4 } else { (count << 4) | 12 };
+    put_little(&mut output[0..output.len()], copy(at), literal_header, copy(header)); at = at + header;
+    let mut i: u64 = 0; while i < count { output[at] = prefix[i]; at = at + 1; i = i + 1; }
+    output[at] = 1; output[at + 1] = 84;
+    output[at + 2] = byte(ll_code); output[at + 3] = byte(copy(off_code)); output[at + 4] = byte(ml_code); at = at + 5;
+    let mut cursor = put_bits(&mut output[0..output.len()], at * 8, count - ll_base, ll_bits);
+    cursor = put_bits(&mut output[0..output.len()], cursor, matched - ml_base, ml_bits);
+    cursor = put_bits(&mut output[0..output.len()], cursor, distance + 3 - (1 << off_code), off_code);
+    drop(put_bits(&mut output[0..output.len()], cursor, 1, 1));
+    Ok(start + 3 + payload)
+}
+
+/// Compresses one Zstandard frame. Workspace requires 36864 u64 words; no heap allocation occurs.
+/// Levels 1–22 control native chain-search effort; zero selects level three. Partial output may remain on errors.
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error> {
+    let empty: [u8;0] = [];
+    compress_with_dictionary(input, output, params, workspace, &empty[..])
+}
+
+/// Compresses with borrowed raw or formatted dictionary history; writes the dictionary ID when present.
+pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8]) -> Result<usize, Error> {
+    let dict_start = match dictionary_start(&dictionary[0..dictionary.len()]) {
+        Ok(value) => { value }, Err(error) => { return Err(error); },
+    };
+    let identifier = dictionary_number(&dictionary[0..dictionary.len()]);
+    compress_dictionary_content(input, output, params, workspace, &dictionary[dict_start..dictionary.len()], identifier)
+}
+
+/// Implements native encoding with a validated dictionary content view.
+fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8], dictionary_id: u64) -> Result<usize, Error> {
+    let configured = (*params).level;
+    if configured > 22 { return Err(Error.InvalidParams); }
+    let level: u64 = if configured == 0 { 3 } else { configured as u64 };
+    if workspace.len() < 36864 { return Err(Error.WorkspaceTooSmall); }
+    if output.len() < 16 { return Err(Error.BufferTooSmall); }
+    let size = input.len() as u64;
+    let width: u64 = if size < 256 { 1 } else if size < 65792 { 2 } else if size <= 0xffffffff { 4 } else { 8 };
+    let flag: u64 = if width == 1 { 0 } else if width == 2 { 64 } else if width == 4 { 128 } else { 192 };
+    put_little(&mut output[0..output.len()], 0, 0xfd2fb528, 4);
+    let mut written: u64 = 0;
+    if dictionary.len() == 0 {
+        output[4] = byte(flag | 32 | (if (*params).checksum { 4 } else { 0 }));
+        put_little(&mut output[0..output.len()], 5, if width == 2 { size - 256 } else { copy(size) }, copy(width));
+        written = 5 + width;
+    } else {
+        let width: u64 = if size <= 0xffffffff { 4 } else { 8 };
+        let flag: u64 = if width == 4 { 128 } else { 192 };
+        let dict_flag: u64 = if dictionary_id == 0 { 0 } else { 3 };
+        let needed: u64 = 6 + (if dict_flag == 0 { 0 } else { 4 }) + width;
+        if needed > output.len() as u64 { return Err(Error.BufferTooSmall); }
+        output[4] = byte(flag | dict_flag | (if (*params).checksum { 4 } else { 0 }));
+        output[5] = 56; written = 6;
+        if dict_flag != 0 { put_little(&mut output[0..output.len()], copy(written), dictionary_id, 4); written = written + 4; }
+        put_little(&mut output[0..output.len()], copy(written), copy(size), copy(width)); written = written + width;
+    }
+    let mut i: u64 = 0; while i < 36864 { workspace[i] = 0; i = i + 1; }
+    let history = dictionary.len() as u64;
+    i = if history > 32768 { history - 32768 } else { 0 };
+    while history - i >= 4 {
+        let hash = history_hash(&dictionary[0..dictionary.len()], &input[0..input.len()], copy(i));
+        workspace[4096 + i % 32768] = workspace[hash]; workspace[hash] = i + 1; i = i + 1;
+    }
+    let mut at: u64 = 0;
+    loop {
+        let left = size - at; let count: u64 = if left > 131072 { 131072 } else { left }; let end = at + count;
+        let mut scan = copy(at); let mut best: u64 = 0; let mut distance: u64 = 0;
+        while end - scan >= 4 {
+            let virtual = history + scan;
+            let hash = history_hash(&dictionary[0..dictionary.len()], &input[0..input.len()], copy(virtual));
+            let mut previous = workspace[hash];
+            workspace[4096 + virtual % 32768] = copy(previous); workspace[hash] = virtual + 1;
+            let mut depth: u64 = 0;
+            while previous != 0 && previous <= virtual && virtual - (previous - 1) <= 32768 && depth < level * 8 {
+                let candidate = previous - 1; let mut length: u64 = 0;
+                while length < end - scan && history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], candidate + length) == input[scan + length] { length = length + 1; }
+                if length > best { best = length; distance = virtual - candidate; }
+                if best == end - scan { break; }
+                let next = workspace[4096 + candidate % 32768]; if next >= previous { break; }
+                previous = next; depth = depth + 1;
+            }
+            if best >= 4 { break; } scan = scan + 1;
+        }
+        if level >= 2 && best < 32 {
+            let encoded = entropy_block(&input[at..end], &mut output[0..output.len()], copy(written), end == size);
+            if encoded != 0 { written = encoded; at = end; if at == size { break; } continue; }
+        }
+        let prefix = scan - at;
+        let header: u64 = if prefix < 32 { 1 } else if prefix < 4096 { 2 } else { 3 };
+        let ll_code = length_code(0, copy(prefix)); let ml_code = length_code(2, copy(best));
+        let decoded_fields_3 = baseline(0, ll_code); let base = decoded_fields_3 >> 32; let ll_bits = decoded_fields_3 & 0xffffffff; drop(base);
+        let decoded_fields_4 = baseline(2, ml_code); let base = decoded_fields_4 >> 32; let ml_bits = decoded_fields_4 & 0xffffffff; drop(base);
+        let payload = header + prefix + 5 + (ll_bits + ml_bits + log2(distance + 3) + 8) / 8;
+        if best >= 4 && payload < prefix + best && payload <= 131072 {
+            if output.len() as u64 - written < 3 { return Err(Error.BufferTooSmall); }
+            let next = match sequence_block(&mut output[0..output.len()], copy(written), &input[at..scan], copy(best), distance, scan + best == size) {
+                Ok(value) => { value }, Err(error) => { return Err(error); },
+            };
+            written = next;
+            i = 1;
+            while i < best && size - (scan + i) >= 4 {
+                let pos = history + scan + i; let hash = history_hash(&dictionary[0..dictionary.len()], &input[0..input.len()], copy(pos));
+                workspace[4096 + pos % 32768] = workspace[hash]; workspace[hash] = pos + 1; i = i + 1;
+            }
+            at = scan + best;
+        } else {
+            if output.len() as u64 - written < 3 || count > output.len() as u64 - written - 3 { return Err(Error.BufferTooSmall); }
+            let final: u64 = if end == size { 1 } else { 0 };
+            put_little(&mut output[0..output.len()], copy(written), (count << 3) | final, 3); written = written + 3;
+            i = 0; while i < count { output[written] = input[at + i]; written = written + 1; i = i + 1; } at = end;
+        }
+        if at == size { break; }
+    }
+    if (*params).checksum {
+        if output.len() as u64 - written < 4 { return Err(Error.BufferTooSmall); }
+        put_little(&mut output[0..output.len()], copy(written), checksum(&input[0..input.len()]) & 0xffffffff, 4); written = written + 4;
+    }
+    Ok(written as usize)
+}

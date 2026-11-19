@@ -1,0 +1,35 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -52,6 +52,16 @@
+         if call_name in async_functions:
+             from async_result_storage import result_storage, pool_result_graph
+             node = async_functions[call_name]
++            effect = getattr(node, 'field_effect_summary', None)
++            if effect and effect.complete and node.args[2][0] in ('owned', 'join_owned', 'join_nested'):
++                candidates = effect.completion_result.candidates
++                if candidates and all(candidate.kind == 'parameter' for candidate in candidates):
++                    origin = merge([evaluate(arguments[candidate.parameter], env) for candidate in candidates])
++                    if origin is not None:
++                        shape = node.args[2][1]
++                        for _ in range({'join_owned': 1, 'join_nested': 2}.get(node.args[2][0], 0)):
++                            shape = 'join', shape
++                        return ('task', shape), origin[1]
+             if not node.result_storage:
+                 return None
+             local_parameters = frozenset(index for index, argument in enumerate(arguments)
+@@ -78,6 +88,15 @@
+                     node = async_functions.get(summary.typ)
+                     if node is not None:
+                         return ('task', node.args[2][1]), {id(expr): expr}
++                sources = summary.task_result_sources
++                if sources and all(source.kind == 'allocation_parameter' for source in sources):
++                    origin = merge([evaluate(arguments[source.index], env) for source in sources])
++                    node = async_functions.get(summary.typ)
++                    if origin is not None and node is not None:
++                        shape = node.args[2][1]
++                        for _ in range({'join_owned': 1, 'join_nested': 2}.get(node.args[2][0], 0)):
++                            shape = 'join', shape
++                        return ('task', shape), origin[1]
+                 return None
+             candidates = []
+             for candidate in summary.candidates:

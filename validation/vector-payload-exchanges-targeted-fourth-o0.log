@@ -1,0 +1,96 @@
+test_mutable_payloads (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_mutable_payloads) ... FAIL
+test_nested_payload (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_nested_payload) ... ok
+test_parent_receiver_requires_both_payload_pools (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_parent_receiver_requires_both_payload_pools) ... ok
+test_relay_both_arms (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_relay_both_arms) ... ok
+test_return_both_arms (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_return_both_arms) ... ok
+test_try_push_success_and_capacity_failure (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_try_push_success_and_capacity_failure) ... FAIL
+
+======================================================================
+FAIL: test_mutable_payloads (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_mutable_payloads)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17336, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15364, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3270, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10663, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12312, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13783, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13844, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3459, in verify_state
+    self.fail('invariant interne : emprunt mutable non exclusif')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2022, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 6: invariant interne : emprunt mutable non exclusif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_vector_payload_exchanges.py", line 70, in test_mutable_payloads
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 6: invariant interne : emprunt mutable non exclusif
+
+======================================================================
+FAIL: test_try_push_success_and_capacity_failure (test_vector_payload_exchanges.VectorPayloadExchangeTests.test_try_push_success_and_capacity_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17336, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15364, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3270, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10663, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12457, in invoke_arguments
+    self.check_result_contract(contract, payload, vars(payload))
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10602, in check_result_contract
+    self.fail('invariant interne : variante absente du contrat de résultat')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2022, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: invariant interne : variante absente du contrat de résultat
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_vector_payload_exchanges.py", line 63, in test_try_push_success_and_capacity_failure
+    self.assertEqual(self.run_source(program).stdout,'9\n' if full else '1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: invariant interne : variante absente du contrat de résultat
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.287s
+
+FAILED (failures=2)

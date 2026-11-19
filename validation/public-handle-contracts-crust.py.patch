@@ -1,0 +1,195 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13,6 +13,7 @@
+ from utf8_syntax import ASYNC_VALUE_RESULT_FAMILIES, ASYNC_VALUE_RESULT_FIELDS
+ from utf8_syntax import FALLIBLE_VALUE_MODES, VALUE_SIGNATURES, VALUE_ANNOTATIONS, PLAIN_JOIN_TYPES, PLAIN_JOIN_C_TYPES, PLAIN_JOIN_INNER_MODES, PLAIN_RETURN_JOINS, register_plain_join_type, plain_join_layouts
+ from dataclasses import dataclass, field, replace
++from handle_types import HandleDefinitions, canonical_captures, common_public_handle, is_public_handle, public_signature
+ from pathlib import Path
+ import re
+ import shutil
+@@ -1867,7 +1868,7 @@
+ class Compiler:
+     def __init__(self, *, allow_legacy_reset=False):
+         self.allow_legacy_reset = allow_legacy_reset
+-        self.async_definitions = {}
++        self.async_definitions = HandleDefinitions(compiled=True)
+         self.async_slot_records = {}
+         self.async_sync_slots = {}
+         self.async_frame_slots = {}
+@@ -2809,7 +2810,8 @@
+                         check.allocations.append(target)
+                         check.origin_sources[target.id] = source
+                         add_field_dependencies(target, index, prefix=f'capture.{position}/')
+-                        dependencies.append((f'{capture}.{position}', (target,)))
++                        capability = 'mut' if is_public_handle(typ) and position == 3 else capture
++                        dependencies.append((f'{capability}.{position}', (target,)))
+                     allocation = Allocation(check.uid(), root.id, pname, (), c=actual,
+                                             typ=f'{mode.capitalize()}<{typ}>', dependencies=tuple(dependencies),
+                                             item_sources=tuple(capture_sources), item_origins=frozenset(capture_origins),
+@@ -3177,10 +3179,9 @@
+                   and (b.last > scope.clock if after else b.last >= scope.clock)]
+         active += [b for frame in self.argument_frames for b in frame]
+         # Task captures remain active independently of the handle's last use.
+-        if self.async_definitions:
+-            active.extend(Binding(carrier.label, 'task', carrier.c, carrier)
+-                          for carrier in self.allocations if carrier.alive and carrier.dependencies
+-                          and carrier.typ.startswith(('Task<', 'Execution<')))
++        active.extend(Binding(carrier.label, 'task', carrier.c, carrier)
++                      for carrier in self.allocations if carrier.alive and carrier.dependencies
++                      and carrier.typ.startswith(('Task<', 'Execution<')))
+         # A result used directly as an argument has no named binding yet. Its
+         # parent loans must still be suspended while that result is accessed.
+         children = list(active)
+@@ -3359,7 +3360,7 @@
+                     (b.kind == 'mut' and (b.alloc is binding.alloc or any(a is binding.alloc for a in b.referents)))
+                     or self.retains_exclusive_field(b, binding.alloc) for b in active):
+                 self.fail(f"accès à '{binding.name}' incompatible avec un emprunt actif")
+-            if binding.kind == 'mut' and self.async_definitions and any(
++            if binding.kind == 'mut' and any(
+                     b is not binding and self.retains_exclusive_field(b, target, join_only=True)
+                     for b in active for target in (binding.referents or (binding.alloc,))):
+                 self.fail(f"accès à '{binding.name}' incompatible avec un emprunt actif")
+@@ -3371,7 +3372,7 @@
+             holders = binding.referents or (binding.alloc,)
+             selected = None if projection is None else {target.id for target in projection}
+             shared_ancestry = (self.array_legacy_parents(binding, None)
+-                               if binding.kind == 'ref' and self.async_definitions else set())
++                               if binding.kind == 'ref' else set())
+ 
+             def blocks_read(loan):
+                 return loan.kind == 'mut' and not (
+@@ -3875,6 +3876,11 @@
+             allocation = tuple(alternatives.values())
+         else:
+             typ = allocation if kind == 'array' else 'Int' if allocation is None else allocation.typ
++        if kind == 'execution' and frame['values'] and all(mode == kind for mode, _, _ in frame['values']):
++            previous = [value for _, _, value in frame['values']]
++            if self.unify_execution_allocations([*previous, allocation]) is not None:
++                typ = allocation.typ
++                frame['values'] = [(mode, typ, value) for mode, _, value in frame['values']]
+         if frame['values'] and (kind, typ) != frame['values'][0][:2]:
+             self.fail('break : même type et même mode requis sur toutes les sorties')
+         if kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested',
+@@ -4405,8 +4411,29 @@
+         frame['paths'].append(state)
+         frame['results'].append(result)
+ 
++    def canonicalize_handle(self, allocation, expected):
++        from async_lowering import public_handle_type
++        if not allocation.typ.startswith('Execution<'):
++            self.fail(f'handle {expected} attendu')
++        nominal = allocation.typ[len('Execution<'):-1]
++        actual = public_handle_type(self.async_definitions[nominal][0].args[2])
++        if actual != expected:
++            self.fail(f'handle {expected} attendu, reçu {actual}')
++        allocation.dependencies = canonical_captures(allocation.dependencies, self.async_definitions[nominal][0].args[1])
++        allocation.typ = f'Execution<{expected}>'
++
++    def unify_execution_allocations(self, allocations):
++        public = common_public_handle((a.typ[len('Execution<'):-1] for a in allocations),
++                                      self.async_definitions)
++        if public is not None:
++            for allocation in allocations:
++                self.canonicalize_handle(allocation, public)
++        return public
++
+     def check_return_sources(self, frame, allocation):
+         mode, typ = frame['declared']
++        if mode == 'execution' and is_public_handle(typ):
++            self.canonicalize_handle(allocation, typ)
+         actual = allocation.typ
+         if mode in ('task', 'execution'):
+             typ = f'{mode.capitalize()}<{typ}>'
+@@ -4656,6 +4683,12 @@
+                     else:
+                         typ = (kind if kind == 'handle_option' else allocation if kind == 'array'
+                                else allocation.typ if allocation is not None else kind)
++                    if selected_kind == kind == 'execution' and selected_type != typ:
++                        previous = Allocation(-1, -1, 'branche précédente', (), typ=selected_type,
++                                              dependencies=selected_dependencies)
++                        if self.unify_execution_allocations([previous, allocation]) is not None:
++                            selected_type = typ = allocation.typ
++                            selected_dependencies = previous.dependencies
+                     if selected_type is not None and selected_type != typ:
+                         self.fail('expression if : même type requis dans toutes les branches')
+                     if selected_kind is not None and selected_kind != kind:
+@@ -5675,13 +5708,12 @@
+             if binding.array_root:
+                 yield binding
+             yield from (loan for _, loan in self.nested_array_loans(binding))
+-        if self.async_definitions:
+-            carriers = [carrier for carrier in self.allocations if carrier.alive
+-                        and carrier.typ.startswith(('Task<', 'Execution<'))]
+-            carriers.extend(binding.alloc for binding, _ in scoped if binding.kind in JOIN_BORROWS)
+-            captures = {id(target.array_capture): target.array_capture for carrier in carriers
+-                        for target in self.dependency_targets(carrier) if target.array_capture is not None}
+-            yield from captures.values()
++        carriers = [carrier for carrier in self.allocations if carrier.alive
++                    and carrier.typ.startswith(('Task<', 'Execution<'))]
++        carriers.extend(binding.alloc for binding, _ in scoped if binding.kind in JOIN_BORROWS)
++        captures = {id(target.array_capture): target.array_capture for carrier in carriers
++                    for target in self.dependency_targets(carrier) if target.array_capture is not None}
++        yield from captures.values()
+ 
+     def reference_array_owner(self, expr):
+         indices = []
+@@ -10166,7 +10198,7 @@
+                     captures = capture_fields(binding.alloc.dependencies, origin.field)
+                     nominal = params[origin.parameter][2]
+                     capture_mode = self.async_definitions[nominal][0].args[1][int(origin.field)][1]
+-                    if not captures and capture_mode not in ASYNC_SHARED_VIEW_MODES:
++                    if not captures and capture_mode not in ASYNC_SHARED_VIEW_MODES and not is_public_handle(nominal):
+                         self.fail('contrat de transfert : capture empruntée introuvable')
+                     for actual_key, captured in captures:
+                         roots.update((root.id, root) for root in captured)
+@@ -10338,6 +10370,8 @@
+                     kind, c, allocation = self.expression(arg[1], caller, pname)
+                 else:
+                     self.fail(f"argument '{pname}' : transfert -> requis")
++                if kind == 'execution' and mode == 'execution' and is_public_handle(typ):
++                    self.canonicalize_handle(allocation, typ)
+                 if (kind != mode or allocation.typ != f'{mode.capitalize()}<{typ}>'
+                         or allocation.scope != caller.id):
+                     self.fail(f"argument '{pname}' : transfert d’un {mode} de {typ} requis")
+@@ -11933,6 +11967,10 @@
+                         result_signature = kind[6:], 'Int'
+                     else:
+                         result_signature = kind, typ
++                    if signature is not None and signature[0] == kind == 'execution':
++                        if self.unify_execution_allocations(selected_allocations) is not None:
++                            typ = selected_allocations[-1].typ
++                            signature = result_signature = kind, typ
+                     if signature is not None and signature != result_signature:
+                         self.fail('expression match : même type et même mode requis dans tous les bras continuants')
+                     signature = result_signature
+@@ -13317,6 +13355,13 @@
+                 self.fail(f"nom de fonction déjà utilisé : '{name}'")
+             normalized = []
+             for pname, mode, typ in params:
++                if is_public_handle(typ):
++                    if mode != 'owned':
++                        self.fail('un runtime::Handle exige un transfert -> explicite')
++                    if public_signature(typ) is None:
++                        self.fail('prototype : contrat Handle avec résultat emprunté ou propriétaire non encore pris en charge')
++                    normalized.append((pname, 'execution', typ))
++                    continue
+                 nominal = typ[len('Execution<'):-1] if typ.startswith('Execution<') else typ
+                 if mode == 'owned' and nominal in async_functions:
+                     mode, typ = ('execution' if typ.startswith('Execution<') else 'task'), nominal
+@@ -13377,7 +13422,14 @@
+                     self.fail('un enum alloué doit être explicitement emprunté ou transféré')
+                 if (typ == 'Allocator' or is_pool) and mode not in ('ref', 'mut'):
+                     self.fail(f'un {typ} doit être explicitement emprunté avec & ou &mut')
+-            if result[0] == 'owned' and result[1] in async_functions:
++            if is_public_handle(result[1]):
++                if result[0] != 'owned':
++                    self.fail('un retour runtime::Handle exige un transfert <- explicite')
++                if public_signature(result[1]) is None:
++                    self.fail('prototype : contrat Handle avec résultat emprunté ou propriétaire non encore pris en charge')
++                result = ('execution', result[1])
++                node = replace(node, args=(name, params, result, node.args[3]))
++            elif result[0] == 'owned' and result[1] in async_functions:
+                 result = ('task', result[1])
+                 node = replace(node, args=(name, params, result, node.args[3]))
+             elif result[0] == 'owned' and result[1].startswith('Execution<'):

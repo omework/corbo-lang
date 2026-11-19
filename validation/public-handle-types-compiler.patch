@@ -1,0 +1,33 @@
+--- before/crust.py
++++ crust.py
+@@ -226,6 +226,14 @@
+         if name == 'runtime' and (self.peek(), self.peek(1)) == (':', ':'):
+             self.take(':'); self.take(':')
+             member = self.name()
++            if member == 'Handle':
++                self.take('<')
++                prefix = self.take('&') if self.peek() == '&' else ''
++                if prefix and self.peek() == 'mut':
++                    prefix += self.take('mut') + ' '
++                payload = prefix + self.type_name()
++                self.take('>')
++                return f'runtime::Handle<{payload}>'
+             if member != 'Error':
+                 raise Error(f'type runtime non pris en charge : {member}')
+             return 'runtime::Error'
+@@ -12571,8 +12579,14 @@
+                 if kind == 'execution':
+                     if (op != 'var' or expr[0] not in ('task_spawn', 'move', 'scope', 'call', 'loop_expr', 'if_expr',
+                                                      'match_expr', 'value_match')
+-                            or annotation is not None or node.compact_transfer):
++                            or node.compact_transfer):
+                         self.fail('un handle exige une nouvelle liaison locale')
++                    if annotation is not None:
++                        from async_lowering import public_handle_type
++                        nominal = allocation.typ[len('Execution<'):-1]
++                        actual_type = public_handle_type(self.async_definitions[nominal][0].args[2])
++                        if annotation != actual_type:
++                            self.fail(f'annotation de handle : attendu {annotation}, reçu {actual_type}')
+                     scope.bindings[name] = Binding(name, kind, c, allocation)
+                     continue
+                 if (op == 'var' and expr[0] == 'match_expr' and expr[1].mutable

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Shared constraints for byte paths passed to platform file backends.
+
+/// Checks that a nonempty byte path has exactly one NUL, at the end.
+pub fn valid_file_path(path: &[u8]) -> bool {
+    let length = path.len();
+    if length < 2 { return false; }
+    let last = length - 1;
+    if path[last] != 0 { return false; }
+    let mut index: usize = 0;
+    while index < last {
+        if path[index] == 0 { return false; }
+        index += 1;
+    }
+    true
+}

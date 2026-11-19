@@ -1,0 +1,138 @@
+--- before/results.py
++++ after/results.py
+@@ -415,6 +415,14 @@
+     return items
+ 
+ 
++@dataclass(frozen=True)
++class ResultContract:
++    """Result-only interface available before effect constraints are assembled."""
++    parameters: tuple
++    result_type: tuple
++    result: FunctionResult
++
++
+ class ResultAnalyzer:
+     """Nominal result flow; the concrete verifier still checks moves/loans."""
+     def __init__(self, functions, effects, error, enums=None, async_functions=None):
+@@ -437,6 +445,13 @@
+         if name not in self.functions or name in self.visiting:
+             return None
+         return self.infer(name)
++
++    def sync_result_contract(self, name):
++        summary = self.sync_summary(name)
++        if summary is None:
++            return None
++        node = self.functions[name]
++        return ResultContract(tuple(node.args[1]), node.args[2], summary)
+ 
+     def infer(self, name):
+         if name in self.summaries:
+@@ -534,7 +549,8 @@
+                                 frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
+                                for position, (_, capture, _) in enumerate(definition.args[1])
+                                if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES))
+-                indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {})
++                indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {},
++                                                     sync_result_contract=self.analyzer.sync_result_contract)
+                 targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')
+                 result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if owned_result_parameters(
+                     definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary) else frozenset()
+@@ -1326,7 +1342,8 @@
+                 mode, typ = declaration.args[2]
+                 if mode in ('ref', 'mut'):
+                     from async_lowering import borrowed_result_parameters, int_reference_row
+-                    indexes = borrowed_result_parameters(declaration, self.analyzer.async_functions, self.fail, {})
++                    indexes = borrowed_result_parameters(declaration, self.analyzer.async_functions, self.fail, {},
++                                                         sync_result_contract=self.analyzer.sync_result_contract)
+                     row_payload = any(index in indexes and int_reference_row(capture_type, capture_mode)
+                                       for index, (_, capture_mode, capture_type) in enumerate(declaration.args[1]))
+                     return flow, Value('join_' + mode, typ, reference_targets=execution.reference_targets,
+@@ -2019,7 +2036,8 @@
+                 from async_lowering import borrowed_result_paths, int_reference_row, owned_result_parameters
+                 declaration = self.analyzer.async_functions[name]
+                 result_paths = {}
+-                for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {}):
++                for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {},
++                                                        sync_result_contract=self.analyzer.sync_result_contract):
+                     result_paths.setdefault(index, []).append(path)
+                 owned_indexes = owned_result_parameters(declaration, self.analyzer.async_functions,
+                                                        sync_result=self.analyzer.sync_summary)
+@@ -2067,14 +2085,7 @@
+                         if isinstance(value, Value) and int_reference_row(capture_type, capture_mode):
+                             origins = self.reference_row_result_targets(value, capture_type, capture_mode, result_paths[index])
+                         elif isinstance(value, Value) and '' in self.analyzer.enums.get(capture_type, {}):
+-                            projected = set()
+-                            fields = dict(self.analyzer.enums[capture_type][''])
+-                            for path in result_paths[index]:
+-                                field = '.'.join(path)
+-                                kind = ('indirect_field_parameter' if fields.get(field) == '&mut Int'
+-                                        else 'inline_field_parameter')
+-                                projected.update(self.inline_field_targets(value, field, kind))
+-                            origins = frozenset(projected)
++                            origins = self.async_structure_result_targets(value, capture_type, result_paths[index])
+                         for origin in origins or (BorrowTarget('local'),):
+                             if (result_mode == 'ref' and origin.kind == 'parameter'
+                                     and self.params[origin.parameter][1] == 'mut'):
+@@ -2230,7 +2241,8 @@
+                 from async_lowering import borrowed_result_paths, int_reference_row
+                 declaration = self.analyzer.async_functions[summary.typ]
+                 result_paths = {}
+-                for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {}):
++                for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {},
++                                                        sync_result_contract=self.analyzer.sync_result_contract):
+                     result_paths.setdefault(index, []).append(path)
+                 captures = []
+                 row_result_targets = set()
+@@ -2239,7 +2251,8 @@
+                     index = int(key.partition('.')[2])
+                     _, capture_mode, capture_type = declaration.args[1][index]
+                     projects_row = index in result_paths and int_reference_row(capture_type, capture_mode)
+-                    if projects_row:
++                    projects_structure = index in result_paths and '' in self.analyzer.enums.get(capture_type, {})
++                    if projects_row or projects_structure:
+                         row_result_indexes.add(index)
+                     exclusive = key.startswith('mut.')
+                     origins = set()
+@@ -2269,9 +2282,12 @@
+                                                                     target.carrier_kind, target.detached_prefix))
+                         else:
+                             origins.update(borrowed_targets(actual) or {BorrowTarget('local')})
+-                        if projects_row:
++                        if projects_row or projects_structure:
+                             if target.kind == 'task_capture_parameter' and isinstance(actual, Value):
+                                 projected = actual.reference_targets
++                            elif projects_structure and isinstance(actual, Value):
++                                carrier = Value(capture_mode, capture_type, reference_targets=frozenset(origins))
++                                projected = self.async_structure_result_targets(carrier, capture_type, result_paths[index])
+                             elif target.kind == 'array_parameter' and isinstance(actual, Value):
+                                 row = updated_arrays.get(target.parameter, actual)
+                                 projected = self.reference_row_result_targets(row, capture_type, capture_mode,
+@@ -2317,7 +2333,8 @@
+                             from async_lowering import int_reference_row
+                             declaration = self.analyzer.async_functions[actual.typ]
+                             _, capture_mode, capture_type = declaration.args[1][int(target.field)]
+-                            if int_reference_row(capture_type, capture_mode):
++                            if (int_reference_row(capture_type, capture_mode)
++                                    or '' in self.analyzer.enums.get(capture_type, {})):
+                                 origins = actual.reference_targets
+                         targets.update(origins or {BorrowTarget('local')})
+                     elif target.kind == 'exclusive_join_parameter':
+@@ -2853,6 +2870,16 @@
+             else target for target in targets
+         ) or frozenset({BorrowTarget('local')})
+ 
++    def async_structure_result_targets(self, carrier, typ, paths):
++        projected = set()
++        fields = dict(self.analyzer.enums[typ][''])
++        for path in paths:
++            field = '.'.join(path)
++            kind = ('indirect_field_parameter' if fields.get(field) == '&mut Int'
++                    else 'inline_field_parameter')
++            projected.update(self.inline_field_targets(carrier, field, kind))
++        return frozenset(projected)
++
+     @staticmethod
+     def inline_field_targets(carrier, path, kind='inline_field_parameter', carrier_kind='', detached_prefix=''):
+         if not isinstance(carrier, Value):

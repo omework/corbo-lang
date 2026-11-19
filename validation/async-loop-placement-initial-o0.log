@@ -1,0 +1,83 @@
+..............FF.F....
+======================================================================
+FAIL: test_borrow_and_move_restrictions (test_async_loop_placement.AsyncLoopPlacementTests.test_borrow_and_move_restrictions) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_borrow_and_move_restrictions (test_async_loop_placement.AsyncLoopPlacementTests.test_borrow_and_move_restrictions) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_field_source_does_not_follow_root_promotion (test_async_loop_placement.AsyncLoopPlacementTests.test_field_source_does_not_follow_root_promotion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1592, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1580, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1425, in statement
+    return self.function(line, asynchronous=True)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 554, in function
+    body = self.block()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 368, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1580, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1487, in statement
+    expr = self.expr()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1072, in expr
+    left = self.postfix(self.primary())
+                        ~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1298, in primary
+    body = self.block(transfer_value=True)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 368, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1580, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1487, in statement
+    expr = self.expr()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1072, in expr
+    left = self.postfix(self.primary())
+                        ~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1278, in primary
+    self.take('<')
+    ~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 186, in take
+    raise Error(f"ligne {line}: attendu {expected!r}, reçu {word!r}")
+crust.Error: ligne 3: attendu '<', reçu '.'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_loop_placement.py", line 55, in test_field_source_does_not_follow_root_promotion
+    self.assertEqual(self.run_source(source.replace('OUTER',pool).replace('INNER','')).stdout,'1\n2\n3\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: attendu '<', reçu '.'
+
+----------------------------------------------------------------------
+Ran 21 tests in 15.975s
+
+FAILED (failures=3)

@@ -1,0 +1,127 @@
+--- /dev/null
++++ after/storage_requirements.py
+@@ -0,0 +1,124 @@
++"""Infer storage-kind obligations with the existing path-sensitive asset flow.
++
++This supplements source equality/lifetime contracts; it never promotes storage.
++Only root parameter obligations are materialized by current async variants.
++"""
++from constraints import ConstraintAnalyzer, Context, Value, UNKNOWN, join_values
++from dataclasses import replace
++
++
++class StorageContext(Context):
++    def completed_task(self, task):
++        if not isinstance(task, Value) or task.mode not in ('task', 'execution'):
++            return UNKNOWN
++        mode, typ = self.analyzer.async_functions[task.typ].args[2]
++        if task.mode == 'execution':
++            if mode in ('owned', 'join_owned'):
++                return Value('join_owned' if mode == 'owned' else 'join_nested', typ,
++                             task.task_result_assets, task.task_result_fields)
++            return UNKNOWN
++        if mode in ('owned', 'join_owned', 'join_nested'):
++            return Value(mode, typ, task.task_result_assets, task.task_result_fields)
++        if mode in ('ref', 'mut'):
++            return Value(mode, typ, task.task_reference_assets)
++        return Value(mode, typ)
++
++    def expression(self, expr, state, line, expected_array=None):
++        if expr and expr[0] == 'task_select':
++            current, values = state, []
++            for branch in expr[1]:
++                paths, task = self.expression(branch, current, line)
++                if 'next' not in paths:
++                    return paths, UNKNOWN
++                current = paths['next']
++                values.append(self.completed_task(task))
++            value = join_values(values)
++            return {'next': current}, replace(value, mode='selection:' + value.mode)
++        if expr and expr[0] == 'await':
++            paths, task = self.expression(expr[1], state, line)
++            if isinstance(task, Value) and task.mode.startswith('selection:'):
++                return paths, replace(task, mode=task.mode.removeprefix('selection:'))
++            if not isinstance(task, Value) or task.mode not in ('task', 'execution'):
++                return paths, UNKNOWN
++            if task.mode == 'execution':
++                for current in paths.values():
++                    for token in task.execution_tokens:
++                        current.pending_executions.pop(token, None)
++            return paths, self.completed_task(task)
++        return super().expression(expr, state, line, expected_array)
++
++    def nodes(self, nodes, state, valued=False, expected_array=None):
++        nodes = [replace(node, op='print_expr') if node.op == 'await_statement' else node for node in nodes]
++        return super().nodes(nodes, state, valued, expected_array)
++
++
++def infer_storage_requirements(functions, async_functions, effects, results,
++                               constraints, enums, error):
++    catalog = dict(functions) | dict(async_functions)
++    structures = {typ for typ, arms in enums.items() if '' in arms}
++    analyzer = ConstraintAnalyzer(functions, effects, results, error, enums, async_functions)
++    analyzer.summaries.update(constraints)
++
++    def require(context, value, required, line):
++        if not isinstance(value, Value) or value.typ not in structures:
++            return
++        demands = dict(context.node.storage_requirements)
++        for asset in value.assets:
++            source = asset.source
++            if source.kind == 'allocation_parameter' and context.params[source.index][2] in structures:
++                previous = demands.get(source.index)
++                if previous is not None and previous != required:
++                    context.fail(line, 'exigences de stockage incompatibles : local T et allocation A<T>')
++                demands[source.index] = required
++            elif source.kind == 'local':
++                actual = 'local' if source.name == 'data stack implicite' else 'pool'
++                if actual != required:
++                    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
++            elif source.kind == 'source_parameter':
++                if required != 'pool':
++                    context.fail(line, 'exigence de stockage local incompatible avec une allocation de pool')
++            else:
++                context.fail(line, 'prototype : exigence de stockage sur une projection non raccordée')
++        context.node.storage_requirements = tuple(sorted(demands.items()))
++
++    def annotation(context, value, typ, line):
++        if typ in structures:
++            require(context, value, 'local', line)
++        elif typ.startswith('A<') and typ[2:-1] in structures:
++            require(context, value, 'pool', line)
++
++    def call(context, callee, actuals, line):
++        for index, required in getattr(callee, 'storage_requirements', ()):
++            require(context, actuals[index], required, line)
++
++    analyzer.storage_annotation_hook = annotation
++    analyzer.storage_call_hook = call
++    for node in catalog.values():
++        node.storage_requirements = tuple((i, 'pool') for i, (name, _, typ) in enumerate(node.args[1])
++                                          if typ in structures and name in node.handle_parameters)
++
++    def relevant(value):
++        if hasattr(value, 'op'):
++            annotation = getattr(value, 'annotation', None)
++            if annotation in structures or (annotation and annotation.startswith('A<')
++                                             and annotation[2:-1] in structures):
++                return True
++            return relevant(value.args)
++        if isinstance(value, (tuple, list)):
++            if len(value) == 3 and value[0] == 'call' and isinstance(value[1], str) and value[1] in catalog:
++                if catalog[value[1]].storage_requirements:
++                    return True
++            if len(value) == 4 and value[0] == 'method_call' and isinstance(value[2], str):
++                if any(name.endswith('.' + value[2]) and node.storage_requirements
++                       for name, node in catalog.items()):
++                    return True
++            return any(relevant(item) for item in value)
++        return False
++
++    while True:
++        previous = {name: node.storage_requirements for name, node in catalog.items()}
++        for node in catalog.values():
++            if (node.handle_result and node.args[2][1] in structures) or relevant(node.args[3]):
++                StorageContext(analyzer, node).infer()
++        if all(node.storage_requirements == previous[name] for name, node in catalog.items()):
++            return

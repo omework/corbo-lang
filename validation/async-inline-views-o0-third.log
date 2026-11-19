@@ -1,0 +1,88 @@
+test_copy_from_view_and_mutable_reborrow (test_async_inline_views.AsyncInlineViewTests.test_copy_from_view_and_mutable_reborrow) ... ok
+test_discard_inactive_releases_borrow_without_running (test_async_inline_views.AsyncInlineViewTests.test_discard_inactive_releases_borrow_without_running) ... ok
+test_field_reference_survives_task_completion (test_async_inline_views.AsyncInlineViewTests.test_field_reference_survives_task_completion) ... ok
+test_mutation_through_sync_bridge_and_nested_await (test_async_inline_views.AsyncInlineViewTests.test_mutation_through_sync_bridge_and_nested_await) ... ok
+test_read_view_after_yield_on_worker (test_async_inline_views.AsyncInlineViewTests.test_read_view_after_yield_on_worker) ... ok
+test_view_keeps_owned_child_and_borrowed_target (test_async_inline_views.AsyncInlineViewTests.test_view_keeps_owned_child_and_borrowed_target) ... FAIL
+test_whole_and_interior_use_same_routine (test_async_inline_views.AsyncInlineViewTests.test_whole_and_interior_use_same_routine) ... ok
+test_contract_keeps_suspended_and_final_sources (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_contract_keeps_suspended_and_final_sources) ... ok
+test_direct_await_and_direct_field_assignment (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_direct_await_and_direct_field_assignment) ... ok
+test_enum_descendant_replacement_in_select (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_enum_descendant_replacement_in_select) ... FAIL
+test_join_applies_replacement_and_cleanup (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_join_applies_replacement_and_cleanup) ... ok
+test_receiver_transferred_into_child_uses_child_lifetime (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_receiver_transferred_into_child_uses_child_lifetime) ... ok
+test_replacement_pool_must_survive_receiver (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_replacement_pool_must_survive_receiver) ... ok
+test_select_loser_retains_suspended_replacement (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_select_loser_retains_suspended_replacement) ... ok
+test_await_preserves_target_and_reuses_slot (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_await_preserves_target_and_reuses_slot) ... ok
+test_conditional_replacement_preserves_both_targets (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_conditional_replacement_preserves_both_targets) ... ok
+test_join_keeps_new_borrow (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_join_keeps_new_borrow) ... ok
+test_local_direct_replacement (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_local_direct_replacement) ... ok
+test_mutable_target_remains_reserved (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_mutable_target_remains_reserved) ... ok
+test_select_preserves_intermediate_borrow (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_select_preserves_intermediate_borrow) ... ok
+test_short_target_cannot_escape_through_replacement (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_short_target_cannot_escape_through_replacement) ... ok
+test_successive_replacements_keep_suspended_target (test_async_owned_borrow_writes.AsyncOwnedBorrowWriteTests.test_successive_replacements_keep_suspended_target) ... ok
+
+======================================================================
+FAIL: test_view_keeps_owned_child_and_borrowed_target (test_async_inline_views.AsyncInlineViewTests.test_view_keeps_owned_child_and_borrowed_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16552, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14673, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3144, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10250, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11733, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13149, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14037, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1970, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 3: résultat reçu 'pair' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_inline_views.py", line 66, in test_view_keeps_owned_child_and_borrowed_target
+    self.assertEqual(self.run_source(source).stdout, '22\n5\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: résultat reçu 'pair' sans usage explicite
+
+======================================================================
+FAIL: test_enum_descendant_replacement_in_select (test_async_owned_field_writes.AsyncOwnedFieldWriteTests.test_enum_descendant_replacement_in_select)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_field_writes.py", line 79, in test_enum_descendant_replacement_in_select
+    self.assertEqual(self.run_source(self.program(body,helpers)).stdout,'99\n9\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 17, in run_source
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12416, in run_c_oracle
+    self.assertEqual(build.returncode, 0, build.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp2mao2hcf/task.c:2876:20: error: assigning to 'CrustStructureView' from incompatible type 'Cell *' (aka 'struct Cell *')
+ 2876 |     frame->value_3 = cell_load_ref(frame->value_0, 0);
+      |                    ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.
+
+
+----------------------------------------------------------------------
+Ran 22 tests in 11.111s
+
+FAILED (failures=2)

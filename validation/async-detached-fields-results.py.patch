@@ -1,0 +1,12 @@
+--- results.py before detached fields
++++ results.py
+@@ -2875,6 +2875,9 @@
+         fields = dict(self.analyzer.enums[typ][''])
+         for path in paths:
+             field = '.'.join(path)
++            if fields.get(field) == '&Int':
++                projected.update(self.detached_field_targets(carrier, '.' + field))
++                continue
+             kind = ('indirect_field_parameter' if fields.get(field) == '&mut Int'
+                     else 'inline_field_parameter')
+             projected.update(self.inline_field_targets(carrier, field, kind))

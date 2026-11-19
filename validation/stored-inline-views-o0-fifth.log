@@ -1,0 +1,117 @@
+test_async_capture_of_stored_view_is_explicitly_pending (test_stored_inline_views.StoredInlineViewTests.test_async_capture_of_stored_view_is_explicitly_pending) ... ok
+test_enum_match_loads_stored_descriptor (test_stored_inline_views.StoredInlineViewTests.test_enum_match_loads_stored_descriptor) ... 
+  test_enum_match_loads_stored_descriptor (test_stored_inline_views.StoredInlineViewTests.test_enum_match_loads_stored_descriptor) (subject='&c') ... FAIL
+  test_enum_match_loads_stored_descriptor (test_stored_inline_views.StoredInlineViewTests.test_enum_match_loads_stored_descriptor) (subject='->c') ... FAIL
+test_mutable_stored_view_reborrow_through_function (test_stored_inline_views.StoredInlineViewTests.test_mutable_stored_view_reborrow_through_function) ... ok
+test_pool_copy_keeps_descriptor_after_slot_reuse (test_stored_inline_views.StoredInlineViewTests.test_pool_copy_keeps_descriptor_after_slot_reuse) ... ok
+test_replace_between_whole_and_interior_references (test_stored_inline_views.StoredInlineViewTests.test_replace_between_whole_and_interior_references) ... ok
+test_returned_carrier_and_reference_survive_producer (test_stored_inline_views.StoredInlineViewTests.test_returned_carrier_and_reference_survive_producer) ... ok
+test_shared_copy_detaches_from_carrier_but_keeps_root (test_stored_inline_views.StoredInlineViewTests.test_shared_copy_detaches_from_carrier_but_keeps_root) ... ok
+test_store_through_interior_carrier (test_stored_inline_views.StoredInlineViewTests.test_store_through_interior_carrier) ... ok
+
+======================================================================
+FAIL: test_enum_match_loads_stored_descriptor (test_stored_inline_views.StoredInlineViewTests.test_enum_match_loads_stored_descriptor) (subject='&c')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16518, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14657, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3144, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10242, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11724, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13133, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13225, in statements
+    self.match_enum(node)
+    ~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12690, in match_enum
+    validate_body(body, projections)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12657, in validate_body
+    self.fail('prototype : match de lecture uniquement (copies Int, print et address)')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1970, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 3: prototype : match de lecture uniquement (copies Int, print et address)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_stored_inline_views.py", line 61, in test_enum_match_loads_stored_descriptor
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: prototype : match de lecture uniquement (copies Int, print et address)
+
+======================================================================
+FAIL: test_enum_match_loads_stored_descriptor (test_stored_inline_views.StoredInlineViewTests.test_enum_match_loads_stored_descriptor) (subject='->c')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16518, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1607, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1595, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1425, in statement
+    return self.function(line)
+           ~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 568, in function
+    body = self.block()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 378, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1595, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1454, in statement
+    return self.match_dispatch(line)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 916, in match_dispatch
+    return self.match_utf8_result(line, valued)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 631, in match_utf8_result
+    subject = named_option or named_exchange or self.expr()
+                                                ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1087, in expr
+    left = self.postfix(self.primary())
+                        ~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1346, in primary
+    name = self.name()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 203, in name
+    raise Error(f"identifiant attendu, reçu {word!r}")
+crust.Error: identifiant attendu, reçu '->'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_stored_inline_views.py", line 61, in test_enum_match_loads_stored_descriptor
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : identifiant attendu, reçu '->'
+
+----------------------------------------------------------------------
+Ran 8 tests in 2.728s
+
+FAILED (failures=2)

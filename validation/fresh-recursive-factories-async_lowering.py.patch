@@ -1,0 +1,41 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1924,6 +1924,8 @@
+             capture_field_loans = {}
+             concrete_definition = functions.get(signature[1])
+             result_definition = concrete_definition or functions[signature[1]]
++            owner_result_indexes = owned_result_parameters(result_definition, functions,
++                sync_result=lambda name: sync_contracts[name].result if name in sync_contracts else None)
+             from async_result_storage import borrowed_result_fields
+             from capture_paths import result_capture_selector
+             result_field_selectors = {result_capture_selector(target)
+@@ -1953,6 +1955,9 @@
+                     else:
+                         fail(line, 'prototype : capture du handle synchrone sans paramètre direct')
+                 retained.extend(held)
++                if not targets and '/' in field:
++                    position = capture_index(field.partition('.')[2])
++                    capture_field_loans[(position, field.partition('/')[2])] = []
+                 if not held:
+                     continue
+                 position = capture_index(field.partition('.')[2])
+@@ -1960,7 +1965,7 @@
+                 if '/' in field:
+                     capture_field_loans[(position, field.partition('/')[2])] = held
+                 selected_field = field.partition('/')[2]
+-                if position in result_captures and (not selected_field or any(
++                if position in owner_result_indexes or position in result_captures and (not selected_field or any(
+                         index == position and selected_field == '.' + '.'.join(path)
+                         for index, path in result_capture_paths)
+                         or f'{position}/{selected_field}' in result_field_selectors):
+@@ -1994,6 +1999,10 @@
+                 from async_result_storage import borrowed_result_fields
+                 if capture_loans or not forwarded:
+                     retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line, capture_field_loans)
++                    for (position, field), loans in capture_field_loans.items():
++                        if position in owner_result_indexes:
++                            key = ('stored_field', value, stored_field_path(field))
++                            active_loans[key] = list(dict.fromkeys((*active_loans.get(key, ()), *loans)))
+                 prefixes = tuple(prefix for record in forwarded for prefix in task_prefix_changes.get(record[0], ()))
+                 if capture_loans or not forwarded:
+                     prefixes += ((definition.field_effect_summary, definition.args[1],

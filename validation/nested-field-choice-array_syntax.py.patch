@@ -1,0 +1,27 @@
+--- before/array_syntax.py
++++ after/array_syntax.py
+@@ -398,6 +398,15 @@
+     return tuple(frozenset().union(*arm) for arm in zip(*(value.exchange_payloads for value in values)))
+ 
+ 
++def merge_structure_choices(values):
++    """Preserve alternative borrowed places, including a whole-object arm."""
++    if not any(getattr(value, 'structure_choices', ()) or getattr(value, 'owned_path', ())
++               for value in values):
++        return ()
++    return tuple(dict.fromkeys(choice for value in values
++                               for choice in getattr(value, 'structure_choices', ()) or (value,)))
++
++
+ def merge_reference_values(values):
+     first = values[0]
+     changes = {}
+@@ -419,6 +428,8 @@
+         changes['exchange_payloads'] = merge_exchange_payloads(values)
+     if hasattr(first, 'absent_owned_payload'):
+         changes['absent_owned_payload'] = all(value.absent_owned_payload for value in values)
++    if hasattr(first, 'structure_choices'):
++        changes['structure_choices'] = merge_structure_choices(values)
+     return replace(first, **changes)
+ 
+ 

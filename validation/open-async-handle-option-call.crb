@@ -1,0 +1,9 @@
+fn extract(v:&mut Vector<A<Int>>)-><-Option<A<Int>>{return <-v.pop();}
+async fn take(v:&mut Vector<A<Int>>)->Int{
+    yield;
+    let saved=extract(v);match (->saved){Some(n)=>{let value=*n;drop(->n);return value;},None=>{return 0;}}
+}
+fn main(){let mut p=pool<Int>(1);let mut vp=pool<Vector<A<Int>>>(1);let mut v=vp.new();
+    v.push(->p.new(7));let h=runtime::spawn(->take(&mut v));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+    drop(->v);let next=p.new(8);print(*next);}

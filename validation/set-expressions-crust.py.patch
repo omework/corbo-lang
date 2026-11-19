@@ -1,0 +1,39 @@
+--- before/crust.py
++++ after/crust.py
+@@ -11512,7 +11512,7 @@
+                     for child in child_blocks(statement):
+                         validate_body(child, projections)
+                     continue
+-                if statement.op == 'assign' or (destination is not None and statement.op == 'call'):
++                if statement.op in ('assign', 'set_expr') or (destination is not None and statement.op == 'call'):
+                     # The general branch checker joins writes and keeps the
+                     # subject loan active while evaluating the statement.
+                     general_branches = True
+@@ -13149,6 +13149,27 @@
+                     self.fail('reset() retiré du prototype : utiliser drop(-> valeur) ou la fin du scope')
+                 source = self.memory_source(args[0])
+                 self.reset_source(source, self.lookup(args[0]).c)
++            elif op == 'set_expr':
++                binding = self.lookup(args[0])
++                if binding.array_root:
++                    if binding.static_type != 'int':
++                        self.fail('set exige Int')
++                elif (binding.kind not in ('scalar', 'owned', 'ref', 'mut')
++                      or binding.alloc is not None and binding.alloc.typ != 'Int'):
++                    self.fail('set exige Int')
++                kind, value, _ = self.expression(args[1], scope, 'set')
++                if kind != 'scalar':
++                    self.fail('set exige une expression Int32')
++                # The RHS may destroy or transfer the target through a call.
++                # A saved C address does not establish that it is still live.
++                self.lookup(args[0])
++                if binding.array_root:
++                    self.array_access(binding, write=True, after=True)
++                    destination = f'*{binding.c}'
++                else:
++                    self.access(binding, write=True, after=True)
++                    destination = binding.c if binding.kind == 'scalar' else f'{binding.c}->value'
++                self.lines.append(f'{destination} = {value};')
+             elif op in ('print', 'set', 'address'):
+                 binding = self.lookup(args[0])
+                 if binding.kind in FALLIBLE_VALUE_MODES:

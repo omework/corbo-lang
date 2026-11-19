@@ -1,0 +1,257 @@
+test_array_targets_survive_native_wait_and_then_mutate (test_native_blocks.NativeBlockTests.test_array_targets_survive_native_wait_and_then_mutate) ... ok
+test_mutable_capture_and_return_keep_target_reserved (test_native_blocks.NativeBlockTests.test_mutable_capture_and_return_keep_target_reserved) ... ERROR
+test_nested_thread_join_stays_synchronous (test_native_blocks.NativeBlockTests.test_nested_thread_join_stays_synchronous) ... ok
+test_owned_capture_cleanup_failure_and_reuse (test_native_blocks.NativeBlockTests.test_owned_capture_cleanup_failure_and_reuse) ... ERROR
+test_owned_result_is_transferred_before_frame_release (test_native_blocks.NativeBlockTests.test_owned_result_is_transferred_before_frame_release) ... ok
+test_recorded_program_tail_early_and_primitive_results (test_native_blocks.NativeBlockTests.test_recorded_program_tail_early_and_primitive_results) ... 
+  test_recorded_program_tail_early_and_primitive_results (test_native_blocks.NativeBlockTests.test_recorded_program_tail_early_and_primitive_results) (body='return false;') ... ERROR
+  test_recorded_program_tail_early_and_primitive_results (test_native_blocks.NativeBlockTests.test_recorded_program_tail_early_and_primitive_results) (body='let b:u8=8;return b;') ... ERROR
+test_scalar_capture_consumes_binding_in_both_callers (test_native_blocks.NativeBlockTests.test_scalar_capture_consumes_binding_in_both_callers) ... ok
+test_type_capture_mutability_and_lifetime_rejections (test_native_blocks.NativeBlockTests.test_type_capture_mutability_and_lifetime_rejections) ... ok
+test_wait_obligation_on_both_return_paths (test_native_blocks.NativeBlockTests.test_wait_obligation_on_both_return_paths) ... 
+  test_wait_obligation_on_both_return_paths (test_native_blocks.NativeBlockTests.test_wait_obligation_on_both_return_paths) (asynchronous=False) ... FAIL
+test_async_context_is_restored_after_native_block (test_native_thread_parser.NativeThreadParserTests.test_async_context_is_restored_after_native_block) ... ok
+test_capture_header_preserves_order_and_return_boundary (test_native_thread_parser.NativeThreadParserTests.test_capture_header_preserves_order_and_return_boundary) ... ok
+test_empty_tail_early_and_owned_return_forms (test_native_thread_parser.NativeThreadParserTests.test_empty_tail_early_and_owned_return_forms) ... ok
+test_malformed_capture_headers_and_nonblocks_are_refused (test_native_thread_parser.NativeThreadParserTests.test_malformed_capture_headers_and_nonblocks_are_refused) ... ok
+test_native_blocks_enforce_wait_before_drop_or_return (test_native_thread_parser.NativeThreadParserTests.test_native_blocks_enforce_wait_before_drop_or_return) ... 
+  test_native_blocks_enforce_wait_before_drop_or_return (test_native_thread_parser.NativeThreadParserTests.test_native_blocks_enforce_wait_before_drop_or_return) (source='fn main() { let h = runtime::thread({ return 7; }); drop(-> h); }', check='verify_program') ... FAIL
+  test_native_blocks_enforce_wait_before_drop_or_return (test_native_thread_parser.NativeThreadParserTests.test_native_blocks_enforce_wait_before_drop_or_return) (source='fn main() { let h = runtime::thread({ return 7; }); drop(-> h); }', check='compile_source') ... FAIL
+test_nested_native_blocks_keep_distinct_captures (test_native_thread_parser.NativeThreadParserTests.test_nested_native_blocks_keep_distinct_captures) ... ok
+test_suspensions_are_refused_inside_native_block_in_async_function (test_native_thread_parser.NativeThreadParserTests.test_suspensions_are_refused_inside_native_block_in_async_function) ... ok
+
+======================================================================
+ERROR: test_mutable_capture_and_return_keep_target_reserved (test_native_blocks.NativeBlockTests.test_mutable_capture_and_return_keep_target_reserved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 72, in test_mutable_capture_and_return_keep_target_reserved
+    self.assertEqual(self.run_native(self.wrap(valid, asynchronous)).stdout, '42\n50\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14813, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14806, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13310, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13131, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 778, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4851, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4363, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4297, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4200, in expression
+    fail(line, f'prototype async : expression {op} non prise en charge')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 803, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: prototype async : expression source non prise en charge
+
+======================================================================
+ERROR: test_owned_capture_cleanup_failure_and_reuse (test_native_blocks.NativeBlockTests.test_owned_capture_cleanup_failure_and_reuse)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 98, in test_owned_capture_cleanup_failure_and_reuse
+    self.assertEqual(self.run_native(source).stdout, '7\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14813, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14806, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13310, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13131, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 778, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4851, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4363, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4297, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4200, in expression
+    fail(line, f'prototype async : expression {op} non prise en charge')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 803, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: prototype async : expression source non prise en charge
+
+======================================================================
+ERROR: test_recorded_program_tail_early_and_primitive_results (test_native_blocks.NativeBlockTests.test_recorded_program_tail_early_and_primitive_results) (body='return false;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 51, in test_recorded_program_tail_early_and_primitive_results
+    self.assertEqual(self.run_native('fn main(){let h=runtime::thread({' + body +
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        '});match h.join(){Ok(' + pattern + ')=>{' + out + '},Err(_)=>{print(99);}}}').stdout, expected)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14813, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14806, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13310, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13280, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2931, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9511, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10619, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11915, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12003, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4524, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11915, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12912, in statements
+    self.fail('cette opération exige un Int ou une allocation')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1912, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: cette opération exige un Int ou une allocation
+
+======================================================================
+ERROR: test_recorded_program_tail_early_and_primitive_results (test_native_blocks.NativeBlockTests.test_recorded_program_tail_early_and_primitive_results) (body='let b:u8=8;return b;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 51, in test_recorded_program_tail_early_and_primitive_results
+    self.assertEqual(self.run_native('fn main(){let h=runtime::thread({' + body +
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        '});match h.join(){Ok(' + pattern + ')=>{' + out + '},Err(_)=>{print(99);}}}').stdout, expected)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14813, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14806, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13310, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13280, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2931, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9511, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10619, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11915, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12003, in statements
+    self.conditional(node)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4524, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11915, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12918, in statements
+    self.fail('opération indisponible sur cette valeur UTF-8')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1912, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: opération indisponible sur cette valeur UTF-8
+
+======================================================================
+FAIL: test_wait_obligation_on_both_return_paths (test_native_blocks.NativeBlockTests.test_wait_obligation_on_both_return_paths) (asynchronous=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/crust.py", line 4524, in conditional
+    result = self.block('branche if', body)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11949, in block
+    raise signal
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11915, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12122, in statements
+    raise FunctionReturn(value)
+crust.FunctionReturn: ('void', '', None)
+
+During handling of the above exception, another exception occurred:
+
+crust.Error: ligne 2: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 143, in test_wait_obligation_on_both_return_paths
+    with self.subTest(asynchronous=asynchronous), self.assertRaisesRegex(Error,'attente requise'):
+                                                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "attente requise" does not match "ligne 2: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné"
+
+======================================================================
+FAIL: test_native_blocks_enforce_wait_before_drop_or_return (test_native_thread_parser.NativeThreadParserTests.test_native_blocks_enforce_wait_before_drop_or_return) (source='fn main() { let h = runtime::thread({ return 7; }); drop(-> h); }', check='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 1: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_parser.py", line 85, in test_native_blocks_enforce_wait_before_drop_or_return
+    with self.assertRaisesRegex(Error, 'attente requise'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "attente requise" does not match "ligne 1: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné"
+
+======================================================================
+FAIL: test_native_blocks_enforce_wait_before_drop_or_return (test_native_thread_parser.NativeThreadParserTests.test_native_blocks_enforce_wait_before_drop_or_return) (source='fn main() { let h = runtime::thread({ return 7; }); drop(-> h); }', check='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 1: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_parser.py", line 85, in test_native_blocks_enforce_wait_before_drop_or_return
+    with self.assertRaisesRegex(Error, 'attente requise'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "attente requise" does not match "ligne 1: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné"
+
+----------------------------------------------------------------------
+Ran 16 tests in 7.147s
+
+FAILED (failures=3, errors=4)

@@ -1,0 +1,86 @@
+--- before/results.py
++++ after/results.py
+@@ -163,6 +163,7 @@
+     # Proven absence, not an unknown source: an owned Result contains no
+     # allocation on any continuing path (for example LaunchFailed only).
+     absent_owned_payload: bool = False
++    task_forward_only: bool = False
+ 
+     @property
+     def same_parameter(self):
+@@ -408,6 +409,7 @@
+     task_parameters: frozenset[int] = frozenset()
+     deferred_field_updates: frozenset = frozenset()
+     absent_owned_payload: bool = False
++    task_forward_only: bool = False
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -586,6 +588,7 @@
+         self.returned_task_result_fields = {}
+         self.task_wait_parameters = set()
+         self.task_forward_parameters = set()
++        self.task_forward_only = True
+         self.returned_task_field_updates = {}
+         self.returned_references = set()
+         self.returned_fields = {}
+@@ -759,7 +762,7 @@
+                 if getattr(definition, 'result_storage', False):
+                     sources |= frozenset({SourceOrigin('task_parameter', index)})
+                 environment[name] = Value(mode, typ, fields=fields, reference_targets=targets, task_sources=sources,
+-                                          task_result_sources=result_sources, task_parameters=frozenset({index}),
++                                          task_result_sources=result_sources, task_parameters=frozenset({index}), task_forward_only=True,
+                                           task_result_fields=tuple((path, frozenset({SourceOrigin(
+                                               'task_result_field_parameter', index, path)}))
+                                               for path, _ in aggregate_owned_paths(self.analyzer.enums, definition.args[2][1])))
+@@ -890,6 +893,7 @@
+                               stored_reference_parameters=frozenset(self.stored_reference_parameters),
+                               task_wait_parameters=frozenset(self.task_wait_parameters),
+                               task_forward_parameters=frozenset(self.task_forward_parameters),
++                              task_forward_only=bool(self.task_forward_parameters) and self.task_forward_only,
+                               absent_owned_payload=bool(self.returned_payload_absence)
+                                   and all(self.returned_payload_absence),
+                               task_field_updates=tuple((i, tuple(sorted(fields.items()))) for i, fields
+@@ -1071,6 +1075,7 @@
+             for path, sources in value.task_result_fields:
+                 self.returned_task_result_fields[path] = self.returned_task_result_fields.get(path, frozenset()) | sources
+             self.task_forward_parameters.update(value.task_parameters)
++            self.task_forward_only &= value.task_forward_only
+             for carrier, fields in value.deferred_field_updates:
+                 for target in borrowed_targets(carrier):
+                     if target.kind != 'parameter' or self.params[target.parameter][1] != 'mut':
+@@ -1406,6 +1411,7 @@
+                     task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+                     task_result_fields=merge_task_result_fields(values),
+                     pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
++                    task_forward_only=all(value.task_forward_only for value in values),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
+                     absent_owned_payload=all(value.absent_owned_payload for value in values))
+@@ -2259,6 +2265,7 @@
+                           task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
+                     task_result_fields=merge_task_result_fields(returning),
+                           pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls),
++                    task_forward_only=all(value.task_forward_only for value in returning),
+                     task_parameters=frozenset(index for value in returning for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in returning for update in value.deferred_field_updates),
+                     absent_owned_payload=bool(returning) and all(value.absent_owned_payload for value in returning)))
+@@ -2656,6 +2663,10 @@
+                             sources.add(SourceOrigin('local', -1, 'capture'))
+                     return frozenset(sources)
+                 return flow, Value(summary.mode, summary.typ, fields=captures, reference_targets=reference_targets,
++                                   pending_structure_calls=frozenset(call for index in summary.task_forward_parameters
++                                       for call in actuals[index].pending_structure_calls) if summary.task_forward_only else frozenset(),
++                                   task_forward_only=summary.task_forward_only and all(
++                                       actuals[index].task_forward_only for index in summary.task_forward_parameters),
+                                    task_sources=resolve_sources(summary.task_sources),
+                                    deferred_field_updates=self.instantiate_deferred_fields(summary.task_field_updates, actuals)
+                                        | frozenset(update for index in summary.task_forward_parameters
+@@ -2967,6 +2978,7 @@
+             task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+                     task_result_fields=merge_task_result_fields(values),
+             pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
++                    task_forward_only=all(value.task_forward_only for value in values),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
+                     absent_owned_payload=all(value.absent_owned_payload for value in values))

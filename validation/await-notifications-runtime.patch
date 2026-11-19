@@ -1,0 +1,255 @@
+--- before/async_runtime.py
++++ async_runtime.py
+@@ -79,6 +79,7 @@
+ 
+ typedef struct CrustTask CrustTask;
+ typedef struct CrustQueueEntry CrustQueueEntry;
++typedef struct { CrustQueueEntry *entry; uint64_t generation; } CrustWakeTicket;
+ 
+ typedef enum {
+     TASK_INACTIVE, TASK_QUEUED, TASK_RUNNING, TASK_SUSPENDED, TASK_COMPLETE, TASK_CONSUMED
+@@ -100,6 +101,7 @@
+     _Atomic int scheduling_lock;
+     int ready; /* Protected by scheduling_lock, including during a poll. */
+     CrustQueueEntry *queue_entry; /* Stable scheduler storage, when generated. */
++    CrustWakeTicket wake_target; /* Root poll owning a chain of direct awaits. */
+     const CrustTaskOps *ops;
+ };
+ 
+@@ -110,6 +112,7 @@
+     atomic_init(&task->scheduling_lock, 0);
+     task->ready = 1;
+     task->queue_entry = NULL;
++    task->wake_target = (CrustWakeTicket){0};
+ }
+ 
+ /* Only short bookkeeping sections hold this gate, never user code. Callers
+@@ -165,6 +168,20 @@
+     int consumed = atomic_compare_exchange_strong(&task->state, &expected, TASK_CONSUMED);
+     task_scheduling_unlock(task);
+     return consumed;
++}
++
++static CrustTaskState task_poll_child(CrustTask *parent, CrustTask *child) {
++    child->wake_target = parent->wake_target;
++    /* A resumed parent rechecks its awaited chain. No child is polled in
++       parallel: direct await owns it and executes it on the parent's thread. */
++    task_wake(child);
++    return task_poll(child);
++}
++static CrustTaskStep task_child_suspension(CrustTask *child) {
++    task_scheduling_lock(child);
++    int ready = child->ready;
++    task_scheduling_unlock(child);
++    return ready ? TASK_STEP_YIELD : TASK_STEP_PENDING;
+ }
+ 
+ static int task_take(CrustTask *task, void *result) {
+@@ -230,6 +247,9 @@
+ static int task_default_submit(CrustTask *task);
+ static void task_default_wait(CrustTask *task);
+ static void task_default_close(void);
++static int task_external_register(CrustTask *task);
++static void task_external_forget(CrustTask *task);
++static void task_external_complete(CrustTask *task);
+ 
+ typedef struct {
+     pthread_t thread;
+@@ -274,7 +294,7 @@
+     }
+     if (state != TASK_COMPLETE) abort();
+     /* Last access to the task slot, for both kinds of launch. */
+-    atomic_store_explicit(&task->worker_done, 1, memory_order_release);
++    task_external_complete(task);
+     return NULL;
+ }
+ 
+@@ -285,7 +305,7 @@
+     task_claim_queued(task);
+     if (task_resume_claimed(task) != TASK_COMPLETE) abort();
+     /* No access to the task slot is allowed after this publication. */
+-    atomic_store_explicit(&task->worker_done, 1, memory_order_release);
++    task_external_complete(task);
+     return NULL;
+ }
+ 
+@@ -299,9 +319,11 @@
+     atomic_init(&execution->joined, 0);
+     execution->wait = wait;
+     execution->detach = detach;
+-    int error = launch ? launch(&execution->thread, 0, run, task) : ENOTSUP;
++    int error = task_external_register(task);
++    if (!error) error = launch ? launch(&execution->thread, 0, run, task) : ENOTSUP;
+     execution->error = error;
+     if (error) {
++        task_external_forget(task);
+         atomic_store(&task->state, TASK_INACTIVE);
+         if (!task_drop_inactive(task)) abort();
+         execution->task = NULL;
+@@ -471,6 +493,7 @@
+     CrustReadyQueue *queue;
+     CrustTask *task;
+     uint64_t generation;
++    CrustWakeTicket waiter;
+     int scheduled; /* Queued, claimed by a worker, or currently being polled. */
+     CrustQueueEntry *next; /* Queue mutex, not entry mutex. */
+ };
+@@ -481,7 +504,6 @@
+     size_t outstanding;
+     int closed;
+ };
+-typedef struct { CrustQueueEntry *entry; uint64_t generation; } CrustWakeTicket;
+ 
+ static void task_queue_lock(pthread_mutex_t *mutex) {
+     if (pthread_mutex_lock(mutex)) abort();
+@@ -507,6 +529,7 @@
+     entry->queue = NULL;
+     entry->task = NULL;
+     entry->generation = 0;
++    entry->waiter = (CrustWakeTicket){0};
+     entry->scheduled = 0;
+     entry->next = NULL;
+ }
+@@ -541,8 +564,11 @@
+             ++entry->generation;
+             entry->queue = queue;
+             entry->task = task;
++            task->queue_entry = entry;
+             ++queue->outstanding;
+             *ticket = (CrustWakeTicket){entry, entry->generation};
++            task->wake_target = *ticket;
++            entry->waiter = (CrustWakeTicket){0};
+             task_queue_push_locked(queue, entry);
+         }
+     }
+@@ -561,6 +587,71 @@
+     }
+     task_queue_unlock(&entry->mutex);
+     return valid;
++}
++
++static int task_external_register(CrustTask *task) {
++    CrustQueueEntry *entry = task->queue_entry;
++    if (!entry) return 0;
++    task_queue_lock(&entry->mutex);
++    int error = entry->task || entry->scheduled ? EBUSY :
++                entry->generation == UINT64_MAX ? EOVERFLOW : 0;
++    if (!error) {
++        ++entry->generation;
++        entry->queue = NULL;
++        entry->task = task;
++        entry->scheduled = 1; /* Dedicated worker, never enqueued. */
++        entry->waiter = (CrustWakeTicket){0};
++        task->wake_target = (CrustWakeTicket){entry, entry->generation};
++    }
++    task_queue_unlock(&entry->mutex);
++    return error;
++}
++static void task_external_forget(CrustTask *task) {
++    CrustQueueEntry *entry = task->queue_entry;
++    if (!entry) return;
++    task_queue_lock(&entry->mutex);
++    if (entry->task == task) {
++        entry->task = NULL;
++        entry->scheduled = 0;
++        entry->waiter = (CrustWakeTicket){0};
++    }
++    task_queue_unlock(&entry->mutex);
++}
++static void task_external_complete(CrustTask *task) {
++    CrustQueueEntry *entry = task->queue_entry;
++    CrustWakeTicket waiter = {0};
++    if (entry) {
++        task_queue_lock(&entry->mutex);
++        if (entry->task != task || entry->queue) abort();
++        waiter = entry->waiter;
++        entry->waiter = (CrustWakeTicket){0};
++        entry->task = NULL;
++        entry->scheduled = 0;
++        task_queue_unlock(&entry->mutex);
++    }
++    /* Notify before the final frame access: a detached thread must not retain
++       a ticket into the context after its completion becomes observable. */
++    task_queue_wake(waiter);
++    /* Completion notification finished. */
++    atomic_store_explicit(&task->worker_done, 1, memory_order_release);
++}
++
++static CrustTaskStep task_subscribe(CrustTask *child, CrustTask *parent) {
++    CrustQueueEntry *entry = child->queue_entry;
++    if (!entry || !parent->wake_target.entry) return TASK_STEP_YIELD;
++    task_queue_lock(&entry->mutex);
++    CrustTaskStep step = TASK_STEP_YIELD;
++    if (entry->task == child) {
++        CrustWakeTicket existing = entry->waiter;
++        CrustWakeTicket target = parent->wake_target;
++        if (existing.entry && (existing.entry != target.entry || existing.generation != target.generation)) abort();
++        entry->waiter = target;
++        step = TASK_STEP_PENDING;
++    }
++    /* If completion detached the entry but has not published worker_done yet,
++       Yield bridges that finite publication interval; no notification is lost. */
++    task_queue_unlock(&entry->mutex);
++    return step;
+ }
+ /* A popped entry remains scheduled until the poll has been finalized.
+    Wakes in the dequeue-to-poll gap therefore cannot enqueue it twice. */
+@@ -590,15 +681,15 @@
+         state = task_resume_claimed(task);
+     } else state = task_poll(task);
+     task_queue_lock(&entry->mutex);
++    CrustWakeTicket waiter = {0};
+     if (state == TASK_COMPLETE) {
++        waiter = entry->waiter;
++        entry->waiter = (CrustWakeTicket){0};
+         entry->task = NULL;
+         entry->scheduled = 0;
+         task_queue_lock(&queue->mutex);
+         if (!queue->outstanding) abort();
+         --queue->outstanding;
+-        /* Tickets can no longer reach the frame. This is the last access. */
+-        atomic_store_explicit(&task->worker_done, 1, memory_order_release);
+-        if (pthread_cond_broadcast(&queue->changed)) abort();
+         task_queue_unlock(&queue->mutex);
+     } else if (state == TASK_SUSPENDED) {
+         task_scheduling_lock(task);
+@@ -608,6 +699,15 @@
+         if (ready) task_queue_push(queue, entry);
+     } else abort();
+     task_queue_unlock(&entry->mutex);
++    if (state == TASK_COMPLETE) {
++        task_queue_wake(waiter);
++        /* Completion notification finished. */
++        task_queue_lock(&queue->mutex);
++        /* Last frame access, after the outgoing notification has returned. */
++        atomic_store_explicit(&task->worker_done, 1, memory_order_release);
++        if (pthread_cond_broadcast(&queue->changed)) abort();
++        task_queue_unlock(&queue->mutex);
++    }
+     return 1;
+ }
+ static void *task_queue_worker(void *pointer) {
+@@ -707,9 +807,11 @@
+     if (!atomic_compare_exchange_strong(&task->state, &inactive, TASK_QUEUED)) abort();
+     execution->task = task;
+     pthread_t thread;
+-    int error = launch ? launch(&thread, 1, run, task) : ENOTSUP;
++    int error = task_external_register(task);
++    if (!error) error = launch ? launch(&thread, 1, run, task) : ENOTSUP;
+     execution->error = error;
+     if (error) {
++        task_external_forget(task);
+         atomic_store(&task->state, TASK_INACTIVE);
+         if (!task_drop_inactive(task)) abort();
+         execution->task = NULL;
+@@ -759,6 +861,10 @@
+         atomic_load_explicit(&execution->task->worker_done, memory_order_acquire));
+ }
+ 
++static CrustTaskStep task_async_subscribe(const CrustAsyncExecution *execution, CrustTask *parent) {
++    return execution->error || !execution->task ? TASK_STEP_YIELD : task_subscribe(execution->task, parent);
++}
++
+ static int task_async_finish(CrustAsyncExecution *execution, void *out) {
+     int status = execution->error ? CRUST_RUNTIME_LAUNCH_FAILED : 0;
+     if (!status && !task_take(execution->task, out)) abort();

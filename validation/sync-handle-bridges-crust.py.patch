@@ -1,0 +1,42 @@
+--- before/crust.py
++++ after/crust.py
+@@ -13637,8 +13637,8 @@
+             elif mode in ASYNC_CAPTURE_VIEW_MODES:
+                 element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(mode, mode), 'uint8_t')
+                 storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+-                                  array_storage_scope=root.id)
+-                root.bindings[storage.name] = storage
++                                  array_storage_scope=external.id)
++                external.bindings[storage.name] = storage
+                 descriptor = (element, ((storage, None),))
+                 if mode in ('text', 'byte_ref'):
+                     root.bindings[parameter] = Binding(parameter, mode, parameter, utf8_capture_descriptor=descriptor)
+@@ -13682,8 +13682,8 @@
+             elif mode in ('ref', 'mut'):
+                 element = check.borrowed_element_type(typ)
+                 storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+-                                  mutable=True, array_storage_scope=root.id)
+-                root.bindings[storage.name] = storage
++                                  mutable=True, array_storage_scope=external.id)
++                external.bindings[storage.name] = storage
+                 root.bindings[parameter] = check.array_borrow_binding(
+                     parameter, 'array_' + mode, parameter, (element, ((storage, None),)))
+                 ctype = element + ' *'
+@@ -13697,7 +13697,7 @@
+         result = None
+         try:
+             result = check.invoke(call, root)
+-            if result is not None and result[0] == 'owned':
++            if result is not None and result[0] in ('owned', 'execution'):
+                 root.exports.append(result[2])
+             check.finish_scope(root)
+         except PathsReturned:
+@@ -13705,7 +13705,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[name]
+         mode = contract.result_type[0]
+-        ctype = ('Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+         lines = check.flag_declarations + check.lines

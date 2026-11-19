@@ -1,0 +1,16 @@
+fn create(memory: &mut Pool<i32>) -> A<i32> {
+    let outer = memory.new(1);
+    {
+        let inner = memory.new(*outer + 1);
+        {
+            let result = memory.new(*inner + 1);
+            return result;
+        }
+    }
+}
+
+fn main() {
+    let mut memory = pool<i32>(3);
+    let received = create(&mut memory);
+    print(*received);
+} // Destruction de result, puis fermeture du pool.

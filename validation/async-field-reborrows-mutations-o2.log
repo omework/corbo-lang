@@ -1,0 +1,310 @@
+BASELINE PASS
+{"native_success": 19, "rejected_checks": 54}
+test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) ... ok
+test_child_await_and_inactive_drop_keep_field_path (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_await_and_inactive_drop_keep_field_path) ... ok
+test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) ... ok
+test_conditional_results_union_fields_and_nested_paths (test_async_field_reborrows.AsyncFieldReborrowTests.test_conditional_results_union_fields_and_nested_paths) ... ok
+test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) ... ok
+test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) ... ok
+test_loop_and_branch_reborrow_lifetimes (test_async_field_reborrows.AsyncFieldReborrowTests.test_loop_and_branch_reborrow_lifetimes) ... ok
+test_modes_levels_and_reference_binding (test_async_field_reborrows.AsyncFieldReborrowTests.test_modes_levels_and_reference_binding) ... ok
+test_native_block_and_prepared_arguments (test_async_field_reborrows.AsyncFieldReborrowTests.test_native_block_and_prepared_arguments) ... ok
+test_recorded_field_reborrow (test_async_field_reborrows.AsyncFieldReborrowTests.test_recorded_field_reborrow) ... ok
+test_same_field_and_whole_argument_blocked_until_last_use (test_async_field_reborrows.AsyncFieldReborrowTests.test_same_field_and_whole_argument_blocked_until_last_use) ... ok
+test_shared_parent_supports_parallel_shared_reborrows (test_async_field_reborrows.AsyncFieldReborrowTests.test_shared_parent_supports_parallel_shared_reborrows) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 12.149s
+
+OK
+
+whole_carrier_reserved DETECTED
+{"native_success": 0, "rejected_checks": 0}
+test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) ... ERROR
+
+======================================================================
+ERROR: test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 38, in test_disjoint_fields_and_target_identity
+    self.assertEqual(self.run_native(self.program(body)).stdout,'44\n11\n13\n20\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/crust.py", line 15042, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/crust.py", line 15035, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/crust.py", line 13536, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/crust.py", line 13379, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 833, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 5471, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 1985, in bind_special
+    pointer, loans, (mode, typ) = reference_value(initializer, statement.line, following=body[position + 1:])
+                                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 1908, in reference_value
+    pointer, loans = borrow_struct_field(expr, mode, line)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 4231, in borrow_struct_field
+    check_access(name, line, write=reservation == 'mut', path=path)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 4112, in check_access
+    fail(line, f"accès à '{name}' incompatible avec un emprunt actif")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-vsr46bpo/async_lowering.py", line 859, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: accès à 'v' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 1 test in 0.060s
+
+FAILED (errors=1)
+
+ancestry_omitted DETECTED
+{"native_success": 2, "rejected_checks": 2}
+test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) ... 
+  test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='verify_program') ... FAIL
+  test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='compile_source') ... FAIL
+  test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='verify_program') ... FAIL
+  test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 1.189s
+
+FAILED (failures=4)
+
+borrow_conflict_check_omitted DETECTED
+{"native_success": 1, "rejected_checks": 4}
+test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) ... 
+  test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) (stage='verify_program') ... FAIL
+  test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.538s
+
+FAILED (failures=2)
+
+helper_projection_loan_omitted DETECTED
+{"native_success": 3, "rejected_checks": 0}
+test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) ... 
+  test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='verify_program') ... FAIL
+  test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='compile_source') ... FAIL
+  test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='verify_program') ... FAIL
+  test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 1.733s
+
+FAILED (failures=4)
+
+child_result_loan_omitted DETECTED
+{"native_success": 1, "rejected_checks": 0}
+test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) ... 
+  test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) (stage='verify_program') ... FAIL
+  test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) (stage='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 27, in refused
+    with self.assertRaisesRegex(Error,pattern):check(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.536s
+
+FAILED (failures=2)
+
+direct_field_pointer_collapsed DETECTED
+{"native_success": 1, "rejected_checks": 0}
+test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) ... FAIL
+
+======================================================================
+FAIL: test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 38, in test_disjoint_fields_and_target_identity
+    self.assertEqual(self.run_native(self.program(body)).stdout,'44\n11\n13\n20\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '46\n13\n3\n20\n' != '44\n11\n13\n20\n'
+- 46
++ 44
++ 11
+  13
+- 3
+  20
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.715s
+
+FAILED (failures=1)
+
+immutable_reference_binding_denied DETECTED
+{"native_success": 0, "rejected_checks": 10}
+test_modes_levels_and_reference_binding (test_async_field_reborrows.AsyncFieldReborrowTests.test_modes_levels_and_reference_binding) ... ERROR
+
+======================================================================
+ERROR: test_modes_levels_and_reference_binding (test_async_field_reborrows.AsyncFieldReborrowTests.test_modes_levels_and_reference_binding)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 62, in test_modes_levels_and_reference_binding
+    self.assertEqual(self.run_native(self.program(body)).stdout,'11\n2\n3\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/crust.py", line 15042, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/crust.py", line 15035, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/crust.py", line 13536, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/crust.py", line 13379, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/async_lowering.py", line 833, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/async_lowering.py", line 5473, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/async_lowering.py", line 1990, in bind_special
+    fail(statement.line, 'mutation: immutable binding denied')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-field-reborrow-mut-67oflhbx/async_lowering.py", line 859, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: mutation: immutable binding denied
+
+----------------------------------------------------------------------
+Ran 1 test in 0.072s
+
+FAILED (errors=1)
+

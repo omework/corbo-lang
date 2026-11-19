@@ -1,0 +1,64 @@
+test_explicit_transfer_type_and_borrow_checks (test_typed_handle_vectors.TypedHandleVectorTests.test_explicit_transfer_type_and_borrow_checks) ... ok
+test_function_inputs_and_returned_handle (test_typed_handle_vectors.TypedHandleVectorTests.test_function_inputs_and_returned_handle) ... FAIL
+test_local_pop_remove_and_remaining_cleanup (test_typed_handle_vectors.TypedHandleVectorTests.test_local_pop_remove_and_remaining_cleanup) ... ok
+test_short_pool_and_noncopy_contents_are_not_promoted (test_typed_handle_vectors.TypedHandleVectorTests.test_short_pool_and_noncopy_contents_are_not_promoted) ... ok
+test_string_and_numeric_vector_payloads (test_typed_handle_vectors.TypedHandleVectorTests.test_string_and_numeric_vector_payloads) ... ok
+test_two_pools_remove_order_and_scope_transfer (test_typed_handle_vectors.TypedHandleVectorTests.test_two_pools_remove_order_and_scope_transfer) ... ok
+
+======================================================================
+FAIL: test_function_inputs_and_returned_handle (test_typed_handle_vectors.TypedHandleVectorTests.test_function_inputs_and_returned_handle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17135, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15163, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3228, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10509, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 12158, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13600, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13712, in statements
+    value = self.expression(operand, scope, 'return')
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9772, in expression
+    return self.invoke(expr, scope)
+           ~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10509, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11815, in invoke_arguments
+    kind, c, allocation = evaluated if evaluated is not None else self.expression(arg, caller, pname)
+                                                                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9819, in expression
+    self.fail('un réemprunt exige une référence Int ou une référence à un agrégat')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 2017, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: un réemprunt exige une référence Int ou une référence à un agrégat
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_handle_vectors.py", line 43, in test_function_inputs_and_returned_handle
+    self.assertEqual(self.run_source(source).stdout,'1\n7\n8\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: un réemprunt exige une référence Int ou une référence à un agrégat
+
+----------------------------------------------------------------------
+Ran 6 tests in 2.967s
+
+FAILED (failures=1)

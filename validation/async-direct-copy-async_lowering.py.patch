@@ -1,0 +1,99 @@
+--- /tmp/crust-before-async-direct-copy/async_lowering.py
++++ async_lowering.py
+@@ -1202,6 +1202,8 @@
+     def sync_owned_value(expr, line, *, following=None):
+         if expr[0] in ('array_transfer', 'new_transfer'):
+             return sync_owned_value(expr[1], line, following=following)
++        if structure_copy_source(expr) is not None:
++            return copy_structure_value(expr, line)
+         if sync_signature(expr) in owned_output_types:
+             return sync_call(expr, line, following=following, owned=True)[0]
+         if expr[0] in ('new', 'new_enum'):
+@@ -1302,6 +1304,58 @@
+         # Same packed payload layout as cell_load/store (which use memcpy).
+         return ' + '.join('sizeof(int)' if kind == 'Int' else 'sizeof(Cell *)'
+                           for _, kind in layout[:index]) or '0'
++
++    def structure_copy_source(expr):
++        if expr[0] == 'struct_copy' and expr[1] in pool_types:
++            return expr[2]
++        if expr[0] == 'array_copy' and expr[1][0] == 'name':
++            name = expr[1][1]
++            if reference_types.get(name, collection_types.get(name)) in pool_structures:
++                return name
++        return None
++
++    def copy_structure_value(expr, line):
++        name = structure_copy_source(expr)
++        typ = reference_types.get(name, collection_types.get(name))
++        if typ not in pool_structures:
++            fail(line, 'pool.copy exige une structure allouée')
++        layout = pool_structures[typ]
++        if any(kind.startswith('A<') or kind.startswith('&mut ') for _, kind in layout):
++            fail(line, 'structure non copiable : champ propriétaire ou référence mutable')
++        check_access(name, line, write=references.get(name) == 'mut')
++        original = f'frame->{fields[name]}'
++        origins = received_refs.get(name, ())
++        storage = storage_of(original) | frozenset(
++            source for target, _ in origins for source in storage_bindings.get(loan_root(target), ()))
++        local = expr[0] != 'struct_copy' and bool(storage & implicit_stacks)
++        if expr[0] == 'struct_copy':
++            source, _ = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]),
++                                      'mut', f'Pool<{typ}>', line)
++            storage = pool_storage(expr[1])
++        elif local:
++            destination = local_destinations.get(id(expr)) or implicit_stack()
++            source = '&' + local_pools[destination]
++            storage = frozenset({destination})
++        else:
++            source = f'{original}->source'
++            for origin in storage:
++                check_access(origin, line, write=True)
++        cell = temporary('Cell *')
++        if local:
++            layout_name = local_layouts.setdefault(typ, f'{prefix}_local_layout_{len(local_layouts)}')
++            factory = f'local_cell_new({source}, &{layout_name}, {structure_offset(layout, len(layout))}, "async copy")'
++        else:
++            factory = (f'enum_new({source}, 0, "async copy")' if expr[0] == 'struct_copy'
++                       else f'cell_new({source}, 0, "async copy")')
++        steps.extend((f'{cell} = {factory};',
++                      f'memcpy({cell}->fields, {original}->fields, {structure_offset(layout, len(layout))});'))
++        owned_result_types[cell] = typ
++        keep_storage(cell, storage)
++        for path, held in owned_capture_field_loans(original, typ).items():
++            if origins:
++                held = project_result_field_loans(origins, typ, stored_field_path(path))
++            active_loans[('stored_field', cell, stored_field_path(path))] = list(held)
++        return cell
+ 
+     def pool_structure_value(expr, line, *, following=None, label='async allocation'):
+         local = expr[0] == 'new_enum' and expr[1] is None
+@@ -3186,7 +3240,8 @@
+             value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+             bind_transferred_value(name, mode, (value, JOIN_PAYLOADS[mode], None), statement)
+             return True
+-        if sync_signature(owned_initializer) in owned_output_types or owned_initializer[0] in ('new', 'new_enum'):
++        if (sync_signature(owned_initializer) in owned_output_types or owned_initializer[0] in ('new', 'new_enum')
++                or structure_copy_source(owned_initializer) is not None):
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+             value = (pool_new_value(owned_initializer, statement.line, following=body[position + 1:],
+@@ -4526,7 +4581,8 @@
+             return 'task', create_task(expr, line)
+         if sync_signature(expr) in handle_sync_types:
+             return 'execution', sync_call(expr, line, execution=True, following=following)
+-        if sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum'):
++        if (sync_signature(expr) in owned_output_types or expr[0] in ('new', 'new_enum')
++                or structure_copy_source(expr) is not None):
+             return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+             return 'execution', spawn_task(expr[1], line,
+@@ -5989,6 +6045,8 @@
+             return True
+         if initializer[0] == 'array_transfer':
+             initializer = initializer[1]
++        if structure_copy_source(initializer) is not None:
++            return False
+         row_replace = None
+         if initializer[0] == 'array_replace':
+             place = ('array_index', initializer[1], initializer[2])

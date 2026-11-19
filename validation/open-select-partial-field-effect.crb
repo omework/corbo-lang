@@ -1,0 +1,32 @@
+struct View { data: &Int }
+
+async fn replace_then_restore(view: &mut View, next: &Int) -> Int {
+    let old = view.data;
+    view.data = &*next;
+    yield;
+    view.data = old;
+    return 7;
+}
+
+async fn ready() -> Int { return 9; }
+
+async fn choose(view: &mut View, next: &Int) -> Int {
+    let mut selection = runtime::select(-> replace_then_restore(view, next), -> ready());
+    let result = selection.await;
+    drop(-> selection);
+    return result;
+}
+
+fn main() {
+    let mut numbers = pool<Int>(2);
+    let first = numbers.new(1);
+    let second = numbers.new(2);
+    let mut view = View { data: &first };
+    let execution = runtime::spawn(-> choose(&mut view, &second));
+    match execution.join() {
+        Ok(result) => { print(result); },
+        Err(_) => {},
+    }
+    drop(-> second); // Must be refused: the suspended loser stored this target.
+    print(*view.data);
+}

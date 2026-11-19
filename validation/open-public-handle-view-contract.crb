@@ -1,0 +1,14 @@
+async fn work(v:&str,scratch:&Int)->&str{print(*scratch);yield;return v;}
+fn launch(v:&str,scratch:&Int)-><-runtime::Handle<&str>{
+    let h=runtime::spawn(->work(v,scratch));return <-h;
+}
+fn relay(h:->runtime::Handle<&str>)-><-runtime::Handle<&str>{return <-h;}
+fn finish(h:->runtime::Handle<&str>,backup:&str)->&str{
+    match h.join(){Ok(v)=>{return v;},Err(_)=>{return backup;}}
+}
+fn main(){let mut p=pool<String>(1);let mut text=p.new();text.push_str("été");
+    let mut q=pool<Int>(1);let scratch=q.new(12);
+        let h=launch(&text[..],&scratch);let next=relay(->h);
+        let view=finish(->next,"backup");drop(->scratch);
+    print(view);drop(->text);
+}

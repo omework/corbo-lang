@@ -1,0 +1,32 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10402,7 +10402,9 @@
+                                 typ=f'{kind.capitalize()}<{summary.typ}>', dependencies=tuple(dependencies),
+                                 borrow_parents=tuple(parents.values()), item_sources=sources,
+                                 item_origins=origins, task_result_sources=result_sources,
+-                                task_result_origins=result_origins)
++                                task_result_origins=result_origins,
++                                async_field_updates=tuple(update for index in summary.task_forward_parameters
++                                    for update in bindings[params[index][0]].alloc.async_field_updates))
+         self.check_borrow_destination(allocation, caller)
+         caller.allocations.append(allocation)
+         self.allocations.append(allocation)
+@@ -10494,8 +10496,6 @@
+                     kind, c, allocation = self.expression(arg[1], caller, pname)
+                 else:
+                     self.fail(f"argument '{pname}' : transfert -> requis")
+-                if allocation.async_field_updates:
+-                    self.fail('prototype : effets de champs async transmis au contrat synchrone non raccordés')
+                 if kind == 'execution' and mode == 'execution' and is_public_handle(typ):
+                     self.canonicalize_handle(allocation, typ)
+                 if (kind != mode or allocation.typ != f'{mode.capitalize()}<{typ}>'
+@@ -11356,6 +11356,9 @@
+         """
+         self.contract_call_log.append(name)
+         params, effects, result = contract.parameters, contract.effects, contract.result
++        if effects.may_return:
++            for index in sorted(result.task_wait_parameters):
++                self.apply_async_field_updates(bindings[params[index][0]].alloc)
+         detached_captures = self.detached_async_captures(result, params, bindings)
+         exchange_contracts = self.resolve_exchange_contracts(name, params, bindings, self.snapshot(), result) if result.exchange_payloads else ()
+         updates = self.prepare_structure_updates(result, params, bindings)

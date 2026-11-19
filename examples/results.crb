@@ -1,0 +1,38 @@
+fn make(memory: &mut Allocator) -> <- Int {
+    let mut data = new(memory) Int(42);
+    return <- data;
+}
+
+fn forward(mut data: -> Int, n: Int) -> <- Int {
+    let mut result = if n == 0 {
+        -> data;
+        <- data
+    } else {
+        -> data;
+        <- data
+    };
+    return <- result;
+}
+
+fn choose(mut a: -> Int, mut b: -> Int, n: Int) -> <- Int {
+    if n == 0 { return <- a; }
+    return <- b;
+}
+
+fn main() {
+    let mut first = pool<Int>(1);
+    let mut second = pool<Int>(1);
+    let mut data = make(&mut first);
+    address(data);
+    {
+        -> data;
+        data = forward(-> data, 0);
+        <- data;
+    }
+    address(data); // Même objet, même adresse après restitution.
+    let mut other = new(second) Int(7);
+    let mut result = choose(-> data, -> other, 1);
+    print(result);
+    first.reset();
+    second.reset();
+}

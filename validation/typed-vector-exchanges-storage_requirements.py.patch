@@ -1,0 +1,21 @@
+--- /tmp/crust-before-typed-vector-exchanges/storage_requirements.py
++++ /Users/jabarkarim/sources/crust/storage_requirements.py
+@@ -7,6 +7,7 @@
+ from constraints import ConstraintAnalyzer, Context, Value, UNKNOWN, join_values
+ from dataclasses import replace
+ from handle_types import public_storage
++from handle_exchange_types import exchange_element
+ 
+ 
+ class StorageContext(Context):
+@@ -79,6 +80,10 @@
+             source = asset.source
+             if source.kind == 'allocation_parameter' and context.params[source.index][2] in structures:
+                 demand(source.index)
++            elif (source.kind == 'allocation_parameter'
++                  and exchange_element(context.params[source.index][2]) == value.typ):
++                if required != 'pool':
++                    context.fail(line, 'exigence de stockage local incompatible avec un résultat contenant A<T>')
+             elif source.kind == 'local':
+                 actual = 'local' if source.name == 'data stack implicite' else 'pool'
+                 if actual != required:

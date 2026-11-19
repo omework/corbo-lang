@@ -1,0 +1,16 @@
+--- before/async_result_storage.py
++++ after/async_result_storage.py
+@@ -109,6 +109,13 @@
+     if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested'):
+         return None
+     summary = effect.completion_result
++    if summary.candidates and all(candidate.kind == 'owned_projection' for candidate in summary.candidates):
++        from array_syntax import aggregate_owned_paths
++        from results import SourceOrigin
++        fields = tuple((path, frozenset(SourceOrigin('allocation_field_parameter',
++            candidate.parameter, candidate.field_path + '/' + path) for candidate in summary.candidates))
++            for path, _ in aggregate_owned_paths(enums or {}, summary.typ))
++        return frozenset(candidate.storage() for candidate in summary.candidates), fields
+     if not summary.owned_fields or not summary.candidates or any(
+             candidate.kind != 'fresh' or candidate.source.kind not in ('source_parameter', 'local_value')
+             for candidate in summary.candidates):

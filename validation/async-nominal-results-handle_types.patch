@@ -1,0 +1,12 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -21,7 +21,8 @@
+     if not is_public_handle(typ):
+         return None
+     payload = typ[len('runtime::Handle<'):-1]
+-    if payload in ('&Int', '&mut Int', '&mut u8'):
++    if payload in ('&Int', '&mut Int', '&mut u8') or (
++            payload.startswith('&') and payload.removeprefix('&').removeprefix('mut ') in structures):
+         return ('mut', payload[5:]) if payload.startswith('&mut ') else ('ref', payload[1:])
+     from async_lowering import SCALAR_RESULTS, scalar_array_layout
+     if payload == 'Void':

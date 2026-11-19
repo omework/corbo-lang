@@ -1,0 +1,125 @@
+--- /dev/null
++++ after/async_local_placement.py
+@@ -0,0 +1,122 @@
++"""Find local constructors that supply a block result, using call contracts.
++
++This is a placement plan, not a validity checker. Unknown producers are left
++to the normal lifetime/type checker; no target borrowed by a value is promoted.
++"""
++
++
++def result_constructors(expression, contracts, known_locals, *, assigned_to=None):
++    assignments = {name: [] for name in assigned_to or ()}
++    def merge(values):
++        if not values or any(value is None for value in values):
++            return None
++        if len({value[0] for value in values}) != 1:
++            return None
++        calls = {}
++        for _, constructors in values:
++            calls.update(constructors)
++        return values[0][0], calls
++
++    def evaluate(expr, env):
++        if not expr:
++            return None
++        op = expr[0]
++        if op in ('name', 'ref', 'mut', 'move', 'down'):
++            return env.get(expr[1])
++        if op in ('array_transfer', 'new_transfer', 'transfer'):
++            return evaluate(expr[1], env)
++        call_name, arguments = (expr[1], expr[2]) if op == 'call' else (None, ())
++        if op == 'method_call':
++            receiver = evaluate(expr[1], env)
++            if receiver is not None:
++                call_name = receiver[0] + '.' + expr[2]
++                arguments = (expr[1], *expr[3])
++        if call_name in contracts:
++            summary = contracts[call_name].result
++            candidates = []
++            for candidate in summary.candidates:
++                if candidate.kind == 'fresh' and candidate.source.kind == 'local_value':
++                    candidates.append((summary.typ, {id(expr): expr}))
++                elif candidate.kind == 'fresh' and candidate.source.kind == 'allocation_parameter':
++                    origin = evaluate(arguments[candidate.source.index], env)
++                    candidates.append((summary.typ, {id(expr): expr}) if origin else None)
++                elif candidate.kind == 'parameter':
++                    candidates.append(evaluate(arguments[candidate.parameter], env))
++                else:
++                    candidates.append(None)
++            return merge(candidates)
++        if op == 'scope':
++            _, results = block(expr[2], env)
++            return merge(results)
++        if op == 'value_match':
++            _, results = block(expr[1], env)
++            return merge(results)
++        if op == 'if_expr':
++            results = []
++            for branch in expr[2:]:
++                if isinstance(branch, tuple):
++                    results.append(evaluate(branch, env))
++                else:
++                    _, outputs = block(branch, env)
++                    results.extend(outputs)
++            return merge(results)
++        if op == 'loop_expr':
++            _, results = block(expr[1].args[0], env, breaks=True)
++            return merge(results)
++        return None
++
++    def block(nodes, incoming, *, breaks=False):
++        env = incoming.copy()
++        results = []
++        for node in nodes:
++            op, args = node.op, node.args
++            if op in ('var', 'assign'):
++                env[args[0]] = evaluate(args[1], env)
++                if op == 'assign' and args[0] in assignments:
++                    assignments[args[0]].append(env[args[0]])
++            elif op == 'if':
++                following = []
++                for branch in args[1:]:
++                    state, outputs = block(branch, env, breaks=breaks)
++                    results.extend(outputs)
++                    if state is not None:
++                        following.append(state)
++                if not following:
++                    return None, results
++                env = {name: merge([state.get(name) for state in following]) for name in env}
++            elif op == '<-' and not node.terminated:
++                results.append(env.get(args[0]))
++                return None, results
++            elif op == 'if_yield':
++                results.append(evaluate(args[0], env))
++                return None, results
++            elif op == 'break':
++                if breaks:
++                    results.append(evaluate(args[0], env))
++                return None, results
++            elif op in ('return', 'continue'):
++                return None, results
++            elif op in ('loop', 'while', 'scope'):
++                nested = args[1] if op == 'scope' else args[0]
++                if assignments:
++                    block(nested, env)
++                # General writes through nested statement loops need a fixed
++                # point. Do not guess a constructor for an affected result.
++                def assigned(value):
++                    if hasattr(value, 'op'):
++                        if value.op == 'assign':
++                            yield value.args[0]
++                        yield from assigned(value.args)
++                    elif isinstance(value, (tuple, list)):
++                        for item in value:
++                            yield from assigned(item)
++                for name in assigned(node):
++                    if name in env:
++                        env[name] = None
++        return env, results
++
++    result = evaluate(expression, {name: (typ, {}) for name, typ in known_locals.items()})
++    if assigned_to is not None:
++        return {name: tuple(merged[1].values()) if (merged := merge(values)) is not None else ()
++                for name, values in assignments.items()}
++    return tuple(result[1].values()) if result is not None else ()

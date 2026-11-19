@@ -1,0 +1,612 @@
+--- before/crust.py
++++ crust.py
+@@ -2707,7 +2707,8 @@
+                     from async_lowering import owned_result_parameters
+                     definition = check.async_definitions[typ][0]
+                     result_indexes = owned_result_parameters(definition,
+-                        {name: node for name, (node, _) in check.async_definitions.items()})
++                        {name: node for name, (node, _) in check.async_definitions.items()},
++                        sync_result=self.function_results.get)
+                     captures = definition.args[1]
+                     for position, (_, capture, capture_type) in enumerate(captures):
+                         if capture in ASYNC_CAPTURE_VIEW_MODES:
+@@ -9659,7 +9660,7 @@
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+         captures, loans, transferred, dependencies = [], [], [], []
+         definitions = {name: declaration for name, (declaration, _) in self.async_definitions.items()}
+-        result_indexes = owned_result_parameters(node, definitions)
++        result_indexes = owned_result_parameters(node, definitions, sync_result=self.function_results.get)
+         result_targets = []
+         self.argument_frames.append(loans)
+         try:
+@@ -13316,7 +13317,7 @@
+     def emit_async_sync_bridge(self, name):
+         """Emit an ordinary synchronous ABI once, using the checked backend.
+ 
+-        Scalar values and scalar references cross this boundary.
++        Scalar values, scalar references and owned Int/String/Vector cells cross this boundary.
+         Callee-local pools, loans and cleanup use the synchronous verifier.
+         Separate compiler state prevents speculative lowering/loop retries from
+         leaking those local lifetimes into a caller's frame.
+@@ -13328,12 +13329,23 @@
+                      'array_types', 'array_definitions', 'handle_slot_types'):
+             setattr(check, attr, getattr(self, attr))
+         check.serial = self.serial
+-        root = Scope(check.uid(), 'synchronous bridge inputs', None)
+-        check.scopes.append(root)
++        external = Scope(check.uid(), 'external input storage', None)
++        root = Scope(check.uid(), 'synchronous bridge inputs', external)
++        check.scopes.extend((external, root))
+         parameters, arguments = [], []
+         for index, (_, mode, typ) in enumerate(contract.parameters):
+             parameter = f'bridge_input_{index}'
+-            if mode == 'byte_ref':
++            if mode == 'owned':
++                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                                      f'{parameter}->source', element_type=typ)
++                external.sources.append(source)
++                allocation = Allocation(check.uid(), root.id, parameter, (source,), c=parameter, typ=typ)
++                check.allocations.append(allocation)
++                root.allocations.append(allocation)
++                check.origin_sources[allocation.id] = source
++                root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
++                ctype = 'Cell *'
++            elif mode == 'byte_ref':
+                 storage = Binding(parameter + '_storage', 'array', '', static_type='uint8_t',
+                                   array_storage_scope=root.id)
+                 root.bindings[storage.name] = storage
+@@ -13352,19 +13364,21 @@
+                 root.bindings[parameter] = Binding(parameter, mode, parameter)
+                 ctype = COPY_VALUE_TYPES[mode]
+             parameters.append(f'{ctype} {parameter}')
+-            arguments.append(('name', parameter))
++            arguments.append(('down' if mode == 'owned' else 'name', parameter))
+         call = ('call', name, arguments)
+         check.index_expression(call)
+         result = None
+         try:
+             result = check.invoke(call, root)
++            if result is not None and result[0] == 'owned':
++                root.exports.append(result[2])
+             check.finish_scope(root)
+         except PathsReturned:
+             pass
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[name]
+         mode = contract.result_type[0]
+-        ctype = ('void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+         lines = check.flag_declarations + check.lines
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -606,7 +606,7 @@
+     return cache[name]
+ 
+ 
+-def owned_result_parameters(node, functions, cache=None, active=frozenset()):
++def owned_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_result=None):
+     """Trace returned cells through lexical bindings and awaited calls."""
+     name, parameters, result, body = node.args
+     if result[0] not in ('owned', *JOIN_PAYLOADS):
+@@ -654,7 +654,7 @@
+         op = expr[0]
+         if op in ('move', 'name', 'down'):
+             return bindings.get(expr[1])
+-        if op in ('task_spawn', 'transfer'):
++        if op in ('task_spawn', 'transfer', 'array_transfer'):
+             return expression(expr[1], bindings, breaks)
+         if op in ('await', 'utf8_value'):
+             value = expression(expr[1], bindings, breaks)
+@@ -664,10 +664,19 @@
+             arguments = [expression(arg, bindings, breaks) for arg in expr[2]]
+             callee = functions[expr[1]]
+             if len(arguments) == len(callee.args[1]):
+-                indexes = owned_result_parameters(callee, functions, cache, active | {name})
++                indexes = owned_result_parameters(callee, functions, cache, active | {name}, sync_result=sync_result)
+                 value = combine([arguments[index] for index in indexes])
+                 if value is not None:
+                     return 'task', value[1]
++        elif op == 'call' and sync_result is not None:
++            summary = sync_result(expr[1])
++            if summary is not None and summary.mode == 'owned' and summary.candidates and all(
++                    candidate.kind == 'parameter' and 0 <= candidate.parameter < len(expr[2])
++                    for candidate in summary.candidates):
++                arguments = [expression(arg, bindings, breaks) for arg in expr[2]]
++                value = combine([arguments[candidate.parameter] for candidate in summary.candidates])
++                if value is not None:
++                    return 'owner', value[1]
+         elif op == 'scope':
+             return scoped_block(expr[2], bindings, breaks)[0]
+         elif op == 'if_expr':
+@@ -839,7 +848,8 @@
+                          ('char', 'char'): 'CrustChar'}
+     reference_sync_types = {('ref', 'Int'): 'int *', ('mut', 'Int'): 'int *', ('mut', 'u8'): 'uint8_t *'}
+     view_sync_types = {('byte_ref', 'u8'): 'const unsigned char *'}
+-    sync_types = scalar_sync_types | reference_sync_types | view_sync_types
++    owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
++    sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types
+ 
+     def sync_signature(expr):
+         if expr[0] == 'call' and expr[1] in sync_contracts:
+@@ -879,27 +889,52 @@
+                                          owner_depth=owner_depth, owned=True):
+                     active_loans.pop(id(held), None)
+ 
+-    def sync_call(expr, line, expected=None, *, following=None, borrow=False):
++    def sync_owned_value(expr, line, *, following=None):
++        if expr[0] == 'array_transfer':
++            return sync_owned_value(expr[1], line, following=following)
++        if sync_signature(expr) in owned_sync_types:
++            return sync_call(expr, line, following=following, owned=True)[0]
++        if expr[0] in ('down', 'move'):
++            require_local_async_value(expr[1], line)
++            kind, value = export_async_value(expr[1], (), line)
++        elif expr[0] == 'await' and await_signature(expr) in owned_sync_types:
++            return await_task(expr, line, returns_value=True, owned=True)
++        else:
++            kind, value = emit_computed_transfer(expr, line, following=following)
++        if kind != 'owned':
++            fail(line, 'transfert synchrone : une allocation possédée est requise')
++        return value
++
++    def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
+         contract = sync_contracts[expr[1]]
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+         signature = contract.result_type
+         if (signature not in sync_types and signature != ('void', 'Void')
+                 or any((mode, typ) not in sync_types for _, mode, typ in contract.parameters)):
+-            fail(line, 'prototype : appel synchrone depuis un état : signature scalaire ou emprunt Int/u8 requis')
++            fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+         if expected is not None and signature != expected:
+             fail(line, f'appel synchrone : résultat {signature[1]}, attendu {expected[1]}')
++        if signature in owned_sync_types and not owned:
++            fail(line, 'résultat propriétaire : recevoir, transférer ou drop explicitement')
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+-        prepared, loans, argument_loans = [], [], []
++        prepared, loans, argument_loans, prepared_owners = [], [], [], []
+         active_loans[id(loans)] = loans
+-        pending_capture_groups.append((len(scopes) - 1, [], loans))
++        pending_capture_groups.append((len(scopes) - 1, prepared_owners, loans))
+         argument_depth = len(argument_tails)
+         try:
+             for index, (argument, (_, mode, typ)) in enumerate(zip(expr[2], contract.parameters)):
+                 argument_tails.append((len(scopes) - 1, expr[2][index + 1:]))
+                 held = []
+-                if mode == 'byte_ref':
++                if mode == 'owned':
++                    if argument[0] not in ('down', 'transfer'):
++                        fail(line, 'argument propriétaire : transfert -> explicite requis')
++                    operand = argument if argument[0] == 'down' else argument[1]
++                    value = sync_owned_value(operand, line)
++                    if owned_result_types.get(value, 'Int') != typ:
++                        fail(line, f'argument propriétaire : allocation {typ} attendue')
++                elif mode == 'byte_ref':
+                     value = static_byte_ref_value(argument, line)
+                     held = list(local_utf8_loans(argument, value))
+                     loans.extend(held)
+@@ -919,6 +954,9 @@
+                         fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
+                 snapshot = temporary(sync_types[(mode, typ)])
+                 steps.append(f'{snapshot} = {value};')
++                if mode == 'owned':
++                    prepared_owners.append(snapshot)
++                    steps.append(f'{value} = NULL;')
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
+                 release_sync_argument_loans(following)
+@@ -936,6 +974,9 @@
+             return '', 'Void'
+         value = temporary(sync_types[signature])
+         steps.append(f'{value} = {call};')
++        if signature in owned_sync_types:
++            owned_result_types[value] = signature[1]
++            return value, signature[1]
+         if signature in view_sync_types:
+             retained_views = []
+             for target in contract.result.reference_targets:
+@@ -1196,6 +1237,10 @@
+                     loans.append(loan)
+                     if index in result_paths:
+                         returned_loans.append(loan)
++                elif mode == 'owned' and argument[0] == 'transfer':
++                    value = sync_owned_value(argument[1], line)
++                    if owned_result_types.get(value, 'Int') != typ:
++                        fail(line, 'capture par transfert : type incompatible')
+                 elif mode in JOIN_PAYLOADS:
+                     if argument[0] != 'down' or not is_owned_join(argument[1], nested=True):
+                         fail(line, 'capture de Result alloué : transfert -> requis')
+@@ -1274,7 +1319,8 @@
+                 steps.append(f'{captured} = {value};')
+                 captures.append(captured)
+                 if mode == 'owned':
+-                    consumed.add(name)
++                    if argument[0] == 'down':
++                        consumed.add(name)
+                     steps.append(f'{value} = NULL;')
+                     prepared_owners.append(captured)
+                 elif mode in JOIN_PAYLOADS:
+@@ -1526,7 +1572,9 @@
+ 
+     def bind_transferred_value(name, kind, value, statement):
+         if statement.annotation is not None and kind != 'array':
+-            fail(statement.line, 'un résultat transféré exige une liaison sans annotation')
++            expected = f'A<{owned_result_types.get(value, "Int")}>' if kind == 'owned' else None
++            if statement.annotation != expected:
++                fail(statement.line, 'annotation incompatible avec le résultat transféré')
+         if kind == 'array':
+             source, shape, element = value
+             if statement.annotation is not None and scalar_array_layout(statement.annotation) != (shape, element):
+@@ -1608,6 +1656,11 @@
+         # Probe without evaluating; reference_value checks every continuing arm.
+         if sync_signature(expr) in reference_sync_types:
+             return sync_signature(expr)
++        if expr[0] in ('ref', 'mut') and expr[1] in fields and references.get(expr[1]) in (None, 'owned'):
++            typ = collection_types.get(expr[1], 'Bool' if expr[1] in boolean_bindings else
++                                       SCALAR_TYPES.get(inline_scalar_mode(expr[1])))
++            if typ in ('Int', 'u8') and expr[1] not in arrays:
++                return expr[0], typ
+         if bindings is None:
+             bindings = {name: (mode, reference_types.get(name, 'Int'))
+                         for name, mode in references.items()
+@@ -1674,6 +1727,10 @@
+     def reference_value(expr, line, *, following=None):
+         if sync_signature(expr) in reference_sync_types:
+             return sync_call(expr, line, following=following, borrow=True)
++        if expr[0] in ('ref', 'mut') and (shape := reference_shape(expr)) is not None:
++            pointer, loans = sync_borrow_argument(expr, *shape, line)
++            active_loans[id(loans)] = loans
++            return pointer, loans, shape
+         if expr[0] == 'loop_expr':
+             kind, record = emit_loop(expr[1].args[0], line, valued=True, following=following)
+             if kind != 'reference':
+@@ -1720,6 +1777,13 @@
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
+         operator = initializer[0]
++        owned_initializer = initializer[1] if operator == 'array_transfer' else initializer
++        if sync_signature(owned_initializer) in owned_sync_types:
++            check_new_name(name, statement.line)
++            require_owned_result_use(statement, body, position, export_name)
++            value = sync_owned_value(initializer, statement.line, following=body[position + 1:])
++            bind_transferred_value(name, 'owned', value, statement)
++            return True
+         if (operator != 'name' and push_new_receiver(initializer) is None
+                 and reference_shape(initializer) in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'))):
+             if statement.compact_transfer:
+@@ -2903,6 +2967,8 @@
+                              transfer_result=True, following=following)
+ 
+     def emit_computed_transfer(expr, line, *, following=None):
++        if sync_signature(expr) in owned_sync_types:
++            return 'owned', sync_owned_value(expr, line, following=following)
+         if expr[0] == 'task_spawn':
+             return 'execution', spawn_task(expr[1], line,
+                 blocking=len(expr) > 2 and expr[2] == 'blocking',
+@@ -3712,6 +3778,14 @@
+                 fail(line, 'retour de Result alloué : type de Result incompatible')
+             steps.extend((f'frame->result = {joined};', f'{joined}.{JOIN_CELLS[join_return_mode]} = NULL;'))
+         elif returns_owned:
++            if value[0] == 'array_transfer' and sync_signature(value[1]) in owned_sync_types:
++                received = sync_owned_value(value[1], line, following=())
++                if owned_result_types[received] != result[1]:
++                    fail(line, 'retour propriétaire : type incompatible')
++                steps.extend((f'frame->result = {received};', f'{received} = NULL;'))
++                discard_pending(line)
++                steps.append('return TASK_STEP_RETURN;')
++                return
+             if (value[0] != 'move' or references.get(value[1]) != 'owned'
+                     or collection_types.get(value[1], 'Int') != result[1]):
+                 fail(line, f'retour async <- {result[1]} : transfert explicite du type déclaré requis')
+@@ -4171,6 +4245,8 @@
+                 kind, replacement = export_async_value(source, (), line)
+             elif operator == 'scope' and ends_in_transfer(expr[2]):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
++            elif sync_signature(expr) in owned_sync_types:
++                kind, replacement = 'owned', sync_owned_value(expr, line, following=following)
+             elif operator in ('if_expr', 'value_match') and has_transfer_result(expr):
+                 kind, replacement = emit_computed_transfer(expr, line, following=following)
+             elif operator == 'loop_expr':
+--- before/results.py
++++ results.py
+@@ -431,6 +431,13 @@
+             self.infer(name)
+         return self.summaries
+ 
++    def sync_summary(self, name):
++        # A cycle keeps the conservative async approximation; do not recurse
++        # through a function whose result is currently being inferred.
++        if name not in self.functions or name in self.visiting:
++            return None
++        return self.infer(name)
++
+     def infer(self, name):
+         if name in self.summaries:
+             return self.summaries[name]
+@@ -529,7 +536,7 @@
+                 indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {})
+                 targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')
+                 result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if owned_result_parameters(
+-                    definition, self.analyzer.async_functions) else frozenset()
++                    definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary) else frozenset()
+                 environment[name] = Value(mode, typ, fields=fields, reference_targets=targets, task_sources=sources,
+                                           task_result_sources=result_sources)
+             elif typ == 'Allocator' or typ.startswith('Pool<'):
+@@ -2013,7 +2020,8 @@
+                 result_paths = {}
+                 for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {}):
+                     result_paths.setdefault(index, []).append(path)
+-                owned_indexes = owned_result_parameters(declaration, self.analyzer.async_functions)
++                owned_indexes = owned_result_parameters(declaration, self.analyzer.async_functions,
++                                                       sync_result=self.analyzer.sync_summary)
+                 task_result_sources = set()
+                 result_mode = declaration.args[2][0]
+                 targets, captures, task_sources = set(), [], set()
+--- before/constraints.py
++++ constraints.py
+@@ -256,7 +256,8 @@
+                     assets = frozenset({asset})
+                 from async_lowering import owned_result_parameters, utf8_result_parameters
+                 result_assets = frozenset()
+-                if owned_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions):
++                if owned_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions,
++                                           sync_result=self.analyzer.results.get):
+                     asset = Asset(('task_result_parameter', index), Source('task_result_parameter', index))
+                     history[asset] = frozenset()
+                     result_assets = frozenset({asset})
+@@ -1338,7 +1339,7 @@
+                                  if (mode in ASYNC_CAPTURE_VIEW_MODES or position in returned) and isinstance(value, Value))
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+                 self.touch_assets(reservations, paths['next'], line)
+-                indexes = owned_result_parameters(catalog[name], catalog)
++                indexes = owned_result_parameters(catalog[name], catalog, sync_result=self.analyzer.results.get)
+                 result_assets = frozenset(asset for index in indexes if isinstance(actuals[index], Value)
+                                           for asset in actuals[index].assets)
+                 return paths, Value('task', name, assets, captures, reservations=reservations,
+--- /dev/null
++++ tests/test_sync_owned_calls.py
+@@ -0,0 +1,173 @@
++"""Ownership, identity and cleanup across synchronous calls from task states."""
++import unittest
++from unittest.mock import patch
++from crust import Compiler, Error, verify_program
++import test_native_blocks as native
++
++class SyncOwnedCallTests(unittest.TestCase):
++    run_c_oracle=native.NativeBlockTests.run_c_oracle
++    run_native=native.NativeBlockTests.run_native
++    assert_destroyed=native.NativeBlockTests.assert_destroyed
++    declarations='''fn consume(a:->Int){print(a);}
++      fn same(a:->Int)-><-Int{return <-a;}
++      fn edit(mut a:->Int,n:Int)-><-Int{a=n;return <-a;}
++      fn read(a:&Int)->Int{return *a;}'''
++
++    @staticmethod
++    def program(body,declarations='',native_block=False,result='Int'):
++        main='''fn main(){let mut p=pool<Int>(1);let a=p.new(7);START
++          match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}
++          let b=p.new(9);print(b);drop(->b);}'''
++        if native_block:
++            return declarations+main.replace('START','let h=runtime::thread({->(a);'+body+'});')
++        return declarations+'async fn run(a:->Int)->'+result+'{'+body+'}'+main.replace('START','let h=runtime::spawn(->run(->a));')
++
++    def test_consume_and_named_result_cleanup_in_both_contexts(self):
++        for native_block in (False,True):
++            for body,trace in [('consume(->a);return 8;',[7,9]),
++                               ('let b=edit(->a,10);print(*b);drop(->b);return 8;',[10,9])]:
++                with self.subTest(native=native_block,body=body):
++                    run=self.run_native(self.program(body,self.declarations,native_block))
++                    self.assertEqual(run.stdout,('7' if trace[0]==7 else '10')+'\n8\n9\n')
++                    self.assert_destroyed(run,trace)
++
++    def test_transfers_and_usages_are_explicit(self):
++        for body in ('consume(a);return 8;', 'consume(&a);return 8;',
++                     'consume(->a);print(*a);return 8;', 'consume(->a);consume(->a);return 8;',
++                     'same(->a);return 8;', 'let _=same(->a);return 8;',
++                     'let unused=same(->a);return 8;', 'return same(->a);'):
++            with self.subTest(body=body),self.assertRaises(Error):
++                verify_program(self.program(body,self.declarations))
++        run=self.run_native(self.program('drop(->same(->a));return 8;',self.declarations))
++        self.assertEqual(run.stdout,'8\n9\n');self.assert_destroyed(run,[7,9])
++
++    def test_argument_order_temporary_read_and_stored_loan(self):
++        declarations=self.declarations+'''fn use_after(n:Int,a:->Int){print(n);print(a);}
++          fn use_before(a:->Int,n:Int){print(a);print(n);}
++          fn alias(a:&Int,b:->Int){print(a);print(b);}'''
++        body='let view=&a;use_after(read(view),->a);AFTER return 8;'
++        run=self.run_native(self.program(body.replace('AFTER',''),declarations))
++        self.assertEqual(run.stdout,'7\n7\n8\n9\n');self.assert_destroyed(run,[7,9])
++        for invalid in (body.replace('AFTER','print(*view);'),
++                        'use_before(->a,read(&a));return 8;',
++                        'alias(&a,->a);return 8;'):
++            with self.subTest(invalid=invalid),self.assertRaises(Error):
++                verify_program(self.program(invalid,declarations))
++
++    def test_prepared_owner_survives_suspension_or_is_dropped_on_return(self):
++        declarations=self.declarations+'''fn take(a:->Int,n:Int){print(90);print(a);print(n);}
++          async fn delay()->Int{yield;return 6;}'''
++        for argument,expected in [('delay().await','90\n7\n6\n8\n9\n'),
++                                  ('{yield;return 42;}','42\n9\n')]:
++            run=self.run_native(self.program(f'take(->a,{argument});return 8;',declarations))
++            self.assertEqual(run.stdout,expected);self.assert_destroyed(run,[7,9])
++        with self.assertRaisesRegex(Error,'plus utilisable'):
++            verify_program(self.program('take(->a,{yield;print(*a);6});return 8;',declarations))
++
++    def test_nested_calls_and_loop_inside_later_argument(self):
++        declarations=self.declarations+'fn take(a:->Int,n:Int){print(a);print(n);}'
++        body='''take(->same(->same(->a)),{let n=loop{yield;break 6;};n});return 8;'''
++        run=self.run_native(self.program(body,declarations))
++        self.assertEqual(run.stdout,'7\n6\n8\n9\n');self.assert_destroyed(run,[7,9])
++
++    def test_multiple_prepared_owners_clean_in_reverse_order(self):
++        source='''fn take(a:->Int,b:->Int,n:Int){print(99);print(a);print(b);print(n);}
++          async fn run(a:->Int,b:->Int)->Int{take(->a,->b,{yield;return 42;});return 0;}
++          fn main(){let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(8);
++          let h=runtime::spawn(->run(->a,->b));match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}
++          let c=p.new(9);let d=p.new(10);drop(->c);drop(->d);}'''
++        run=self.run_native(source);self.assertEqual(run.stdout,'42\n');self.assert_destroyed(run,[8,7,9,10])
++
++    def test_owned_result_annotation_and_direct_mutable_loan(self):
++        body='''let mut b:A<Int>=same(->a);let mut v=&mut b;*v=10;
++          let n=read(v);consume(->b);return n;'''
++        run=self.run_native(self.program(body,self.declarations))
++        self.assertEqual(run.stdout,'10\n10\n9\n');self.assert_destroyed(run,[10,9])
++        for before,after in [('A<Int>','Int'),('A<Int>','A<String>'),
++                             ('consume(->b);','consume(->b);print(*v);')]:
++            with self.subTest(after=after),self.assertRaises(Error):
++                verify_program(self.program(body.replace(before,after),self.declarations))
++
++    def test_owned_return_identity_and_child_capture(self):
++        declarations=self.declarations+'''async fn child(a:->Int)-><-Int{yield;return <-a;}'''
++        for body in ('let b=same(->a);return <-b;', 'return <-same(->a);',
++                     'let task=child(->same(->a));let b=task.await;return <-b;'):
++            source=declarations+'async fn run(a:->Int)-><-Int{'+body+'''}
++              fn main(){let mut p=pool<Int>(1);let a=p.new(7);address(a);
++              let h=runtime::spawn(->run(->a));match h.join(){Ok(v)=>{address(v);print(v);drop(->v);},Err(_)=>{}}
++              let b=p.new(9);address(b);drop(->b);}'''
++            with self.subTest(body=body):
++                run=self.run_native(source);lines=run.stdout.splitlines()
++                self.assertEqual(lines[0],lines[1]);self.assertEqual(lines[0],lines[3]);self.assertEqual(lines[2],'7')
++                self.assert_destroyed(run,[7,9])
++
++    def test_conditional_return_uses_real_pool_and_cleans_other_parameter(self):
++        source='''fn choose(a:->Int,b:->Int,n:Int)-><-Int{if n==0{return <-a;}return <-b;}
++          async fn run(a:->Int,b:->Int,n:Int)-><-Int{yield;let value=choose(->a,->b,n);return <-value;}
++          fn main(){let mut p=pool<Int>(1);let mut q=pool<Int>(1);let a=p.new(7);let b=q.new(8);
++          address(a);address(b);let h=runtime::spawn(->run(->a,->b,FLAG));
++          match h.join(){Ok(v)=>{address(v);print(v);drop(->v);},Err(_)=>{}}
++          let c=p.new(9);let d=q.new(10);drop(->c);drop(->d);}'''
++        for flag in (0,1):
++            run=self.run_native(source.replace('FLAG',str(flag)));lines=run.stdout.splitlines()
++            self.assertEqual(lines[2],lines[flag]);self.assertEqual(lines[3],str(7+flag))
++            self.assert_destroyed(run,([8,7] if flag==0 else [7,8])+[9,10])
++
++    def test_unreturned_pool_may_end_before_result(self):
++        source='''fn first(a:->Int,b:->Int)-><-Int{print(b);return <-a;}
++          async fn run(a:->Int,b:->Int)-><-Int{yield;return <-first(->a,->b);}
++          fn factory(a:->Int,b:->Int)-><-run{let t=run(->a,->b);return <-t;}
++          fn main(){let mut p=pool<Int>(1);let a=p.new(7);address(a);
++          let result={a ->;let mut q=pool<Int>(1);let b=q.new(8);
++            let task=factory(->a,->b);let h=runtime::spawn(->task);
++            let value=match h.join(){Ok(v)=>{<-v},Err(_)=>{let fallback=p.new(9);<-fallback}};
++            <-value};address(result);print(result);drop(->result);}'''
++        run=self.run_native(source);lines=run.stdout.splitlines()
++        self.assertEqual(lines[0],lines[2]);self.assertEqual((lines[1],lines[3]),('8','7'))
++        self.assert_destroyed(run,[8,7])
++        invalid=source.replace('print(b);return <-a;','if b==0{return <-a;}return <-b;')
++        with self.assertRaises(Error):verify_program(invalid)
++        # Only the result may forget q. A live handle still owns its captures.
++        pending='''fn first(a:->Int,b:->Int)-><-Int{return <-a;}
++          async fn run(a:->Int,b:->Int)-><-Int{yield;return <-first(->a,->b);}
++          fn main(){let mut p=pool<Int>(1);let a=p.new(7);
++            let h={a ->;let mut q=pool<Int>(1);let b=q.new(8);
++              let child=runtime::spawn(->run(->a,->b));<-child};
++            match h.join(){Ok(v)=>{drop(->v);},Err(_)=>{}}}'''
++        with self.assertRaises(Error):verify_program(pending)
++        with self.assertRaises(Error):
++            verify_program('fn bad(a:->Int)->&Int{return &a;} async fn run(a:->Int)->&Int{return bad(->a);}')
++
++    def test_collections_keep_their_type_and_cleanup(self):
++        for typ,initialize,edit,display,expected in (
++            ('String','a.push_str("A");','a.push_str("B");','print(&v[..]);','AB\n'),
++            ('Vector<Int>','a.push(7);','a.push(8);','print(v[0]);print(v[1]);','7\n8\n'),
++            ('Vector<u8>','a.push(7);','a.push(8);','print(v[0] as Int);print(v[1] as Int);','7\n8\n')):
++            source=f'''fn edit(mut a:->{typ})-><-{typ}{{{edit}return <-a;}}
++              async fn run(a:->{typ})-><-{typ}{{let b=edit(->a);yield;return <-b;}}
++              fn main(){{let mut p=pool<{typ}>(1);let mut a=p.new();{initialize}
++                let h=runtime::spawn(->run(->a));match h.join(){{Ok(v)=>{{{display}drop(->v);}},Err(_)=>{{}}}}
++                let b=p.new();drop(->b);}}'''
++            with self.subTest(typ=typ):
++                run=self.run_native(source);self.assertEqual(run.stdout,expected)
++                self.assertEqual(sum(line.startswith('destroy ') for line in run.stderr.splitlines()),2)
++        invalid='''fn consume(a:->Int){} async fn run(a:->String){consume(->a);}'''
++        with self.assertRaisesRegex(Error,'allocation Int attendue'):verify_program(invalid)
++
++    def test_replacement_evaluates_new_before_destroying_old(self):
++        source=self.declarations+'''async fn run(mut a:->Int,b:->Int)->Int{
++          a=same(->b);let n=*a;drop(->a);return n;}
++          fn main(){let mut p=pool<Int>(2);let a=p.new(7);let b=p.new(8);
++          let h=runtime::spawn(->run(->a,->b));match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}
++          let c=p.new(9);let d=p.new(10);drop(->c);drop(->d);}'''
++        run=self.run_native(source);self.assertEqual(run.stdout,'8\n');self.assert_destroyed(run,[7,8,9,10])
++        with self.assertRaises(Error):verify_program(source.replace('a=same(->b);','let view=&a;a=same(->b);print(*view);'))
++
++    def test_verification_uses_contracts_and_failed_launch_cleans_input(self):
++        source=self.program('consume(->a);return 8;',self.declarations)
++        with patch.object(Compiler,'emit_async_sync_bridge',side_effect=AssertionError('backend during check')):
++            verify_program(source)
++        run=self.run_native(source,fail_at=1)
++        self.assertEqual(run.stdout,'99\n9\n');self.assert_destroyed(run,[7,9])
++
++if __name__=='__main__':unittest.main()
+--- /dev/null
++++ tests/run_sync_owned_mutations.py
+@@ -0,0 +1,65 @@
++"""Ownership-boundary faults in temporary compilers, independent test expectations."""
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++import tempfile
++ROOT=Path(__file__).resolve().parents[1]
++MUTATIONS=[
++ ('moved_slot_not_cleared','async_lowering.py',
++  "steps.extend((f'{result} = {member};', f'{member} = NULL;'))",
++  "steps.append(f'{result} = {member};')",
++  'test_consume_and_named_result_cleanup_in_both_contexts'),
++ ('moved_binding_still_valid','async_lowering.py',
++  "steps.extend((f'{result} = {member};', f'{member} = NULL;'))\n            consumed.add(name)",
++  "steps.extend((f'{result} = {member};', f'{member} = NULL;'))\n            pass # binding remains usable",
++  'test_transfers_and_usages_are_explicit'),
++ ('prepared_owner_not_registered','async_lowering.py',
++  'prepared_owners.append(snapshot)', 'pass # omitted cleanup registration',
++  'test_prepared_owner_survives_suspension_or_is_dropped_on_return'),
++ ('prepared_owner_order_reversed','async_lowering.py',
++  'for cell in reversed(cells):','for cell in cells:',
++  'test_multiple_prepared_owners_clean_in_reverse_order'),
++ ('bridge_result_destroyed','crust.py',
++  'root.exports.append(result[2])','pass # result not exported',
++  'test_owned_return_identity_and_child_capture'),
++ ('owned_source_contract_ignored','async_lowering.py',
++  "elif op == 'call' and sync_result is not None:","elif op == 'call' and False:",
++  'test_unreturned_pool_may_end_before_result'),
++ ('owned_result_silently_discarded','async_lowering.py',
++  'if signature in owned_sync_types and not owned:', 'if False:',
++  'test_transfers_and_usages_are_explicit'),
++]
++
++def run(folder,test):
++    return subprocess.run([sys.executable,'-c',f'''import sys,unittest
++sys.path[:0]=[{str(folder)!r},{str(ROOT/'tests')!r}]
++r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromName({test!r}))
++sys.exit(not r.wasSuccessful())
++'''],cwd=folder,capture_output=True,text=True,timeout=150)
++
++def main():
++    baseline=run(ROOT,'test_sync_owned_calls')
++    print('BASELINE','PASS' if baseline.returncode==0 else 'INCONCLUSIVE',flush=True)
++    print(baseline.stderr,flush=True)
++    if baseline.returncode:return 1
++    success=True
++    for name,filename,before,after,test in MUTATIONS:
++        source=(ROOT/filename).read_text()
++        if source.count(before)!=1:raise SystemExit(f'{name}: anchor count {source.count(before)}')
++        with tempfile.TemporaryDirectory(prefix='crust-sync-owned-mut-') as folder:
++            for path in ROOT.glob('*.py'):shutil.copy2(path,Path(folder)/path.name)
++            (Path(folder)/filename).write_text(source.replace(before,after))
++            result=run(folder,'test_sync_owned_calls.SyncOwnedCallTests.'+test)
++            semantic_error=('crust.Error:' in result.stderr and 'ERROR:' in result.stderr)
++            detected=result.returncode==1 and ('FAIL:' in result.stderr or semantic_error)
++            # On these paths cleanup is selected by the consumed state and
++            # cleanup_path, so the stale pointer field is never read again.
++            # This is a bounded behavioral classification, not general proof.
++            redundant = name=='moved_slot_not_cleared' and result.returncode==0
++            print(name,'DETECTED' if detected else 'BEHAVIORALLY_IRRELEVANT_ON_SELECTED_PATHS' if redundant
++                  else 'SURVIVED' if result.returncode==0 else 'INCONCLUSIVE',flush=True)
++            print(result.stderr[-4500:],flush=True)
++            success &= detected or redundant
++    return 0 if success else 1
++if __name__=='__main__':sys.exit(main())

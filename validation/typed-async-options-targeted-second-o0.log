@@ -1,0 +1,93 @@
+test_capture_cleanup_inactive_and_failed_launch (test_typed_async_options.TypedAsyncOptionTests.test_capture_cleanup_inactive_and_failed_launch) ... ok
+test_direct_await_capture_and_named_relay (test_typed_async_options.TypedAsyncOptionTests.test_direct_await_capture_and_named_relay) ... ok
+test_growing_payloads_with_typed_async_signatures (test_typed_async_options.TypedAsyncOptionTests.test_growing_payloads_with_typed_async_signatures) ... ok
+test_launch_failures_drop_original_pool_payload (test_typed_async_options.TypedAsyncOptionTests.test_launch_failures_drop_original_pool_payload) ... ok
+test_pool_lifetime_and_explicit_usage (test_typed_async_options.TypedAsyncOptionTests.test_pool_lifetime_and_explicit_usage) ... FAIL
+test_public_handle_and_typed_envelope_parameters (test_typed_async_options.TypedAsyncOptionTests.test_public_handle_and_typed_envelope_parameters) ... FAIL
+test_recorded_case_and_nested_some_none (test_typed_async_options.TypedAsyncOptionTests.test_recorded_case_and_nested_some_none) ... FAIL
+
+======================================================================
+FAIL: test_pool_lifetime_and_explicit_usage (test_typed_async_options.TypedAsyncOptionTests.test_pool_lifetime_and_explicit_usage)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_async_options.py", line 117, in test_pool_lifetime_and_explicit_usage
+    self.assertEqual(self.run_source(definitions+main).stdout,'7\n8\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 17, in run_source
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12426, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : destroy v=0
+reclaim v
+pop de handle : aucun élément possible
+
+
+======================================================================
+FAIL: test_public_handle_and_typed_envelope_parameters (test_typed_async_options.TypedAsyncOptionTests.test_public_handle_and_typed_envelope_parameters)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17158, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15140, in verify
+    self.function_results, Error, self.enums, async_functions).infer_all()
+                                                               ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 230, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 242, in infer
+    result = context.infer()
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 489, in infer
+    paths, tail = self.nodes(self.node.args[3], initial,
+                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             valued=self.node.args[2][0] == 'owned')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2235, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1529, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1618, in call
+    self.fail(line, f"'{pname}' attend une allocation {typ}")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 351, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 8: 'r' attend une allocation Point
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_async_options.py", line 82, in test_public_handle_and_typed_envelope_parameters
+    self.assertEqual(self.run_source(source).stdout,('7' if some else '0')+'\n42\n8\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 8: 'r' attend une allocation Point
+
+======================================================================
+FAIL: test_recorded_case_and_nested_some_none (test_typed_async_options.TypedAsyncOptionTests.test_recorded_case_and_nested_some_none)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_async_options.py", line 55, in test_recorded_case_and_nested_some_none
+    self.assertEqual(self.run_source(source).stdout, ('7' if some else '0')+'\n8\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 17, in run_source
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12426, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : pop de handle : aucun élément possible
+
+
+----------------------------------------------------------------------
+Ran 7 tests in 8.741s
+
+FAILED (failures=3)

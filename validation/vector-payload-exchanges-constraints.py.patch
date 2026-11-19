@@ -1,0 +1,68 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -100,6 +100,16 @@
+     inline_path: str = ''
+ 
+     def __post_init__(self):
++        if self.mode == 'buffered_handle_exchange' and self.handle_payloads:
++            fields = {}
++            for arm, assets in zip(('ok', 'err'), self.exchange_payloads):
++                for item in self.handle_payloads:
++                    if item.assets & assets:
++                        for name, targets in item.fields:
++                            key = arm + '/' + name
++                            fields[key] = fields.get(key, frozenset()) | targets
++            object.__setattr__(self, 'fields', tuple(sorted(fields.items())))
++            return
+         if not is_handle_vector(self.typ):
+             return
+         items = possible_handle_items(self.handle_items)
+@@ -491,6 +501,23 @@
+                     payloads = (frozenset() if exchange_optional(typ) or exchange_is_try_push(mode) else frozenset({asset}),
+                                 frozenset({asset}))
+                     environment[name] = replace(environment[name], exchange_payloads=payloads)
++                    if mode == 'buffered_handle_exchange':
++                        element = exchange_element(typ)
++                        paths = dict(aggregate_reference_paths(self.analyzer.enums, element))
++                        paths.update((path, pointee) for path, _, pointee in owned_reference_paths(self.analyzer.enums, element))
++                        paths.update(aggregate_owned_paths(self.analyzer.enums, element))
++                        prototypes = []
++                        for arm, assets in zip(('ok', 'err'), payloads):
++                            if not assets:
++                                continue
++                            payload_fields = []
++                            for path in paths:
++                                target = Asset(('exchange_field', index, arm, path),
++                                    Source('allocation_field_parameter', index, arm + '/' + path))
++                                history[target] = frozenset()
++                                payload_fields.append((path, frozenset({target})))
++                            prototypes.append(Value('owned', element, assets, tuple(payload_fields)))
++                        environment[name] = replace(environment[name], handle_payloads=tuple(prototypes))
+                 if mode == 'mut' and typ.startswith('A<'):
+                     key = f'\0handle:{index}'
+                     environment[name] = replace(environment[name], storage_owner=key)
+@@ -2144,6 +2171,16 @@
+                                       if child.source.kind != 'local')
+                 for asset in assets:
+                     current.vector_sources[asset] = current.vector_sources.get(asset, frozenset()) | contained
++            def exchange_value(value):
++                payload_assets = resolve_assets(value.candidates)
++                mapped = {}
++                for key, targets in value.fields:
++                    mapped[key] = frozenset(asset for target in targets for asset in (
++                        actuals[target.parameter].all_assets if target.kind == 'parameter'
++                        else self.projected_assets(actuals[target.parameter], target.field, current)))
++                for key, children in owned_fields(value.owned_fields):
++                    mapped[key] = mapped.get(key, frozenset()) | children
++                return Value('owned', value.typ, payload_assets, tuple(mapped.items()))
+             reservations = {a for candidate in result.candidates if candidate.kind == 'parameter'
+                             for a in actuals[candidate.parameter].reservations}
+             for name, targets in result.borrowed_fields:
+@@ -2182,6 +2219,7 @@
+                         array_contract_assets(target, actuals[target.parameter])))
+                         for slot in result.shared_vector_layout)
+             return paths, Value(result.mode, result.typ, assets, tuple(fields), frozenset(reservations),
++                                handle_payloads=tuple(exchange_value(value) for value in result.exchange_values if value.candidates),
+                                 exchange_payloads=tuple(resolve_assets(arm) for arm in result.exchange_payloads),
+                                 variants=variants, handle_items=item_sets,
+                                 absent_owned_payload=not assets and (result.mode == 'handle_option' or result.absent_owned_payload or

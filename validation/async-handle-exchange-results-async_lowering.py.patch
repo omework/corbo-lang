@@ -1,0 +1,220 @@
+--- /tmp/crust-before-async-handle-exchange-results/async_lowering.py
++++ async_lowering.py
+@@ -34,12 +34,19 @@
+     paths: tuple = ()
+ 
+ 
+-JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested', 'join_option': 'optional_nested', 'handle_option': 'optional_allocation'}
+-JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'join_option': 'value.value', 'handle_option': 'value'}
++JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested', 'join_option': 'optional_nested', 'handle_option': 'optional_allocation', 'buffered_handle_exchange': 'exchange_allocation'}
++JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'join_option': 'value.value', 'handle_option': 'value', 'buffered_handle_exchange': 'value'}
+ OWNED_WRAPPER_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult', 'join_option': 'CrustOptionJoinResult',
+                        'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult', 'buffered_handle_try_push': 'VectorHandleResult'}
+ OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation',
+                           'buffered_handle_exchange': 'exchange_allocation', 'buffered_handle_try_push': 'rejected_allocation'}
++EXCHANGE_RESULT_TYPES = ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')
++
++
++def wrapper_content_type(mode, typ):
++    return 'Int' if mode == 'buffered_handle_exchange' else typ
++
++
+ def owned_wrapper_kind(mode, typ):
+     return ('buffered_handle_try_push' if mode == 'buffered_handle_exchange'
+             and typ == 'Result<(),A<Int>>' else mode)
+@@ -114,7 +121,7 @@
+             'ref': 'const int *', 'mut': 'int *', 'owned': 'Cell *',
+             'array': 'const void *', 'array_ref': 'const void *', 'array_mut': 'void *',
+             'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult', 'join_option': 'CrustOptionJoinResult',
+-            'handle_option': 'VectorHandleResult'}[mode]
++            'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult'}[mode]
+ 
+ 
+ def utf8_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_contracts=None, sync_result_contract=None):
+@@ -1344,8 +1351,8 @@
+                         fail(line, 'expression Result propriétaire : type incompatible')
+                     value = await_task(expr, line, returns_value=True, joined=True,
+                                        prepared=prepared[1] if prepared is not None else None)
+-                    result = value, JOIN_PAYLOADS[signature[0]], None
+-            if result[1] not in JOIN_PAYLOADS.values():
++                    result = value, owned_wrapper_payload(*signature), None
++            if result[1] not in OWNED_WRAPPER_PAYLOADS.values():
+                 fail(line, 'expression Result propriétaire : type incompatible')
+             return result
+         kind, value = emit_computed_transfer(expr, line, following=following)
+@@ -2076,6 +2083,18 @@
+                 contract.parameters, argument_loans, line)
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]
++                if definition.args[2][0] == 'buffered_handle_exchange':
++                    for arm, symbols in contract.result.task_result_fields:
++                        origins = set()
++                        for source in symbols:
++                            if source.kind == 'allocation_field_parameter' and source.name in ('ok', 'err'):
++                                origins.update(argument_payload_storage.get((source.index, source.name), argument_storage[source.index]))
++                            elif source.kind == 'task_result_field_parameter' and source.index in argument_tasks:
++                                holder = argument_tasks[source.index][0]
++                                origins.update(origin for origin, _ in active_loans.get(('owned_storage', holder, (source.name,)), ()))
++                            else:
++                                origins.update(argument_storage[source.index])
++                        active_loans[('owned_storage', value, (arm,))] = [(origin, 'storage') for origin in origins]
+                 from async_result_storage import borrowed_result_fields
+                 if capture_loans or not forwarded:
+                     retain_result_fields(value, borrowed_result_fields(definition), capture_loans, line, capture_field_loans)
+@@ -2168,6 +2187,7 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR))
+            and (mode, typ) not in pool_sync_types
++           and not (mode == 'buffered_handle_exchange' and typ in EXCHANGE_RESULT_TYPES)
+            and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_aggregates)
+            and not (mode in ('ref', 'mut') and typ in reference_aggregates)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+@@ -2188,6 +2208,7 @@
+     awaited_reference_types = {}
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
++            and not (result[0] == 'buffered_handle_exchange' and result[1] in EXCHANGE_RESULT_TYPES)
+             and not (result[0] in ('ref', 'mut') and result[1] in reference_structs)
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_aggregates)
+@@ -2317,6 +2338,7 @@
+         argument_fields = {}
+         local_captures = set()
+         capture_storage = []
++        capture_payload_storage = {}
+         owner_indexes = owned_result_parameters(declaration, functions,
+                                                 sync_result=lambda name: sync_contracts[name].result if name in sync_contracts else None)
+         result_paths = {}
+@@ -2464,8 +2486,13 @@
+                         fail(line, 'capture de Result alloué : transfert -> requis')
+                     value, payload, _ = owned_join_value(
+                         argument if argument[0] == 'down' else argument[1], line)
+-                    if payload != JOIN_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
++                    if payload != owned_wrapper_payload(mode, typ) or owned_result_types.get(value, 'Int') != wrapper_content_type(mode, typ):
+                         fail(line, 'capture de Result alloué : type de Result incompatible')
++                    if mode == 'buffered_handle_exchange':
++                        for arm in ('ok', 'err'):
++                            held = active_loans.get(('owned_storage', value, (arm,)))
++                            capture_payload_storage[index, arm] = (frozenset(origin for origin, _ in held)
++                                if held is not None else storage_of(value))
+                 else:
+                     operator, *operands = argument
+                     if mode == 'owned':
+@@ -2567,6 +2594,8 @@
+                     if index in owner_indexes:
+                         returned_loans.extend(held_storage)
+                 steps.append(f'{captured} = {value};')
++                if mode == 'buffered_handle_exchange' and typ == 'Result<(),A<Int>>':
++                    steps.append(f'if ({captured}.status == 0) {captured}.value = NULL;')
+                 captures.append(captured)
+                 if index in declaration.cell_reference_parameters:
+                     descriptor = stored_reference_cell(captured, loans[argument_loan_start:], line)
+@@ -2603,6 +2632,21 @@
+                     returned_loans.append((destination, 'storage'))
+                 captures.append('&' + local_pools[destination] if destination else 'NULL')
+             steps.append(f'{task} = crust_async_{target}_create({", ".join(captures)});')
++            if effects and effects.complete and declaration.args[2][0] == 'buffered_handle_exchange':
++                for arm, candidates in zip(('ok', 'err'), effects.completion_result.exchange_payloads):
++                    origins = set()
++                    for candidate in candidates:
++                        if candidate.kind == 'exchange_parameter':
++                            origins.update(capture_payload_storage.get((candidate.parameter,
++                                ('ok', 'err')[candidate.item_index]), capture_storage[candidate.parameter]))
++                        elif candidate.kind in ('parameter', 'vector_element'):
++                            origins.update(capture_storage[candidate.parameter])
++                        elif candidate.kind == 'fresh' and candidate.source.kind == 'source_parameter':
++                            origins.update(capture_storage[candidate.source.index])
++                        else:
++                            origins.update(origin for held in capture_storage for origin in held)
++                    active_loans[('owned_storage', task, (arm,))] = [(origin, 'storage') for origin in origins]
++
+             from async_result_storage import borrowed_result_fields
+             retain_result_fields(task, borrowed_result_fields(declaration), argument_loans, line, argument_fields)
+             changes = (prepare_field_changes(effects.completion_result, declaration.args[1], argument_loans, line, capture_storage)
+@@ -2825,7 +2869,7 @@
+                             move_stored_fields(record[0], result)
+             else:
+                 move_stored_fields(task, result)
+-            owned_result_types[result] = result_type
++            owned_result_types[result] = wrapper_content_type(result_mode, result_type)
+             keep_storage(result, (target for target, mode in returned_loans if mode == 'storage'))
+         if result_mode in ASYNC_CAPTURE_VIEW_MODES:
+             utf8_result_loans[result] = tuple(returned_loans)
+@@ -3549,7 +3593,7 @@
+                 native=len(initializer) > 2 and initializer[2] == 'native')
+         elif joined_await:
+             value = await_task(initializer, statement.line, returns_value=True, joined=True)
+-            join_results[name] = value, JOIN_PAYLOADS[await_mode], None
++            join_results[name] = value, owned_wrapper_payload(*await_signature(initializer)), None
+         elif join:
+             bind_execution_result(name, execution_await(initializer, statement.line), body, position,
+                                   export_name=export_name, annotation=statement.annotation,
+@@ -4940,6 +4984,8 @@
+                 fail(line, 'spawn exige une tâche inactive')
+         enable_threads()
+         task, returns_int, loans, nominal, returned_loans, field_changes = record
++        if functions[nominal].args[2][0] == 'buffered_handle_exchange':
++            fail(line, 'prototype : enveloppe spawn/join de replace ou try_push non raccordée')
+         if functions[nominal].args[2][0] in ('join_nested', 'join_option'):
+             fail(line, 'spawn avec trois niveaux de Result non pris en charge')
+         handle = temporary('CrustAsyncExecution')
+@@ -5982,17 +6028,17 @@
+             else:
+                 fail(line, 'retour de tableau : transfert explicite <- requis')
+         elif returns_join:
+-            if value[0] in ('array_transfer', 'new_transfer', 'move', 'array_handle_option_pop'):
++            if value[0] in ('array_transfer', 'new_transfer', 'move', 'array_handle_option_pop', 'array_buffered_replace', 'array_buffered_try_push'):
+                 joined, payload, _ = owned_join_value(
+-                    value if value[0] in ('move', 'array_handle_option_pop') else value[1], line, following=())
++                    value if value[0] in ('move', 'array_handle_option_pop', 'array_buffered_replace', 'array_buffered_try_push') else value[1], line, following=())
+             else:
+                 fail(line, 'retour de Result alloué : <- explicite requis')
+             require_durable_storage(joined, 0, line)
+             if node.join_storage_result and any((source in implicit_stacks) != (node.join_storage_result == 'local')
+                                                for source in storage_of(joined)):
+                 fail(line, f'retour Result : stockage {node.join_storage_result} requis (T local / allocation A<T>)')
+-            if (payload != JOIN_PAYLOADS[join_return_mode]
+-                    or owned_result_types.get(joined, 'Int') != result[1]):
++            if (payload != owned_wrapper_payload(*result)
++                    or owned_result_types.get(joined, 'Int') != wrapper_content_type(*result)):
+                 fail(line, 'retour de Result alloué : type de Result incompatible')
+             steps.extend((f'frame->result = {joined};', f'{joined}.{JOIN_CELLS[join_return_mode]} = NULL;'))
+         elif returns_owned:
+@@ -7501,7 +7547,7 @@
+             require_owned_result_use(statement, body, index, export_name)
+         if mode in JOIN_PAYLOADS:
+             value = await_task(initializer, line, returns_value=True, joined=True, prepared=prepared)
+-            join_results[name] = value, JOIN_PAYLOADS[mode], None
++            join_results[name] = value, owned_wrapper_payload(mode, functions[prepared[3]].args[2][1]), None
+             storage_bindings[name] = storage_of(value)
+             scopes[-1][0][name] = None
+             return True
+@@ -7716,8 +7762,8 @@
+         if mode == 'array':
+             scopes[0][0][parameter] = None
+         if mode in JOIN_PAYLOADS:
+-            join_results[parameter] = f'frame->{member}', JOIN_PAYLOADS[mode], None
+-            owned_result_types[f'frame->{member}'] = typ
++            join_results[parameter] = f'frame->{member}', owned_wrapper_payload(mode, typ), None
++            owned_result_types[f'frame->{member}'] = wrapper_content_type(mode, typ)
+         if mode in PLAIN_JOIN_TYPES:
+             join_results[parameter] = f'frame->{member}', PLAIN_JOIN_FIELDS[mode], None
+         if mode in ('owned', *JOIN_PAYLOADS):
+@@ -7842,13 +7888,15 @@
+     for (root,_), (member,offset) in initial_field_cells.items():
+         initialize += f'    frame->{member} = cell_load_ref(frame->{fields[root]}, {offset});\n'
+     inactive_cleanup = []
+-    for name, mode, _ in reversed(parameters):
++    for name, mode, typ in reversed(parameters):
+         cell = f'frame->{fields[name]}'
+         if mode in JOIN_CELLS:
+             cell += f'.{JOIN_CELLS[mode]}'
+         elif mode != 'owned':
+             continue
+-        inactive_cleanup.append(f'if ({cell}) cell_drop({cell});')
++        present = (f'frame->{fields[name]}.status != 0 && ' if mode == 'buffered_handle_exchange'
++                   and typ == 'Result<(),A<Int>>' else '')
++        inactive_cleanup.append(f'if ({present}{cell}) cell_drop({cell});')
+     members += '    size_t cleanup_path;\n'
+     initialize += '    frame->cleanup_path = 0;\n'
+     cases = []

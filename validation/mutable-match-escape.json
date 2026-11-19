@@ -1,0 +1,76 @@
+{
+  "accepted": [
+    "enum W{A{x:&mut Int},B{x:&mut Int}}fn make(q:&mut Pool<W>,a:&mut Int,b:&mut Int,k:Int)-><-W{if k==0{let w=new(q)W.A{x:a};return<-w;}let w=new(q)W.B{x:b};return<-w;}let mut p=pool<Int>(2);let mut q=pool<W>(1);let mut a=new(p)Int(10);let mut b=new(p)Int(11);let mut w=make(&mut q,&mut a,&mut b,0);let mut out=match &mut w{W.A{x:r}=>{r},W.B{x:r}=>{r}};out.set(30);print(w);print(a);print(b);",
+    "enum W{A{x:&mut Int},B{x:&mut Int}}fn make(q:&mut Pool<W>,a:&mut Int,b:&mut Int,k:Int)-><-W{if k==0{let w=new(q)W.A{x:a};return<-w;}let w=new(q)W.B{x:b};return<-w;}let mut p=pool<Int>(2);let mut q=pool<W>(1);let mut a=new(p)Int(10);let mut b=new(p)Int(11);let mut w=make(&mut q,&mut a,&mut b,1);let mut out=match &mut w{W.A{x:r}=>{r},W.B{x:r}=>{r}};out.set(30);print(w);print(a);print(b);",
+    "enum W{Bound{data:&mut Int,other:&mut Int}}let mut p=pool<Int>(2);let mut q=pool<W>(1);let mut n=new(p)Int(10);let mut m=new(p)Int(11);let mut w=new(q)W.Bound{data:&mut n,other:&mut m};let mut out=match &mut w{W.Bound{data:r,other:_}=>{r}};out.set(30);print(w);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};let mut next=identity(out);next.set(30);print(w);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};out.set(30);print(w);print(n);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};out.set(30);q.reset();p.reset();"
+  ],
+  "rejected": [
+    "enum W{A{x:&mut Int},B{x:&mut Int}}fn make(q:&mut Pool<W>,a:&mut Int,b:&mut Int,k:Int)-><-W{if k==0{let w=new(q)W.A{x:a};return<-w;}let w=new(q)W.B{x:b};return<-w;}let mut p=pool<Int>(2);let mut q=pool<W>(1);let mut a=new(p)Int(10);let mut b=new(p)Int(11);let mut w=make(&mut q,&mut a,&mut b,0);let mut out=match &mut w{W.A{x:r}=>{r},W.B{x:r}=>{r}};print(w);out.set(30);",
+    "enum W{A{x:&mut Int},B{x:&mut Int}}fn make(q:&mut Pool<W>,a:&mut Int,b:&mut Int,k:Int)-><-W{if k==0{let w=new(q)W.A{x:a};return<-w;}let w=new(q)W.B{x:b};return<-w;}let mut p=pool<Int>(2);let mut q=pool<W>(1);let mut a=new(p)Int(10);let mut b=new(p)Int(11);let mut w=make(&mut q,&mut a,&mut b,1);let mut out=match &mut w{W.A{x:r}=>{r},W.B{x:r}=>{r}};print(w);out.set(30);",
+    "enum W{Bound{data:&mut Int,other:&mut Int}}let mut p=pool<Int>(2);let mut q=pool<W>(1);let mut n=new(p)Int(10);let mut m=new(p)Int(11);let mut w=new(q)W.Bound{data:&mut n,other:&mut m};let mut out=match &mut w{W.Bound{data:r,other:_}=>{r}};drop(->m);out.set(30);print(w);",
+    "fn bad(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}fn identity(x:&mut Int)->&mut Int{return x;}",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};drop(->n);out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};drop(->w);out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};fn clear(q:&mut Pool<W>,x:&mut Int){q.reset();x.set(30);}clear(&mut q,out);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};let mut next=identity(out);print(w);next.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};p.reset();out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};print(w);out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};q.reset();out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};w=new(q)W.Bound{data:&mut n};out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);n}};out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);print(child);}};out.set(30);"
+  ],
+  "mutations": [
+    {
+      "fault": "ignore reservation of holder",
+      "before": "reservations[id(loan)] = loan",
+      "after": "pass",
+      "test": "test_writer_reopens_after_last_use_of_result",
+      "detected": true,
+      "stderr": "======================================================================\nFAIL: test_writer_reopens_after_last_use_of_result (test_mutable_match_escape.MutableMatchEscapeTests.test_writer_reopens_after_last_use_of_result) (stage='verify_program')\n----------------------------------------------------------------------\ncrust.Error: ligne 1: champ emprunté de 'w' incompatible avec un emprunt mutable\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpbkh_pu9z/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: \"emprunt actif\" does not match \"ligne 1: champ emprunté de 'w' incompatible avec un emprunt mutable\"\n\n======================================================================\nFAIL: test_writer_reopens_after_last_use_of_result (test_mutable_match_escape.MutableMatchEscapeTests.test_writer_reopens_after_last_use_of_result) (stage='compile_source')\n----------------------------------------------------------------------\ncrust.Error: ligne 1: champ emprunté de 'w' incompatible avec un emprunt mutable\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpbkh_pu9z/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: \"emprunt actif\" does not match \"ligne 1: champ emprunté de 'w' incompatible avec un emprunt mutable\"\n\n----------------------------------------------------------------------\nRan 1 test in 0.387s\n\nFAILED (failures=2)\n"
+    }
+  ],
+  "C": [
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};out.set(30);print(w);print(n);",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};out.set(30);print(w);print(n);",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};out.set(30);print(w);print(n);",
+      "flags": [
+        "-Os"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};out.set(30);print(w);print(n);",
+      "flags": [
+        "-O2",
+        "-fsanitize=undefined",
+        "-fno-sanitize-recover=all"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    }
+  ],
+  "suites": {
+    "standard": "----------------------------------------------------------------------\nRan 756 tests in 387.821s\n\nOK\n",
+    "ubsan": "----------------------------------------------------------------------\nRan 84 tests in 35.861s\n\nOK\n"
+  }
+}

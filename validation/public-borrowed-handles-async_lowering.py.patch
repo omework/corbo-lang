@@ -1,0 +1,11 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -373,6 +373,8 @@
+ 
+ def borrowed_result_paths(node, functions, fail, cache, visiting=(), *, sync_contracts=None, sync_result_contract=None):
+     """Infer which input references can reach the result, including awaited relays."""
++    if getattr(node, 'public_result_borrows', ()):
++        return frozenset((index, ()) for index in node.public_result_borrows)
+     node = expand_reference_return_branches(node)
+     sync_contracts = sync_contracts or {}
+     def result_contract(callee):

@@ -1,0 +1,48 @@
+--- /tmp/crust-before-async-local-owned-result-graphs/async_local_placement.py
++++ async_local_placement.py
+@@ -28,10 +28,18 @@
+             return env.get(expr[1])
+         if op in ('array_transfer', 'new_transfer', 'transfer'):
+             return evaluate(expr[1], env)
+-        if op == 'await':
+-            task = evaluate(expr[1], env)
+-            if task is not None and isinstance(task[0], tuple) and task[0][0] == 'task':
+-                return task[0][1], task[1]
++        if op in ('task_spawn', 'await', 'task_join', 'task_join_value', 'utf8_value'):
++            operand = ('name', expr[1]) if op == 'task_join' else expr[1]
++            value = evaluate(operand, env)
++            if value is None or not isinstance(value[0], tuple):
++                return None
++            kind, typ = value[0]
++            if op == 'task_spawn' and kind == 'task':
++                return ('execution', typ), value[1]
++            if op in ('task_join', 'task_join_value', 'await') and kind == 'execution':
++                return ('join', typ), value[1]
++            if op == 'await' and kind == 'task' or op == 'utf8_value' and kind == 'join':
++                return typ, value[1]
+             return None
+         call_name, arguments = (expr[1], expr[2]) if op == 'call' else (None, ())
+         if op == 'method_call':
+@@ -40,7 +48,7 @@
+                 call_name = receiver[0] + '.' + expr[2]
+                 arguments = (expr[1], *expr[3])
+         if call_name in async_functions:
+-            from async_result_storage import result_storage
++            from async_result_storage import result_storage, pool_result_graph
+             node = async_functions[call_name]
+             if not node.result_storage:
+                 return None
+@@ -48,9 +56,10 @@
+                                          if (value := evaluate(argument, env)) is not None
+                                          and not isinstance(value[0], tuple))
+             plan = result_storage(node, local_parameters)
+-            # Only a fresh independent result is relocated by this plan.
+-            # Captured inputs and borrowed targets keep their original storage.
+-            if plan.destination and plan.parameters == frozenset() and not plan.mixed:
++            # Relocate only the fresh root. A complete graph contract retains
++            # the separately pooled descendants at their original addresses.
++            if plan.destination and not plan.mixed and (
++                    plan.parameters == frozenset() or pool_result_graph(node) is not None):
+                 return ('task', node.args[2][1]), {id(expr): expr}
+             return None
+         if call_name in contracts:

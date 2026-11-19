@@ -1,0 +1,34 @@
+--- tests/test_returned_owned_replacement.py
++++ tests/test_returned_owned_replacement.py
+@@ -7,7 +7,9 @@
+ import test_select_source as harness
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-BASE = (ROOT / 'validation/open-async-return-replaced-owned-field.crust').read_text()
++# Preserve the historical fixture while making its pool return explicit.
++BASE = (ROOT / 'validation/open-async-return-replaced-owned-field.crust').read_text().replace(
++    '-> <-Holder', '-> <-A<Holder>')
+ HELPERS = BASE[:BASE.index('fn main')]
+ SETUP = '''let mut old_values=pool<Int>(1);let mut new_values=pool<Int>(1);
+     let mut holders=pool<Holder>(1);let value=old_values.new(7);
+@@ -54,7 +56,7 @@
+ 
+     def test_direct_await_and_relay_keep_new_pool(self):
+         helpers = HELPERS.replace('async fn work(', 'async fn replace_async(') + '''
+-            async fn relay(h:->Holder,p:&mut Pool<Int>)-><-Holder{
++            async fn relay(h:->Holder,p:&mut Pool<Int>)-><-A<Holder>{
+                 let result=replace_async(->h,p).await;yield;return <-result;}'''
+         body = SETUP + '''let h=relay(->holder,&mut new_values).await;print(*h.value);
+             let a=old_values.new(20);print(*a);drop(->h);
+@@ -86,9 +88,9 @@
+ 
+     def test_returned_replacement_keeps_contained_borrow(self):
+         source = '''struct Leaf{view:&Int}struct Root{item:A<Leaf>}
+-            fn replace(mut root:->Root,p:&mut Pool<Leaf>,n:&Int)-><-Root{
++            fn replace(mut root:->Root,p:&mut Pool<Leaf>,n:&Int)-><-A<Root>{
+                 root.item=<-p.new(view:n);return <-root;}
+-            async fn work(root:->Root,p:&mut Pool<Leaf>,n:&Int)-><-Root{
++            async fn work(root:->Root,p:&mut Pool<Leaf>,n:&Int)-><-A<Root>{
+                 yield;return <-replace(->root,p,n);}
+             fn main(){let mut values=pool<Int>(2);let old=values.new(7);let next=values.new(9);
+                 let mut leaves=pool<Leaf>(2);let leaf=leaves.new(view:&old);

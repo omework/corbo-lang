@@ -1,0 +1,120 @@
+--- before/results.py
++++ after/results.py
+@@ -426,7 +426,8 @@
+ class ResultAnalyzer:
+     """Nominal result flow; the concrete verifier still checks moves/loans."""
+     def __init__(self, functions, effects, error, enums=None, async_functions=None):
+-        self.async_functions = async_functions or {}
++        from handle_types import HandleDefinitions
++        self.async_functions = HandleDefinitions(async_functions or {})
+         self.functions = functions
+         self.effects = effects
+         self.error = error
+@@ -523,6 +524,26 @@
+             self.fail(line, f"variable inconnue '{name}'")
+         return environment[name]
+ 
++    def public_handle_value(self, value, typ, line):
++        from handle_types import is_public_handle, canonical_captures
++        if not is_public_handle(typ) or not isinstance(value, Value) or value.mode != 'execution':
++            return value
++        from async_lowering import public_handle_type
++        actual = public_handle_type(self.analyzer.async_functions[value.typ].args[2])
++        if actual != typ:
++            self.fail(line, f'handle {typ} attendu, reçu {actual}')
++        fields = tuple((key, frozenset(targets)) for key, targets in canonical_captures(
++            value.fields, self.analyzer.async_functions[value.typ].args[1]))
++        return replace(value, typ=typ, fields=fields)
++
++    def unify_handle_values(self, values, line):
++        from handle_types import common_public_handle
++        if values and all(isinstance(value, Value) and value.mode == 'execution' for value in values):
++            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions)
++            if public is not None:
++                return [self.public_handle_value(value, public, line) for value in values]
++        return values
++
+     def parameter_array(self, index, typ, prefix=''):
+         mode, count = reference_array_shape(typ)
+         targets = tuple((str(slot), frozenset({BorrowTarget('stored_array_parameter', index, prefix + str(slot))}))
+@@ -549,6 +570,9 @@
+                                 frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
+                                for position, (_, capture, _) in enumerate(definition.args[1])
+                                if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES))
++                from handle_types import is_public_handle
++                if is_public_handle(typ):
++                    fields = tuple(('mut.3' if key == 'ref.3' else key, targets) for key, targets in fields)
+                 indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {},
+                                                      sync_result_contract=self.analyzer.sync_result_contract)
+                 targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')
+@@ -839,6 +863,8 @@
+             self.returned_references.update(targets)
+             return
+         if mode in ('task', 'execution'):
++            if mode == 'execution':
++                value = self.public_handle_value(value, typ, line)
+             if not isinstance(value, Value) or (value.mode, value.typ) != (mode, typ):
+                 self.fail(line, f"retour de '{self.name}' : {mode} de {typ} attendu")
+             if any(source.kind not in ('source_parameter', 'allocation_parameter', 'task_parameter', 'task_result_parameter')
+@@ -1954,6 +1980,8 @@
+             self.join_environments(environment, ((left, left_env), (right, right_env)))
+             candidates, returning = set(), []
+             kind, typ = None, None
++            if 'next' in left and 'next' in right:
++                a, b = self.unify_handle_values([a, b], line)
+             for branch, value in ((left, a), (right, b)):
+                 if 'next' not in branch:
+                     continue
+@@ -2106,6 +2134,8 @@
+                 expected = typ if mode in ('array', 'array_refs', 'array_refs_owned', 'array_ref', 'array_mut') else None
+                 part, value = self.expression(arg, environment, line, expected)
+                 flow = (flow - {'next'}) | part
++                if mode == 'execution':
++                    value = self.public_handle_value(value, typ, line)
+                 actuals.append(value)
+             if 'next' not in flow or not self.analyzer.effects[name].may_return:
+                 return flow - {'next'}, UNKNOWN
+@@ -2296,7 +2326,8 @@
+                                 projected = ()
+                             row_result_targets.update(projected or {BorrowTarget('local')})
+                     mode = 'mut' if exclusive else 'ref'
+-                    if not origins and capture_mode not in ASYNC_SHARED_VIEW_MODES:
++                    from handle_types import is_public_handle
++                    if not origins and capture_mode not in ASYNC_SHARED_VIEW_MODES and not is_public_handle(summary.typ):
+                         origins.add(BorrowTarget('local'))
+                     if origins:
+                         captures.append((f"{mode}.{key.partition('.')[2]}", frozenset(origins)))
+@@ -2312,7 +2343,7 @@
+                             sources.add(actual)
+                         elif source.kind == 'allocation_parameter' and isinstance(actual, Value) and actual.candidates:
+                             sources.update(candidate.storage() for candidate in actual.candidates)
+-                        elif source.kind == 'task_parameter' and isinstance(actual, Value) and actual.task_sources:
++                        elif source.kind == 'task_parameter' and isinstance(actual, Value):
+                             sources.update(actual.task_sources)
+                         elif source.kind == 'task_result_parameter' and isinstance(actual, Value) and actual.task_result_sources:
+                             sources.update(actual.task_result_sources)
+@@ -2690,6 +2721,8 @@
+                             self.fail(line, 'break sans valeur dans une boucle avec receveur')
+                         if isinstance(value, Value):
+                             values = self.loops[-1]['values']
++                            combined = self.unify_handle_values([*values, value], line)
++                            values[:], value = combined[:-1], combined[-1]
+                             if values and (value.mode, value.typ) != (values[0].mode, values[0].typ):
+                                 self.fail(line, 'break : même type et même mode requis sur toutes les sorties')
+                             values.append(value)
+@@ -2777,6 +2810,7 @@
+                     part |= outcome
+                 self.join_environments(environment, continuing)
+                 if values and all(isinstance(value, Value) and value.mode != 'unknown' for value in values):
++                    values = self.unify_handle_values(values, line)
+                     signatures = {(value.mode.removeprefix('array_') if value.mode in ('array_ref', 'array_mut')
+                                    else value.mode, value.typ,
+                                    value.container_mode if value.container_borrow else None)
+@@ -2839,6 +2873,7 @@
+                 values.append(value)
+         self.join_environments(environment, continuing)
+         if values:
++            values = self.unify_handle_values(values, line)
+             return flow, replace(merge_reference_values(values),
+                                  payload_reference=any(value.payload_reference for value in values),
+                                  handle_items=merge_handle_items(values),

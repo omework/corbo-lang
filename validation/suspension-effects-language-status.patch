@@ -1,0 +1,109 @@
+--- /tmp/crust-before-suspension-effects/LANGUAGE_RULES.md	2026-11-08 04:45:07
++++ LANGUAGE_RULES.md	2026-11-08 04:45:07
+@@ -5,10 +5,10 @@
+ Les décisions sur les data stacks et régions grandissantes sont consignées
+ dans [GROWING_REGIONS.md](GROWING_REGIONS.md), à la même date.
+ Les structures, constructions builtin et méthodes retenues le 5 novembre 2026
+-sont consignées dans [STRUCTURES_METHODS.md](STRUCTURES_METHODS.md), sans
+-implémentation à ce stade.
++sont consignées dans [STRUCTURES_METHODS.md](STRUCTURES_METHODS.md).
+ Les décisions UTF-8, str, char et String du 5 novembre 2026 sont consignées
+-dans [UTF8_STRINGS.md](UTF8_STRINGS.md), également sans implémentation.
++dans [UTF8_STRINGS.md](UTF8_STRINGS.md). Ces familles disposent désormais d'un
++support partiel, détaillé par les rapports et la matrice de vérification.
+ 
+ Ce document consigne les décisions retenues. Il ne constitue pas encore un
+ système de types formalisé ni une preuve de sûreté. Le [README](README.md)
+@@ -94,27 +94,28 @@
+ Cette décision fournit une référence de conception ; elle ne signifie ni que
+ tout Rust est implémenté, ni que sa bibliothèque `core`/`std` est reprise, ni que
+ ses règles d'ownership remplacent celles de Crust. Les traits, threads et async
+-étaient hors du périmètre initial. Les traits restent reportés ; threads et async
+-sont désormais spécifiés dans l'extension, sans être implémentés. Le sous-ensemble sera implémenté
+-progressivement, en vérifiant ses interactions avec les règles mémoire.
++étaient hors du périmètre initial. Les traits à plusieurs méthodes restent
++reportés ; les type features à une méthode ont un support statique. Threads
++et async disposent d'un support partiel suivi dans la matrice, qui distingue
++les cas exécutés des règles encore à raccorder.
+ 
+-Le prototype emploie désormais `new(source) Int(...)`, avec `allocator()` ou
+-`stack(octets)` pour déclarer explicitement une source locale. Cette notation
+-reste expérimentale. Dans les anciens exemples ci-dessous qui omettent la
+-source, seule la règle locale illustrée est visée ; la syntaxe courte n'est
+-plus acceptée par le prototype.
++L'ancienne notation du prototype employait `new(source) Int(...)`, avec
++`allocator()` ou `stack(octets)` pour déclarer une source locale. I2 décrit
++la décision actuelle. Les anciens exemples ci-dessous illustrent les règles
++locales indiquées ; ils ne remplacent pas les décisions de notation récentes.
+ 
+ ## 1. Blocs et exécution
+ 
+ **S1 — Syntaxe.** Un bloc commence par `{` et finit par `}`. La notation
+ `scope A { ... }` servait à la discussion ; elle ne fait pas partie de la syntaxe.
+ 
+-**S2 — Modèle initial et extension.** L'implémentation actuelle est synchrone.
++**S2 — Modèle initial et extension.** Le modèle initial est synchrone.
+ La conception async/multithread est définie par AS1–AS16, RT1–RT8, MT1–MT9 et SL1 dans
+ [l'extension normative](ASYNC_MULTITHREAD_RULES.md). Elle ne doit pas être
+-présentée comme déjà vérifiée par ce compilateur.
++présentée comme entièrement vérifiée par ce compilateur : son support partiel
++et ses preuves d'exécution sont suivis dans la matrice.
+ 
+-Les traits restent également hors périmètre pour le moment. Leur absence
++Les traits à plusieurs méthodes restent hors périmètre pour le moment. Leur absence
+ n'impose pas de décision définitive sur leur ajout ultérieur.
+ 
+ **S3 — Appels.** Chaque appel de fonction crée une activation de scope dont le
+@@ -733,7 +734,10 @@
+ L'extension normative [GROWING_REGIONS.md](GROWING_REGIONS.md), G1–G12, précise
+ les décisions récentes : deux curseurs, régions de même gabarit, annotation de
+ scope héritée et recours à une stack dédiée. Elle prévaut sur les réserves
+-historiques incompatibles ci-dessous et n'est pas encore implémentée.
++historiques incompatibles ci-dessous. Les primitives des deux fronts et des
++régions sont implémentées dans le périmètre décrit par
++[GROWING_REGIONS_CYCLE.md](GROWING_REGIONS_CYCLE.md) ; le placement général
++reste à compléter.
+ 
+ **P1 — Plusieurs plages virtuelles.** La réservation et l'engagement suivent le
+ modèle de Goose : grandes plages virtuelles, pages mises à disposition à la
+@@ -1005,7 +1009,7 @@
+ Voir [FIXED_ARRAYS_VALIDATION.md](FIXED_ARRAYS_VALIDATION.md) pour le
+ périmètre implémenté et les limites du cycle.
+ 
+-## 10. Extension async/multithread retenue, non implémentée
++## 10. Extension async/multithread retenue, support partiel
+ 
+ Les règles normatives sont regroupées dans
+ [ASYNC_MULTITHREAD_RULES.md](ASYNC_MULTITHREAD_RULES.md). Les décisions remplacées,
+@@ -1022,10 +1026,11 @@
+ ont été retirés : ils ne sont pas des fonctionnalités à implémenter. Les méthodes
+ et champs d'un type ne peuvent pas porter le même nom. Les défauts personnalisés
+ et les tags sont reportés. Le chantier UTF-8 est désormais consigné séparément.
+-Le support exécutable de cette famille se limite à la construction dans
+-`Pool<Int>`, y compris le défaut 0. Voir la matrice pour ST2 et ST3.
++Le support comprend des structures locales et en pool, des copies explicites,
++des méthodes et des contrats de champs. La matrice et les rapports de cycle
++délimitent les types et compositions effectivement pris en charge.
+ 
+-## 12. UTF-8 et String retenus, non implémentés
++## 12. UTF-8 et String retenus, support partiel
+ 
+ [UTF8_STRINGS.md](UTF8_STRINGS.md) fait partie des règles normatives : TX1–TX20
+ définissent les vues str, conversions explicites, indexation d'octets, String
+@@ -1040,8 +1045,15 @@
+ H1–H3, VE1–VE6, GR1–GR2 et TX21–TX22. La matrice distingue les parties
+ exécutables des décisions qui restent à implémenter.
+ 
+-## 14. Travail restant
++## 14. Inventaire historique du travail restant
+ 
++La liste ci-dessous conserve les travaux identifiés lors de la conception
++initiale. Plusieurs ont depuis été partiellement ou entièrement raccordés
++dans un périmètre donné, notamment PR1, les contrats, les structures et UTF-8.
++Elle ne constitue pas la checklist actuelle d'implémentation : consulter le
++[README](README.md) et la [matrice de vérification](VERIFICATION_MATRIX.md),
++dont les cycles les plus récents précisent les écarts encore ouverts.
++
+ - Formaliser les effets des signatures, les origines des références retournées
+   et le suivi des dépendances dans les structures mutables.
+ - Préciser le bilan des transferts conditionnels et la syntaxe compacte des

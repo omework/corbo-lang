@@ -1,0 +1,111 @@
+--- before/results.py
++++ results.py
+@@ -137,6 +137,9 @@
+     task_wait_parameters: frozenset[int] = frozenset()
+     task_forward_parameters: frozenset[int] = frozenset()
+     task_field_updates: tuple = ()
++    # Proven absence, not an unknown source: an owned Result contains no
++    # allocation on any continuing path (for example LaunchFailed only).
++    absent_owned_payload: bool = False
+ 
+     @property
+     def same_parameter(self):
+@@ -153,6 +156,8 @@
+                                     for name, targets in self.borrowed_fields],
+                 'fresh_variants': sorted(self.fresh_variants),
+                 'reference_targets': [t.describe(params) for t in sorted(self.reference_targets)]}
++        if self.absent_owned_payload:
++            description['absent_owned_payload'] = True
+         if self.task_field_updates:
+             description['task_field_updates'] = [
+                 {'parameter': params[index][0], 'fields': [
+@@ -376,6 +381,7 @@
+     pending_structure_calls: frozenset = frozenset()
+     task_parameters: frozenset[int] = frozenset()
+     deferred_field_updates: frozenset = frozenset()
++    absent_owned_payload: bool = False
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -520,6 +526,7 @@
+         self.loops = []
+         self.blocks = []
+         self.returned = set()
++        self.returned_payload_absence = []
+         self.returned_task_sources = set()
+         self.returned_task_result_sources = set()
+         self.task_wait_parameters = set()
+@@ -769,6 +776,8 @@
+                               stored_reference_parameters=frozenset(self.stored_reference_parameters),
+                               task_wait_parameters=frozenset(self.task_wait_parameters),
+                               task_forward_parameters=frozenset(self.task_forward_parameters),
++                              absent_owned_payload=bool(self.returned_payload_absence)
++                                  and all(self.returned_payload_absence),
+                               task_field_updates=tuple((i, tuple(sorted(fields.items()))) for i, fields
+                                   in sorted(self.returned_task_field_updates.items())),
+                               owned_field_writes=tuple((index, name, child) for (index, name), child
+@@ -1070,8 +1079,10 @@
+                     self.fail(line, 'retour refusé : cible de case empruntée non durable')
+                 self.returned_fields[slot] = self.returned_fields.get(slot, frozenset()) | targets
+             return
+-        if not value.candidates and value.mode != 'handle_option':
++        absent_payload = value.mode in ('join_owned', 'join_nested') and value.absent_owned_payload
++        if not value.candidates and value.mode != 'handle_option' and not absent_payload:
+             self.fail(line, 'retour sans provenance symbolique vérifiable')
++        self.returned_payload_absence.append(absent_payload and not value.candidates)
+         candidates = self.describe_vector_result(value, line)
+         for candidate in candidates:
+             if candidate.kind == 'fresh' and candidate.source.kind == 'local':
+@@ -1277,7 +1288,8 @@
+                     task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+                     pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+-                    deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates))
++                    deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
++                    absent_owned_payload=all(value.absent_owned_payload for value in values))
+ 
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+@@ -1704,7 +1716,8 @@
+                 if values[0].mode == 'join_array':
+                     return flow, Value('array', values[0].typ)
+                 if values[0].mode == 'join_nested':
+-                    return flow, Value('join_owned', values[0].typ, values[0].candidates)
++                    return flow, Value('join_owned', values[0].typ, values[0].candidates,
++                                       absent_owned_payload=values[0].absent_owned_payload)
+                 if values[0].mode == 'join_owned':
+                     return flow, Value('owned', values[0].typ, values[0].candidates)
+                 if values[0].mode in ('join_ref', 'join_mut'):
+@@ -2102,7 +2115,8 @@
+                           task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
+                           pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls),
+                     task_parameters=frozenset(index for value in returning for index in value.task_parameters),
+-                    deferred_field_updates=frozenset(update for value in returning for update in value.deferred_field_updates)))
++                    deferred_field_updates=frozenset(update for value in returning for update in value.deferred_field_updates),
++                    absent_owned_payload=bool(returning) and all(value.absent_owned_payload for value in returning)))
+         if op == 'struct_copy':
+             source = self.lookup(expr[1], environment, line)
+             original = self.lookup(expr[2], environment, line)
+@@ -2678,7 +2692,11 @@
+                                structure_origins=frozenset({id(expr)})
+                                if summary.typ in REFERENCE_VECTORS or '' in self.analyzer.enums.get(summary.typ, {})
+                                else frozenset(),
+-                               handle_items=shared_items, input_items_changed=shared_changed)
++                               handle_items=shared_items, input_items_changed=shared_changed,
++                               absent_owned_payload=not candidates and (summary.absent_owned_payload or
++                                   bool(summary.candidates) and all(item.kind == 'parameter'
++                                       and actuals[item.parameter].absent_owned_payload
++                                       for item in summary.candidates)))
+         return {'next'}, UNKNOWN
+ 
+     def record_loop_edge(self, outcome, environment):
+@@ -2740,7 +2758,8 @@
+             task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+             pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+-                    deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates))
++                    deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
++                    absent_owned_payload=all(value.absent_owned_payload for value in values))
+ 
+     def observe_suspension(self, environment, line):
+         """Extension point: synchronous completion inference has no prefix exits."""

@@ -1,0 +1,30 @@
+--- /tmp/crust-before-typed-handle-vectors/effects.py
++++ /Users/jabarkarim/sources/crust/effects.py
+@@ -13,6 +13,7 @@
+ from utf8_syntax import VECTOR_SPLIT_TYPES, VECTOR_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, VECTOR_PAYLOAD_TYPES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, VALUE_MODES
+ from dataclasses import dataclass
+ 
++from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression, SHARED_REF_VECTOR, REFERENCE_VECTORS, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, fixed_array_shape, reference_type
+ 
+ 
+@@ -347,7 +348,7 @@
+                 if expr[2] == 'pop':
+                     return 'Option<&Int>' if typ == SHARED_REF_VECTOR else VALUE_MODES[VECTOR_OPTION_MODES[VECTOR_ELEMENTS[typ]]]
+                 if expr[2] == 'remove':
+-                    return 'Int' if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) else VECTOR_ELEMENTS[typ]
++                    return handle_vector_element(typ) if is_handle_vector(typ) else 'Int' if typ in REFERENCE_VECTORS else VECTOR_ELEMENTS[typ]
+                 return 'Int' if expr[2] == 'len' else 'Void'
+             builtin = UTF8_METHODS.get((typ, expr[2]))
+             if builtin is not None:
+@@ -379,8 +380,8 @@
+         if op in ('array_index', 'array_replace'):
+             nominal = self.receiver_type(expr[1], environment)
+             shape = fixed_array_shape(nominal) if nominal else None
+-            if op == 'array_index' and nominal == HANDLE_VECTOR:
+-                return 'A<Int>'
++            if op == 'array_index' and is_handle_vector(nominal):
++                return f'A<{handle_vector_element(nominal)}>'
+             if op == 'array_index' and nominal == '[Int]':
+                 return 'Int'
+             if op == 'array_index' and nominal in VECTOR_ELEMENTS:

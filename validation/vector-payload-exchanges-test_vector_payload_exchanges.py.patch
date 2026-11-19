@@ -1,0 +1,99 @@
+--- before/tests/test_vector_payload_exchanges.py
++++ after/tests/test_vector_payload_exchanges.py
+@@ -0,0 +1,96 @@
++"""Each Result arm preserves the payload graph returned by a vector exchange."""
++from pathlib import Path
++import struct
++import unittest
++import test_select_source as harness
++BASE=Path(__file__).resolve().parents[1].joinpath('validation/open-vector-payload-exchange-contract.crust').read_text()
++RELAY='fn relay(r:->Result<A<Item>,A<Item>>)-><-Result<A<Item>,A<Item>>{return <-r;}'
++CALL='exchange(&mut v,->next,0)'
++
++class VectorPayloadExchangeTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_return_both_arms(self):
++        for i,value in ((0,7),(4,9)):
++            source=BASE.replace(CALL,f'exchange(&mut v,->next,{i})')
++            run=self.run_source(source)
++            self.assertEqual(run.stdout,f'{value}\n')
++            self.assertEqual(run.stderr.count('=Item\n'),2)
++            for name in ('a','b'):
++                self.refused(source.replace(f'drop(->{name});','').replace('match (->result)',f'drop(->{name});match (->result)'),
++                             'emprunt|réserv|référenc')
++
++    def test_relay_both_arms(self):
++        for i,value in ((0,7),(4,9)):
++            source=RELAY+BASE.replace(CALL,f'relay(->exchange(&mut v,->next,{i}))')
++            self.assertEqual(self.run_source(source).stdout,f'{value}\n')
++            self.refused(source.replace('relay(->exchange','relay(exchange'),'transfert|->|mode attendu')
++
++    def test_nested_payload(self):
++        source=BASE.replace('struct Item{value:&Int}',
++            'struct Inner{value:&Int}struct Item{inner:A<Inner>}fn read(i:&Inner)->Int{return *i.value;}')
++        source=source.replace('let mut p=pool<Item>(2);','let mut ip=pool<Inner>(2);let mut p=pool<Item>(2);')
++        source=source.replace('v.push(->p.new(value:&a));','let x=ip.new(value:&a);v.push(->p.new(inner:<-x));')
++        source=source.replace('let next=p.new(value:&b);','let y=ip.new(value:&b);let next=p.new(inner:<-y);')
++        source=source.replace('*old.value','read(&*old.inner)').replace('*incoming.value','read(&*incoming.inner)')
++        for relay in (False,True):
++            for i,value in ((0,7),(4,9)):
++                candidate=source.replace(CALL,f'exchange(&mut v,->next,{i})')
++                if relay:
++                    candidate=RELAY+candidate.replace(f'exchange(&mut v,->next,{i})',f'relay(->exchange(&mut v,->next,{i}))')
++                run=self.run_source(candidate)
++                self.assertEqual(run.stdout,f'{value}\n')
++                self.assertEqual(run.stderr.count('=Inner\n'),2)
++                self.assertEqual(run.stderr.count('=Item\n'),2)
++                self.refused(candidate.replace('drop(->a);','').replace('match (->result)','drop(->a);match (->result)'),
++                             'emprunt|réserv|référenc')
++
++    def test_try_push_success_and_capacity_failure(self):
++        source='''struct Item{value:&Int}
++            fn append(v:&mut Vector<A<Item>>,item:->A<Item>)-><-Result<(),A<Item>>{return <-v.try_push(->item);}
++            fn relay(r:->Result<(),A<Item>>)-><-Result<(),A<Item>>{return <-r;}
++            fn main(){#(directive, stack_region_max_size=1M){
++                let mut ns=pool<Int>(2);let a=ns.new(7);let b=ns.new(9);
++                let mut p=pool<Item>(1);let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();
++                FILL
++                let item=p.new(value:&b);let result=relay(->append(&mut v,->item));
++                match (->result){Ok(())=>{print(1);},Err(item)=>{print(*item.value);drop(->item);}}
++                drop(->v);let reused=p.new(value:&a);drop(->reused);drop(->a);drop(->b);
++            }}'''
++        count=1048576//struct.calcsize('P')
++        fill=f'let mut q=pool<Item>({count});let mut i=0;while i<{count}{{v.push(->q.new(value:&a));i=i+1;}}'
++        for full in (False,True):
++            program=source.replace('FILL',fill if full else '')
++            self.assertEqual(self.run_source(program).stdout,'9\n' if full else '1\n')
++            self.refused(program.replace('drop(->b);','').replace('match (->result)','drop(->b);match (->result)'),
++                         'emprunt|réserv|référenc')
++
++    def test_direct_drop_and_explicit_result_usage(self):
++        match='match (->result){Ok(old)=>{print(*old.value);drop(->old);},Err(incoming)=>{print(*incoming.value);drop(->incoming);}}'
++        for i in (0,4):
++            source=BASE.replace('let result='+CALL+';',f'drop(->exchange(&mut v,->next,{i}));').replace(match,'')
++            run=self.run_source(source)
++            self.assertEqual(run.stdout,'')
++            self.assertEqual(run.stderr.count('=Item\n'),2)
++        self.refused(BASE.replace(match,''),'sans usage explicite')
++        self.refused(BASE.replace(match,'drop(->result);drop(->result);'),'utilisable|consomm')
++
++    def test_mutable_payloads(self):
++        source=BASE.replace('value:&Int','value:&mut Int').replace('let a=','let mut a=').replace(
++            'let b=','let mut b=').replace('value:&a','value:&mut a').replace('value:&b','value:&mut b')
++        self.assertEqual(self.run_source(source).stdout,'7\n')
++        for op in ('print(*a);','b=21;'):
++            self.refused(source.replace('match (->result)',op+'match (->result)'),'emprunt|réserv|référenc')
++        self.refused(source.replace('next=p.new(value:&mut b)','next=p.new(value:&mut a)'),
++                     'emprunt|réserv|référenc')
++
++    def test_parent_receiver_requires_both_payload_pools(self):
++        source=BASE.replace('let mut vp=','let result={let mut vp=').replace(
++            'let result=exchange(&mut v,->next,0);','let local=exchange(&mut v,->next,0);<-local};').replace('drop(->v);','')
++        self.assertEqual(self.run_source(source).stdout,'7\n')
++        self.refused(source.replace('let mut p=pool<Item>(2);let result={','let result={let mut p=pool<Item>(2);'),
++                     'source|pool|survi')
++
++if __name__=='__main__':unittest.main()

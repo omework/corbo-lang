@@ -1,0 +1,9 @@
+enum Choice{A,B}
+            async fn first(x:&mut Int,s:&Int)->Int{yield;*x=*x+*s;return *x;}
+            async fn second(s:&Int,y:&mut Int)->Int{let padding=[1,2];yield;*y=*y+*s;return *y+padding[0];}
+            fn choose(flag:bool,a:&mut Int,b:&mut Int,s:&Int)-><-runtime::Handle<Int>{
+                 let h=if flag {let h=runtime::spawn(->first(a,s)); <-h} else {let h=runtime::spawn(->second(s,b)); <-h};return <-h;}
+            fn finish(h:->runtime::Handle<Int>)->Int{
+                match h.join(){Ok(n)=>{return n;},Err(_)=>{return 99;}}}fn main(){let mut p=pool<Int>(3);let mut a=p.new(7);let mut b=p.new(9);let s=p.new(1);
+            let h=choose(true,&mut a,&mut b,&s);print(*s);
+            print(finish(->h));print(*a);print(*b);}

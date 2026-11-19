@@ -1,0 +1,339 @@
+BASELINE 0 test_computed_and_nested_return_producers (test_async_result_storage.AsyncResultStorageTests.test_computed_and_nested_return_producers) ... ok
+test_conditional_fresh_results (test_async_result_storage.AsyncResultStorageTests.test_conditional_fresh_results) ... ok
+test_fresh_result_from_scalar_capture (test_async_result_storage.AsyncResultStorageTests.test_fresh_result_from_scalar_capture) ... ok
+test_launch_failure_and_inactive_drop (test_async_result_storage.AsyncResultStorageTests.test_launch_failure_and_inactive_drop) ... ok
+test_loop_result_and_repeated_reuse (test_async_result_storage.AsyncResultStorageTests.test_loop_result_and_repeated_reuse) ... ok
+test_pool_copy_cannot_escape_pool (test_async_result_storage.AsyncResultStorageTests.test_pool_copy_cannot_escape_pool) ... ok
+test_pool_copy_keeps_pool_but_not_original (test_async_result_storage.AsyncResultStorageTests.test_pool_copy_keeps_pool_but_not_original) ... ok
+test_recorded_copy_return (test_async_result_storage.AsyncResultStorageTests.test_recorded_copy_return) ... ok
+test_reference_row_capture_and_independent_result (test_async_result_storage.AsyncResultStorageTests.test_reference_row_capture_and_independent_result) ... ok
+test_result_borrow_still_prevents_drop (test_async_result_storage.AsyncResultStorageTests.test_result_borrow_still_prevents_drop) ... ok
+test_result_identity_after_child_release (test_async_result_storage.AsyncResultStorageTests.test_result_identity_after_child_release) ... ok
+test_returned_copy_releases_original_borrow (test_async_result_storage.AsyncResultStorageTests.test_returned_copy_releases_original_borrow) ... ok
+test_suspended_child_discards_partial_result (test_async_result_storage.AsyncResultStorageTests.test_suspended_child_discards_partial_result) ... ok
+test_two_concurrent_fresh_results (test_async_result_storage.AsyncResultStorageTests.test_two_concurrent_fresh_results) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 16.969s
+
+OK
+
+omit_output_storage_flag DETECTED
+test_recorded_copy_return (test_async_result_storage.AsyncResultStorageTests.test_recorded_copy_return) ... FAIL
+
+======================================================================
+FAIL: test_recorded_copy_return (test_async_result_storage.AsyncResultStorageTests.test_recorded_copy_return)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/crust.py", line 15726, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/crust.py", line 13905, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/async_lowering.py", line 927, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/async_lowering.py", line 6487, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/async_lowering.py", line 4927, in emit_return
+    require_durable_storage(member, 0, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/async_lowering.py", line 1028, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-1tymutk3/async_lowering.py", line 960, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 27, in test_recorded_copy_return
+    run=self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.078s
+
+FAILED (failures=1)
+
+omit_return_producers DETECTED
+test_result_identity_after_child_release (test_async_result_storage.AsyncResultStorageTests.test_result_identity_after_child_release) ... FAIL
+
+======================================================================
+FAIL: test_result_identity_after_child_release (test_async_result_storage.AsyncResultStorageTests.test_result_identity_after_child_release)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 21, in storage_probe
+    return captures.AsyncLocalCaptureTests.storage_probe(self, source, body)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 139, in storage_probe
+    code=compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/crust.py", line 15719, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/crust.py", line 15712, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/crust.py", line 14200, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/crust.py", line 13905, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/async_lowering.py", line 927, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/async_lowering.py", line 6487, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/async_lowering.py", line 4927, in emit_return
+    require_durable_storage(member, 0, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/async_lowering.py", line 1028, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-mxkb6wm8/async_lowering.py", line 960, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 116, in test_result_identity_after_child_release
+    run=self.storage_probe(source, '''
+        CrustTask *task=crust_async_work_create();assert(task_poll(task)==TASK_SUSPENDED);
+    ...<7 lines>...
+        assert(observed_close_count==1 && observed_closed[0]==destination);
+    ''')
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 23, in storage_probe
+    self.fail(f'programme attendu valide refusé avant la sonde C : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé avant la sonde C : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.077s
+
+FAILED (failures=1)
+
+forget_pool_result_source DETECTED
+test_pool_copy_keeps_pool_but_not_original (test_async_result_storage.AsyncResultStorageTests.test_pool_copy_keeps_pool_but_not_original) ... FAIL
+
+======================================================================
+FAIL: test_pool_copy_keeps_pool_but_not_original (test_async_result_storage.AsyncResultStorageTests.test_pool_copy_keeps_pool_but_not_original)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 15726, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 13924, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 3019, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 9805, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 11095, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 12414, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 12927, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 6236, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 8619, in expression
+    return self.match_expression(expr, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 8575, in match_expression
+    result = self.statements(scope, nodes, 'value_match', continuation=future,
+                             expected_array=expected_array)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 12475, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 3180, in verify_state
+    self.fail('invariant interne : allocation vivante sans provenance')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-dauud5ox/crust.py", line 1947, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: invariant interne : allocation vivante sans provenance
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 100, in test_pool_copy_keeps_pool_but_not_original
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: invariant interne : allocation vivante sans provenance
+
+----------------------------------------------------------------------
+Ran 1 test in 0.080s
+
+FAILED (failures=1)
+
+close_external_output_source DETECTED
+test_suspended_child_discards_partial_result (test_async_result_storage.AsyncResultStorageTests.test_suspended_child_discards_partial_result) ... FAIL
+
+======================================================================
+FAIL: test_suspended_child_discards_partial_result (test_async_result_storage.AsyncResultStorageTests.test_suspended_child_discards_partial_result)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 21, in storage_probe
+    return captures.AsyncLocalCaptureTests.storage_probe(self, source, body)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 139, in storage_probe
+    code=compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/crust.py", line 15719, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/crust.py", line 15712, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/crust.py", line 14200, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/crust.py", line 13905, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/async_lowering.py", line 927, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/async_lowering.py", line 6488, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/async_lowering.py", line 4927, in emit_return
+    require_durable_storage(member, 0, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/async_lowering.py", line 1028, in require_durable_storage
+    fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-qfzyc7xj/async_lowering.py", line 960, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 132, in test_suspended_child_discards_partial_result
+    run=self.storage_probe(source, '''
+        CrustTask *task=crust_async_work_create();assert(task_poll(task)==TASK_SUSPENDED);
+    ...<4 lines>...
+        assert(task_pool_is_empty(&crust_task_context.pool_work));
+    ''')
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 23, in storage_probe
+    self.fail(f'programme attendu valide refusé avant la sonde C : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé avant la sonde C : ligne 1: transfert refusé : le pool local ne survit pas au receveur
+
+----------------------------------------------------------------------
+Ran 1 test in 0.078s
+
+FAILED (failures=1)
+
+overwrite_parameter_map DETECTED
+test_reference_row_capture_and_independent_result (test_async_result_storage.AsyncResultStorageTests.test_reference_row_capture_and_independent_result) ... 
+  test_reference_row_capture_and_independent_result (test_async_result_storage.AsyncResultStorageTests.test_reference_row_capture_and_independent_result) (creation='let mut points=pool<Point>(2);let p=points.new(x:7);') ... FAIL
+
+======================================================================
+FAIL: test_reference_row_capture_and_independent_result (test_async_result_storage.AsyncResultStorageTests.test_reference_row_capture_and_independent_result) (creation='let mut points=pool<Point>(2);let p=points.new(x:7);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 15726, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 13924, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 3019, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 9805, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 11095, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 12414, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 12927, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 6236, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 8619, in expression
+    return self.match_expression(expr, scope, source_name)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 8575, in match_expression
+    result = self.statements(scope, nodes, 'value_match', continuation=future,
+                             expected_array=expected_array)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 12475, in statements
+    self.verify_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 3180, in verify_state
+    self.fail('invariant interne : allocation vivante sans provenance')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-result-storage-rtte2zxs/crust.py", line 1947, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 5: invariant interne : allocation vivante sans provenance
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 77, in test_reference_row_capture_and_independent_result
+    self.assertEqual(self.run_source(source.replace('POINT',creation)).stdout,'3\n7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: invariant interne : allocation vivante sans provenance
+
+----------------------------------------------------------------------
+Ran 1 test in 0.614s
+
+FAILED (failures=1)
+

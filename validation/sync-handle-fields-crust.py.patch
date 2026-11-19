@@ -1,0 +1,84 @@
+--- before/crust.py
++++ after/crust.py
+@@ -3243,6 +3243,13 @@
+                 key = (loan.alloc.id, loan.reserved_field) if loan.reserved_field is not None else (
+                     id(loan) if loan.vector_projection_targets else loan.alloc.id)
+                 if loan.alloc is allocation:
++                    if (child.alloc is not None and child.alloc.typ.startswith('Execution<')
++                            and any(target is allocation for target in self.dependency_targets(child.alloc))):
++                        # A returned-field projection is retained for after join.
++                        # While the handle is running its whole-carrier capture
++                        # already represents this same capability, not a second
++                        # independent mutable loan. Other holders still count.
++                        continue
+                     reservations[key] = loan
+                 elif any(target is allocation for target in
+                          (loan.vector_projection_targets or self.reserved_targets(loan))):
+@@ -3297,7 +3304,8 @@
+             represented = {id(loan) for loan in result if loan.match_reservation}
+             represented.update(id(loan) for key, loan in reservations.items()
+                                if key not in projected and loan.match_reservation)
+-            array_loans = self.allocation_array_loans(allocation, after, represented, access=exclude)
++            array_loans = self.allocation_array_loans(
++                allocation, after, represented, access=exclude, represented_carriers=field_tokens)
+             if exclude is None and allocation.typ in VECTOR_SLICE_MODES and any(
+                     loan.kind == 'mut' for loan in array_loans):
+                 # A shared parameter and a task's shared view can both
+@@ -3322,7 +3330,8 @@
+     def array_reservations(self, loan):
+         return tuple(self.match_reservations(tuple(self.array_lineage(loan).values())))
+ 
+-    def allocation_array_loans(self, allocation, after=False, represented=frozenset(), *, access=None):
++    def allocation_array_loans(self, allocation, after=False, represented=frozenset(), *, access=None,
++                               represented_carriers=frozenset()):
+         # A reborrow and its stored parent are one capability. Keep the
+         # exclusivity of the most restrictive active route to the allocation.
+         modes = []
+@@ -3330,7 +3339,20 @@
+                          and allocation.typ in VECTOR_SLICE_MODES else set())
+         if access is not None and access.kind == 'ref' and allocation.typ in VECTOR_SLICE_MODES:
+             parent_access = self.array_legacy_parents(access, None)
++        # A running handle can retain both its whole input and a projected
++        # result. The input loan already covers that projection until join.
++        # Match the actual captured loan, never just the target allocation:
++        # an independent view of the same object must still count.
++        covered_captures = {id(target.array_capture)
++                            for carrier in self.allocations
++                            if carrier.alive and carrier.id in represented_carriers
++                            and carrier.typ.startswith('Execution<')
++                            and any(root is allocation for root in self.dependency_targets(carrier))
++                            for target in self.dependency_targets(carrier)
++                            if target.array_capture is not None}
+         for loan in self.active_array_loans(after):
++            if id(loan) in covered_captures:
++                continue
+             # A shared slice can coexist with reads through its mutable parent.
+             # Other paths to the allocation still see the inherited reservation.
+             for root, _ in self.array_paths(loan):
+@@ -9106,6 +9128,10 @@
+                 return source_union(*(a.sources for a in targets))
+             if symbol.kind == 'task_result_parameter':
+                 return binding.alloc.task_result_sources
++            if symbol.kind == 'task_borrow_parameter':
++                return source_union(*(target.sources
++                                      for _, targets in capture_fields(binding.alloc.dependencies, symbol.name)
++                                      for target in targets))
+             if symbol.kind == 'task_utf8_parameter':
+                 return source_union(*(target.sources for _, targets in capture_fields(binding.alloc.dependencies, symbol.name)
+                                       for target in targets if target.array_capture is not None
+@@ -10251,6 +10277,15 @@
+                     exclusive |= any(parent.kind == 'mut'
+                                      or any(self.retains_exclusive_field(parent, root, join_only=True)
+                                             for root in captured) for parent in chain)
++                elif origin.kind == 'indirect_field_parameter':
++                    projection = FunctionResult('mut' if exclusive else 'ref', 'Int',
++                                                reference_targets=frozenset({origin}))
++                    descriptor = self.direct_result(projection, params, bindings, binding.c)
++                    captured, chain = descriptor.reference_targets, descriptor.borrow_parents
++                    roots.update((root.id, root) for root in captured)
++                    exclusive |= any(parent.kind == 'mut' or any(
++                        self.retains_exclusive_field(parent, root, join_only=True)
++                        for root in captured) for parent in chain)
+                 elif origin.kind in ('utf8_parameter', 'string_parameter', 'vector_parameter'):
+                     descriptor = (binding.utf8_capture_descriptor if origin.kind == 'utf8_parameter'
+                                   else ('int' if origin.kind == 'vector_parameter' and binding.alloc.typ == 'Vector<Int>'

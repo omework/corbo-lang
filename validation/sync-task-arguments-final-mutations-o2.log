@@ -1,0 +1,241 @@
+BASELINE 0 test_conditional_forward_unions_targets (test_sync_task_arguments.SyncTaskArgumentTests.test_conditional_forward_unions_targets) ... ok
+test_conditional_fresh_or_forwarded_task (test_sync_task_arguments.SyncTaskArgumentTests.test_conditional_fresh_or_forwarded_task) ... ok
+test_drop_helper_releases_capture_and_task_slot (test_sync_task_arguments.SyncTaskArgumentTests.test_drop_helper_releases_capture_and_task_slot) ... ok
+test_early_return_destroys_prepared_task_before_pool (test_sync_task_arguments.SyncTaskArgumentTests.test_early_return_destroys_prepared_task_before_pool) ... ok
+test_forwarded_owned_graph_result_keeps_nested_reference (test_sync_task_arguments.SyncTaskArgumentTests.test_forwarded_owned_graph_result_keeps_nested_reference) ... ok
+test_forwarding_contract_marks_fresh_alternative (test_sync_task_arguments.SyncTaskArgumentTests.test_forwarding_contract_marks_fresh_alternative) ... ok
+test_fresh_local_result_and_pool_result_through_relay (test_sync_task_arguments.SyncTaskArgumentTests.test_fresh_local_result_and_pool_result_through_relay) ... ok
+test_left_to_right_prepared_task_holds_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_left_to_right_prepared_task_holds_capture) ... ok
+test_multiple_prepared_tasks_clean_in_reverse_order (test_sync_task_arguments.SyncTaskArgumentTests.test_multiple_prepared_tasks_clean_in_reverse_order) ... ok
+test_public_spawn_helper_keeps_returned_borrow (test_sync_task_arguments.SyncTaskArgumentTests.test_public_spawn_helper_keeps_returned_borrow) ... ok
+test_recorded_nested_owned_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_recorded_nested_owned_capture) ... ok
+test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) ... ok
+test_select_cleanup_in_later_suspended_argument (test_sync_task_arguments.SyncTaskArgumentTests.test_select_cleanup_in_later_suspended_argument) ... ok
+test_select_rejects_loser_with_outstanding_launched_handle (test_sync_task_arguments.SyncTaskArgumentTests.test_select_rejects_loser_with_outstanding_launched_handle) ... ok
+test_task_nominal_type_and_capture_scope (test_sync_task_arguments.SyncTaskArgumentTests.test_task_nominal_type_and_capture_scope) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 7.881s
+
+OK
+
+forget_consumption DETECTED_COMPILER_CRASH
+test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) ... ERROR
+
+======================================================================
+ERROR: test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_task_arguments.py", line 34, in test_relay_borrowed_result_and_last_use
+    self.assertEqual(self.run_source(self.program(body, helpers)).stdout, '7\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/crust.py", line 16064, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/crust.py", line 14204, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/async_lowering.py", line 934, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/async_lowering.py", line 6891, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/async_lowering.py", line 5368, in emit_return
+    discard_pending(line)
+    ~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/async_lowering.py", line 5222, in discard_pending
+    cleanup_async_values(names, (), line)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/async_lowering.py", line 4522, in cleanup_async_values
+    destroy(name, line)
+    ~~~~~~~^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-task-mutant-_tj5ea0a/async_lowering.py", line 2302, in discard_task
+    del active_loans[id(loans)]
+        ~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 4454279360
+
+----------------------------------------------------------------------
+Ran 1 test in 0.084s
+
+FAILED (errors=1)
+
+lose_prepared_loans DETECTED
+test_left_to_right_prepared_task_holds_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_left_to_right_prepared_task_holds_capture) ... 
+  test_left_to_right_prepared_task_holds_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_left_to_right_prepared_task_holds_capture) (checker='verify_program') ... FAIL
+  test_left_to_right_prepared_task_holds_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_left_to_right_prepared_task_holds_capture) (checker='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_left_to_right_prepared_task_holds_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_left_to_right_prepared_task_holds_capture) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_left_to_right_prepared_task_holds_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_left_to_right_prepared_task_holds_capture) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.611s
+
+FAILED (failures=2)
+
+lose_forwarded_captures DETECTED
+test_recorded_nested_owned_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_recorded_nested_owned_capture) ... 
+  test_recorded_nested_owned_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_recorded_nested_owned_capture) (checker='verify_program') ... FAIL
+  test_recorded_nested_owned_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_recorded_nested_owned_capture) (checker='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_recorded_nested_owned_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_recorded_nested_owned_capture) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_recorded_nested_owned_capture (test_sync_task_arguments.SyncTaskArgumentTests.test_recorded_nested_owned_capture) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.660s
+
+FAILED (failures=2)
+
+lose_returned_loan DETECTED
+test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) ... 
+  test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='verify_program') ... FAIL
+  test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='compile_source') ... FAIL
+  test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='verify_program') ... FAIL
+  test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='compile_source') ... FAIL
+
+======================================================================
+FAIL: test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_relay_borrowed_result_and_last_use (test_sync_task_arguments.SyncTaskArgumentTests.test_relay_borrowed_result_and_last_use) (checker='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 21, in refused
+    with self.subTest(checker=checker.__name__), self.assertRaisesRegex(Error, diagnostic):
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 1.085s
+
+FAILED (failures=4)
+
+omit_suspended_argument_task DETECTED
+test_select_cleanup_in_later_suspended_argument (test_sync_task_arguments.SyncTaskArgumentTests.test_select_cleanup_in_later_suspended_argument) ... FAIL
+
+======================================================================
+FAIL: test_select_cleanup_in_later_suspended_argument (test_sync_task_arguments.SyncTaskArgumentTests.test_select_cleanup_in_later_suspended_argument)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_task_arguments.py", line 93, in test_select_cleanup_in_later_suspended_argument
+    run = self.run_source(self.program(body, helpers))
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 17, in run_source
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12419, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : internal error: source still has live allocations
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.612s
+
+FAILED (failures=1)
+
+omit_early_argument_task DETECTED
+test_early_return_destroys_prepared_task_before_pool (test_sync_task_arguments.SyncTaskArgumentTests.test_early_return_destroys_prepared_task_before_pool) ... FAIL
+
+======================================================================
+FAIL: test_early_return_destroys_prepared_task_before_pool (test_sync_task_arguments.SyncTaskArgumentTests.test_early_return_destroys_prepared_task_before_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_task_arguments.py", line 78, in test_early_return_destroys_prepared_task_before_pool
+    run = self.run_source(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 17, in run_source
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12419, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : internal error: source still has live allocations
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.957s
+
+FAILED (failures=1)
+
+assume_all_returns_forward DETECTED
+test_forwarding_contract_marks_fresh_alternative (test_sync_task_arguments.SyncTaskArgumentTests.test_forwarding_contract_marks_fresh_alternative) ... FAIL
+
+======================================================================
+FAIL: test_forwarding_contract_marks_fresh_alternative (test_sync_task_arguments.SyncTaskArgumentTests.test_forwarding_contract_marks_fresh_alternative)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_task_arguments.py", line 178, in test_forwarding_contract_marks_fresh_alternative
+    self.assertEqual(compiler.function_contracts[name].result.task_forward_only, expected)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True != False
+
+----------------------------------------------------------------------
+Ran 1 test in 0.085s
+
+FAILED (failures=1)
+

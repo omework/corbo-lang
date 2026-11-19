@@ -1,0 +1,4 @@
+async fn read(value:&Int)->&Int{yield;return value;}
+fn relay(h:->runtime::Handle<&Int>)-><-runtime::Handle<&Int>{return <-h;}
+fn main(){let mut p=pool<Int>(1);let value=p.new(7);let h=runtime::spawn(->read(&value));
+let next=relay(->h);match next.join(){Ok(view)=>{print(*view);},Err(_)=>{print(99);}}}

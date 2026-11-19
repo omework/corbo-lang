@@ -1,0 +1,4 @@
+struct Inner{x:Int} struct Outer{inner:A<Inner>}
+fn get(v:&Inner)->Int{return v.x;} async fn own(i:->Inner)-><-Outer{yield;let q=Outer{inner:<-i};return <-q;}
+fn consume(t:->own)->Int{let h=runtime::spawn(->t);let p:Outer=match h.join(){Ok(v)=>{<-v},Err(_)=>{return 99;}};let x=get(&*p.inner);drop(->p);return x;}
+fn main(){let mut ps=pool<Inner>(1);let p=ps.new(x:7);print(consume(->own(->p)));}

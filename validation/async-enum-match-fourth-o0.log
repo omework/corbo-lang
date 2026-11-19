@@ -1,0 +1,62 @@
+test_exhaustiveness_fields_and_subject_type (test_async_enum_match.AsyncEnumMatchTests.test_exhaustiveness_fields_and_subject_type) ... ok
+test_match_reserves_carrier_until_arm_exit (test_async_enum_match.AsyncEnumMatchTests.test_match_reserves_carrier_until_arm_exit) ... ok
+test_mutable_projection_and_reborrow_inside_arm (test_async_enum_match.AsyncEnumMatchTests.test_mutable_projection_and_reborrow_inside_arm) ... ok
+test_owned_result_constructed_in_arm (test_async_enum_match.AsyncEnumMatchTests.test_owned_result_constructed_in_arm) ... ok
+test_recorded_scalar_match (test_async_enum_match.AsyncEnumMatchTests.test_recorded_scalar_match) ... ok
+test_return_break_continue_and_pool_cleanup (test_async_enum_match.AsyncEnumMatchTests.test_return_break_continue_and_pool_cleanup) ... ok
+test_returned_mutable_projection_reserves_caller (test_async_enum_match.AsyncEnumMatchTests.test_returned_mutable_projection_reserves_caller) ... ERROR
+test_shared_projection_outlives_owned_carrier (test_async_enum_match.AsyncEnumMatchTests.test_shared_projection_outlives_owned_carrier) ... ok
+test_three_arms_reordered_with_suspension_model (test_async_enum_match.AsyncEnumMatchTests.test_three_arms_reordered_with_suspension_model) ... ok
+
+======================================================================
+ERROR: test_returned_mutable_projection_reserves_caller (test_async_enum_match.AsyncEnumMatchTests.test_returned_mutable_projection_reserves_caller)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_enum_match.py", line 75, in test_returned_mutable_projection_reserves_caller
+    self.assertEqual(self.run_source(source.replace('BEFORE','')).stdout,'Writer.One(30)\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16220, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14356, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 936, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7076, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3116, in bind_special
+    pointer, loans, (mode, typ) = reference_value(initializer, statement.line, following=body[position + 1:])
+                                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2957, in reference_value
+    return match_enum(expr[1], valued=True, following=following, boolean=None, reference_result=True)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4860, in match_enum
+    return emit_branches(tag, None, None, line, valued=valued, construct='match',
+        following=following, boolean=boolean, transfer_result=transfer_result,
+        reference_result=reference_result, enum_match=(statement, typ, cell))
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4884, in emit_branches
+    arms = tuple([replace(n, op='if_yield', args=(('name', n.args[0]),))
+           ^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4884, in <genexpr>
+    arms = tuple([replace(n, op='if_yield', args=(('name', n.args[0]),))
+                  ^^^^^^^
+NameError: cannot access free variable 'replace' where it is not associated with a value in enclosing scope
+
+----------------------------------------------------------------------
+Ran 9 tests in 6.665s
+
+FAILED (errors=1)

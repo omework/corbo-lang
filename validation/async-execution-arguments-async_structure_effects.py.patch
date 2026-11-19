@@ -1,0 +1,47 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -262,13 +262,43 @@
+     def check_call_actuals(self, name, actuals, line):
+         if any(isinstance(value, Value) and value.pending_structure_calls for value in actuals):
+             summary = self.analyzer.infer(name)
+-            if summary.task_wait_parameters or summary.mode == 'execution':
++            forwarding_execution = summary.task_forward_only and all(
++                value.mode == 'execution' for value in actuals
++                if isinstance(value, Value) and value.pending_structure_calls)
++            if summary.mode == 'execution' and not forwarding_execution:
+                 raise IncompleteStructureEffects(
+                     'effets différés attendus ou lancés par un auxiliaire synchrone non raccordés')
++            if summary.task_wait_parameters and (summary.structure_fields or summary.mode not in (
++                    'scalar', 'bool', 'byte', 'char', 'void')):
++                raise IncompleteStructureEffects(
++                    'ordre des écritures ou résultat emprunté de l’auxiliaire attendant non raccordé')
++            # Relaying an already launched handle does not run or wait for it.
++            # Its pending completion effects remain attached to the result.
+             # A synchronous relay may transfer or discard an inactive input.
+             # Neither operation runs its body. Pure forwarding preserves the
+             # pending capture snapshots in ResultContext; a fresh alternative
+             # stays unknown until its suspension contract is available.
++
++    def apply_deferred_field_updates(self, task, environment, line):
++        super().apply_deferred_field_updates(task, environment, line)
++        if not task.pending_structure_calls:
++            return
++        # A synchronous helper can explicitly consume a launched handle in
++        # native code. Its contract records the wait, while this context owns
++        # the original capture snapshots. LaunchFailed keeps the input state.
++        branches = [({'next'}, environment.copy())]
++        for token in task.pending_structure_calls:
++            if token not in self.pending:
++                raise IncompleteStructureEffects('attente sans contrat différé de champs')
++            name, actuals = self.pending[token]
++            summary = self.effects.infer(name)
++            if not summary.complete:
++                raise IncompleteStructureEffects(summary.reason)
++            if summary.may_complete:
++                branch, _ = self.apply_async_result(name, summary.parameters,
++                    summary.completion_result, actuals, environment, line, 'completion')
++                branches.append(({'next'}, branch))
++        self.join_environments(environment, branches)
+ 
+     def select_task_names(self, task):
+         if not isinstance(task, Value) or task.mode != 'task' or not task.pending_structure_calls:

@@ -1,0 +1,17 @@
+enum View { Item { data: &i32 } }
+
+fn use_view(view: &View) {
+    match &view {
+        View.Item { data: value } => { print(value); }
+    }
+}
+
+fn main() {
+    let mut data_pool = pool<i32>(1);
+    let mut view_pool = pool<View>(1);
+    let data = data_pool.new(42);
+    let target = data.vref();
+    let view = view_pool.new(View.Item { data: target });
+    use_view(view.vref());
+    drop(data); // L'emprunt stocké ne doit plus servir.
+}

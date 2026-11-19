@@ -1,0 +1,21 @@
+--- before/results.py
++++ after/results.py
+@@ -7,7 +7,7 @@
+     OPTION_JOIN_TYPES, option_join_mode, option_inner_signature,
+ )
+ from exchange_join_types import (
+-    EXCHANGE_JOIN_TYPES, exchange_join_mode, exchange_inner_signature, exchange_is_try_push,
++    EXCHANGE_JOIN_TYPES, exchange_join_mode, exchange_payload_type, exchange_inner_signature, exchange_is_try_push,
+ )
+ from capture_paths import result_capture_selector, capture_fields, capture_index
+ from integer_syntax import exact_integer_conversion
+@@ -1898,7 +1898,8 @@
+                                        payload_reference=row_payload)
+                 if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                     value = self.async_owned_result_value(mode, typ, execution.task_result_sources, execution.task_result_fields)
+-                    return flow, replace(value, mode=exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]), typ='Int')
++                    outer = exchange_join_mode(typ if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode])
++                    return flow, replace(value, mode=outer, typ=exchange_payload_type(outer))
+                 if mode in ('owned', 'join_owned', *OWNED_JOIN_TYPES, 'handle_option', *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES):
+                     if mode in ('owned', *OWNED_JOIN_TYPES):
+                         kind = owned_join_mode(mode)

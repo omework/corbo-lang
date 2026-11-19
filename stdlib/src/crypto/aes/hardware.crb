@@ -1,0 +1,221 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Hardware capability detection and assembly kernels for AES and carryless multiplication.
+
+#(if: target.os == "macos" && target.arch == "aarch64" && target.pointer_width == "64")
+    /// Queries the named Darwin CPU feature using sysctl.
+    fn enabled(name: &[u8]) -> bool {
+        let mut result: u64 = 0;
+        @unchecked {
+            let address = addr(&name[0]);
+            @asm {
+                sub sp, sp, #16
+                str xzr, [sp]
+                mov x9, #4
+                str x9, [sp, #8]
+                mov x0, ${address}
+                mov x1, sp
+                add x2, sp, #8
+                mov x3, #0
+                mov x4, #0
+                bl _sysctlbyname
+                cbnz w0, 1f
+                ldr w9, [sp]
+                mov ${result}, x9
+                1:
+                add sp, sp, #16
+            }
+        }
+        result != 0
+    }
+
+    /// Reports whether this target can execute the AES and carryless multiplication kernels.
+    fn hardware_available() -> bool {
+        let aes: [u8; 25] = [104, 119, 46, 111, 112, 116, 105, 111, 110, 97, 108, 46, 97, 114, 109, 46, 70, 69, 65, 84, 95, 65, 69, 83, 0];
+        let pmull: [u8; 27] = [104, 119, 46, 111, 112, 116, 105, 111, 110, 97, 108, 46, 97, 114, 109, 46, 70, 69, 65, 84, 95, 80, 77, 85, 76, 76, 0];
+        enabled(&aes[..]) && enabled(&pmull[..])
+    }
+#(endif)
+
+#(if: target.os == "linux" && target.arch == "aarch64" && target.pointer_width == "64")
+    /// Reports whether this target can execute the AES and carryless multiplication kernels.
+    fn hardware_available() -> bool {
+        let mut caps: u64 = 0;
+        @unchecked {
+            @asm {
+                // AT_HWCAP. Linux AArch64 exposes AES and PMULL at bits 3 and 4.
+                mov x0, #16
+                bl getauxval
+                mov ${caps}, x0
+            }
+        }
+        (caps & 24) == 24
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "aarch64" && target.pointer_width == "64")
+    /// Reports whether this target can execute the AES and carryless multiplication kernels.
+    fn hardware_available() -> bool {
+        let mut enabled: u64 = 0;
+        @unchecked {
+            @asm {
+                // PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE.
+                mov w0, #30
+                bl IsProcessorFeaturePresent
+                uxtw x0, w0
+                mov ${enabled}, x0
+            }
+        }
+        enabled != 0
+    }
+#(endif)
+
+#(if: target.arch == "aarch64" && target.pointer_width == "64")
+    /// Runs the target AES block encryption kernel with expanded round keys.
+    fn hardware_encrypt(schedule: &[u8; 240], rounds: u64, block: &mut [u8; 16]) {
+        @unchecked {
+            let keys = addr(&(*schedule)[0]);
+            let data = addr(&mut (*block)[0]);
+            @asm {
+                .arch_extension crypto
+                mov x8, ${keys}
+                mov x9, ${data}
+                mov x10, ${rounds}
+                ldr q0, [x9]
+                sub x10, x10, #1
+                1:
+                ldr q1, [x8], #16
+                aese v0.16b, v1.16b
+                aesmc v0.16b, v0.16b
+                subs x10, x10, #1
+                b.ne 1b
+                ldp q1, q2, [x8]
+                aese v0.16b, v1.16b
+                eor v0.16b, v0.16b, v2.16b
+                str q0, [x9]
+            }
+        }
+    }
+
+    /// Runs the target carryless product kernel for GHASH.
+    fn hardware_product(left: &[u8; 16], right: &[u8; 16], product: &mut [u8; 32]) {
+        @unchecked {
+            let a = addr(&(*left)[0]);
+            let b = addr(&(*right)[0]);
+            let output = addr(&mut (*product)[0]);
+            @asm {
+                .arch_extension crypto
+                mov x8, ${a}
+                mov x9, ${b}
+                mov x10, ${output}
+                ldr q0, [x8]
+                ldr q1, [x9]
+                pmull v2.1q, v0.1d, v1.1d
+                pmull2 v3.1q, v0.2d, v1.2d
+                ext v1.16b, v1.16b, v1.16b, #8
+                pmull v4.1q, v0.1d, v1.1d
+                pmull2 v5.1q, v0.2d, v1.2d
+                eor v4.16b, v4.16b, v5.16b
+                movi v5.16b, #0
+                ext v0.16b, v5.16b, v4.16b, #8
+                ext v1.16b, v4.16b, v5.16b, #8
+                eor v2.16b, v2.16b, v0.16b
+                eor v3.16b, v3.16b, v1.16b
+                stp q2, q3, [x10]
+            }
+        }
+    }
+#(endif)
+
+#(if: target.arch == "x86_64" && target.pointer_width == "64")
+    /// Reports whether this target can execute the AES and carryless multiplication kernels.
+    fn hardware_available() -> bool {
+        let mut supported: u64 = 0;
+        @unchecked {
+            @asm {
+                push rbx
+                mov eax, 1
+                cpuid
+                and ecx, 0x02000002
+                mov ${supported}, rcx
+                pop rbx
+            }
+        }
+        supported == 0x02000002
+    }
+
+    /// Runs the target AES block encryption kernel with expanded round keys.
+    fn hardware_encrypt(schedule: &[u8; 240], rounds: u64, block: &mut [u8; 16]) {
+        @unchecked {
+            let keys = addr(&(*schedule)[0]);
+            let data = addr(&mut (*block)[0]);
+            @asm {
+                mov r8, ${keys}
+                mov r9, ${data}
+                mov r10, ${rounds}
+                movdqu xmm0, [r9]
+                movdqu xmm1, [r8]
+                pxor xmm0, xmm1
+                add r8, 16
+                dec r10
+                1:
+                movdqu xmm1, [r8]
+                aesenc xmm0, xmm1
+                add r8, 16
+                dec r10
+                jnz 1b
+                movdqu xmm1, [r8]
+                aesenclast xmm0, xmm1
+                movdqu [r9], xmm0
+            }
+        }
+    }
+
+    /// Runs the target carryless product kernel for GHASH.
+    fn hardware_product(left: &[u8; 16], right: &[u8; 16], product: &mut [u8; 32]) {
+        @unchecked {
+            let a = addr(&(*left)[0]);
+            let b = addr(&(*right)[0]);
+            let output = addr(&mut (*product)[0]);
+            @asm {
+                mov r8, ${a}
+                mov r9, ${b}
+                mov r10, ${output}
+                movdqu xmm0, [r8]
+                movdqu xmm1, [r9]
+                movdqa xmm2, xmm0
+                movdqa xmm3, xmm0
+                movdqa xmm4, xmm0
+                pclmulqdq xmm2, xmm1, 0x00
+                pclmulqdq xmm3, xmm1, 0x11
+                pclmulqdq xmm4, xmm1, 0x01
+                pclmulqdq xmm0, xmm1, 0x10
+                pxor xmm4, xmm0
+                movdqa xmm0, xmm4
+                pslldq xmm4, 8
+                psrldq xmm0, 8
+                pxor xmm2, xmm4
+                pxor xmm3, xmm0
+                movdqu [r10], xmm2
+                movdqu [r10 + 16], xmm3
+            }
+        }
+    }
+#(endif)
+
+#(if: target.pointer_width == "32")
+    /// Reports whether this target can execute the AES and carryless multiplication kernels.
+    fn hardware_available() -> bool { false }
+
+    /// Runs the target AES block encryption kernel with expanded round keys.
+    fn hardware_encrypt(schedule: &[u8; 240], rounds: u64, block: &mut [u8; 16]) {
+        portable_encrypt(&*schedule, rounds, &mut *block);
+    }
+
+    /// Runs the target carryless product kernel for GHASH.
+    fn hardware_product(left: &[u8; 16], right: &[u8; 16], product: &mut [u8; 32]) {
+        // The platform dispatch cannot select this kernel.
+        drop(left);
+        drop(right);
+        drop(product);
+    }
+#(endif)

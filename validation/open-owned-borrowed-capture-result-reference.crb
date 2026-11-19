@@ -1,0 +1,3 @@
+struct View{data:&Int}async fn detach(v:->View)->&Int{yield;return v.data;}
+ fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let v=View{data:&n};let h=runtime::spawn(->detach(->v));
+ match h.join(){Ok(value)=>{print(*value);},Err(_)=>{}}drop(->n);}

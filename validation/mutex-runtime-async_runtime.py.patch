@@ -1,0 +1,14 @@
+--- before/async_runtime.py
++++ after/async_runtime.py
+@@ -827,6 +827,11 @@
+ 
+ TASK_THREAD_RUNTIME += TASK_READY_QUEUE_RUNTIME
+ 
++# Internal guard/wait primitives; the public mutex constructor syntax remains
++# deferred. Keep these behind the same scheduler ticket implementation.
++from mutex_runtime import MUTEX_RUNTIME
++TASK_THREAD_RUNTIME += MUTEX_RUNTIME
++
+ TASK_SELECT_RUNTIME = r'''
+ /* Internal Select mechanism. Storage and branch descriptors belong to the
+    enclosing state. The compiler must provide a suspended destructor for each

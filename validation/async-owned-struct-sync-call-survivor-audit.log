@@ -1,0 +1,268 @@
+Full suite without bridge graph: 1
+test_collection_fields_are_cleaned (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_collection_fields_are_cleaned) ... ok
+test_field_borrow_blocks_consuming_call (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_field_borrow_blocks_consuming_call) ... FAIL
+test_identity_and_suspended_prepared_cleanup (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_identity_and_suspended_prepared_cleanup) ... ok
+test_mutable_field_borrow_across_suspension (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_mutable_field_borrow_across_suspension) ... FAIL
+test_mutable_inline_field_and_wrong_type (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_mutable_inline_field_and_wrong_type) ... FAIL
+test_nested_owned_graph (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_nested_owned_graph) ... ok
+test_prepared_graph_across_argument_suspension (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_prepared_graph_across_argument_suspension) ... 
+  test_prepared_graph_across_argument_suspension (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_prepared_graph_across_argument_suspension) (argument='pause().await') ... FAIL
+test_recorded_consume_and_explicit_marker (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_recorded_consume_and_explicit_marker) ... FAIL
+test_result_argument_handles_success_and_error (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_result_argument_handles_success_and_error) ... ok
+test_return_and_repeated_transfer (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_return_and_repeated_transfer) ... ok
+test_returned_graph_lifetime_model (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_returned_graph_lifetime_model) ... ok
+
+======================================================================
+FAIL: test_field_borrow_blocks_consuming_call (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_field_borrow_blocks_consuming_call)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15592, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15585, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14086, in compile
+    self.emit_async_sync_bridge(name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14030, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 9792, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 11045, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12364, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12518, in statements
+    value = self.contextual_array(expr, scope, 'return', expected)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 6227, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 8712, in expression
+    _, pointer, _ = self.nominal_field_borrow(expr[1], binding, offset, write=False, owned=True)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 5308, in nominal_field_borrow
+    self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_sync_calls.py", line 160, in test_field_borrow_blocks_consuming_call
+    self.assertEqual(self.run_source(source).stdout,'7\n7\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+======================================================================
+FAIL: test_mutable_field_borrow_across_suspension (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_mutable_field_borrow_across_suspension)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15592, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15585, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14086, in compile
+    self.emit_async_sync_bridge(name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14030, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 9792, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 11045, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12364, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12518, in statements
+    value = self.contextual_array(expr, scope, 'return', expected)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 6227, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 8712, in expression
+    _, pointer, _ = self.nominal_field_borrow(expr[1], binding, offset, write=False, owned=True)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 5308, in nominal_field_borrow
+    self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_sync_calls.py", line 167, in test_mutable_field_borrow_across_suspension
+    self.assertEqual(self.run_source(source).stdout,'12\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+======================================================================
+FAIL: test_mutable_inline_field_and_wrong_type (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_mutable_inline_field_and_wrong_type)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15592, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15585, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14086, in compile
+    self.emit_async_sync_bridge(name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14030, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 9792, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 11045, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12364, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12518, in statements
+    value = self.contextual_array(expr, scope, 'return', expected)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 6227, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 8736, in expression
+    kind, value, _ = self.expression(operand, scope, source_name)
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 8712, in expression
+    _, pointer, _ = self.nominal_field_borrow(expr[1], binding, offset, write=False, owned=True)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 5308, in nominal_field_borrow
+    self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_sync_calls.py", line 44, in test_mutable_inline_field_and_wrong_type
+    self.assertEqual(self.run_source(source).stdout,'10\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+======================================================================
+FAIL: test_prepared_graph_across_argument_suspension (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_prepared_graph_across_argument_suspension) (argument='pause().await')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15592, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15585, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14086, in compile
+    self.emit_async_sync_bridge(name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14030, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 9792, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 11045, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12364, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12615, in statements
+    kind, value, _ = self.expression(args[0], scope, 'print')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 8712, in expression
+    _, pointer, _ = self.nominal_field_borrow(expr[1], binding, offset, write=False, owned=True)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 5308, in nominal_field_borrow
+    self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_sync_calls.py", line 55, in test_prepared_graph_across_argument_suspension
+    run=self.run_source(source.replace('ARG',argument))
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+======================================================================
+FAIL: test_recorded_consume_and_explicit_marker (test_async_owned_struct_sync_calls.AsyncOwnedStructSyncCallTests.test_recorded_consume_and_explicit_marker)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 14, in run_source
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15592, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 15585, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14086, in compile
+    self.emit_async_sync_bridge(name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 14030, in emit_async_sync_bridge
+    result = check.invoke(call, root)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 9792, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 11045, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12364, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 12518, in statements
+    value = self.contextual_array(expr, scope, 'return', expected)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 6227, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 8712, in expression
+    _, pointer, _ = self.nominal_field_borrow(expr[1], binding, offset, write=False, owned=True)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 5308, in nominal_field_borrow
+    self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-graph-survivor-k9knybo0/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_sync_calls.py", line 22, in test_recorded_consume_and_explicit_marker
+    run=self.run_source(BASE)
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: projection de champ propriétaire au-delà de la provenance suivie
+
+----------------------------------------------------------------------
+Ran 11 tests in 6.151s
+
+FAILED (failures=5)
+

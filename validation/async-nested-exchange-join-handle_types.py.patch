@@ -1,0 +1,34 @@
+--- /tmp/crust-before-nested-exchange-joins/handle_types.py
++++ handle_types.py
+@@ -9,7 +9,9 @@
+ groups survive join; unrelated capture groups do not.
+ """
+ 
+-from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
++from exchange_join_types import (
++    EXCHANGE_JOIN_TYPES, EXCHANGE_LEAVES, exchange_type_mode,
++)
+ from capture_paths import capture_index
+ from types import SimpleNamespace
+ 
+@@ -34,8 +36,10 @@
+         content = payload[2:-1]
+         if content in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') or content in structures:
+             return ('owned', content)
+-    if payload in EXCHANGE_JOIN_INNERS.values():
++    if payload in EXCHANGE_LEAVES:
+         return ('buffered_handle_exchange', payload)
++    if (mode := exchange_type_mode(payload)) is not None:
++        return mode, 'Int'
+     if payload == 'Option<A<Int>>':
+         return ('handle_option', 'Int')
+     if payload in structures:
+@@ -145,7 +149,7 @@
+             parameters.append(('opaque_result_borrow', signature[0], signature[1]))
+             if signature[0] == 'ref':
+                 parameters.append(('opaque_result_capability', 'ref', signature[1]))
+-        if signature[0] in ('owned', 'join_owned', 'handle_option', 'buffered_handle_exchange'):
++        if signature[0] in ('owned', 'join_owned', 'handle_option', 'buffered_handle_exchange', *EXCHANGE_JOIN_TYPES):
+             result_storage = len(parameters)
+             parameters.append(('opaque_result_storage', 'owned', 'Int' if signature[0] == 'buffered_handle_exchange' else signature[1]))
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),

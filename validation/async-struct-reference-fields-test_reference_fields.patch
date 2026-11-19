@@ -1,0 +1,51 @@
+--- test_reference_fields.before
++++ test_reference_fields.py
+@@ -63,7 +63,7 @@
+         self.reject(DECL + SETUP + 'data_pool.reset(); use_view(&view);')
+ 
+     def test_reset_of_holder_pool_then_referent_drop_is_allowed(self):
+-        result = self.execute(DECL + SETUP + 'view_pool.reset(); drop(-> data);', add_source=False)
++        result = self.execute(DECL + SETUP + 'use_view(&view);view_pool.reset(); drop(-> data);', add_source=False)
+         self.assertEqual(result.stderr.count('destroy view=View.Item'), 1)
+         self.assertEqual(result.stderr.count('destroy data=42'), 1)
+ 
+@@ -75,10 +75,10 @@
+         self.assertEqual(result.stdout, '20\n')
+ 
+     def test_holder_reassignment_releases_old_dependency_and_keeps_new_one(self):
+-        prefix = DECL + SETUP + 'let mut other = new(data_pool) Int(7); '
++        prefix = DECL + SETUP + 'use_view(&view);let mut other = new(data_pool) Int(7); '
+         assignment = 'view=new(view_pool)View.Item{prefix:3,data:&other,tail:4};'
+         result = self.execute(prefix + assignment + 'drop(-> data);use_view(&view);', add_source=False)
+-        self.assertEqual(result.stdout, '3\n7\n4\n')
++        self.assertEqual(result.stdout, '1\n42\n2\n3\n7\n4\n')
+         self.reject(prefix + assignment + 'drop(-> other);use_view(&view);')
+ 
+     def test_pending_reference_field_survives_later_initializer_effects(self):
+@@ -92,7 +92,7 @@
+             'prefix:1,data:&data,tail:consume(-> data)};'))
+ 
+     def test_reference_field_requires_explicit_named_int_borrow(self):
+-        prefix = DECL + 'let mut data_pool=pool<Int>(1);let mut view_pool=pool<View>(1);let mut data=new(data_pool)Int(42);'
++        prefix = DECL + 'let mut data_pool=pool<Int>(1);let mut view_pool=pool<View>(1);let mut data=new(data_pool)Int(42);print(data);'
+         for rhs in ('42', 'data', '&mut data', '&new(data_pool) Int(7)'):
+             with self.subTest(rhs=rhs):
+                 self.reject(prefix + f'let mut view=new(view_pool)View.Item{{prefix:1,data:{rhs},tail:2}};use_view(&view);',
+@@ -197,7 +197,7 @@
+             expected_valid = not before or (operation != 'reset' and affected not in targets)
+             code = ['enum Pair { Item { x: &Int, y: &Int } }',
+                     'let mut p=pool<Int>(3);let mut q=pool<Pair>(1);']
+-            code.extend(f'let mut d{i}=new(p)Int({10+i});' for i in range(3))
++            code.extend(f'let mut d{i}=new(p)Int({10+i});print(d{i});' for i in range(3))
+             code.append(f'let mut view=new(q)Pair.Item{{x:&d{targets[0]},y:&d{targets[1]}}};')
+             action = {'drop':f'drop(-> d{affected});','mutate':f'd{affected}.set(99);','reset':'p.reset();'}[operation]
+             code.extend([action, 'print(view);'] if before else ['print(view);', action])
+@@ -205,7 +205,7 @@
+                 source = ' '.join(code)
+                 if expected_valid:
+                     result = self.execute(source, add_source=False)
+-                    self.assertEqual(result.stdout, f'Pair.Item({10+targets[0]}, {10+targets[1]})\n')
++                    self.assertEqual(result.stdout, f'10\n11\n12\nPair.Item({10+targets[0]}, {10+targets[1]})\n')
+                     accepted += 1
+                 else:
+                     self.reject(source)

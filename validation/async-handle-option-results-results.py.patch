@@ -1,0 +1,29 @@
+--- /tmp/crust-before-async-handle-option-results/results.py
++++ results.py
+@@ -2690,7 +2690,7 @@
+                             if origins:
+                                 access = 'mut' if capture_mode in SHARED_VECTOR_SLICE_MODES else 'ref'
+                                 captures.append((f'{access}.{index}', origins))
+-                        elif capture_mode in ('owned', 'join_owned', 'join_nested'):
++                        elif capture_mode in ('owned', 'join_owned', 'join_nested', 'handle_option'):
+                             owned_paths, reference_paths = self.owned_capture_paths(value)
+                             for field, (access, _) in reference_paths.items():
+                                 origins = self.owned_capture_field_targets(value, field)
+@@ -2749,7 +2749,7 @@
+                     task_result_sources = set(resolve_graph_sources(graph[0]))
+                     task_sources.update(task_result_sources)
+                     task_result_fields = {path: resolve_graph_sources(symbols) for path, symbols in graph[1]}
+-                if field_summary and field_summary.complete and result_mode in ('owned', 'join_owned', 'join_nested'):
++                if field_summary and field_summary.complete and result_mode in ('owned', 'join_owned', 'join_nested', 'handle_option'):
+                     result_shapes = [Value('owned', declaration.args[2][1],
+                         task_result_shapes=self.resolved_owned_shapes(field_summary.completion_result, captured_actuals))]
+                 pending = self.instantiate_deferred_fields(field_summary.structure_fields, captured_actuals) if (
+@@ -2963,7 +2963,7 @@
+                         if projects_row or projects_structure:
+                             if target.kind == 'task_capture_parameter' and isinstance(actual, Value):
+                                 projected = actual.reference_targets
+-                            elif projects_structure and capture_mode in ('owned', 'join_owned', 'join_nested') and '/' in key:
++                            elif projects_structure and capture_mode in ('owned', 'join_owned', 'join_nested', 'handle_option') and '/' in key:
+                                 from array_syntax import owned_reference_paths
+                                 selected = key.partition('/')[2]
+                                 if not any('.' + '.'.join(path) == selected for path in result_paths[index]):

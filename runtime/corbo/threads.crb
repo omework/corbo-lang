@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Native and blocking workers preserve launch-failure, abandonment and drain ordering.
+/// Maps native-worker metadata whose lifetime can extend beyond its launching scope.
+fn native_box()->usize {
+    let pointer=os_metadata(size_NativeBox());
+    if copy(pointer)==0 {
+        region_error();
+    }
+    copy(pointer)
+}
+/// Releases a native worker's region and metadata; its frame must no longer be in use.
+fn native_release(box:usize) {
+    region_drop(a_NativeBox_region(copy(box)));
+    os_unmap(copy(box),size_NativeBox());
+}
+/// Establishes the worker's region scope from the configured budget before executing its frame.
+fn worker_regions() {
+    let budget=get_global_budget();
+    if copy(budget)==0 {
+        return;
+    }
+    let cells=copy(budget)/region_stride(get_global_limit());
+    if copy(cells)!=0 {
+        lock();
+        region_enter(get_global_limit(),copy(cells),copy(cells));
+        unlock();
+    }
+}
+/// Runs a native frame on its worker datastack, publishes completion and handles abandoned-result cleanup before decrementing the active count.
+fn native_run(box:usize)->usize {
+    reserve(get_global_fixed_budget());
+    worker_regions();
+    let state=g_NativeBox_state(copy(box));
+    if !call_poll(g_NativeBox_run(copy(box)),copy(state),false) {
+        os_abort();
+    }
+    lock();
+    region_restore(0);
+    unlock();
+    release();
+    lock();
+    s_Task_done(copy(state),true);
+    if g_NativeBox_abandoned(copy(box)) {
+        let dispose=g_NativeBox_dispose(copy(box));
+        unlock();
+        call_dispose(copy(dispose),copy(state),true);
+        lock();
+        native_release(copy(box));
+    }
+    set_native_count(get_native_count()-1);
+    broadcast();
+    unlock();
+    0
+}
+/// Constructs an inactive native execution descriptor with its frame, run callback and cleanup callback.
+fn make_native(out:usize,size:usize,run:usize,dispose:usize) {
+    let box=native_box();
+    lock();
+    make_task_in(copy(out),a_NativeBox_region(copy(box)),copy(size),copy(run),get_current_band()==0 && get_global_budget()==0);
+    unlock();
+    s_NativeBox_state(copy(box),g_TaskValue_state(copy(out)));
+    s_NativeBox_run(copy(box),copy(run));
+    s_NativeBox_dispose(copy(box),copy(dispose));
+    s_TaskValue_native(copy(out),true);
+}
+/// Starts a detached worker or records LaunchFailed and destroys the unexecuted captures; publication uses the runtime lock.
+fn start_native(value:usize) {
+    let box=g_TaskValue_storage(copy(value));
+    let state=g_TaskValue_state(copy(value));
+    lock();
+    let error=thread_detached(pointer_native_run(),copy(box));
+    if copy(error)!=0 {
+        s_Task_failed(copy(state),true);
+        s_Task_done(copy(state),true);
+    } else {
+        set_native_count(get_native_count()+1);
+    }
+    unlock();
+    if copy(error)!=0 {
+        call_dispose(g_NativeBox_dispose(copy(box)),copy(state),false);
+    }
+}
+/// Releases a completed native execution, destroying its result only when it was not transferred to the caller.
+fn release_native(value:usize,taken:bool) {
+    let box=g_TaskValue_storage(copy(value));
+    let state=g_TaskValue_state(copy(value));
+    if !copy(taken) && !g_Task_failed(copy(state)) {
+        call_dispose(g_NativeBox_dispose(copy(box)),copy(state),true);
+    }
+    lock();
+    native_release(copy(box));
+    unlock();
+}
+/// Transfers final cleanup of a running native frame to its worker; completed frames are released immediately.
+fn abandon_native(value:usize) {
+    let box=g_TaskValue_storage(copy(value));
+    if copy(box)==0 {
+        return;
+    }
+    lock();
+    let done=g_Task_done(g_TaskValue_state(copy(value)));
+    if !copy(done) {
+        s_NativeBox_abandoned(copy(box),true);
+    }
+    unlock();
+    if copy(done) {
+        release_native(copy(value),false);
+    }
+}
+/// Discards the execution stored at value and clears its storage link to prevent repeated cleanup.
+fn dispose_handle_value(value:usize) {
+    discard_handle(copy(value));
+    s_TaskValue_storage(copy(value),0);
+}
+/// Discards every stored handle from last to first before releasing the containing region.
+fn destroy_task_region(region:usize) {
+    let mut index=g_Region_len(copy(region));
+    while copy(index)!=0 {
+        index=copy(index)-1;
+        dispose_handle_value(g_Region_data(copy(region))+copy(index)*size_TaskValue());
+    }
+    value_region_drop(copy(region));
+}
+/// Polls a blocking execution on its dedicated worker, waits for dependencies, publishes completion and releases worker storage.
+fn run_blocking(task:usize)->usize {
+    if get_base()==0 {
+        reserve(1);
+    }
+    while !call_poll(g_Task_poll(copy(task)),copy(task),false) {
+        lock();
+        while g_Task_waiting(copy(task)) {
+            condition_wait();
+        }
+        unlock();
+    }
+    lock();
+    task_publish(copy(task));
+    if g_Task_abandoned(copy(task)) {
+        let discard=g_Task_discard(copy(task));
+        unlock();
+        call_task_drop(copy(discard),copy(task));
+        lock();
+    }
+    set_native_count(get_native_count()-1);
+    broadcast();
+    unlock();
+    if get_base()!=0 {
+        release();
+    }
+    0
+}
+/// Launches a blocking worker for a TaskValue; on launch failure, clears captures and publishes a completed failed state.
+fn start_blocking(value:usize) {
+    let task=g_TaskValue_state(copy(value));
+    memory_zero(copy(task),size_Task());
+    s_Task_blocking(copy(task),true);
+    s_Task_poll(copy(task),g_TaskValue_poll(copy(value)));
+    s_Task_discard(copy(task),pointer_task_abandoned());
+    lock();
+    let error=thread_detached(pointer_run_blocking(),copy(task));
+    if copy(error)==0 {
+        set_native_count(get_native_count()+1);
+    }
+    unlock();
+    if copy(error)!=0 {
+        s_Task_failed(copy(task),true);
+        drop(call_poll(g_Task_poll(copy(task)),copy(task),true));
+        s_Task_done(copy(task),true);
+    }
+}
+/// Waits under the condition variable until native/blocking executions and scheduled tasks have all finished.
+fn native_drain() {
+    lock();
+    while get_native_count()!=0 || get_task_active()!=0 {
+        condition_wait();
+    }
+    unlock();
+}

@@ -1,0 +1,70 @@
+--- before/results.py
++++ after/results.py
+@@ -468,6 +468,9 @@
+     deferred_owned_updates: frozenset = frozenset()
+     deferred_suspension_owned: frozenset | None = None
+     structure_choices: tuple = ()
++    # Storage provenance for an explicit copy of a borrowed interior value.
++    # These are not additional borrowed targets of the reference itself.
++    copy_candidates: frozenset[ResultCandidate] = frozenset()
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -1507,6 +1510,7 @@
+                     owned_fields=merge_reference_rows(values, 'owned_fields'),
+                     owned_path=first.owned_path if all(value.owned_path == first.owned_path for value in values) else (),
+                     structure_choices=merge_structure_choices(values),
++                    copy_candidates=frozenset(candidate for value in values for candidate in value.copy_candidates),
+                     structure_origins=frozenset(origin for value in values for origin in value.structure_origins),
+                     handle_items=merge_handle_items(values),
+                     input_item_history=merge_input_item_history(values),
+@@ -2124,7 +2128,7 @@
+                 candidates = frozenset(ResultCandidate('fresh', source=(
+                     SourceOrigin('local_value', id(expr), 'data stack implicite', original.typ)
+                     if candidate.storage().kind == 'local_value' else candidate.storage()))
+-                                       for candidate in original.candidates)
++                                       for candidate in (original.copy_candidates or original.candidates))
+                 return flow, Value('owned', original.typ, candidates, original.fields, frozenset({''}),
+                                    structure_origins=frozenset({id(expr)}))
+             if op in ('array_transfer', 'array_copy'):
+@@ -2282,6 +2286,7 @@
+             projection = contained_field(self.analyzer.enums, carrier.typ, path) if isinstance(carrier, Value) else None
+             if projection is not None:
+                 return {'next'}, Value('mut' if op == 'mut_expr' else 'ref', projection.typ,
++                                       copy_candidates=carrier.copy_candidates or carrier.candidates,
+                                        reference_targets=targets)
+             return {'next'}, Value('mut' if op == 'mut_expr' else 'ref', 'Int',
+                                     reference_targets=targets, payload_reference=True)
+@@ -2387,6 +2392,7 @@
+                     Value(kind, typ, frozenset(candidates), merge_fields(returning),
+                           frozenset(arm for v in returning for arm in v.fresh_variants),
+                           reference_targets=frozenset(t for v in returning for t in v.reference_targets),
++                          copy_candidates=frozenset(c for v in returning for c in v.copy_candidates),
+                           payload_reference=any(v.payload_reference for v in returning),
+                           rows=merge_reference_rows(returning),
+                           owned_fields=merge_reference_rows(returning, 'owned_fields'),
+@@ -2933,7 +2939,10 @@
+                     root = actuals[parameter]
+                     if isinstance(root, Value) and root.structure_origins:
+                         handle_slot = (root.structure_origins, index)
+-                return flow, Value(summary.mode, summary.typ, fields=fields, reference_targets=frozenset(targets),
++                candidates = frozenset(candidate for target in summary.reference_targets
++                    if target.kind in ('parameter', 'inline_field_parameter') and not target.carrier_kind
++                    for candidate in (actuals[target.parameter].copy_candidates or actuals[target.parameter].candidates)) if summary.typ in self.analyzer.enums else frozenset()
++                return flow, Value(summary.mode, summary.typ, copy_candidates=candidates, fields=fields, reference_targets=frozenset(targets),
+                                    structure_origins=structure_origins, handle_slot=handle_slot,
+                                    payload_reference=summary.payload_reference or any(
+                                        actuals[t.parameter].payload_reference for t in summary.reference_targets))
+@@ -3010,7 +3019,11 @@
+                     else:
+                         source = actuals[candidate.source.index]
+                         if candidate.source.kind == 'allocation_parameter' and isinstance(source, Value):
+-                            candidates.update(ResultCandidate('fresh', source=item.storage()) for item in source.candidates)
++                            for item in source.copy_candidates or source.candidates:
++                                origin = item.storage()
++                                if origin.kind == 'local_value':
++                                    origin = replace(origin, index=id(expr), element=summary.typ)
++                                candidates.add(ResultCandidate('fresh', source=origin))
+                             continue
+                         if not isinstance(source, SourceOrigin):
+                             self.fail(line, f"'{params[candidate.source.index][0]}' n'est pas une source de stockage")

@@ -1,0 +1,55 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -195,7 +195,7 @@
+ class ConstraintAnalyzer:
+     def __init__(self, functions, effects, results, error, enums=None, async_functions=None):
+         from handle_types import HandleDefinitions
+-        self.async_functions = HandleDefinitions(async_functions or {})
++        self.async_functions = HandleDefinitions(async_functions or {}, structures={name: arms for name, arms in (enums or {}).items() if "" in arms})
+         self.functions, self.effects, self.results, self.error = functions, effects, results, error
+         self.summaries, self.visiting = {}, set()
+         self.enums = enums or {}
+@@ -245,6 +245,11 @@
+                          for key, targets in value.fields)
+         fields = tuple((key.partition('.')[2], frozenset(targets))
+                        for key, targets in canonical_captures(captures, parameters))
++        if definition.args[2][0] in ('owned', 'join_owned'):
++            from async_result_storage import borrowed_result_fields
++            fields += tuple(('4/' + field, frozenset(asset for target in targets
++                for _, assets in capture_slots(value.fields, result_capture_selector(target)) for asset in assets))
++                for field, targets in borrowed_result_fields(definition))
+         if definition.args[2][0] in ('ref', 'mut'):
+             fields += (('4', value.task_reference_assets),)
+         if definition.args[2][0] in ASYNC_CAPTURE_VIEW_MODES:
+@@ -302,7 +307,10 @@
+     def unify_handle_values(self, values):
+         from handle_types import common_public_handle
+         if values and all(isinstance(value, Value) and value.mode == 'execution' for value in values):
+-            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions)
++            from handle_types import is_public_handle
++            result = self.node.args[2]
++            expected = result[1] if result[0] == 'execution' and is_public_handle(result[1]) else None
++            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions, expected=expected)
+             if public is not None:
+                 return [self.public_handle_value(value, public) for value in values]
+         return values
+@@ -1480,8 +1488,8 @@
+                 paths = merge_paths(paths, following)
+                 from handle_types import is_public_handle
+                 if mode == 'execution' and is_public_handle(typ) and isinstance(value, Value) and value.mode == 'execution':
+-                    from async_lowering import public_handle_type
+-                    actual_type = public_handle_type(self.analyzer.async_functions[value.typ].args[2])
++                    from handle_types import contextual_public_type
++                    actual_type = contextual_public_type(value.typ, typ, self.analyzer.async_functions)
+                     if actual_type != typ:
+                         self.fail(line, f'handle {typ} attendu, reçu {actual_type}')
+                     value = self.public_handle_value(value, typ)
+@@ -2232,6 +2240,8 @@
+                 following, value = self.expression(args[0], current, line, typ if mode in ('array', 'array_refs') else None)
+                 if self.node.handle_result and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
+                     hook(self, value, f'A<{typ}>', line)
++                if mode == 'execution' and (hook := getattr(self.analyzer, 'storage_annotation_hook', None)):
++                    hook(self, value, typ, line)
+                 if 'next' in following:
+                     returning = following.pop('next')
+                     following = merge_paths(following, {'return': returning})

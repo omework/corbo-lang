@@ -1,0 +1,139 @@
+--- /tmp/crust-before-mutable-field-completion/async_lowering.py	2026-11-08 04:05:23
++++ async_lowering.py	2026-11-08 04:06:32
+@@ -410,6 +410,15 @@
+             else:
+                 fail(node.line, 'prototype : provenance du résultat de terminaison non raccordée')
+             paths.add((target.parameter, path))
++            if target.kind == 'indirect_field_parameter':
++                changed = dict(dict(completion.structure_fields).get(target.parameter, ()))
++                for origin in changed.get('.' + target.field, ()):
++                    if origin.kind == 'parameter':
++                        paths.add((origin.parameter, ()))
++                    elif origin.kind in ('field_parameter', 'detached_field_parameter'):
++                        paths.add((origin.parameter, tuple(origin.field.lstrip('.').split('.'))))
++                    else:
++                        fail(node.line, 'prototype : cible du champ mutable retourné non raccordée')
+         cache[name] = frozenset(paths)
+         return cache[name]
+     if name in cache:
+@@ -1135,8 +1144,9 @@
+                 fail(line,'prototype : dépendances de champs async sans porteur suivi')
+             for field, targets in changes:
+                 path = tuple(field.lstrip('.').split('.'))
+-                if dict(reference_structs.get(typ,())).get('.'.join(path)) != '&Int':
+-                    fail(line,'prototype : dépendances de champs mutables async non raccordées')
++                field_type = dict(reference_structs.get(typ,())).get('.'.join(path))
++                if field_type not in ('&Int', '&mut Int'):
++                    fail(line,'prototype : dépendances de champs async non raccordées')
+                 retained = []
+                 for target in targets:
+                     if target.kind == 'parameter':
+@@ -1144,7 +1154,7 @@
+                     elif target.kind in ('field_parameter', 'detached_field_parameter'):
+                         source_type = callee_parameters[target.parameter][2]
+                         source_path = tuple(target.field.lstrip('.').split('.'))
+-                        if dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) != '&Int':
++                        if dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) not in ('&Int', '&mut Int'):
+                             fail(line, 'prototype : dépendances de champs sources non partagées non raccordées')
+                         origins = project_result_field_loans(argument_loans[target.parameter], source_type, source_path)
+                     else:
+@@ -1155,7 +1165,7 @@
+                             continue
+                         source_type = reference_types.get(root)
+                         durable_type = (source_type == 'Int' if not source_path else
+-                                        dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) == '&Int')
++                                        dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) in ('&Int', '&mut Int'))
+                         if parameter_modes.get(root) not in ('ref','mut') or not durable_type:
+                             fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
+                         retained.append((origin,mode))
+@@ -1163,8 +1173,12 @@
+                     fail(line,'remplacement de champ async : cible sans provenance durable')
+                 for holder in holders:
+                     key = ('stored_field',holder,path)
+-                    old = active_loans.get(key,[((holder,path),'shared_target')]) if len(holders)>1 else []
+-                    field_changes.append((key,list(dict.fromkeys((*old,*retained)))))
++                    old = active_loans.get(key, initial_stored_field_loans(holder,path)) if len(holders)>1 else []
++                    # An unchanged field alternative owns its input capability;
++                    # it is not an outstanding reborrow of that same field.
++                    current = [(origin, 'stored_mut_target' if field_type == '&mut Int'
++                                and origin == (holder, path) else mode) for origin, mode in retained]
++                    field_changes.append((key,list(dict.fromkeys((*old,*current)))))
+         return tuple((key, tuple(held)) for key, held in field_changes)
+ 
+     def apply_child_field_changes(alternatives, line, *, launched):
+@@ -1176,7 +1190,7 @@
+         alternatives = [dict(changes) for changes in alternatives]
+         for key in set().union(*(changes.keys() for changes in alternatives)):
+             _, holder, path = key
+-            initial = active_loans.get(key, [((holder, path), 'shared_target')])
++            initial = active_loans.get(key, initial_stored_field_loans(holder,path))
+             held = list(initial) if launched else []
+             for changes in alternatives:
+                 held.extend(changes.get(key, initial))
+@@ -2431,7 +2445,7 @@
+         for key in left[2].keys() | right[2].keys():
+             if isinstance(key, tuple) and key[0] == 'stored_field':
+                 _, holder, path = key
+-                initial = [((holder, path), 'shared_target')]
++                initial = initial_stored_field_loans(holder,path)
+                 active[key] = list(dict.fromkeys((*left[2].get(key, initial),
+                                                  *right[2].get(key, initial))))
+         refs = [local.copy() for local in refs]
+@@ -4426,7 +4440,7 @@
+     def check_access(name, line, *, write=False, path=()):
+         if name in consumed:
+             fail(line, f"'{name}' n’est plus utilisable après drop ou transfert")
+-        if any(loan_root(target) == name and mode not in ('storage', 'shared_target') and (mode == 'mut' or write)
++        if any(loan_root(target) == name and mode not in ('storage', 'shared_target', 'stored_mut_target') and (mode == 'mut' or write)
+                and (not isinstance(target, tuple)
+                     or all(left is None or right is None or left == right for left, right in zip(path, target[1])))
+                for loans in active_loans.values() for target, mode in loans):
+@@ -4538,6 +4552,10 @@
+             projected.append(((root, prefix + path), mode))
+         return projected
+ 
++    def initial_stored_field_loans(holder, path):
++        typ = dict(reference_structs.get(reference_types.get(holder), ())).get('.'.join(path))
++        return [((holder, path), 'stored_mut_target' if typ == '&mut Int' else 'shared_target')]
++
+     def project_result_field_loans(loans, typ, path):
+         projected = project_field_loans(loans, path)
+         if dict(reference_structs[typ]).get('.'.join(path)) == '&Int':
+@@ -4549,6 +4567,14 @@
+                 retained.extend(active_loans.get(('stored_field',root,full_path),
+                     [(target,'shared_target' if mode != 'storage' else mode)]))
+             return retained
++        if dict(reference_structs[typ]).get('.'.join(path)) == '&mut Int':
++            # Keep the field capability as well as its current target. A
++            # reborrow suspends access to that field until its final use.
++            retained = list(projected)
++            for target, _ in projected:
++                root, full_path = target if isinstance(target,tuple) else (target,())
++                retained.extend(active_loans.get(('stored_field',root,full_path), ()))
++            return list(dict.fromkeys(retained))
+         return projected
+ 
+     def borrow_struct_field(expr, mode, line):
+@@ -4571,10 +4597,11 @@
+ 
+     def store_struct_field(place, rhs, line, *, following):
+         name, cell, offset, path, typ = struct_field(place, line, write=True)
+-        if typ == '&Int':
++        if typ in ('&Int', '&mut Int'):
+             if node.field_effect_summary is None or not node.field_effect_summary.complete:
+                 fail(line, 'prototype : remplacement de champ référence sans contrat de terminaison')
+-            pointer, held = sync_borrow_argument(rhs, 'ref', 'Int', line)
++            access = 'mut' if typ == '&mut Int' else 'ref'
++            pointer, held = sync_borrow_argument(rhs, access, 'Int', line)
+             target = stored_reference_cell(pointer, held, line)
+             saved = temporary('Cell *')
+             steps.append(f'{saved} = {target};')
+@@ -4583,7 +4610,7 @@
+             from results import FunctionResult, BorrowTarget
+             summary = FunctionResult('void', 'Void', structure_fields=(
+                 (0, (('.' + '.'.join(path), frozenset({BorrowTarget('parameter', 1)})),)),))
+-            parameters = (('carrier', 'mut', reference_types[name]), ('target', 'ref', 'Int'))
++            parameters = (('carrier', 'mut', reference_types[name]), ('target', access, 'Int'))
+             changes = prepare_field_changes(summary, parameters,
+                 [[(name, 'mut'), *received_refs.get(name, ())], held], line)
+             steps.append(f'cell_store_ref({cell}, {offset}, {saved});')

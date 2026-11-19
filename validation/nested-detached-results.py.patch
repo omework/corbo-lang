@@ -1,0 +1,59 @@
+--- before/results.py
++++ after/results.py
+@@ -2175,6 +2175,12 @@
+                     if child is not None:
+                         return {'next'}, replace(child, mode=mode, storage_owner=carrier.storage_owner,
+                                                  owned_path=(*carrier.owned_path, '.' + path))
++                if declared.startswith('A<') and declared[2:-1] in self.analyzer.enums:
++                    key = '.' + path
++                    return {'next'}, Value(mode, declared[2:-1], carrier.candidates,
++                        fields=nested_reference_fields(carrier.fields, key),
++                        reference_targets=self.inline_field_targets(carrier, path, 'indirect_field_parameter'),
++                        owned_path=(*carrier.owned_path, key))
+                 capability = reference_type(declared)
+                 if capability and capability[0] == 'ref' and mode == 'ref':
+                     return self.expression(expr[1][1], environment, line)
+@@ -2594,6 +2600,15 @@
+                         if projects_row or projects_structure:
+                             if target.kind == 'task_capture_parameter' and isinstance(actual, Value):
+                                 projected = actual.reference_targets
++                            elif projects_structure and capture_mode in ('owned', 'join_owned', 'join_nested') and '/' in key:
++                                from array_syntax import owned_reference_paths
++                                selected = key.partition('/')[2]
++                                if not any('.' + '.'.join(path) == selected for path in result_paths[index]):
++                                    continue
++                                shared = any(path == selected and access == 'ref' and typ == 'Int'
++                                             for path, access, typ in owned_reference_paths(self.analyzer.enums, capture_type))
++                                projected = frozenset(replace(origin, kind='detached_field_parameter')
++                                    if origin.kind == 'owned_capture_field' else origin for origin in origins) if shared else ()
+                             elif projects_structure and isinstance(actual, Value):
+                                 carrier = Value(capture_mode, capture_type, reference_targets=frozenset(origins))
+                                 projected = self.async_structure_result_targets(carrier, capture_type, result_paths[index])
+@@ -3223,11 +3238,12 @@
+         if not isinstance(carrier, Value):
+             return frozenset({BorrowTarget('local')})
+         parameters = {candidate.parameter for candidate in carrier.candidates if candidate.kind == 'parameter'}
++        projected_key = '/'.join((*carrier.owned_path, key))
+         targets = shared_vector_field_items(carrier, key)
+         return frozenset(
+-            BorrowTarget('detached_field_parameter', target.parameter, key)
++            BorrowTarget('detached_field_parameter', target.parameter, target.field)
+             if target.parameter in parameters and (
+-                target.kind == 'field_parameter' and target.field == key
++                target.kind == 'field_parameter' and target.field in (key, projected_key)
+                 or carrier.typ in REFERENCE_VECTORS and carrier.handle_items is None
+                 and target.kind == 'detached_field_parameter' and target.field == '.items')
+             else target for target in targets
+@@ -3236,9 +3252,11 @@
+     def async_structure_result_targets(self, carrier, typ, paths):
+         projected = set()
+         fields = dict(self.analyzer.enums[typ][''])
++        from array_syntax import owned_reference_paths
++        borrowed_fields = {field: (access, target) for field, access, target in owned_reference_paths(self.analyzer.enums, typ)}
+         for path in paths:
+             field = '.'.join(path)
+-            if fields.get(field) == '&Int':
++            if borrowed_fields.get('.' + field) == ('ref', 'Int'):
+                 projected.update(self.detached_field_targets(carrier, '.' + field))
+                 continue
+             kind = ('indirect_field_parameter' if fields.get(field) == '&mut Int'

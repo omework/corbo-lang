@@ -1,0 +1,47 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10918,7 +10918,10 @@
+                 self.lines.append(f'return {result[1]};')
+             function_name = f'crust_fn_{self.uid()}'
+             cparams = ', '.join(f'{t} {p}' for t, p, _ in arguments) or 'void'
+-            definition = f'static {result_type} {function_name}({cparams}) {{\n'
++            qualifier = '_Noreturn ' if diverges else ''
++            if diverges:
++                self.lines.append('fail("non-returning synchronous function returned");')
++            definition = f'static {qualifier}{result_type} {function_name}({cparams}) {{\n'
+             definition += '\n'.join('    ' + s for s in self.flag_declarations + self.lines) + '\n}\n'
+             self.definitions.append(definition)
+             conditional_sources, conditional_origins = None, frozenset()
+@@ -13705,6 +13708,19 @@
+                 root.bindings[parameter] = Binding(parameter, 'source', parameter, source=source,
+                     source_mut=mode == 'mut', source_borrowed=True)
+                 ctype = 'Source *'
++            elif index in contract.result.stored_reference_parameters:
++                if mode not in ('ref', 'mut') or typ != 'Int':
++                    check.fail('bridge : contrat de référence stockée incompatible')
++                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                                      f'{parameter}->source', element_type=typ)
++                external.sources.append(source)
++                allocation = Allocation(check.uid(), external.id, parameter, (source,),
++                                        c=parameter, typ=typ)
++                check.allocations.append(allocation)
++                external.allocations.append(allocation)
++                check.origin_sources[allocation.id] = source
++                root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
++                ctype = 'Cell *'
+             elif mode in ('ref', 'mut') and typ in self.struct_fields:
+                 source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+@@ -13759,8 +13775,11 @@
+         mode = contract.result_type[0]
+         ctype = ('CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+-        signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
++        qualifier = '_Noreturn ' if not contract.effects.may_return else ''
++        signature = f'static {qualifier}{ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+         lines = check.flag_declarations + check.lines
++        if not contract.effects.may_return:
++            lines.append('fail("non-returning synchronous bridge returned");')
+         if result is not None and mode != 'void':
+             value = result[1]
+             if result[0] in ('ref', 'mut') and contract.result_type[1] == 'Int':

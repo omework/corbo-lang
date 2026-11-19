@@ -1,0 +1,16 @@
+--- before/results.py
++++ after/results.py
+@@ -2214,7 +2214,12 @@
+                         carrier = replace(carrier, storage_owner=name)
+                     child = self.owned_field_at(environment, carrier, '.' + path)
+                     if child is not None:
+-                        return {'next'}, replace(child, mode=mode, storage_owner=carrier.storage_owner,
++                        targets = frozenset(projected_field_origin(origin,
++                            BorrowTarget('field_parameter', field='.' + path))
++                            for origin in borrowed_targets(carrier))
++                        return {'next'}, replace(child, mode=mode, candidates=frozenset(),
++                                                 reference_targets=targets,
++                                                 storage_owner=carrier.storage_owner,
+                                                  owned_path=(*carrier.owned_path, '.' + path))
+                 if declared.startswith('A<') and declared[2:-1] in self.analyzer.enums:
+                     key = '.' + path

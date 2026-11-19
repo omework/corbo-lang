@@ -1,0 +1,391 @@
+--- /tmp/async_runtime.py-before-ready-queue	2026-11-08 00:26:31
++++ async_runtime.py	2026-11-08 00:37:57
+@@ -78,6 +78,7 @@
+ } CrustNestedJoinResult;
+ 
+ typedef struct CrustTask CrustTask;
++typedef struct CrustQueueEntry CrustQueueEntry;
+ 
+ typedef enum {
+     TASK_INACTIVE, TASK_QUEUED, TASK_RUNNING, TASK_SUSPENDED, TASK_COMPLETE, TASK_CONSUMED
+@@ -98,6 +99,7 @@
+     _Atomic int worker_done;
+     _Atomic int scheduling_lock;
+     int ready; /* Protected by scheduling_lock, including during a poll. */
++    CrustQueueEntry *queue_entry; /* Stable scheduler storage, when generated. */
+     const CrustTaskOps *ops;
+ };
+ 
+@@ -107,6 +109,7 @@
+     atomic_init(&task->worker_done, 0);
+     atomic_init(&task->scheduling_lock, 0);
+     task->ready = 1;
++    task->queue_entry = NULL;
+ }
+ 
+ /* Only short bookkeeping sections hold this gate, never user code. Callers
+@@ -122,6 +125,8 @@
+ }
+ 
+ static int task_wake(CrustTask *task) {
++    /* Primitive readiness update. External producers for a queued task use
++       task_queue_wake so that a waiting task is also placed on its queue. */
+     task_scheduling_lock(task);
+     CrustTaskState state = atomic_load(&task->state);
+     int live = state != TASK_COMPLETE && state != TASK_CONSUMED;
+@@ -222,6 +227,10 @@
+     .launch_blocking = task_pthread_launch
+ };
+ 
++static int task_default_submit(CrustTask *task);
++static void task_default_wait(CrustTask *task);
++static void task_default_close(void);
++
+ typedef struct {
+     pthread_t thread;
+     int (*wait)(pthread_t);
+@@ -229,6 +238,7 @@
+     CrustTask *task;
+     _Atomic int joined;
+     int error;
++    int pooled;
+ } CrustExecution;
+ 
+ 
+@@ -238,6 +248,7 @@
+     int (*detach)(pthread_t);
+     CrustTask *task;
+     int detached;
++    int pooled;
+ } CrustAbandonedExecution;
+ 
+ typedef struct {
+@@ -284,6 +295,7 @@
+     CrustTaskState inactive = TASK_INACTIVE;
+     if (!atomic_compare_exchange_strong(&task->state, &inactive, TASK_QUEUED)) return EINVAL;
+     execution->task = task;
++    execution->pooled = 0;
+     atomic_init(&execution->joined, 0);
+     execution->wait = wait;
+     execution->detach = detach;
+@@ -299,6 +311,23 @@
+ 
+ static int task_thread_start_mode(CrustExecution *execution, CrustTask *task,
+                                   const CrustThreadScheduler *scheduler, int blocking) {
++    if (scheduler == &task_default_scheduler && !blocking && task->queue_entry) {
++        if (atomic_load(&task->state) != TASK_INACTIVE) return EINVAL;
++        execution->task = task;
++        execution->pooled = 1;
++        execution->thread = (pthread_t){0};
++        execution->wait = NULL;
++        execution->detach = NULL;
++        atomic_init(&execution->joined, 0);
++        int error = task_default_submit(task);
++        execution->error = error;
++        if (error) {
++            if (error == EINVAL) return error;
++            if (!task_drop_inactive(task)) abort();
++            execution->task = NULL;
++        }
++        return error;
++    }
+     return task_start_joinable(execution, task,
+         blocking ? scheduler->launch_blocking : scheduler->launch,
+         scheduler->wait, scheduler->detach, task_thread_run);
+@@ -330,7 +359,8 @@
+ static int task_thread_join(CrustExecution *execution, void *result) {
+     if (!execution->task || atomic_exchange(&execution->joined, 1)) return 0;
+     /* A system join failure cannot establish that the task has terminated. */
+-    if (execution->wait(execution->thread) != 0) abort();
++    if (execution->pooled) task_default_wait(execution->task);
++    else if (execution->wait(execution->thread) != 0) abort();
+     if (!task_take(execution->task, result)) abort();
+     return 1;
+ }
+@@ -388,7 +418,8 @@
+     if (atomic_exchange(&execution->joined, 1)) abort();
+     if (!execution->task) return;
+     task_register_abandoned(tasks, (CrustAbandonedExecution){
+-        .thread = execution->thread, .wait = execution->wait, .detach = execution->detach, .task = execution->task
++        .thread = execution->thread, .wait = execution->wait, .detach = execution->detach,
++        .task = execution->task, .pooled = execution->pooled
+     });
+ }
+ 
+@@ -399,7 +430,7 @@
+         for (size_t i = 0; i < tasks->count; ++i) {
+             CrustAbandonedExecution *execution = &tasks->entries[i];
+             if (!atomic_load_explicit(&execution->task->worker_done, memory_order_acquire)) continue;
+-            if (!execution->detached && (!execution->detach || execution->detach(execution->thread))) continue;
++            if (!execution->pooled && !execution->detached && (!execution->detach || execution->detach(execution->thread))) continue;
+             completed = execution->task;
+             *execution = tasks->entries[--tasks->count];
+             break;
+@@ -419,16 +450,249 @@
+         }
+         CrustAbandonedExecution execution = tasks->entries[--tasks->count];
+         if (pthread_mutex_unlock(&abandoned_mutex) != 0) abort();
+-        if (execution.detached) {
++        if (execution.pooled) task_default_wait(execution.task);
++        else if (execution.detached) {
+             while (!atomic_load_explicit(&execution.task->worker_done, memory_order_acquire))
+                 sched_yield();
+         } else if (execution.wait(execution.thread) != 0) abort();
+         if (!task_drop_complete(execution.task)) abort();
++    }
++}
++
++'''
++
++TASK_READY_QUEUE_RUNTIME = r'''
++/* Entries live in scheduler storage, independently of task frames. A ticket
++   may outlive a frame, but never its entry. Entry storage is retired only after
++   all workers and event producers using it have stopped. No heap allocation. */
++typedef struct CrustReadyQueue CrustReadyQueue;
++struct CrustQueueEntry {
++    pthread_mutex_t mutex;
++    CrustReadyQueue *queue;
++    CrustTask *task;
++    uint64_t generation;
++    int scheduled; /* Queued, claimed by a worker, or currently being polled. */
++    CrustQueueEntry *next; /* Queue mutex, not entry mutex. */
++};
++struct CrustReadyQueue {
++    pthread_mutex_t mutex;
++    pthread_cond_t changed;
++    CrustQueueEntry *head, *tail;
++    size_t outstanding;
++    int closed;
++};
++typedef struct { CrustQueueEntry *entry; uint64_t generation; } CrustWakeTicket;
++
++static void task_queue_lock(pthread_mutex_t *mutex) {
++    if (pthread_mutex_lock(mutex)) abort();
++}
++static void task_queue_unlock(pthread_mutex_t *mutex) {
++    if (pthread_mutex_unlock(mutex)) abort();
++}
++static int task_queue_init(CrustReadyQueue *queue) {
++    int error = pthread_mutex_init(&queue->mutex, NULL);
++    if (error) return error;
++    error = pthread_cond_init(&queue->changed, NULL);
++    if (error) {
++        if (pthread_mutex_destroy(&queue->mutex)) abort();
++        return error;
++    }
++    queue->head = queue->tail = NULL;
++    queue->outstanding = 0;
++    queue->closed = 0;
++    return 0;
++}
++static void task_queue_entry_init(CrustQueueEntry *entry) {
++    if (pthread_mutex_init(&entry->mutex, NULL)) abort();
++    entry->queue = NULL;
++    entry->task = NULL;
++    entry->generation = 0;
++    entry->scheduled = 0;
++    entry->next = NULL;
++}
++/* Caller holds both entry and queue mutexes. No consumer holds the queue
++   mutex while acquiring an entry mutex: the lock order cannot be reversed. */
++static void task_queue_push_locked(CrustReadyQueue *queue, CrustQueueEntry *entry) {
++    entry->next = NULL;
++    if (queue->tail) queue->tail->next = entry;
++    else queue->head = entry;
++    queue->tail = entry;
++    entry->scheduled = 1;
++    if (pthread_cond_broadcast(&queue->changed)) abort();
++}
++static void task_queue_push(CrustReadyQueue *queue, CrustQueueEntry *entry) {
++    task_queue_lock(&queue->mutex);
++    if (queue->closed) abort();
++    task_queue_push_locked(queue, entry);
++    task_queue_unlock(&queue->mutex);
++}
++static int task_queue_submit(CrustReadyQueue *queue, CrustQueueEntry *entry,
++                             CrustTask *task, CrustWakeTicket *ticket) {
++    int error = 0;
++    task_queue_lock(&entry->mutex);
++    task_queue_lock(&queue->mutex);
++    if (entry->task || entry->scheduled) error = EBUSY;
++    else if (queue->closed) error = EPIPE;
++    else if (entry->generation == UINT64_MAX) error = EOVERFLOW;
++    else {
++        CrustTaskState inactive = TASK_INACTIVE;
++        if (!atomic_compare_exchange_strong(&task->state, &inactive, TASK_QUEUED)) error = EINVAL;
++        else {
++            ++entry->generation;
++            entry->queue = queue;
++            entry->task = task;
++            ++queue->outstanding;
++            *ticket = (CrustWakeTicket){entry, entry->generation};
++            task_queue_push_locked(queue, entry);
++        }
++    }
++    task_queue_unlock(&queue->mutex);
++    task_queue_unlock(&entry->mutex);
++    return error;
++}
++static int task_queue_wake(CrustWakeTicket ticket) {
++    CrustQueueEntry *entry = ticket.entry;
++    if (!entry) return 0;
++    task_queue_lock(&entry->mutex);
++    int valid = entry->generation == ticket.generation && entry->task;
++    if (valid) {
++        valid = task_wake(entry->task);
++        if (valid && !entry->scheduled) task_queue_push(entry->queue, entry);
+     }
++    task_queue_unlock(&entry->mutex);
++    return valid;
+ }
++/* A popped entry remains scheduled until the poll has been finalized.
++   Wakes in the dequeue-to-poll gap therefore cannot enqueue it twice. */
++static CrustQueueEntry *task_queue_pop(CrustReadyQueue *queue, int wait) {
++    task_queue_lock(&queue->mutex);
++    while (wait && !queue->head && !queue->closed)
++        if (pthread_cond_wait(&queue->changed, &queue->mutex)) abort();
++    CrustQueueEntry *entry = queue->head;
++    if (entry) {
++        queue->head = entry->next;
++        if (!queue->head) queue->tail = NULL;
++        entry->next = NULL;
++    }
++    task_queue_unlock(&queue->mutex);
++    return entry;
++}
++static int task_queue_run_one(CrustReadyQueue *queue, int wait) {
++    CrustQueueEntry *entry = task_queue_pop(queue, wait);
++    if (!entry) return 0;
++    task_queue_lock(&entry->mutex);
++    CrustTask *task = entry->task;
++    if (!task || !entry->scheduled) abort();
++    task_queue_unlock(&entry->mutex);
++    CrustTaskState state;
++    if (atomic_load(&task->state) == TASK_QUEUED) {
++        task_claim_queued(task);
++        state = task_resume_claimed(task);
++    } else state = task_poll(task);
++    task_queue_lock(&entry->mutex);
++    if (state == TASK_COMPLETE) {
++        entry->task = NULL;
++        entry->scheduled = 0;
++        task_queue_lock(&queue->mutex);
++        if (!queue->outstanding) abort();
++        --queue->outstanding;
++        /* Tickets can no longer reach the frame. This is the last access. */
++        atomic_store_explicit(&task->worker_done, 1, memory_order_release);
++        if (pthread_cond_broadcast(&queue->changed)) abort();
++        task_queue_unlock(&queue->mutex);
++    } else if (state == TASK_SUSPENDED) {
++        task_scheduling_lock(task);
++        int ready = task->ready;
++        task_scheduling_unlock(task);
++        entry->scheduled = 0;
++        if (ready) task_queue_push(queue, entry);
++    } else abort();
++    task_queue_unlock(&entry->mutex);
++    return 1;
++}
++static void *task_queue_worker(void *pointer) {
++    CrustReadyQueue *queue = pointer;
++    while (task_queue_run_one(queue, 1)) {}
++    return NULL;
++}
++static int task_queue_close(CrustReadyQueue *queue) {
++    task_queue_lock(&queue->mutex);
++    int error = queue->outstanding ? EBUSY : 0;
++    if (!error) {
++        queue->closed = 1;
++        if (pthread_cond_broadcast(&queue->changed)) abort();
++    }
++    task_queue_unlock(&queue->mutex);
++    return error;
++}
++/* Shutdown precondition: workers joined and event producers stopped. */
++static void task_queue_entry_destroy(CrustQueueEntry *entry) {
++    if (entry->task || entry->scheduled) abort();
++    if (pthread_mutex_destroy(&entry->mutex)) abort();
++}
++static void task_queue_destroy(CrustReadyQueue *queue) {
++    if (!queue->closed || queue->outstanding || queue->head) abort();
++    if (pthread_cond_destroy(&queue->changed)) abort();
++    if (pthread_mutex_destroy(&queue->mutex)) abort();
++}
+ 
++/* The default cooperative scheduler has reusable workers. Blocking requests
++   keep their separate launch path; native blocks never pass through this pool. */
++static pthread_mutex_t task_default_mutex = PTHREAD_MUTEX_INITIALIZER;
++static CrustReadyQueue task_default_queue;
++static pthread_t task_default_workers[2];
++static int task_default_started;
++
++static int task_default_submit(CrustTask *task) {
++    task_queue_lock(&task_default_mutex);
++    if (!task_default_started) {
++        int error = task_queue_init(&task_default_queue);
++        if (error) {
++            task_queue_unlock(&task_default_mutex);
++            return error;
++        }
++        unsigned created = 0;
++        for (; created < 2; ++created) {
++            error = task_pthread_launch(&task_default_workers[created], 0,
++                                        task_queue_worker, &task_default_queue);
++            if (error) break;
++        }
++        if (error) {
++            if (task_queue_close(&task_default_queue)) abort();
++            for (unsigned i = 0; i < created; ++i)
++                if (pthread_join(task_default_workers[i], NULL)) abort();
++            task_queue_destroy(&task_default_queue);
++            task_queue_unlock(&task_default_mutex);
++            return error;
++        }
++        task_default_started = 1;
++    }
++    CrustWakeTicket ticket;
++    int error = task_queue_submit(&task_default_queue, task->queue_entry, task, &ticket);
++    task_queue_unlock(&task_default_mutex);
++    return error;
++}
++static void task_default_wait(CrustTask *task) {
++    task_queue_lock(&task_default_queue.mutex);
++    while (!atomic_load_explicit(&task->worker_done, memory_order_acquire))
++        if (pthread_cond_wait(&task_default_queue.changed, &task_default_queue.mutex)) abort();
++    task_queue_unlock(&task_default_queue.mutex);
++}
++static void task_default_close(void) {
++    task_queue_lock(&task_default_mutex);
++    if (task_default_started) {
++        if (task_queue_close(&task_default_queue)) abort();
++        for (unsigned i = 0; i < 2; ++i)
++            if (pthread_join(task_default_workers[i], NULL)) abort();
++        task_queue_destroy(&task_default_queue);
++        task_default_started = 0;
++    }
++    task_queue_unlock(&task_default_mutex);
++}
+ '''
+ 
++TASK_THREAD_RUNTIME += TASK_READY_QUEUE_RUNTIME
++
+ TASK_ASYNC_THREAD_RUNTIME = r'''
+ /* The worker only accesses its own stable task slot. It publishes
+    completion as its last access, so the parent handle can disappear. */
+@@ -454,6 +718,16 @@
+ 
+ static void task_async_start_mode(CrustAsyncExecution *execution, CrustTask *task,
+                                   const CrustThreadScheduler *scheduler, int blocking) {
++    if (scheduler == &task_default_scheduler && !blocking && task->queue_entry) {
++        execution->task = task;
++        int error = task_default_submit(task);
++        execution->error = error;
++        if (error) {
++            if (!task_drop_inactive(task)) abort();
++            execution->task = NULL;
++        }
++        return;
++    }
+     task_start_detached(execution, task,
+         blocking ? scheduler->launch_blocking : scheduler->launch, task_thread_run);
+ }

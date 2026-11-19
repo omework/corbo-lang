@@ -1,0 +1,40 @@
+--- before/handle_types.py
++++ after/handle_types.py
+@@ -4,6 +4,9 @@
+ Capture groups 1 and 2 retain shared/exclusive loans independently. Group 3
+ retains an exclusive ancestor while exposing only its shared reborrow. Group 0
+ represents storage retained by owned captures, not a concrete Int allocation.
++Borrowed results have separate projections: group 4 carries the result loan,
++and group 5 preserves an exclusive capability behind a shared result. These
++groups survive join; unrelated capture groups do not.
+ """
+ from types import SimpleNamespace
+ 
+@@ -16,7 +19,8 @@
+     if not is_public_handle(typ):
+         return None
+     payload = typ[len('runtime::Handle<'):-1]
+-    # Borrowed results need separate result-provenance projections.
++    if payload in ('&Int', '&mut Int', '&mut u8'):
++        return ('mut', payload[5:]) if payload.startswith('&mut ') else ('ref', payload[1:])
+     from async_lowering import SCALAR_RESULTS, ASYNC_CAPTURE_VIEW_MODES, scalar_array_layout
+     if payload == 'Void':
+         return ('void', 'Void')
+@@ -88,9 +92,16 @@
+             ('opaque_shared_capability', 'ref', 'Int'),
+         ]
+         result_storage = None
++        result_borrows = ()
++        if signature[0] in ('ref', 'mut'):
++            result_borrows = (4, 5) if signature[0] == 'ref' else (4,)
++            parameters.append(('opaque_result_borrow', signature[0], signature[1]))
++            if signature[0] == 'ref':
++                parameters.append(('opaque_result_capability', 'ref', signature[1]))
+         if signature[0] in ('owned', 'join_owned'):
+             result_storage = len(parameters)
+             parameters.append(('opaque_result_storage', 'owned', signature[1]))
+         declaration = SimpleNamespace(args=(key, parameters, signature, []),
+-                                      public_result_storage=result_storage, native_block=False, line=0)
++                                      public_result_storage=result_storage,
++                                      public_result_borrows=result_borrows, native_block=False, line=0)
+         return (declaration, None) if self.compiled else declaration

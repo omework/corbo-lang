@@ -1,0 +1,207 @@
+{
+  "accepted": [
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn stop(x:&mut Int){loop{}}fn edit(x:&mut Int){x.set(20);}fn run(w:&mut W){match &mut w{W.Other{data:r}=>{stop(r);},W.Bound{data:r}=>{edit(r);}}print(w);}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};run(&mut w);print(n);",
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);},W.Other{data:r}=>{edit(r);}}print(n);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);}}print(w);p.reset();q.reset();",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{{forward(r);}print(r);r.set(21);edit(r);print(r);}}print(w);print(n);"
+  ],
+  "rejected": [
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&n};match &mut w{W.Bound{data:r}=>{edit(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);},W.Other{data:r}=>{edit(r,r);}}print(n);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn duo(x:&mut Int,y:&Int){x.set(20);print(y);}match &mut w{W.Bound{data:r}=>{duo(r,r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn identity(x:&mut Int)->&mut Int{return x;}match &mut w{W.Bound{data:r}=>{identity(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn identity(x:&mut Int)->&mut Int{return x;}match &mut w{W.Bound{data:r}=>{let other=identity(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn reset(x:&mut Int,p:&mut Pool<Int>){x.set(20);p.reset();}match &mut w{W.Bound{data:r}=>{reset(r,&mut p);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(&mut r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(n);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);print(n);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);}}print(n);print(w);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &w{W.Bound{data:r}=>{edit(r);}}"
+  ],
+  "mutations": [
+    {
+      "fault": "drop reservation for arm",
+      "before": "self.argument_frames.append([subject_loan])",
+      "after": "self.argument_frames.append([])",
+      "test": "test_lifetime_boundaries_after_call",
+      "detected": true,
+      "stderr": "======================================================================\nFAIL: test_lifetime_boundaries_after_call (test_mutable_match_calls.MutableMatchCallTests.test_lifetime_boundaries_after_call) (stage='verify_program', arm='edit(r);print(n);', tail='')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_lifetime_boundaries_after_call (test_mutable_match_calls.MutableMatchCallTests.test_lifetime_boundaries_after_call) (stage='compile_source', arm='edit(r);print(n);', tail='')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.662s\n\nFAILED (failures=2)\n"
+    },
+    {
+      "fault": "promote shared projection",
+      "before": "mode = 'mut' if node.mutable and field_type == '&mut Int' else 'ref'",
+      "after": "mode = 'mut' if node.mutable else 'ref'",
+      "test": "test_call_keeps_projection_mode_and_exclusivity",
+      "detected": true,
+      "stderr": "======================================================================\nFAIL: test_call_keeps_projection_mode_and_exclusivity (test_mutable_match_calls.MutableMatchCallTests.test_call_keeps_projection_mode_and_exclusivity) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_call_keeps_projection_mode_and_exclusivity (test_mutable_match_calls.MutableMatchCallTests.test_call_keeps_projection_mode_and_exclusivity) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.003s\n\nFAILED (failures=2)\n"
+    },
+    {
+      "fault": "fail to typecheck impossible arm",
+      "before": "if actual_type != typ:",
+      "after": "if actual_type != typ or actual.alloc is None:",
+      "test": "test_unreachable_variant_validates_call_without_a_target",
+      "detected": true,
+      "stderr": "======================================================================\nERROR: test_unreachable_variant_validates_call_without_a_target (test_mutable_match_calls.MutableMatchCallTests.test_unreachable_variant_validates_call_without_a_target)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_mutable_match_calls.py\", line 56, in test_unreachable_variant_validates_call_without_a_target\n    self.assertEqual(self.run_source(source + arm % 'edit(r);').stdout, '20\\n')\n                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_mutable_reference_fields.py\", line 24, in run_source\n    def run_source(self,s):return self.execute(s,add_source=False)\n                                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/tests/test_crust.py\", line 34, in execute\n    source_path.write_text(compile_source(self.with_source(source) if add_source else source))\n                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 3059, in compile_source\n    return compile_program(source)[1]\n           ~~~~~~~~~~~~~~~^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 3052, in compile_program\n    code = compiler.compile(Parser(source).parse())\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2789, in compile\n    main = self.verify(nodes)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2785, in verify\n    self.verify_top_level(main)\n    ~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 878, in verify_top_level\n    check.block('root', nodes)\n    ~~~~~~~~~~~^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2436, in block\n    result = self.statements(scope, nodes, returns)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2497, in statements\n    self.match_enum(node)\n    ~~~~~~~~~~~~~~~^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2403, in match_enum\n    self.block(f'match {typ}.{arm}', body, bindings=bindings)\n    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2436, in block\n    result = self.statements(scope, nodes, returns)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2531, in statements\n    value = self.invoke(args[0], scope)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 1925, in invoke\n    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)\n           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 2004, in invoke_arguments\n    self.fail(f\"'{pname}' attend une allocation {typ}\")\n    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpl1n6shkv/crust.py\", line 653, in fail\n    raise Error(f'ligne {self.line}: {message}')\ncrust.Error: ligne 1: 'x' attend une allocation Int\n\n----------------------------------------------------------------------\nRan 1 test in 0.003s\n\nFAILED (errors=1)\n"
+    }
+  ],
+  "C": [
+    {
+      "source": "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{forward(r);print(r);r.set(21);}}print(w);print(n);",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "20\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    },
+    {
+      "source": "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{forward(r);print(r);r.set(21);}}print(w);print(n);",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "20\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    },
+    {
+      "source": "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{forward(r);print(r);r.set(21);}}print(w);print(n);",
+      "flags": [
+        "-Os"
+      ],
+      "stdout": "20\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    },
+    {
+      "source": "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{forward(r);print(r);r.set(21);}}print(w);print(n);",
+      "flags": [
+        "-O2",
+        "-fsanitize=undefined",
+        "-fno-sanitize-recover=all"
+      ],
+      "stdout": "20\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    }
+  ],
+  "suites": {
+    "standard": {
+      "tests": 745,
+      "seconds": 392.559,
+      "output": "----------------------------------------------------------------------\nRan 745 tests in 392.559s\n\nOK\n"
+    },
+    "ubsan": {
+      "tests": 73,
+      "seconds": 47.272,
+      "output": "----------------------------------------------------------------------\nRan 73 tests in 47.272s\n\nOK\n"
+    }
+  },
+  "field_regression_mutations": {
+    "scope": "six selected faults, no global detection rate",
+    "mutations": [
+      {
+        "id": "downgrade_exclusive_field",
+        "module": "crust.py",
+        "test": "test_original_accesses_are_excluded",
+        "status": "detected",
+        "returncode": 1,
+        "output": "======================================================================\nFAIL: test_original_accesses_are_excluded (test_mutable_reference_fields.MutableReferenceFieldTests.test_original_accesses_are_excluded) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_original_accesses_are_excluded (test_mutable_reference_fields.MutableReferenceFieldTests.test_original_accesses_are_excluded) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_original_accesses_are_excluded (test_mutable_reference_fields.MutableReferenceFieldTests.test_original_accesses_are_excluded) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_original_accesses_are_excluded (test_mutable_reference_fields.MutableReferenceFieldTests.test_original_accesses_are_excluded) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_original_accesses_are_excluded (test_mutable_reference_fields.MutableReferenceFieldTests.test_original_accesses_are_excluded) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_original_accesses_are_excluded (test_mutable_reference_fields.MutableReferenceFieldTests.test_original_accesses_are_excluded) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.004s\n\nFAILED (failures=6)\n"
+      },
+      {
+        "id": "lose_exclusive_ancestor",
+        "module": "crust.py",
+        "test": "test_readonly_match_projection_retains_exclusivity",
+        "status": "detected",
+        "returncode": 1,
+        "output": "======================================================================\nFAIL: test_readonly_match_projection_retains_exclusivity (test_mutable_reference_fields.MutableReferenceFieldTests.test_readonly_match_projection_retains_exclusivity) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_readonly_match_projection_retains_exclusivity (test_mutable_reference_fields.MutableReferenceFieldTests.test_readonly_match_projection_retains_exclusivity) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.284s\n\nFAILED (failures=2)\n"
+      },
+      {
+        "id": "wrong_pointer_offset",
+        "module": "crust.py",
+        "test": "test_mixed_pointer_layout_and_identity",
+        "status": "detected",
+        "returncode": 1,
+        "output": "======================================================================\nERROR: test_mixed_pointer_layout_and_identity (test_mutable_reference_fields.MutableReferenceFieldTests.test_mixed_pointer_layout_and_identity)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 63, in test_mixed_pointer_layout_and_identity\n    r=self.run_source(s);lines=r.stdout.splitlines()\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 24, in run_source\n    def run_source(self,s):return self.execute(s,add_source=False)\n                                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_crust.py\", line 46, in execute\n    return subprocess.run([str(executable)], check=True, capture_output=True, text=True, timeout=10)\n           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py\", line 578, in run\n    raise CalledProcessError(retcode, process.args,\n                             output=stdout, stderr=stderr)\nsubprocess.CalledProcessError: Command '['/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp9bewh_jr/program']' died with <Signals.SIGSEGV: 11>.\n\n----------------------------------------------------------------------\nRan 1 test in 0.559s\n\nFAILED (errors=1)\n"
+      },
+      {
+        "id": "forget_projection_parent",
+        "module": "crust.py",
+        "test": "test_readonly_match_projection_retains_exclusivity",
+        "status": "detected",
+        "returncode": 1,
+        "output": "======================================================================\nFAIL: test_readonly_match_projection_retains_exclusivity (test_mutable_reference_fields.MutableReferenceFieldTests.test_readonly_match_projection_retains_exclusivity) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_readonly_match_projection_retains_exclusivity (test_mutable_reference_fields.MutableReferenceFieldTests.test_readonly_match_projection_retains_exclusivity) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.365s\n\nFAILED (failures=2)\n"
+      },
+      {
+        "id": "lose_pending_field",
+        "module": "crust.py",
+        "test": "test_two_mutable_fields_cannot_alias",
+        "status": "detected",
+        "returncode": 1,
+        "output": "======================================================================\nFAIL: test_two_mutable_fields_cannot_alias (test_mutable_reference_fields.MutableReferenceFieldTests.test_two_mutable_fields_cannot_alias) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_two_mutable_fields_cannot_alias (test_mutable_reference_fields.MutableReferenceFieldTests.test_two_mutable_fields_cannot_alias) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=2)\n"
+      },
+      {
+        "id": "erase_descriptor_target_type",
+        "module": "crust.py",
+        "test": "test_container_reference_cannot_supply_int_field",
+        "status": "detected",
+        "returncode": 1,
+        "output": "======================================================================\nFAIL: test_container_reference_cannot_supply_int_field (test_mutable_reference_fields.MutableReferenceFieldTests.test_container_reference_cannot_supply_int_field) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_container_reference_cannot_supply_int_field (test_mutable_reference_fields.MutableReferenceFieldTests.test_container_reference_cannot_supply_int_field) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_container_reference_cannot_supply_int_field (test_mutable_reference_fields.MutableReferenceFieldTests.test_container_reference_cannot_supply_int_field) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_container_reference_cannot_supply_int_field (test_mutable_reference_fields.MutableReferenceFieldTests.test_container_reference_cannot_supply_int_field) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-ref-mutations-7r635fbk/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.002s\n\nFAILED (failures=4)\n"
+      }
+    ],
+    "baseline": {
+      "status": "survived",
+      "returncode": 0,
+      "output": "----------------------------------------------------------------------\nRan 29 tests in 18.673s\n\nOK\n"
+    },
+    "checkout_unchanged": true,
+    "checkout_sha256": {
+      "constraints.py": "b0100c450b92c59717bc311d3922b573b6e19c4b2c4f9042b09e0679de83189f",
+      "contracts.py": "86939cfbaede4c70e495e90a0d187dc26c0f7c62ae9b6ae8f69fabcbdefb04f3",
+      "crust.py": "d1986169656289213acf6d6f55ad2a6f2f8e412958b65a53a066e2c8fbcd6f5c",
+      "effects.py": "93ed770c1bc5deffbd975b89bfb27baca3aff353b9d72d858974455257666b6c",
+      "results.py": "f524b8cd4aeed8ce29fe76355db7fa513e55400601a7beb356150623295f9f91",
+      "tests/pool_requirement_model.py": "95025f8ca55c57702e5d15df9f148fcc093ed4e63b72f7702259d849f6a6e84c",
+      "tests/run_borrowed_return_mutations.py": "87b3dcd1ea8fa26102064a2a91ca9ac70f0ab97eb1e9a0478c4e70270bb4542e",
+      "tests/run_direct_borrow_mutations.py": "782ff0f217bab410262d1431eb40e807c99905cb0bf0893ff7e7fcd4b168b432",
+      "tests/run_let_mutations.py": "035afc8387f557131f75d24009e536ce185ad43e074d0275b726b92d261eb47b",
+      "tests/run_mutable_field_mutations.py": "4fab89aef6b752fc92c6da09bae8f03ebb04b8a781455dda294973758ed99f70",
+      "tests/run_mutable_return_mutations.py": "0f1b9091dcd37c5c4463292ba261da83a9befbeb6e9b1dbf6f59b5db7a0bffb7",
+      "tests/run_pool_requirement_mutations.py": "b316381d9d739b166c55dbb95e348a06be697409c4ed0d1c236fc2af2dce5dd6",
+      "tests/run_reference_field_mutations.py": "37777c2d037cae37b4cc3317fc83882ba39e886f5ccb5e88dc8e0483ea8c8de7",
+      "tests/run_reference_value_mutations.py": "633dbafaac33b0f99f452413e9a7a0d68cbf36236261376c8c61f51e79315f89",
+      "tests/test_arguments.py": "f5669a0ecdb2025640f98c70e68d59026f33c3d6c660295a05cf0731b4344be9",
+      "tests/test_audit_regressions.py": "741ba2b49a32de9253c61c39cbf52f0c3db39c8eb1491719bfcec78e2fdff3ae",
+      "tests/test_borrowed_returns.py": "889bffc3b9f56a1a537f7e8706239fab9bd2659a956f2856f39669e0a956e028",
+      "tests/test_conditional_returns.py": "eeb2ed13c4d258f9d4a225f1a300ce075982c7d5a3aa666efa71ad8d2511354c",
+      "tests/test_conditionals.py": "9d49e6ff0f92a8f46287752a2a0d37dda04932b75bc20ac5f59aee74005c7fa4",
+      "tests/test_constraints.py": "808d2c213c5f703304efbac52db63bbd9d0cd2bacf959eff7c159bce28e96c18",
+      "tests/test_continue.py": "a650ba88194655ea075ef80b6d65f578a9cb4943937ece67ba17f3762c807b67",
+      "tests/test_crust.py": "f2ceeafb9e22a2406e59c9965bd4c1f83d71917f57328e559d9495b29eb3a81f",
+      "tests/test_direct_borrow_returns.py": "3c19712d5a4461224769e6353068dd5e578b05162ac3139d055fba5da6aa3f10",
+      "tests/test_drop_transitions.py": "380b8dddc9692b565fdb490caeaa4dc0c1260c2f0f661bfde0a1b892313528ef",
+      "tests/test_effects.py": "a24a9f5d51340883561ca4fae74fe5c4b4d2ee7bce766fe55ed853642b65c775",
+      "tests/test_function_bodies.py": "f5fa930a21cea889f2a86ac3c054c19c4a852c5c2ae0047edc69896498ce564f",
+      "tests/test_if_expressions.py": "5ec7db08ad37d4778124fcc2291038638a47fd35e93e20b04ce57b2f114b176e",
+      "tests/test_let_mutability.py": "f4a6f1297f79c65754a06ead3091d2a124c830bb7d438b92fc9bfefffb2e6250",
+      "tests/test_loops.py": "2814b2e172cfb17b79b9c7821563063bfa7222c510d01db3c9067ccd89d851ed",
+      "tests/test_modular_calls.py": "bd3acd1054bc8b4fe4f24018c223630dd92f0fb69ea916829d5f4edbbc2314b5",
+      "tests/test_mutable_borrow_returns.py": "1cf0815de14f68112972af221f9c11f9d94c9732a424908ba9d893fd21a44417",
+      "tests/test_mutable_match.py": "810d719b060f92c40ff84cb9a90f8da53c9fa499d7293f177bc39d3bab0b22b7",
+      "tests/test_mutable_match_calls.py": "71660c93b11d465629c2fa05ae8034340ef273ed6b19cb12aebce002885a6948",
+      "tests/test_mutable_reference_fields.py": "a82b6aa0e29397df28f339ff996e6296389c8063f8a98f69a825bf8f12b18de1",
+      "tests/test_pool_requirements.py": "59296e36d54e35c77526f1cdbdf7c67197589ef02a78d899a066309c7cd2a94a",
+      "tests/test_provenances.py": "fa733d8bcdf7807fd8d0b1ffe50ed281596de8dc0520f45258972c79a92a0135",
+      "tests/test_reassignment.py": "84b67af052da7675e46527031e5b5376e77234cc2b6ee83fcee2c87dd2cf51c2",
+      "tests/test_reference_fields.py": "a72c85c3c4b7f149993297de6d173f72c094f6cf62bf776799e7bdfa7739a209",
+      "tests/test_reference_values.py": "9d1a1046dc04f833079877858c2d1df30460bd4cb5d0ceec12625f6ebab3d4ff",
+      "tests/test_reset_transitions.py": "fc6c1c6e38123936337390d40a911ec1bce43da55c072b53802c1dc56fbd7e93",
+      "tests/test_results.py": "884e57be2b8ae5558589e213274cd2cab873b058b079ed0ffab115adf1422706",
+      "tests/test_safety.py": "3202e203f79a499081410c0ff239a94c2f8c30db08e073d604cbf2e2aa7bb8bd",
+      "tests/test_scope_exit.py": "c6bdab101f82558838a40a5d0211623c9dcc1d3b56f604962ba39b350fb448c8",
+      "tests/test_while.py": "b6ec87b241f5884be4a4af7de7292cd3cc1e1e51089ea1e766731dc02b7256bc",
+      "tests/validate_borrowed_return_c.py": "32f121d7342d142b149cc80ca02510c0ca835c657a7202c0352c3de483161b89",
+      "tests/validate_direct_borrow_c.py": "591da4988c3e4c9bc4f4dd7492b9554cfb5721869cb5fd21cd57e776a2035748",
+      "tests/validate_let_c.py": "3c8f5e2dae802e9702bc388e125002f3b5a0f2ff0cfd4765d2b3a98f2d8c1557",
+      "tests/validate_mutable_field_c.py": "3d4bbd879664f3dd14d0cee424e8d017c2bdf08259d5c9c478d085d138df4a55",
+      "tests/validate_mutable_return_c.py": "385344e52440708bc0c967aa5aa8353a9422fe98cf83d1d4f0dd4b1cb23c6ce0",
+      "tests/validate_pool_contract_c.py": "b690863499b401eaac4096ef96c316e63ecb580bda5f0db3eb30209cae982c49",
+      "tests/validate_reference_field_c.py": "35e5c4a811aed02150db51d0cc83ebc3a479226573750f653aeb033186e1c674"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+test_annotation_combines_with_select_and_conversion (test_storage_requirements.StorageRequirementTests.test_annotation_combines_with_select_and_conversion) ... ok
+test_incompatible_requirements_rejected (test_storage_requirements.StorageRequirementTests.test_incompatible_requirements_rejected) ... ok
+test_owned_field_storage_is_independent_of_carrier (test_storage_requirements.StorageRequirementTests.test_owned_field_storage_is_independent_of_carrier) ... FAIL
+test_pool_caller_cannot_satisfy_local_annotation (test_storage_requirements.StorageRequirementTests.test_pool_caller_cannot_satisfy_local_annotation) ... ok
+test_pool_requirement_accepts_matching_source (test_storage_requirements.StorageRequirementTests.test_pool_requirement_accepts_matching_source) ... ok
+test_recorded_annotation (test_storage_requirements.StorageRequirementTests.test_recorded_annotation) ... ok
+test_requirements_do_not_relax_borrow_lifetime (test_storage_requirements.StorageRequirementTests.test_requirements_do_not_relax_borrow_lifetime) ... ok
+test_sync_factory_preserves_requirement (test_storage_requirements.StorageRequirementTests.test_sync_factory_preserves_requirement) ... ok
+test_sync_helper_requirement_and_async_relay (test_storage_requirements.StorageRequirementTests.test_sync_helper_requirement_and_async_relay) ... ok
+test_two_parameter_storage_model (test_storage_requirements.StorageRequirementTests.test_two_parameter_storage_model) ... ok
+test_two_possible_sources_require_both_local (test_storage_requirements.StorageRequirementTests.test_two_possible_sources_require_both_local) ... ok
+
+======================================================================
+FAIL: test_owned_field_storage_is_independent_of_carrier (test_storage_requirements.StorageRequirementTests.test_owned_field_storage_is_independent_of_carrier)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16686, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1614, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1602, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1432, in statement
+    return self.function(line)
+           ~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 571, in function
+    body = self.block()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 381, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1602, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1509, in statement
+    expr = self.expr()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1090, in expr
+    left = self.postfix(self.primary())
+                        ~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1274, in primary
+    return self.match_dispatch(line, valued=True)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 917, in match_dispatch
+    result = self.match(line, valued)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 949, in match
+    self.take('.')
+    ~~~~~~~~~^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 199, in take
+    raise Error(f"ligne {line}: attendu {expected!r}, reçu {word!r}")
+crust.Error: ligne 3: attendu '.', reçu '{'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_storage_requirements.py", line 27, in test_owned_field_storage_is_independent_of_carrier
+    self.assertEqual(self.run_source(source).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: attendu '.', reçu '{'
+
+----------------------------------------------------------------------
+Ran 11 tests in 6.451s
+
+FAILED (failures=1)

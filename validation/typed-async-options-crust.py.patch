@@ -1,0 +1,71 @@
+--- before/crust.py
++++ after/crust.py
+@@ -8,7 +8,7 @@
+ from option_join_types import (
+     OPTION_JOIN_TYPES, OPTION_JOIN_CTYPES, OPTION_JOIN_CELLS, OPTION_JOIN_DEPTHS,
+     option_type_mode, option_join_mode, option_inner_signature, option_cleanup,
+-    option_join_layouts,
++    option_join_layouts, option_payload_type,
+ )
+ from exchange_join_types import (
+     EXCHANGE_JOIN_TYPES, exchange_join_mode, EXCHANGE_JOIN_CTYPES, EXCHANGE_JOIN_CELLS,
+@@ -83,7 +83,7 @@
+     if (mode := exchange_type_mode(typ)) is not None:
+         return mode, 'Int', 'pool'
+     if (mode := option_type_mode(typ)) is not None:
+-        return mode, 'Int', 'pool'
++        return mode, option_payload_type(mode), 'pool'
+     return owned_join_signature(typ)
+ COPY_VALUE_TYPES = ChainMap(PLAIN_JOIN_C_TYPES, {
+     **dict.fromkeys(ERROR_VALUE_TYPES, 'int'),
+@@ -598,11 +598,8 @@
+             raise Error('prototype : résultats typés de replace/try_push dans une signature async non raccordés')
+         if asynchronous and (result[0] == 'buffered_handle_exchange' or result[0] in EXCHANGE_JOIN_TYPES):
+             exchange_join_mode(result[1] if result[0] == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[result[0]])
+-        if asynchronous and any(mode == 'handle_option' and typ != 'Int'
+-                                for mode, typ in (result, *((mode, typ) for _, mode, typ in params))):
+-            raise Error('prototype : Option<A<T>> typé dans une signature async non raccordé')
+         if asynchronous and (result[0] == 'handle_option' or result[0] in OPTION_JOIN_TYPES):
+-            option_join_mode('Option<A<Int>>' if result[0] == 'handle_option' else OPTION_JOIN_TYPES[result[0]])
++            option_join_mode(option_type(result[1]) if result[0] == 'handle_option' else OPTION_JOIN_TYPES[result[0]])
+         if asynchronous and result[0] in ('owned', *OWNED_JOIN_TYPES):
+             owned_join_mode(result[0])
+         return Node('async_fn' if asynchronous else 'fn', (name, params, result, body), line,
+@@ -2762,6 +2759,10 @@
+         variants = summary.fresh_variants | frozenset(
+             arm for candidate in summary.candidates if candidate.kind == 'parameter'
+             for arm in bindings[params[candidate.parameter][0]].alloc.variants)
++        # A homogeneous vector records element provenance, not an arm-specific
++        # layout. Its extracted value can have any arm of the declared type.
++        if any(candidate.kind == 'vector_element' for candidate in summary.candidates):
++            variants |= frozenset(self.enums.get(summary.typ, {}))
+         inherited_fields = {}
+         for candidate in summary.candidates:
+             if candidate.kind != 'task_capture':
+@@ -2771,7 +2772,7 @@
+             projected, chain = self.project_task_result_fields(nominal, task.dependencies, task.borrow_parents)
+             inherited_fields.update(projected)
+             parents.update((id(parent), parent) for parent in chain)
+-            variants |= task.task_result_variants
++            variants |= task.task_result_variants or frozenset(self.enums.get(summary.typ, {}))
+         inherited_fields.update(fields)
+         return tuple(inherited_fields.items()), variants, (*parents.values(), *reservations.values())
+ 
+@@ -8338,6 +8339,8 @@
+         option_mode = optional if isinstance(optional, str) else 'join_option' if optional else None
+         absent = absent or (optional and not sources)
+         storage = 'pool' if optional else storage
++        if option_mode:
++            typ = option_payload_type(option_mode)
+         cell = f'{name}.{EXCHANGE_JOIN_CELLS[exchange]}' if exchange else f'{name}.{OPTION_JOIN_CELLS[option_mode]}' if optional else f'{name}.{OWNED_JOIN_CELLS[owned_mode]}'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+@@ -11246,7 +11249,7 @@
+                 allocation.task_result_origins, exchange=outer_mode,
+                 owned_fields=allocation.task_result_fields, absent=absent_payload)
+         if mode == 'handle_option' or mode in OPTION_JOIN_TYPES:
+-            outer_mode = option_join_mode('Option<A<Int>>' if mode == 'handle_option' else OPTION_JOIN_TYPES[mode])
++            outer_mode = option_join_mode(option_type(typ) if mode == 'handle_option' else OPTION_JOIN_TYPES[mode])
+             self.flag_declarations.append(f'{OPTION_JOIN_CTYPES[outer_mode]} {c} = {{0}};')
+             self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.value).status;')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,

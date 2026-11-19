@@ -1,0 +1,143 @@
+--- before/results.py
++++ after/results.py
+@@ -132,6 +132,10 @@
+     # Includes temporary stores restored before return. Final field deltas
+     # alone cannot describe the reference representation needed by a bridge.
+     stored_reference_parameters: frozenset[int] = frozenset()
++    # Possible waits and returned inputs across normal control-flow paths.
++    # The body checker separately enforces each launched handle's wait duty.
++    task_wait_parameters: frozenset[int] = frozenset()
++    task_forward_parameters: frozenset[int] = frozenset()
+ 
+     @property
+     def same_parameter(self):
+@@ -148,6 +152,10 @@
+                                     for name, targets in self.borrowed_fields],
+                 'fresh_variants': sorted(self.fresh_variants),
+                 'reference_targets': [t.describe(params) for t in sorted(self.reference_targets)]}
++        if self.task_wait_parameters:
++            description['task_wait_parameters'] = [params[i][0] for i in sorted(self.task_wait_parameters)]
++        if self.task_forward_parameters:
++            description['task_forward_parameters'] = [params[i][0] for i in sorted(self.task_forward_parameters)]
+         if self.task_result_sources:
+             description['task_result_sources'] = [source.describe(params) for source in sorted(self.task_result_sources)]
+         if self.task_sources:
+@@ -360,6 +368,7 @@
+     # Deferred field-effect analysis keeps capture snapshots until await/join.
+     # This is separate from storage identities of ordinary structures.
+     pending_structure_calls: frozenset = frozenset()
++    task_parameters: frozenset[int] = frozenset()
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -481,7 +490,8 @@
+                                  for _, parameter_mode, parameter_type in node.args[1])
+         scalar_reference_inputs = any(mode in ('ref', 'mut') and typ == 'Int'
+                                       for _, mode, typ in node.args[1])
+-        if mode not in ('task', 'execution', 'owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'ref', 'mut', 'array_refs', 'vector_split', *UTF8_BORROW_MODES) and not mutable_containers and not scalar_reference_inputs:
++        task_inputs = any(mode in ('task', 'execution') for _, mode, _ in node.args[1])
++        if mode not in ('task', 'execution', 'owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'ref', 'mut', 'array_refs', 'vector_split', *UTF8_BORROW_MODES) and not mutable_containers and not scalar_reference_inputs and not task_inputs:
+             result = FunctionResult(mode, typ)
+         else:
+             if name in self.visiting:
+@@ -505,6 +515,8 @@
+         self.returned = set()
+         self.returned_task_sources = set()
+         self.returned_task_result_sources = set()
++        self.task_wait_parameters = set()
++        self.task_forward_parameters = set()
+         self.returned_references = set()
+         self.returned_fields = {}
+         self.returned_owned_fields = {}
+@@ -627,7 +639,7 @@
+                 result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if owned_result_parameters(
+                     definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary) else frozenset()
+                 environment[name] = Value(mode, typ, fields=fields, reference_targets=targets, task_sources=sources,
+-                                          task_result_sources=result_sources)
++                                          task_result_sources=result_sources, task_parameters=frozenset({index}))
+             elif typ == 'Allocator' or typ.startswith('Pool<'):
+                 environment[name] = SourceOrigin('source_parameter', index,
+                                                  element=typ[5:-1] if typ.startswith('Pool<') else None)
+@@ -747,6 +759,8 @@
+                               task_sources=frozenset(self.returned_task_sources),
+                               task_result_sources=frozenset(self.returned_task_result_sources),
+                               stored_reference_parameters=frozenset(self.stored_reference_parameters),
++                              task_wait_parameters=frozenset(self.task_wait_parameters),
++                              task_forward_parameters=frozenset(self.task_forward_parameters),
+                               owned_field_writes=tuple((index, name, child) for (index, name), child
+                                   in sorted(self.owned_field_writes.items())
+                                   if any(item.kind != 'owned_field_input' for item in child.candidates)))
+@@ -921,6 +935,7 @@
+                 self.fail(line, 'retour de tâche refusé : le pool de capture ne survit pas au retour')
+             self.returned_task_sources.update(value.task_sources)
+             self.returned_task_result_sources.update(value.task_result_sources)
++            self.task_forward_parameters.update(value.task_parameters)
+             for key, targets in value.fields:
+                 if any(not (
+                         target.kind in ('parameter', 'exclusive_join_parameter', 'inline_field_parameter', 'indirect_field_parameter')
+@@ -1241,7 +1256,8 @@
+                     handle_slot=first.handle_slot if all(value.handle_slot == first.handle_slot for value in values) else None,
+                     task_sources=frozenset(source for value in values for source in value.task_sources),
+                     task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+-                    pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls))
++                    pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
++                    task_parameters=frozenset(index for value in values for index in value.task_parameters))
+ 
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+@@ -1414,6 +1430,7 @@
+             else:
+                 flow, execution = self.expression(expr[1], environment, line)
+             if isinstance(execution, Value) and execution.mode == 'execution':
++                self.task_wait_parameters.update(execution.task_parameters)
+                 declaration = self.analyzer.async_functions[execution.typ]
+                 mode, typ = declaration.args[2]
+                 if mode in ('ref', 'mut'):
+@@ -1915,7 +1932,7 @@
+             return {'next'}, SCALAR
+         if op in ('name', 'move', 'down', 'ref', 'mut'):
+             value = self.lookup(expr[1], environment, line)
+-            if op == 'move' and (not isinstance(value, Value) or value.mode not in ('owned', 'array_refs', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', 'join_owned', 'join_nested')):
++            if op == 'move' and (not isinstance(value, Value) or value.mode not in ('owned', 'array', 'array_refs', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', 'join_owned', 'join_nested')):
+                 self.fail(line, 'seule une allocation explicite est déplaçable')
+             if op in ('ref', 'mut') and isinstance(value, Value):
+                 if value.mode == 'array_refs':
+@@ -2062,7 +2079,8 @@
+                           input_items_written=any(value.input_items_written for value in returning),
+                           task_sources=frozenset(source for value in returning for source in value.task_sources),
+                           task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
+-                          pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls)))
++                          pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls),
++                    task_parameters=frozenset(index for value in returning for index in value.task_parameters)))
+         if op == 'struct_copy':
+             source = self.lookup(expr[1], environment, line)
+             original = self.lookup(expr[2], environment, line)
+@@ -2206,6 +2224,9 @@
+             if any(mode == 'mut' and typ.startswith('A<') and typ != f'A<{HANDLE_VECTOR}>' for _, mode, typ in params):
+                 self.invalidate_handle_items(environment)
+             summary = self.analyzer.infer(name)
++            for index in summary.task_wait_parameters:
++                if isinstance(actuals[index], Value):
++                    self.task_wait_parameters.update(actuals[index].task_parameters)
+             for index, field, child in reversed(summary.owned_field_writes):
+                 if args[index][0] not in ('name', 'mut'):
+                     continue
+@@ -2388,6 +2409,8 @@
+                     return frozenset(sources)
+                 return flow, Value(summary.mode, summary.typ, fields=captures, reference_targets=reference_targets,
+                                    task_sources=resolve_sources(summary.task_sources),
++                                   task_parameters=frozenset(origin for index in summary.task_forward_parameters
++                                                             for origin in actuals[index].task_parameters),
+                                    task_result_sources=resolve_sources(summary.task_result_sources))
+             if summary.mode in ('ref', 'mut'):
+                 targets = set()
+@@ -2683,7 +2706,8 @@
+             input_items_written=any(value.input_items_written for value in values),
+             task_sources=frozenset(source for value in values for source in value.task_sources),
+             task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+-            pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls))
++            pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
++                    task_parameters=frozenset(index for value in values for index in value.task_parameters))
+ 
+     def nodes(self, nodes, environment, valued=False, shadows=None, expected_array=None):
+         flow, tail = {'next'}, UNKNOWN

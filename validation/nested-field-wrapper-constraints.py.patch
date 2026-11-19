@@ -1,0 +1,61 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -83,6 +83,7 @@
+     task_reference_assets: frozenset[Asset] = frozenset()
+     execution_tokens: frozenset[tuple] = frozenset()
+     absent_owned_payload: bool = False
++    owned_path: tuple = ()
+ 
+     @property
+     def all_assets(self):
+@@ -141,6 +142,7 @@
+                      task_result_fields=merge_fields(values, 'task_result_fields'),
+                      task_reference_assets=frozenset(a for value in values for a in value.task_reference_assets),
+                      execution_tokens=frozenset(token for value in values for token in value.execution_tokens),
++                     owned_path=first.owned_path if all(value.owned_path == first.owned_path for value in values) else (),
+                      absent_owned_payload=all(value.absent_owned_payload for value in values))
+     return replace(first, variants=frozenset()) if isinstance(first, Value) else first
+ 
+@@ -1375,7 +1377,9 @@
+             if capability and capability[0] == 'mut' and capability[1] in self.analyzer.enums:
+                 return {'next': state}, Value('mut' if op == 'mut_expr' else 'ref', capability[1], targets,
+                                               nested_reference_fields(carrier.fields, key),
+-                                              carrier.assets | carrier.reservations)
++                                              carrier.assets | carrier.reservations,
++                                              storage_owner=(carrier.storage_owner or place[1]) if declared.startswith('A<') else None,
++                                              owned_path=(*carrier.owned_path, key) if declared.startswith('A<') else ())
+             return {'next': state}, Value('array_mut' if op == 'mut_expr' else 'array_ref',
+                                           'Int', targets, reservations=carrier.assets | carrier.reservations)
+         if op in ('transfer', 'new_transfer', 'ref_expr', 'mut_expr'):
+@@ -1703,6 +1707,10 @@
+             updated_structures = {}
+             for parameter, fields in result.structure_fields:
+                 name = borrowed_array_name(args[parameter])
++                projected = name is None and isinstance(actuals[parameter], Value) and actuals[parameter].owned_path
++                if projected:
++                    name = '\0projected_structure_update'
++                    current.environment[name] = actuals[parameter]
+                 if name not in current.environment:
+                     self.fail(line, 'prototype : mise à jour de champ exige un porteur nommé')
+                 carrier = current.environment[name]
+@@ -1726,6 +1734,8 @@
+                                                lambda value: value.assets)
+                 else:
+                     updated_structures[parameter] = self.update_structure(current, name, carrier, changes, line)
++                if projected:
++                    current.environment.pop(name)
+             def result_actual(target):
+                 actual = actuals[target.parameter]
+                 if target.parameter in updated_structures and (
+@@ -2354,6 +2364,11 @@
+         fields = dict(carrier.fields) | changes
+         state.environment[name] = replace(carrier, fields=tuple(fields.items()))
+         owner = state.environment.get(carrier.storage_owner)
++        if carrier.owned_path and isinstance(owner, Value):
++            prefix = '/'.join(carrier.owned_path) + '/'
++            updated = dict(owner.fields) | {prefix + field: assets for field, assets in changes.items()}
++            state.environment[carrier.storage_owner] = replace(owner, fields=tuple(updated.items()))
++            return fields
+         if isinstance(owner, Value):
+             state.environment[carrier.storage_owner] = replace(owner, fields=tuple(fields.items()))
+             original = state.environment.get(owner.storage_owner)

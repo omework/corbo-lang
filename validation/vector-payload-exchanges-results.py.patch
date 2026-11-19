@@ -1,0 +1,116 @@
+--- before/results.py
++++ after/results.py
+@@ -180,6 +180,7 @@
+     handle_writes: tuple[tuple[int, tuple[ResultCandidate, ...]], ...] = ()
+     handle_write_fields: tuple = ()
+     exchange_payloads: tuple = ()
++    exchange_values: tuple = field(default=(), kw_only=True)
+     shared_vector_layout: tuple | None = None
+     shared_vector_passthrough: int | None = None
+     reference_appends: tuple = ()
+@@ -300,7 +301,7 @@
+                                   for position, slot in replacements},
+                  'removals': list(removals)}
+                 for index, slots, exact, replacements, removals in self.vector_writes]
+-        if self.vector_write_payloads:
++        if self.vector_write_payloads or self.exchange_values:
+             def describe_payload(payload):
+                 return {'type': payload.typ,
+                         'alternatives': [item.describe(params) for item in sorted(payload.candidates)],
+@@ -310,6 +311,9 @@
+             description['vector_write_payloads'] = [
+                 {'parameter': params[index][0], 'payloads': [describe_payload(payload) for payload in payloads]}
+                 for index, payloads in self.vector_write_payloads]
++            if self.exchange_values:
++                description['exchange_values'] = {
++                    arm: describe_payload(value) for arm, value in zip(('Ok', 'Err'), self.exchange_values)}
+         if self.vector_slot is not None:
+             parameter, index = self.vector_slot
+             description['vector_slot'] = {'parameter': params[parameter][0], 'index': index}
+@@ -543,6 +547,23 @@
+     inline_path: str = ''
+ 
+     def __post_init__(self):
++        if self.mode == 'buffered_handle_exchange' and any(item.fields or item.owned_fields for item in self.handle_payloads):
++            fields, owned = {}, []
++            for arm, candidates in zip(('ok', 'err'), self.exchange_payloads):
++                active = tuple(item for item in self.handle_payloads if item.candidates & candidates)
++                if not active:
++                    continue
++                payload = merge_owned_values(active)
++                owned.append((arm, payload))
++                def collect(value, prefix):
++                    for name, targets in value.fields:
++                        fields[prefix + name] = fields.get(prefix + name, frozenset()) | targets
++                    for name, child in value.owned_fields:
++                        collect(child, prefix + name + '/')
++                collect(payload, arm + '/')
++            object.__setattr__(self, 'fields', tuple(sorted(fields.items())))
++            object.__setattr__(self, 'owned_fields', tuple(owned))
++            return
+         if not is_handle_vector(self.typ):
+             return
+         items = possible_handle_items(self.handle_items)
+@@ -767,6 +788,7 @@
+         self.shared_vector_returns = []
+         self.shared_vector_passthroughs = set()
+         self.returned_exchange_payloads = ()
++        self.returned_exchange_values = ()
+         self.fresh_variants = frozenset()
+         self.updated_parameters = {}
+         self.returned_payload = False
+@@ -1119,6 +1141,11 @@
+             if is_handle_vector(typ):
+                 environment[name] = replace(environment[name], handle_payloads=(
+                     vector_payload(index, handle_vector_element(typ)),))
++            elif mode == 'buffered_handle_exchange':
++                payloads = tuple(replace(vector_payload(index, exchange_element(typ), arm),
++                    candidates=candidates) for arm, candidates in zip(('ok', 'err'), environment[name].exchange_payloads)
++                    if candidates)
++                environment[name] = replace(environment[name], handle_payloads=payloads)
+ 
+         for index, (name, mode, typ) in enumerate(self.params):
+             if mode in ('array_ref', 'array_mut') and reference_array_shape(typ):
+@@ -1195,7 +1222,8 @@
+                               tuple((index, tuple(sorted(self.updated_handle_fields[index].items())))
+                                     for index, _ in handle_writes if self.updated_handle_fields[index]),
+                               vector_write_payloads=tuple((index, tuple(payloads)) for index, payloads in sorted(self.vector_write_payloads.items())),
+-                              exchange_payloads=self.returned_exchange_payloads, shared_vector_layout=layout,
++                              exchange_payloads=self.returned_exchange_payloads,
++                              exchange_values=self.returned_exchange_values, shared_vector_layout=layout,
+                               shared_vector_passthrough=next(iter(self.shared_vector_passthroughs))
+                               if len(self.shared_vector_passthroughs) == 1 else None,
+                               reference_appends=tuple(reference_appends),
+@@ -1583,6 +1611,12 @@
+         if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+             previous = self.returned_exchange_payloads or (frozenset(), frozenset())
+             self.returned_exchange_payloads = tuple(a | b for a, b in zip(previous, value.exchange_payloads))
++            if mode == 'buffered_handle_exchange':
++                values = tuple(restore_handle_payload(Value('owned', exchange_element(typ), arm), value)
++                               for arm in value.exchange_payloads)
++                if self.returned_exchange_values or any(value.fields or value.owned_fields for value in values):
++                    self.returned_exchange_values = (tuple(merge_owned_values((a, b)) for a, b in
++                        zip(self.returned_exchange_values, values)) if self.returned_exchange_values else values)
+         for name, targets in value.fields:
+             for target in targets:
+                 if (target.kind in ('local', 'mutable_vector_parameter') or
+@@ -3436,6 +3470,8 @@
+                 owned_fields = tuple((dict(actuals[summary.same_parameter].owned_fields) | dict(owned_fields)).items())
+             return flow, Value(summary.mode, summary.typ, frozenset(candidates), tuple(fields), fresh_variants,
+                                owned_fields=owned_fields,
++                               handle_payloads=tuple(self.resolve_owned_child(value, actuals, map_fields=True)
++                                                     for value in summary.exchange_values if value.candidates),
+                                exchange_payloads=tuple(resolve_candidates(arm) for arm in summary.exchange_payloads),
+                                structure_origins=frozenset({id(expr)})
+                                if summary.typ in REFERENCE_VECTORS or '' in self.analyzer.enums.get(summary.typ, {})
+@@ -4220,6 +4256,10 @@
+                 candidates = vector_result_candidates(vector, item.item_index,
+                     last=item.item_index == VECTOR_LAST_ITEM, excluded=item.excluded_items, tail_offset=item.tail_offset)
+                 alternatives.append(restore_handle_payload(extracted_handle(candidates, child.typ), vector))
++            elif item.kind == 'exchange_parameter':
++                carrier = actuals[item.parameter]
++                candidates = carrier.exchange_payloads[item.item_index]
++                alternatives.append(restore_handle_payload(Value('owned', child.typ, candidates), carrier))
+         if previous is not None and any(item.kind == 'owned_field_input' for item in child.candidates):
+             alternatives.append(previous)
+         fresh = set()

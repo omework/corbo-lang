@@ -1,0 +1,31 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10123,8 +10123,28 @@
+             if not paths:
+                 continue
+             projected = []
++            capture_paths = paths
+             for target in candidates:
++                paths = capture_paths
+                 loan = target.array_capture
++                nested_paths = tuple(path for path in paths if '/' in '.'.join(path))
++                if nested_paths and target.typ in self.enums:
++                    for path in nested_paths:
++                        field = '.'.join(path)
++                        field = '.' + field if target.typ in self.struct_fields else field
++                        prefix, _, leaf = field.rpartition('/')
++                        children = self.aggregate_field_targets(target, prefix)
++                        if not children:
++                            self.fail('projection du retour async : descendant propriétaire absent')
++                        nested, parents = self.project_task_result_captures(
++                            nominal, ((key, children),), (*ancestry, *target.borrow_parents),
++                            paths=frozenset({(capture_index(key.partition('.')[2]),
++                                              tuple(leaf.lstrip('.').split('.')))}))
++                        cell_dependencies.extend(nested)
++                        cell_parents.update((id(parent), parent) for parent in parents)
++                    paths = tuple(path for path in paths if path not in nested_paths)
++                    if not paths:
++                        continue
+                 if target.typ in self.enums and target.typ not in self.struct_fields and any(path for path in paths):
+                     mode = key.split('.')[0]
+                     binding = Binding(target.label, mode, '', target,

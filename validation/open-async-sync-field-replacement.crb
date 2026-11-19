@@ -1,0 +1,18 @@
+struct View { data: &Int }
+fn change(view: &mut View, next: &Int) {
+    view.data = &*next;
+}
+async fn update(view: &mut View, next: &Int) -> Int {
+    change(view, next);
+    yield;
+    return *view.data;
+}
+fn main() {
+    let mut p = pool<Int>(2);
+    let a = p.new(7);
+    let b = p.new(9);
+    let mut view = View { data: &a };
+    let h = runtime::spawn(-> update(&mut view, &b));
+    match h.join() { Ok(n) => { print(n); }, Err(_) => {} }
+    print(*view.data);
+}

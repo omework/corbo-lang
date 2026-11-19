@@ -1,0 +1,17 @@
+let mut memory = allocator();
+
+let mut result = {
+    let mut temporary = new(memory) Int(99);
+    memory.drop(-> temporary);
+
+    let mut data = new(memory) Int(42);
+    <- data
+};
+
+print(result);
+memory.drop(-> result);
+memory.reset();
+
+// Le même allocateur reste utilisable après reset.
+let mut next = new(memory) Int(43);
+print(next);

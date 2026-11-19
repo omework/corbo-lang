@@ -1,0 +1,35 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -21,6 +21,17 @@
+ 
+ class IncompleteStructureEffects(Exception):
+     """An unsupported analysis must never masquerade as an empty effect."""
++
++
++def owned_storage_shape(value):
++    """Storage identity of an owned graph, independent of its borrowed targets.
++
++    Reference-field writes are already flattened into Value.fields. They must
++    not be confused with replacement of an owned allocation at suspension.
++    """
++    return (value.typ, value.candidates, value.fresh_variants,
++            tuple((field, owned_storage_shape(child)) for field, child in value.owned_fields),
++            frozenset(owned_storage_shape(child) for child in value.owned_alternatives))
+ 
+ 
+ class ContractResultAnalyzer(ResultAnalyzer):
+@@ -168,10 +179,10 @@
+                 continue
+             final = environment[f'\0structure:{index}']
+             typ = self.params[index][2]
+-            if '' not in self.analyzer.enums.get(typ, {}) and final.owned_fields != original.owned_fields:
+-                # Enum projections are newly admitted here. Do not publish an
+-                # empty suspension contract for a changed owned graph until
+-                # those graph writes have their own suspension representation.
++            if ('' not in self.analyzer.enums.get(typ, {})
++                    and owned_storage_shape(final) != owned_storage_shape(original)):
++                # Flattened reference writes have a suspension representation;
++                # changing the storage graph additionally needs owned writes.
+                 self.suspension_reason = 'effets suspendus du graphe possédé dans un enum non raccordés'
+             fields = self.suspended_structures.setdefault(index, {})
+             for field, targets in final.fields:

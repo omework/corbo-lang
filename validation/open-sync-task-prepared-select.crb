@@ -1,0 +1,8 @@
+async fn own(n:->Int)->Int{yield;return *n;}
+async fn pause()->Int{yield;return 3;}
+fn relay(t:->own,x:Int)-><-own{return <-t;}
+async fn left()->Int{let mut ns=pool<Int>(1);let n=ns.new(7);
+let t=relay(->own(->n),pause().await);return t.await;}
+async fn ready()->Int{return 9;}async fn work()->Int{let mut s=runtime::select(->left(),->ready());let result=s.await;
+drop(->s);return result;}
+        fn main(){let h=runtime::spawn(->work());match h.join(){Ok(r)=>{print(r);},Err(_)=>{print(99);}}}

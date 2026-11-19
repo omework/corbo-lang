@@ -1,0 +1,109 @@
+test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection) ... ERROR
+test_child_await_and_inactive_drop_keep_field_path (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_await_and_inactive_drop_keep_field_path) ... ok
+test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved) ... ERROR
+test_conditional_results_union_fields_and_nested_paths (test_async_field_reborrows.AsyncFieldReborrowTests.test_conditional_results_union_fields_and_nested_paths) ... ok
+test_disjoint_fields_and_target_identity (test_async_field_reborrows.AsyncFieldReborrowTests.test_disjoint_fields_and_target_identity) ... ok
+test_helper_and_method_projected_results (test_async_field_reborrows.AsyncFieldReborrowTests.test_helper_and_method_projected_results) ... ok
+test_loop_and_branch_reborrow_lifetimes (test_async_field_reborrows.AsyncFieldReborrowTests.test_loop_and_branch_reborrow_lifetimes) ... ok
+test_modes_levels_and_reference_binding (test_async_field_reborrows.AsyncFieldReborrowTests.test_modes_levels_and_reference_binding) ... ok
+test_native_block_and_prepared_arguments (test_async_field_reborrows.AsyncFieldReborrowTests.test_native_block_and_prepared_arguments) ... ok
+test_recorded_field_reborrow (test_async_field_reborrows.AsyncFieldReborrowTests.test_recorded_field_reborrow) ... ok
+test_same_field_and_whole_argument_blocked_until_last_use (test_async_field_reborrows.AsyncFieldReborrowTests.test_same_field_and_whole_argument_blocked_until_last_use) ... ok
+test_shared_parent_supports_parallel_shared_reborrows (test_async_field_reborrows.AsyncFieldReborrowTests.test_shared_parent_supports_parallel_shared_reborrows) ... ok
+
+======================================================================
+ERROR: test_alias_scope_and_ancestry_projection (test_async_field_reborrows.AsyncFieldReborrowTests.test_alias_scope_and_ancestry_projection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 90, in test_alias_scope_and_ancestry_projection
+    self.assertEqual(self.run_native(self.program(body.replace('BEFORE',''),helpers)).stdout,'17\n2\n4\n17\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15042, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15035, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13536, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13379, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 833, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5470, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2061, in bind_special
+    kind, value = emit_computed_transfer(initializer, statement.line, following=body[position + 1:])
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3185, in emit_computed_transfer
+    return emit_region_block(body[:-1], expr[3] if len(expr) > 3 else None, line, valued=False,
+                         construct='bloc', export_name=body[-1].args[0], following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3504, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3807, in emit_branches
+    exported = export_async_value(export_name, locals_in_arm, line, depth=len(scopes) - 1)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3943, in export_async_value
+    fail(line, 'transfert refusé : cible empruntée non durable dans le scope parent')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 859, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: transfert refusé : cible empruntée non durable dans le scope parent
+
+======================================================================
+ERROR: test_child_result_keeps_projected_field_reserved (test_async_field_reborrows.AsyncFieldReborrowTests.test_child_result_keeps_projected_field_reserved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_reborrows.py", line 79, in test_child_result_keeps_projected_field_reserved
+    self.assertEqual(self.run_native(self.program(body.replace('BEFORE',''),helpers)).stdout,'15\n4\n3\n15\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15042, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15035, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13536, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13379, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 833, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5468, in _lower_async_function
+    if receive_await_result(statement, body, index):
+       ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5299, in receive_await_result
+    fail(line, 'recevoir le résultat emprunté mutable avec let mut')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 859, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: recevoir le résultat emprunté mutable avec let mut
+
+----------------------------------------------------------------------
+Ran 12 tests in 6.114s
+
+FAILED (errors=2)

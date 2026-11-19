@@ -1,0 +1,170 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! X.509 extension parsing for the supported P-256 server certificate profile.
+
+use std::encoding::der::{der, bytes_equal, uint_valid, oid_valid};
+/// Holds parsed CA, usage, path length and subject alternative name constraints.
+struct Properties {
+    /// BasicConstraints CA flag.
+    is_ca: bool,
+    /// Maximum subordinate CA depth, or the internal unlimited sentinel.
+    path_limit: u64,
+    /// Parsed keyUsage bit mask.
+    usage: u64,
+    /// Whether extended key usage permits server authentication.
+    server_usage: bool,
+    /// Start offset of the subjectAltName extension.
+    san: u64,
+    /// Exclusive end of subjectAltName bytes.
+    san_end: u64,
+    /// Whether subjectAltName is marked critical.
+    san_critical: bool,
+}
+
+/// Creates default extension state before any extensions are processed.
+fn properties() -> Properties {
+    Properties { is_ca: false, path_limit: 0xffffffffffffffff, usage: 256,
+                 server_usage: true, san: 0, san_end: 0, san_critical: false }
+}
+
+/// Parses the CA flag and optional maximum path length.
+fn basic_constraints(input: &[u8], start: u64, end: u64, out: &mut Properties) -> bool {
+    let seq = der(&input[0..end], start, copy(end), 48);
+    if seq.end != end { return false; }
+    if seq.body == end { return true; }
+    let ca = der(&input[0..end], seq.body, copy(end), 1);
+    // The default FALSE is omitted in DER.
+    if ca.end == 0 || ca.end - ca.body != 1 || input[ca.body] != 255 { return false; }
+    let dst = &mut (*out).is_ca;
+    *dst = true;
+    if ca.end == end { return true; }
+    let path = der(&input[0..end], ca.end, copy(end), 2);
+    if path.end != end || end - path.body > 8
+       || !uint_valid(&input[0..end], path.body, copy(end)) { return false; }
+    let mut value: u64 = 0;
+    let mut at = path.body;
+    while at < end {
+        value = value * 256 + (input[at] as u64);
+        at = at + 1;
+    }
+    let limit = &mut (*out).path_limit;
+    *limit = value;
+    true
+}
+
+/// Decodes the DER bit string containing the certificate's key usage flags.
+fn key_usage(input: &[u8], start: u64, end: u64, out: &mut Properties) -> bool {
+    let bits = der(&input[0..end], start, copy(end), 3);
+    if bits.end != end { return false; }
+    let size = end - bits.body;
+    if size < 2 || size > 3 { return false; }
+    let unused = input[bits.body] as u64;
+    if unused > 7 || (size == 3 && unused != 7) { return false; }
+    let last = input[end - 1] as u64;
+    if last % (2 << unused) != (1 << unused) { return false; }
+    let dst = &mut (*out).usage;
+    *dst = input[bits.body + 1] as u64;
+    true
+}
+
+/// Reads extended key usage identifiers and tracks permission for server authentication.
+fn ext_key_usage(input: &[u8], start: u64, end: u64, out: &mut Properties) -> bool {
+    let seq = der(&input[0..end], start, copy(end), 48);
+    if seq.end != end || seq.body == end { return false; }
+    let server: [u8; 8] = [43, 6, 1, 5, 5, 7, 3, 1];
+    let mut at = seq.body;
+    let mut found = false;
+    while at < end {
+        let oid = der(&input[0..end], copy(at), copy(end), 6);
+        if oid.end == 0 || !oid_valid(&input[0..end], oid.body, oid.end) { return false; }
+        if bytes_equal(&input[oid.body..oid.end], &server[..]) { found = true; }
+        at = oid.end;
+    }
+    let dst = &mut (*out).server_usage;
+    *dst = found;
+    true
+}
+
+// Returns zero for malformed SAN, one for no match, and two for a match.
+/// Parses subject alternative names and records whether a DNS name matches.
+fn check_san(input: &[u8], start: u64, end: u64, name: &[u8]) -> u64 {
+    let seq = der(&input[0..end], start, copy(end), 48);
+    if seq.end != end || seq.body == end { return 0; }
+    let length = name.len();
+    let mut at = seq.body;
+    let mut matched = false;
+    while at < end {
+        let kind = input[at];
+        if kind != 160 && kind != 129 && kind != 130 && kind != 163 && kind != 164
+           && kind != 165 && kind != 134 && kind != 135 && kind != 136 { return 0; }
+        let identifier = der(&input[0..end], copy(at), copy(end), copy(kind));
+        if identifier.end == 0 || identifier.body == identifier.end { return 0; }
+        if kind == 135 && identifier.end - identifier.body != 4 && identifier.end - identifier.body != 16 {
+            return 0;
+        }
+        if kind == 130 && length != 0 {
+            if dns_match(&input[identifier.body..identifier.end], &name[0..length]) { matched = true; }
+        }
+        at = identifier.end;
+    }
+    if matched { return 2; }
+    1
+}
+
+/// Parses supported extensions and rejects invalid or unsupported critical extensions.
+fn certificate_extensions(input: &[u8], start: u64, end: u64, out: &mut Properties) -> bool {
+    let seq = der(&input[0..end], start, copy(end), 48);
+    if seq.end != end || seq.body == end { return false; }
+    let mut at = seq.body;
+    let mut seen: [u64; 64] = [0; 64];
+    let mut count: usize = 0;
+    while at < end {
+        if count == 64 { return false; }
+        let entry = der(&input[0..end], copy(at), copy(end), 48);
+        if entry.end == 0 { return false; }
+        let oid = der(&input[0..end], entry.body, entry.end, 6);
+        if oid.end == 0 || !oid_valid(&input[0..end], oid.body, oid.end) { return false; }
+        let mut i: usize = 0;
+        while i < count {
+            let previous = der(&input[0..end], seen[i], copy(end), 6);
+            if bytes_equal(&input[previous.body..previous.end], &input[oid.body..oid.end]) { return false; }
+            i = i + 1;
+        }
+        seen[count] = entry.body;
+        count = count + 1;
+        let mut value_start = oid.end;
+        let mut critical = false;
+        if value_start < entry.end && input[value_start] == 1 {
+            let flag = der(&input[0..end], copy(value_start), entry.end, 1);
+            if flag.end == 0 || flag.end - flag.body != 1 || input[flag.body] != 255 { return false; }
+            value_start = flag.end;
+            critical = true;
+        }
+        let value = der(&input[0..end], value_start, entry.end, 4);
+        if value.end != entry.end { return false; }
+        let mut number: u8 = 0;
+        if oid.end - oid.body == 3 && input[oid.body] == 85 && input[oid.body + 1] == 29 {
+            number = input[oid.body + 2];
+        }
+        if number == 19 {
+            if !basic_constraints(&input[0..end], value.body, value.end, &mut *out) { return false; }
+        } else if number == 15 {
+            if !key_usage(&input[0..end], value.body, value.end, &mut *out) { return false; }
+        } else if number == 37 {
+            if !ext_key_usage(&input[0..end], value.body, value.end, &mut *out) { return false; }
+        } else if number == 17 {
+            let empty: [u8; 0] = [];
+            if check_san(&input[0..end], value.body, value.end, &empty[..]) == 0 { return false; }
+            let san = &mut (*out).san;
+            *san = value.body;
+            let san_end = &mut (*out).san_end;
+            *san_end = value.end;
+            let required = &mut (*out).san_critical;
+            *required = copy(critical);
+        } else if critical || number == 30 || number == 33 || number == 36 || number == 54 {
+            // Reject constraints this profile cannot enforce, even if mislabeled noncritical.
+            return false;
+        }
+        at = entry.end;
+    }
+    true
+}

@@ -1,0 +1,57 @@
+test_nested_join_result_transfers_through_sync_and_async_signatures (test_async_runtime.AsyncRuntimeTests.test_nested_join_result_transfers_through_sync_and_async_signatures) ... 
+  test_nested_join_result_transfers_through_sync_and_async_signatures (test_async_runtime.AsyncRuntimeTests.test_nested_join_result_transfers_through_sync_and_async_signatures) (eligible='(a)') ... ERROR
+test_nested_join_result_transfers_through_sync_and_async_signatures (test_async_runtime.AsyncRuntimeTests.test_nested_join_result_transfers_through_sync_and_async_signatures) ... FAIL
+
+======================================================================
+ERROR: test_nested_join_result_transfers_through_sync_and_async_signatures (test_async_runtime.AsyncRuntimeTests.test_nested_join_result_transfers_through_sync_and_async_signatures) (eligible='(a)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 2199, in test_nested_join_result_transfers_through_sync_and_async_signatures
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17110, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17103, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15564, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15124, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1008, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7857, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3640, in bind_special
+    join_results[name] = value, owned_wrapper_payload(*await_signature(initializer)), None
+                                ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: async_lowering.owned_wrapper_payload() argument after * must be an iterable, not NoneType
+
+======================================================================
+FAIL: test_nested_join_result_transfers_through_sync_and_async_signatures (test_async_runtime.AsyncRuntimeTests.test_nested_join_result_transfers_through_sync_and_async_signatures)
+----------------------------------------------------------------------
+crust.Error: ligne 14: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 2214, in test_nested_join_result_transfers_through_sync_and_async_signatures
+    with self.assertRaisesRegex(Error, 'trois niveaux'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "trois niveaux" does not match "ligne 14: match async : résultat de handle requis"
+
+----------------------------------------------------------------------
+Ran 1 test in 1.580s
+
+FAILED (failures=1, errors=1)

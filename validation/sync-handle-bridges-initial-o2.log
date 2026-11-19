@@ -1,0 +1,197 @@
+test_borrowed_results (test_sync_handle_bridges.SyncHandleBridgeTests.test_borrowed_results) ... 
+  test_borrowed_results (test_sync_handle_bridges.SyncHandleBridgeTests.test_borrowed_results) (mutable=False) ... ERROR
+  test_borrowed_results (test_sync_handle_bridges.SyncHandleBridgeTests.test_borrowed_results) (mutable=True) ... ERROR
+test_capture_release_and_returned_target (test_sync_handle_bridges.SyncHandleBridgeTests.test_capture_release_and_returned_target) ... ok
+test_launch_failure_cleans_owner_and_reuses_slot (test_sync_handle_bridges.SyncHandleBridgeTests.test_launch_failure_cleans_owner_and_reuses_slot) ... ok
+test_local_capture_reserved_until_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_local_capture_reserved_until_wait) ... ok
+test_recorded_counterexample (test_sync_handle_bridges.SyncHandleBridgeTests.test_recorded_counterexample) ... ok
+test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) ... 
+  test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='verify_program', launch='runtime::spawn(->leaf(n))') ... FAIL
+  test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='compile_source', launch='runtime::spawn(->leaf(n))') ... FAIL
+  test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='verify_program', launch='runtime::spawn_blocking(->leaf(n))') ... FAIL
+  test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='compile_source', launch='runtime::spawn_blocking(->leaf(n))') ... FAIL
+  test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='verify_program', launch='runtime::thread({->(n);n})') ... FAIL
+  test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='compile_source', launch='runtime::thread({->(n);n})') ... FAIL
+
+======================================================================
+ERROR: test_borrowed_results (test_sync_handle_bridges.SyncHandleBridgeTests.test_borrowed_results) (mutable=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 59, in test_borrowed_results
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('CHECK',''))).stdout,'7\n')
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15254, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15247, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13748, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13575, in verify
+    borrowed_result_paths(node, async_functions, fail_async_contract, self.async_reference_paths,
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          sync_contracts=self.function_contracts)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 643, in borrowed_result_paths
+    cache[name] = frozenset(scan(body, {}, {}))
+                  ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 620, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 628, in scan
+    yield from scan(value.args, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 625, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 620, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 638, in scan
+    mode, origins = reference_origin(expr, task_calls, awaited, value.line)
+                    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 603, in reference_origin
+    mode, origins = awaited_origin(*awaited[expr[1]], line)
+                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 485, in awaited_origin
+    return reference_origin(operand[1], tasks, awaited, line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 560, in reference_origin
+    return awaited_origin(*awaited[expr[1][1]], line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 495, in awaited_origin
+    child_mode, child_origins = call_origin(call, context, line)
+                                ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 506, in call_origin
+    fail(line, diagnostic)
+    ~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13573, in fail_async_contract
+    raise Error(f'ligne {line}: {message}')
+crust.Error: ligne 4: retour async &Int : un paramètre partagé durable ou un réemprunt est requis
+
+======================================================================
+ERROR: test_borrowed_results (test_sync_handle_bridges.SyncHandleBridgeTests.test_borrowed_results) (mutable=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 59, in test_borrowed_results
+    self.assertEqual(self.run_c_oracle(compile_source(source.replace('CHECK',''))).stdout,'7\n')
+                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15254, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15247, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13748, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13575, in verify
+    borrowed_result_paths(node, async_functions, fail_async_contract, self.async_reference_paths,
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          sync_contracts=self.function_contracts)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 643, in borrowed_result_paths
+    cache[name] = frozenset(scan(body, {}, {}))
+                  ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 620, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 628, in scan
+    yield from scan(value.args, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 625, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 620, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 638, in scan
+    mode, origins = reference_origin(expr, task_calls, awaited, value.line)
+                    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 603, in reference_origin
+    mode, origins = awaited_origin(*awaited[expr[1]], line)
+                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 485, in awaited_origin
+    return reference_origin(operand[1], tasks, awaited, line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 560, in reference_origin
+    return awaited_origin(*awaited[expr[1][1]], line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 495, in awaited_origin
+    child_mode, child_origins = call_origin(call, context, line)
+                                ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 506, in call_origin
+    fail(line, diagnostic)
+    ~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13573, in fail_async_contract
+    raise Error(f'ligne {line}: {message}')
+crust.Error: ligne 4: retour async &mut Int : un paramètre mutable durable est requis
+
+======================================================================
+FAIL: test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='verify_program', launch='runtime::spawn(->leaf(n))')
+----------------------------------------------------------------------
+crust.Error: ligne 5: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 14, in rejected
+    with self.subTest(stage=check.__name__), self.assertRaisesRegex(Error, pattern):check(source)
+                                             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "join réservé|synchrone" does not match "ligne 5: match async : résultat de handle requis"
+
+======================================================================
+FAIL: test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='compile_source', launch='runtime::spawn(->leaf(n))')
+----------------------------------------------------------------------
+crust.Error: ligne 5: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 14, in rejected
+    with self.subTest(stage=check.__name__), self.assertRaisesRegex(Error, pattern):check(source)
+                                             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "join réservé|synchrone" does not match "ligne 5: match async : résultat de handle requis"
+
+======================================================================
+FAIL: test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='verify_program', launch='runtime::spawn_blocking(->leaf(n))')
+----------------------------------------------------------------------
+crust.Error: ligne 5: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 14, in rejected
+    with self.subTest(stage=check.__name__), self.assertRaisesRegex(Error, pattern):check(source)
+                                             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "join réservé|synchrone" does not match "ligne 5: match async : résultat de handle requis"
+
+======================================================================
+FAIL: test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='compile_source', launch='runtime::spawn_blocking(->leaf(n))')
+----------------------------------------------------------------------
+crust.Error: ligne 5: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 14, in rejected
+    with self.subTest(stage=check.__name__), self.assertRaisesRegex(Error, pattern):check(source)
+                                             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "join réservé|synchrone" does not match "ligne 5: match async : résultat de handle requis"
+
+======================================================================
+FAIL: test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='verify_program', launch='runtime::thread({->(n);n})')
+----------------------------------------------------------------------
+crust.Error: ligne 5: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 14, in rejected
+    with self.subTest(stage=check.__name__), self.assertRaisesRegex(Error, pattern):check(source)
+                                             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "join réservé|synchrone" does not match "ligne 5: match async : résultat de handle requis"
+
+======================================================================
+FAIL: test_scalar_launch_modes_and_explicit_wait (test_sync_handle_bridges.SyncHandleBridgeTests.test_scalar_launch_modes_and_explicit_wait) (stage='compile_source', launch='runtime::thread({->(n);n})')
+----------------------------------------------------------------------
+crust.Error: ligne 5: match async : résultat de handle requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_bridges.py", line 14, in rejected
+    with self.subTest(stage=check.__name__), self.assertRaisesRegex(Error, pattern):check(source)
+                                             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "join réservé|synchrone" does not match "ligne 5: match async : résultat de handle requis"
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.473s
+
+FAILED (failures=6, errors=2)

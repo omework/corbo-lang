@@ -1,0 +1,160 @@
+BASELINE PASS
+{"native_success": 13, "expected_runtime_failure": 0, "rejected_programs": 27}
+test_caller_exclusivity_and_last_wait (test_async_struct_captures.AsyncStructCaptureTests.test_caller_exclusivity_and_last_wait) ... ok
+test_escape_and_inactive_drop (test_async_struct_captures.AsyncStructCaptureTests.test_escape_and_inactive_drop) ... ok
+test_export_child_out_of_alias_block_preserves_root_loan (test_async_struct_captures.AsyncStructCaptureTests.test_export_child_out_of_alias_block_preserves_root_loan) ... ok
+test_helper_returns_struct_reference_and_argument_order (test_async_struct_captures.AsyncStructCaptureTests.test_helper_returns_struct_reference_and_argument_order) ... ok
+test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout) ... ok
+test_native_block_capture_and_launch_failure (test_async_struct_captures.AsyncStructCaptureTests.test_native_block_capture_and_launch_failure) ... ok
+test_nominal_types_in_child_and_helper_arguments (test_async_struct_captures.AsyncStructCaptureTests.test_nominal_types_in_child_and_helper_arguments) ... ok
+test_pool_identity_drop_and_reuse (test_async_struct_captures.AsyncStructCaptureTests.test_pool_identity_drop_and_reuse) ... ok
+test_recorded_direct_and_feature_method_capture (test_async_struct_captures.AsyncStructCaptureTests.test_recorded_direct_and_feature_method_capture) ... ok
+test_relay_reborrow_and_child_lifetime (test_async_struct_captures.AsyncStructCaptureTests.test_relay_reborrow_and_child_lifetime) ... ok
+test_shared_captures_coexist_and_block_writes (test_async_struct_captures.AsyncStructCaptureTests.test_shared_captures_coexist_and_block_writes) ... ok
+test_sync_helpers_and_methods (test_async_struct_captures.AsyncStructCaptureTests.test_sync_helpers_and_methods) ... ok
+test_type_mismatch_and_scalar_shortcuts_rejected (test_async_struct_captures.AsyncStructCaptureTests.test_type_mismatch_and_scalar_shortcuts_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 6.776s
+
+OK
+
+field_offset_collapsed DETECTED
+{"native_success": 1, "expected_runtime_failure": 0, "rejected_programs": 0}
+test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout) ... FAIL
+
+======================================================================
+FAIL: test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 30, in test_mutable_fields_and_nested_layout
+    self.assertEqual(self.run_native(source).stdout,'12\n5\n2\n7\n4\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '8\n4\n2\n3\n4\n' != '12\n5\n2\n7\n4\n'
+- 8
++ 12
++ 5
++ 2
++ 7
+  4
+- 2
+- 3
+- 4
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.516s
+
+FAILED (failures=1)
+
+field_write_omitted DETECTED
+{"native_success": 1, "expected_runtime_failure": 0, "rejected_programs": 0}
+test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout) ... FAIL
+
+======================================================================
+FAIL: test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 30, in test_mutable_fields_and_nested_layout
+    self.assertEqual(self.run_native(source).stdout,'12\n5\n2\n7\n4\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '4\n1\n2\n3\n4\n' != '12\n5\n2\n7\n4\n'
++ 12
++ 5
++ 2
++ 7
+  4
+- 1
+- 2
+- 3
+- 4
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.523s
+
+FAILED (failures=1)
+
+mutable_field_guard_omitted DETECTED
+{"native_success": 1, "expected_runtime_failure": 0, "rejected_programs": 0}
+test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout) ... FAIL
+
+======================================================================
+FAIL: test_mutable_fields_and_nested_layout (test_async_struct_captures.AsyncStructCaptureTests.test_mutable_fields_and_nested_layout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 31, in test_mutable_fields_and_nested_layout
+    with self.assertRaises(Error):verify_program(source.replace('p:&mut Pair','p:&Pair').replace('work(&mut p)','work(&p)'))
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.526s
+
+FAILED (failures=1)
+
+field_write_loan_check_omitted DETECTED
+{"native_success": 1, "expected_runtime_failure": 0, "rejected_programs": 1}
+test_relay_reborrow_and_child_lifetime (test_async_struct_captures.AsyncStructCaptureTests.test_relay_reborrow_and_child_lifetime) ... FAIL
+
+======================================================================
+FAIL: test_relay_reborrow_and_child_lifetime (test_async_struct_captures.AsyncStructCaptureTests.test_relay_reborrow_and_child_lifetime)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 75, in test_relay_reborrow_and_child_lifetime
+    with self.assertRaises(Error):verify_program(self.wrap(work.replace('BEFORE',operation),main))
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.524s
+
+FAILED (failures=1)
+
+child_root_loan_lost DETECTED
+{"native_success": 1, "expected_runtime_failure": 0, "rejected_programs": 0}
+test_export_child_out_of_alias_block_preserves_root_loan (test_async_struct_captures.AsyncStructCaptureTests.test_export_child_out_of_alias_block_preserves_root_loan) ... FAIL
+
+======================================================================
+FAIL: test_export_child_out_of_alias_block_preserves_root_loan (test_async_struct_captures.AsyncStructCaptureTests.test_export_child_out_of_alias_block_preserves_root_loan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 111, in test_export_child_out_of_alias_block_preserves_root_loan
+    with self.assertRaises(Error):verify_program(self.wrap(work.replace('BEFORE',operation),main))
+         ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.522s
+
+FAILED (failures=1)
+
+scalar_structure_guard_omitted DETECTED
+{"native_success": 0, "expected_runtime_failure": 0, "rejected_programs": 4}
+test_type_mismatch_and_scalar_shortcuts_rejected (test_async_struct_captures.AsyncStructCaptureTests.test_type_mismatch_and_scalar_shortcuts_rejected) ... 
+  test_type_mismatch_and_scalar_shortcuts_rejected (test_async_struct_captures.AsyncStructCaptureTests.test_type_mismatch_and_scalar_shortcuts_rejected) (operation='print(*p);') ... FAIL
+  test_type_mismatch_and_scalar_shortcuts_rejected (test_async_struct_captures.AsyncStructCaptureTests.test_type_mismatch_and_scalar_shortcuts_rejected) (operation='p.set(7);') ... FAIL
+
+======================================================================
+FAIL: test_type_mismatch_and_scalar_shortcuts_rejected (test_async_struct_captures.AsyncStructCaptureTests.test_type_mismatch_and_scalar_shortcuts_rejected) (operation='print(*p);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 99, in test_type_mismatch_and_scalar_shortcuts_rejected
+    with self.subTest(operation=operation),self.assertRaises(Error):verify_program(base.replace('OP',operation))
+                                           ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_type_mismatch_and_scalar_shortcuts_rejected (test_async_struct_captures.AsyncStructCaptureTests.test_type_mismatch_and_scalar_shortcuts_rejected) (operation='p.set(7);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_struct_captures.py", line 99, in test_type_mismatch_and_scalar_shortcuts_rejected
+    with self.subTest(operation=operation),self.assertRaises(Error):verify_program(base.replace('OP',operation))
+                                           ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.061s
+
+FAILED (failures=2)
+

@@ -1,0 +1,35 @@
+--- before/type_features.py
++++ after/type_features.py
+@@ -31,7 +31,8 @@
+                 if name in self.functions:
+                     self.fail(f"nom de fonction déjà utilisé : '{name}'", node.line)
+                 self.functions[name] = node
+-        self.analyzer = EffectAnalyzer(self.functions, enums, error)
++        self.analyzer = EffectAnalyzer(self.functions, enums, error,
++            {name: node for name, node in self.functions.items() if node.op == 'async_fn'})
+ 
+     def fail(self, message, line=None):
+         raise self.error(f'ligne {self.line if line is None else line}: {message}')
+@@ -48,10 +49,11 @@
+         # feature parameters remain independent constraints (TF2), even when
+         # they use the same feature name. A feature result also remains a
+         # constraint, not an implicit promise to return the receiver's type.
++        joined = dict(getattr(node, 'join_storage_parameters', ()))
+         return (tuple(normalized(mode, concrete if index == 0 and concrete is not None else typ,
+-                                 name in node.handle_parameters)
++                                 name in node.handle_parameters or joined.get(name) == 'pool')
+                       for index, (name, mode, typ) in enumerate(params)),
+-                normalized(*result, node.handle_result, result=True))
++                normalized(*result, node.handle_result or getattr(node, 'join_storage_result', None) == 'pool', result=True))
+ 
+     def signatures_match(self, supplied, required, pending):
+         supplied_params, supplied_result = supplied
+@@ -199,6 +201,8 @@
+         self.resolved[concrete_name] = resolved
+         # The lightweight type query needs signatures only, never contracts.
+         self.analyzer.functions = {**self.functions, **self.resolved}
++        self.analyzer.async_functions.update({name: node for name, node in self.resolved.items()
++                                             if node.op == 'async_fn'})
+         self.visiting.remove(key)
+         return concrete_name
+ 

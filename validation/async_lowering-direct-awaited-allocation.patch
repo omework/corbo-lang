@@ -1,0 +1,30 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1052,8 +1052,16 @@
+         if expr[0] in ('down', 'move'):
+             require_local_async_value(expr[1], line)
+             kind, value = export_async_value(expr[1], (), line)
+-        elif expr[0] == 'await' and await_signature(expr) in owned_sync_types:
+-            return await_task(expr, line, returns_value=True, owned=True)
++        elif expr[0] == 'await':
++            prepared = None
++            if computed_await(expr):
++                kind, prepared = emit_computed_transfer(expr[1], line, following=following)
++                if kind != 'task':
++                    fail(line, 'allocation attendue : un handle rend un Result, pas une allocation directe')
++            signature = functions[prepared[3]].args[2] if prepared is not None else await_signature(expr)
++            if signature not in owned_sync_types:
++                fail(line, 'allocation attendue : résultat async de type incompatible')
++            return await_task(expr, line, returns_value=True, owned=True, prepared=prepared)
+         else:
+             kind, value = emit_computed_transfer(expr, line, following=following)
+         if kind != 'owned':
+@@ -4745,7 +4753,7 @@
+                 fail(line, 'retour de Result alloué : type de Result incompatible')
+             steps.extend((f'frame->result = {joined};', f'{joined}.{JOIN_CELLS[join_return_mode]} = NULL;'))
+         elif returns_owned:
+-            if value[0] in ('array_transfer', 'new_transfer') and (sync_signature(value[1]) in owned_sync_types or value[1][0] == 'new'):
++            if value[0] in ('array_transfer', 'new_transfer'):
+                 received = sync_owned_value(value[1], line, following=())
+                 require_durable_storage(received, 0, line)
+                 if owned_result_types[received] != result[1]:

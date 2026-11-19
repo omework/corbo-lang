@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: (MIT OR Apache-2.0) AND BSD-3-Clause
+//! Bounded bit readers and packed entropy tables for RFC 8878.
+// Copyright 2023 The Go Authors. All rights reserved.
+// Entropy decoding adapted to Corbo from Go internal/zstd; RFC-defined tables cross-checked there.
+// Additional BSD-3-Clause terms: stdlib/THIRD_PARTY_NOTICES.txt.
+
+/// Typed zero for unsigned tuple results.
+const ZERO: u64 = 0;
+
+/// Marks an unavailable sequence decoding table.
+const MISSING: u64 = 99;
+
+/// Packs bounded entropy metadata as two unsigned 32-bit fields.
+fn pack_pair(first: u64, second: u64) -> u64 { (first << 32) | second }
+
+/// Packs a bounded literal-section end, literal count and Huffman log.
+fn pack_literals(end: u64, count: u64, bits: u64) -> u64 { (end << 32) | (count << 8) | bits }
+
+/// Tracks a bit boundary; reverse readers also retain their first permitted bit.
+struct Reader {
+    /// Current bit offset in the encoded input/output.
+    bit: u64,
+    /// Lower bound of the backward bit reader.
+    low: u64,
+    /// Sticky invalid/truncated bitstream flag.
+    bad: bool
+}
+
+/// Sets a reader position through a mutable field borrow.
+fn position(reader: &mut Reader, value: u64) { let slot = &mut (*reader).bit; *slot = value; }
+
+/// Records a malformed or truncated entropy stream.
+fn fail(reader: &mut Reader) { let slot = &mut (*reader).bad; *slot = true; }
+
+/// Extracts a byte with no lossy integer conversion.
+fn byte(value: u64) -> u8 {
+    let digits: [u8; 16] = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    digits[value & 15] | (digits[(value >> 4) & 15] << 4)
+}
+
+/// Returns floor(log2(value)); callers reject zero where the format requires it.
+fn log2(value: u64) -> u64 {
+    let mut n = value; let mut result: u64 = 0;
+    while n > 1 { n = n >> 1; result = result + 1; } result
+}
+
+/// Reads little-endian bits without accessing beyond input.
+fn forward(input: &[u8], reader: &mut Reader, count: u64) -> u64 {
+    let start = (*reader).bit;
+    if count > 32 || start > input.len() as u64 * 8 || count > input.len() as u64 * 8 - start {
+        fail(&mut *reader); return 0;
+    }
+    let mut value: u64 = 0; let mut i: u64 = 0;
+    while i < count {
+        let at = start + i;
+        value = value | (((input[at / 8] as u64 >> (at % 8)) & 1) << i); i = i + 1;
+    }
+    position(&mut *reader, start + count); value
+}
+
+/// Reads a high-to-low group from a reverse stream, excluding its terminal marker.
+fn backward(input: &[u8], reader: &mut Reader, count: u64) -> u64 {
+    let start = (*reader).bit;
+    if count > 32 || start < (*reader).low || count > start - (*reader).low { fail(&mut *reader); return 0; }
+    let mut result: u64 = 0; let mut i: u64 = 0;
+    while i < count {
+        let at = start - 1 - i;
+        result = (result << 1) | ((input[at / 8] as u64 >> (at % 8)) & 1); i = i + 1;
+    }
+    position(&mut *reader, start - count); result
+}
+
+/// Initializes a reverse reader from the final nonzero marker byte.
+fn reverse_reader(input: &[u8], start: u64, end: u64) -> Reader {
+    if start >= end || end > input.len() as u64 { return Reader { bit: 0, low: 0, bad: true }; }
+    let last = input[end - 1] as u64;
+    if last == 0 { return Reader { bit: 0, low: 0, bad: true }; }
+    Reader { bit: (end - 1) * 8 + log2(last), low: start * 8, bad: false }
+}
+
+/// Builds an FSE table from normalized probabilities. Entries pack symbol, bit count and next-state base.
+fn build_fse(norm: &[u64], table: &mut [u64], bits: u64) -> bool {
+    if bits > 9 || (1 << bits) > table.len() as u64 { return false; }
+    let size: u64 = 1 << bits; let mut high = size - 1;
+    let mut next: [u64; 256] = [0; 256]; let mut i: u64 = 0; let mut total: u64 = 0;
+    while i < norm.len() as u64 {
+        let n = norm[i];
+        if n > size && n != 65535 { return false; }
+        if n == 65535 {
+            if total >= size { return false; }
+            table[high] = copy(i); if high > 0 { high = high - 1; }
+            next[i] = 1; total = total + 1;
+        } else { next[i] = copy(n); total = total + n; }
+        i = i + 1;
+    }
+    if total != size { return false; }
+    let step = (size >> 1) + (size >> 3) + 3; let mut pos: u64 = 0;
+    i = 0;
+    while i < norm.len() as u64 {
+        let mut j: u64 = 0;
+        while norm[i] != 65535 && j < norm[i] {
+            table[pos] = copy(i); pos = (pos + step) & (size - 1);
+            while pos > high { pos = (pos + step) & (size - 1); }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    if pos != 0 { return false; }
+    i = 0;
+    while i < size {
+        let sym = table[i]; let state = next[sym];
+        if state == 0 { return false; }
+        next[sym] = state + 1;
+        let count = bits - log2(copy(state));
+        table[i] = sym | (count << 8) | (((state << count) - size) << 16); i = i + 1;
+    }
+    true
+}
+
+/// Reads normalized FSE counts from the forward header and returns its accuracy log and byte end.
+fn read_fse(input: &[u8], start: u64, max_symbol: u64, max_bits: u64, table: &mut [u64]) -> u64 {
+    let mut reader = Reader { bit: start * 8, low: 0, bad: false };
+    let bits = forward(&input[0..input.len()], &mut reader, 4) + 5;
+    if bits > max_bits { return pack_pair(ZERO, ZERO); }
+    let mut remaining: u64 = (1 << bits) + 1;
+    let mut threshold: u64 = 1 << bits; let mut needed = bits + 1;
+    let mut norm: [u64; 256] = [0; 256]; let mut symbol: u64 = 0; let mut previous_zero = false;
+    while remaining > 1 && symbol <= max_symbol {
+        if previous_zero {
+            let mut repeat = forward(&input[0..input.len()], &mut reader, 2);
+            while repeat == 3 {
+                symbol = symbol + 3; if symbol > max_symbol { return pack_pair(ZERO, ZERO); }
+                repeat = forward(&input[0..input.len()], &mut reader, 2);
+                if reader.bad { return pack_pair(ZERO, ZERO); }
+            }
+            symbol = symbol + repeat; if symbol > max_symbol { return pack_pair(ZERO, ZERO); }
+        }
+        let limit = (2 * threshold - 1) - remaining;
+        let mut count = forward(&input[0..input.len()], &mut reader, needed - 1);
+        if count >= limit {
+            count = count + forward(&input[0..input.len()], &mut reader, 1) * threshold;
+            if count >= threshold { count = count - limit; }
+        }
+        if reader.bad { return pack_pair(ZERO, ZERO); }
+        if count == 0 { norm[symbol] = 65535; remaining = remaining - 1; previous_zero = false; }
+        else {
+            count = count - 1;
+            if count >= remaining { return pack_pair(ZERO, ZERO); }
+            norm[symbol] = copy(count); remaining = remaining - count; previous_zero = count == 0;
+        }
+        symbol = symbol + 1;
+        while remaining < threshold { threshold = threshold >> 1; needed = needed - 1; }
+    }
+    if remaining != 1 || reader.bad { return pack_pair(ZERO, ZERO); }
+    let valid = build_fse(&norm[0..max_symbol + 1], &mut table[0..table.len()], copy(bits));
+    if !valid { return pack_pair(ZERO, ZERO); }
+    pack_pair(bits, (reader.bit + 7) / 8)
+}

@@ -1,0 +1,23 @@
+--- before/async_result_storage.py
++++ after/async_result_storage.py
+@@ -7,6 +7,20 @@
+     parameters: frozenset | None = None
+     mixed: bool = False
+     owned_fields: bool = False
++
++
++def root_result_parameters(node, fallback):
++    """Parameter sources of the root, excluding independently owned children."""
++    effect = getattr(node, 'field_effect_summary', None)
++    completed = effect.completion_result if effect and effect.complete else None
++    if completed and completed.candidates and all(
++            candidate.kind == 'parameter' or candidate.kind == 'fresh'
++            and candidate.source.kind in ('local_value', 'allocation_parameter', 'source_parameter')
++            for candidate in completed.candidates):
++        return frozenset(candidate.parameter if candidate.kind == 'parameter' else candidate.source.index
++            for candidate in completed.candidates
++            if candidate.kind == 'parameter' or candidate.source.kind != 'local_value')
++    return fallback
+ 
+ 
+ def may_need_destination(node, structures):

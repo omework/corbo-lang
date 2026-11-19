@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Raw-content and formatted Zstandard dictionaries in borrowed caller storage.
+
+/// Validates a dictionary and initializes its entropy tables and repeat offsets; returns its content offset.
+fn load_dictionary(dictionary: &[u8], huffman: &mut [u64], ll: &mut [u64], off: &mut [u64],
+                   ml: &mut [u64], state: &mut State) -> Result<u64, Error> {
+    let size = dictionary.len() as u64;
+    if size == 0 { return Ok(0); }
+    if size < 8 || size > 0xffffffff { return Err(Error.InvalidDictionary); }
+    if little(&dictionary[0..dictionary.len()], 0, 4) != 0xec30a437 { return Ok(0); }
+    if little(&dictionary[0..dictionary.len()], 4, 4) == 0 { return Err(Error.InvalidDictionary); }
+    let decoded = read_huffman(&dictionary[0..dictionary.len()], 8, &mut huffman[0..huffman.len()]);
+    let huff = decoded >> 32; let mut at = decoded & 0xffffffff;
+    if huff == 0 { return Err(Error.InvalidDictionary); }
+    let decoded = read_fse(&dictionary[0..dictionary.len()], at, 31, 8, &mut off[0..off.len()]);
+    let off_bits = decoded >> 32; at = decoded & 0xffffffff;
+    if off_bits == 0 { return Err(Error.InvalidDictionary); }
+    let decoded = read_fse(&dictionary[0..dictionary.len()], at, 52, 9, &mut ml[0..ml.len()]);
+    let ml_bits = decoded >> 32; at = decoded & 0xffffffff;
+    if ml_bits == 0 { return Err(Error.InvalidDictionary); }
+    let decoded = read_fse(&dictionary[0..dictionary.len()], at, 35, 9, &mut ll[0..ll.len()]);
+    let ll_bits = decoded >> 32; at = decoded & 0xffffffff;
+    if ll_bits == 0 || at > size || size - at < 12 { return Err(Error.InvalidDictionary); }
+    let a = little(&dictionary[0..dictionary.len()], copy(at), 4);
+    let b = little(&dictionary[0..dictionary.len()], at + 4, 4);
+    let c = little(&dictionary[0..dictionary.len()], at + 8, 4);
+    at = at + 12;
+    if a == 0 || b == 0 || c == 0 || a > size - at || b > size - at || c > size - at { return Err(Error.InvalidDictionary); }
+    let field = &mut (*state).huffman; *field = huff;
+    let field = &mut (*state).literal; *field = ll_bits;
+    let field = &mut (*state).offset; *field = off_bits;
+    let field = &mut (*state).matched; *field = ml_bits;
+    let field = &mut (*state).rep1; *field = a;
+    let field = &mut (*state).rep2; *field = b;
+    let field = &mut (*state).rep3; *field = c;
+    Ok(at)
+}
+
+/// Returns a formatted dictionary's identifier, or zero for a raw-content dictionary.
+fn dictionary_number(dictionary: &[u8]) -> u64 {
+    if dictionary.len() >= 8 && little(&dictionary[0..dictionary.len()], 0, 4) == 0xec30a437 {
+        return little(&dictionary[0..dictionary.len()], 4, 4);
+    }
+    0
+}
+
+/// Validates encoder dictionary metadata without retaining a reference or allocating storage.
+fn dictionary_start(dictionary: &[u8]) -> Result<u64, Error> {
+    if dictionary.len() == 0 { return Ok(0); }
+    if dictionary.len() < 8 { return Err(Error.InvalidDictionary); }
+    if little(&dictionary[0..dictionary.len()], 0, 4) != 0xec30a437 { return Ok(0); }
+    let mut huffman: [u64;2048] = [0;2048]; let mut ll: [u64;512] = [0;512];
+    let mut off: [u64;256] = [0;256]; let mut ml: [u64;512] = [0;512];
+    let mut state = State { huffman:0,literal:99,offset:99,matched:99,rep1:1,rep2:4,rep3:8,window:0,origin:0 };
+    load_dictionary(&dictionary[0..dictionary.len()], &mut huffman[..], &mut ll[..], &mut off[..], &mut ml[..], &mut state)
+}
+
+/// Reads a virtual concatenation of dictionary history and current input without copying either.
+fn history_byte(dictionary: &[u8], input: &[u8], at: u64) -> u8 {
+    if at < dictionary.len() as u64 { return dictionary[at]; }
+    input[at - dictionary.len() as u64]
+}
+
+/// Computes the encoder hash for four virtual history bytes.
+fn history_hash(dictionary: &[u8], input: &[u8], at: u64) -> u64 {
+    let a = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], copy(at)) as u64;
+    let b = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], at + 1) as u64;
+    let c = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], at + 2) as u64;
+    let d = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], at + 3) as u64;
+    (((a | (b << 8) | (c << 16) | (d << 24)) * 2654435761) >> 20) & 4095
+}

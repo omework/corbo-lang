@@ -1,0 +1,13 @@
+--- native_threads.py before stored reborrows
++++ native_threads.py
+@@ -142,7 +142,9 @@
+             typ = source[1][5:-1] if source and source[1].startswith('Pool<') else expr[3]
+             return transformed, ('owned', typ)
+         if op == 'new_enum':
+-            return transformed, ('owned', expr[2])
++            source = env.get(expr[1], Local(None)).signature
++            typ = expr[2] or (source[1][5:-1] if source and source[1].startswith('Pool<') else None)
++            return transformed, ('owned', typ) if typ else None
+         if op == 'field':
+             binding = env.get(expr[1], Local(None)).signature
+             typ = binding[1] if binding else None

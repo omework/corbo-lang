@@ -1,0 +1,260 @@
+--- /tmp/crust-before-async-borrowed-local-results/crust.py
++++ /Users/jabarkarim/sources/crust/crust.py
+@@ -2571,6 +2571,14 @@
+                 binding = bindings[params[target.parameter][0]]
+                 if binding.array_root:
+                     self.fail('stockage dans un enum d’un emprunt de case non pris en charge')
++                if target.kind == 'task_capture_parameter':
++                    captures = capture_fields(binding.alloc.dependencies, target.field)
++                    mutable = self.field_modes(summary.typ).get(name) == 'mut'
++                    if not captures or mutable and any(not key.startswith('mut.') for key, _ in captures):
++                        self.fail('contrat de champ : capture empruntée compatible introuvable')
++                    resolved.extend(root for _, roots in captures for root in roots)
++                    parents.update((id(parent), parent) for parent in binding.alloc.borrow_parents)
++                    continue
+                 if target.kind == 'indirect_field_parameter':
+                     mode = self.field_modes(summary.typ).get(name, 'ref')
+                     projection = FunctionResult(mode, 'Int', reference_targets=frozenset({target}))
+@@ -2833,6 +2841,20 @@
+                         add_field_dependencies(target, index, prefix=f'capture.{position}/')
+                         capability = 'mut' if is_public_handle(typ) and position in (3, 5) else capture
+                         dependencies.append((f'{capability}.{position}', (target,)))
++                    effect = getattr(definition, 'field_effect_summary', None)
++                    completed = effect.completion_result if effect and effect.complete else None
++                    if completed and completed.candidates and all(
++                            candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
++                            for candidate in completed.candidates):
++                        # This task constructs its root in caller storage. Its
++                        # captured loans and descendant pools remain separate.
++                        source = check.local_stack_storage(root)
++                        origin = check.uid()
++                        check.origin_sources[origin] = source
++                        result_sources.append(source)
++                        result_origins.add(origin)
++                        capture_sources.append(source)
++                        capture_origins.add(origin)
+                     result_fields = []
+                     for path, child_type in aggregate_owned_paths(self.enums, definition.args[2][1]):
+                         group = find(('task_result_field_parameter', index, path))
+@@ -7024,7 +7046,8 @@
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                                                        label, descriptor.origins, typ=descriptor.typ,
+                                                        absent=descriptor.absent_owned_payload,
+-                                                       owned_fields=self.task_owned_result_fields((descriptor,)))
++                                                       owned_fields=self.task_owned_result_fields((descriptor,)),
++                                                       borrowed_fields=descriptor.dependencies, borrow_parents=descriptor.borrow_parents)
+                 if descriptor.absent_owned_payload:
+                     self.lines.append('fail("join : charge propriétaire impossible");')
+                     raise PathsReturned()
+@@ -7648,6 +7671,8 @@
+             self.origin_sources.update(zip(origins, sources))
+         allocation = Allocation(self.uid(), scope.id, label, sources, c=name, typ=typ, origins=frozenset(origins))
+         if prototype is not None:
++            allocation.dependencies = prototype.dependencies
++            allocation.borrow_parents = prototype.borrow_parents
+             allocation.owned_fields = tuple((key, tuple(self.copy_owned_tree(child, scope.id) for child in children))
+                                            for key, children in prototype.owned_fields)
+             allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+@@ -7744,12 +7769,15 @@
+                 allocation.item_sources = self.owned_field_sources(allocation.owned_fields)
+         return allocation
+ 
+-    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, owned_fields=()):
++    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, owned_fields=(), borrowed_fields=(), borrow_parents=()):
+         cell = f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+         payload.absent_owned_payload = absent
+         self.restore_async_owned_fields(payload, owned_fields)
++        payload.dependencies = borrowed_fields
++        payload.borrow_parents = borrow_parents
++        self.check_borrow_destination(payload, scope)
+         payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested else None
+         self.guard_buffered_handle(name, payload, '==', payload_status=payload_status)
+         return ('join_nested' if nested else 'join_owned'), name, payload
+@@ -8454,6 +8482,20 @@
+ 
+     def local_result_constructors(self, expr, producers=None):
+         producers = dict(producers or {})
++        if expr[0] == 'value_match':
++            from async_local_placement import result_constructors
++            known = {}
++            for scope in self.scopes:
++                for name, binding in scope.bindings.items():
++                    known.pop(name, None)
++                    if binding.kind in ('task', 'execution') and binding.alloc.task_result_sources and all(
++                            source.kind == 'local_stack' for source in binding.alloc.task_result_sources):
++                        nominal = binding.alloc.typ.split('<', 1)[1][:-1]
++                        known[name] = binding.kind, self.async_definitions[nominal][0].args[2][1]
++                    elif binding.alloc is not None and binding.alloc.sources and all(
++                            source.kind == 'local_stack' for source in binding.alloc.sources):
++                        known[name] = binding.alloc.typ
++            return result_constructors(expr, self.function_contracts, known)
+         if expr[0] == 'array_copy':
+             typ = self.local_copy_type(expr, producers)
+             if typ is not None:
+@@ -8540,13 +8582,14 @@
+             for constructor in constructors:
+                 self.local_reservations[id(constructor)] = source, layout, reserved
+         repeated = expr[0] == 'loop_expr'
+-        if repeated:
++        managed = repeated or not inherited
++        if managed:
+             self.lines.append(f'{reserved}->reservation_depth++;')
+             self.active_local_reservations.append((self.scopes[-1].id, reserved))
+         try:
+             yield
+         finally:
+-            if repeated:
++            if managed:
+                 self.active_local_reservations.pop()
+                 self.lines.append(f'local_reservation_end({reserved});')
+             if not inherited:
+@@ -8595,8 +8638,9 @@
+             nodes = expr[1]
+             future = getattr(scope, 'future', [])
+             try:
+-                result = self.statements(scope, nodes, 'value_match', continuation=future,
+-                                         expected_array=expected_array)
++                with self.reserve_local_result(expr):
++                    result = self.statements(scope, nodes, 'value_match', continuation=future,
++                                             expected_array=expected_array)
+             finally:
+                 for node in nodes[:2]:
+                     if node.op == 'var':
+@@ -9868,10 +9912,11 @@
+                     paths[id(root), id(parent)] = root, parent
+         return paths
+ 
+-    def project_task_result_captures(self, nominal, captures, ancestry=()):
++    def project_task_result_captures(self, nominal, captures, ancestry=(), *, paths=None):
+         result_paths = {}
+-        paths = (frozenset((index, ()) for index in self.async_definitions[nominal][0].public_result_borrows)
+-                 if is_public_handle(nominal) else self.async_reference_paths[nominal])
++        if paths is None:
++            paths = (frozenset((index, ()) for index in self.async_definitions[nominal][0].public_result_borrows)
++                     if is_public_handle(nominal) else self.async_reference_paths[nominal])
+         for index, path in paths:
+             result_paths.setdefault(index, []).append(path)
+         inline_result = any(target.array_capture is not None or any(
+@@ -9937,6 +9982,19 @@
+             *(parent.referents or (parent.alloc,)), *self.dependency_targets(parent.alloc)))}
+         parents.update(cell_parents)
+         return tuple((*dependencies, *cell_dependencies)), tuple(parents.values())
++
++    def project_task_result_fields(self, nominal, captures, ancestry=()):
++        from async_result_storage import borrowed_result_fields
++        fields, parents = [], {}
++        for field, targets in borrowed_result_fields(self.async_definitions[nominal][0]):
++            if any(target.kind not in ('parameter', 'exclusive_join_parameter') for target in targets):
++                self.fail('résultat struct async : cible empruntée sans paramètre durable raccordé')
++            dependencies, chain = self.project_task_result_captures(nominal, captures, ancestry,
++                paths=frozenset((target.parameter, ()) for target in targets))
++            roots = {root.id: root for _, candidates in dependencies for root in candidates}
++            fields.append((field, tuple(roots.values())))
++            parents.update((id(parent), parent) for parent in chain)
++        return tuple(fields), tuple(parents.values())
+ 
+     def async_array_capture(self, loan, root):
+         if root.alloc is None:
+@@ -10381,6 +10439,7 @@
+         # Project the input snapshot before publishing the completed stores.
+         reference_result = (self.project_task_result_captures(task_name, allocation.dependencies,
+                             allocation.borrow_parents) if mode in ('ref', 'mut') else None)
++        result_borrows, result_parents = self.project_task_result_fields(task_name, allocation.dependencies, allocation.borrow_parents)
+         self.apply_async_field_updates(allocation)
+         if mode == 'array':
+             from async_lowering import scalar_array_layout
+@@ -10399,12 +10458,14 @@
+             self.flag_declarations.append(f'CrustNestedJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_nested(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
+-                                               allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields)
++                                               allocation.task_result_origins, nested=True, typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields,
++                                               borrowed_fields=result_borrows, borrow_parents=result_parents)
+         if mode == 'owned':
+             self.flag_declarations.append(f'CrustJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins,
+-                                               typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields)
++                                               typ=typ, absent=absent_payload, owned_fields=allocation.task_result_fields,
++                                               borrowed_fields=result_borrows, borrow_parents=result_parents)
+         if mode in ('ref', 'mut'):
+             dependencies, parents = reference_result
+             kind = 'join_' + mode
+@@ -11004,6 +11065,9 @@
+                 self.check_utf8_paths_destination(descriptor[1], caller, within_instruction=True)
+                 utf8_result = (UTF8_BORROW_MODES.get(declared[0], declared[0]), descriptor)
+         def local_candidate(candidate):
++            if candidate.kind == 'task_capture':
++                sources = bindings[params[candidate.parameter][0]].alloc.task_result_sources
++                return bool(sources) and all(source.kind == 'local_stack' for source in sources)
+             if candidate.kind != 'fresh':
+                 return False
+             if candidate.source.kind == 'local_value':
+@@ -11013,7 +11077,8 @@
+             sources = self.parameter_storage(candidate.source, params, bindings)
+             return bool(sources) and all(source.kind == 'local_stack' for source in sources)
+ 
+-        local_result = any(local_candidate(candidate) for candidate in summary.candidates)
++        local_result = any(candidate.kind == 'fresh' and local_candidate(candidate)
++                           for candidate in summary.candidates)
+         from async_result_storage import needs_task_output
+         task_output = None
+         task_output_parameter = None
+@@ -11032,6 +11097,7 @@
+             if len(storage_kinds) > 1:
+                 self.fail('retours incompatibles : valeur locale T et allocation A<T>')
+         local_result_storage = None
++        local_result_reservation = None
+         if local_result:
+             if signature.handle_result or not all(local_candidate(candidate) for candidate in summary.candidates):
+                 self.fail('un retour local T ne peut pas devenir une allocation A<T>')
+@@ -11044,6 +11110,8 @@
+                 size = self.field_offset(fields, len(fields))
+                 reserved = f'local_return{self.uid()}'
+                 self.lines.append(f'Cell *{reserved} = local_cell_new({source.c}, &{layout}, {size}, NULL);')
++                self.lines.append(f'{reserved}->reservation_depth++;')
++                local_result_reservation = reserved
+             bindings['\0local-result'] = Binding('résultat local', 'source', source.c, source=source)
+             parameter = f'local_output{self.uid()}'
+             arguments.append(('Cell *', parameter, reserved))
+@@ -11111,6 +11179,18 @@
+                         and binding.alloc.sources
+                         and all(source.kind == 'local_stack' for source in binding.alloc.sources)}
+         local_constructors = self.local_break_constructors(nodes, 'return', local_inputs) if local_result else ()
++        if local_result and not local_constructors:
++            from async_local_placement import result_constructors
++            known_locals = {pname: producer[2] for pname, producer in local_inputs.items()}
++            for pname, binding in bindings.items():
++                if binding.kind in ('task', 'execution') and binding.alloc.task_result_sources and all(
++                        source.kind == 'local_stack' for source in binding.alloc.task_result_sources):
++                    task_type = next(typ for name, _, typ in params if name == pname)
++                    known_locals[pname] = binding.kind, self.async_definitions[task_type][0].args[2][1]
++            # Already-created task roots have no constructor to relocate here.
++            # Only fresh synchronous alternatives need the caller's output slot.
++            local_constructors = result_constructors(('scope', None, nodes), self.function_contracts,
++                                                     known_locals, returns=True)
+         if local_result and not local_constructors:
+             self.fail('retour local : placement de cette forme de fonction non encore pris en charge')
+         for constructor in local_constructors:
+@@ -11355,6 +11435,8 @@
+                 self.lines.append(f'{result_type} {c} = {call};')
+         # Joins restore the original cleanup expression. Keep its value in
+         # sync with the slot the callee received on every returning path.
++        if local_result_reservation is not None:
++            self.lines.append(f'local_reservation_end({local_result_reservation});')
+         for _, cleanup, _, argument in write_pointers:
+             self.lines.append(f'{cleanup} = *{argument};')
+         if result[0] == 'void':
+@@ -11368,7 +11450,9 @@
+         if result[0] in JOIN_RESULT_TYPES:
+             return self.join_allocation_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins, nested=result[0] == 'join_nested', typ=declared[1],
+-                                               owned_fields=self.owned_field_storage(result_contract['owned_fields']))
++                                               owned_fields=self.owned_field_storage(result_contract['owned_fields']),
++                                               borrowed_fields=result_contract['dependencies'],
++                                               borrow_parents=result_contract['borrow_parents'])
+         if result[0] == 'handle_option':
+             return self.buffered_handle_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins)

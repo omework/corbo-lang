@@ -1,0 +1,191 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Bounded, caller-buffered streaming with explicit backpressure and frame budgets.
+
+/// Provides a typed unit for cursor arithmetic.
+const STREAM_ONE: u64 = 1;
+
+/// Encodes bounded chunks as concatenated standard frames; owns no heap storage.
+/// Call process until finished. Destruction discards pending bytes without flushing.
+pub struct Encoder {
+    /// Caller-owned frame input storage, borrowed for streaming operation.
+    input: &mut [u8],
+    /// Caller-owned encoded-output storage awaiting draining.
+    pending: &mut [u8],
+    /// Caller-owned codec scratch storage; required length is checked before use.
+    workspace: &mut [u64],
+    /// Requested compression effort level; constructors validate the supported range.
+    level: u32,
+    /// Whether the encoded frame includes its content checksum.
+    checksum:bool,
+    /// Borrowed optional dictionary bytes; they must outlive the codec.
+    dictionary:&[u8],
+    /// Number of bytes currently accumulated in input/pending storage.
+    used: u64,
+    /// Number of valid pending-output bytes.
+    count: u64,
+    /// Offset of the next pending byte to drain.
+    next: u64,
+    /// Records the caller's end-of-input request.
+    ending: bool,
+    /// Records that the current frame has been completely emitted/decoded.
+    done: bool,
+    /// Tracks whether input/progress has been observed for this frame.
+    seen: bool,
+    /// Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+    failed: bool,
+    /// Number of input bytes consumed by the latest streaming operation.
+    last_read:u64,
+}
+
+impl Encoder {
+    /// Returns the input accepted by the last successful process call; re-submit the remaining suffix.
+    fn consumed(&self)->usize { (*self).last_read as usize }
+    /// Reports EOF after all pending output has been drained.
+    fn finished(&self)->bool { (*self).done }
+
+    /// Borrows staging, pending-output and match-search buffers; snapshots the scalar options.
+    /// Pending needs 2*staging.len()+128 bytes. Zstandard also borrows its dictionary (empty means none).
+    fn new(level:u32, checksum:bool, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64], dictionary:&[u8]) -> Encoder {
+        Encoder { input: input, pending: pending, workspace: workspace,
+            level: level, checksum:checksum,dictionary:dictionary,
+            used: 0, count: 0, next: 0, ending: false, done: false, seen: false, failed: false,last_read:0 }
+    }
+    /// Reuses the borrowed buffers and parameters for a fresh stream, discarding pending bytes.
+    fn reset(&mut self) {
+        let f=&mut (*self).used; *f=0; let f=&mut (*self).count; *f=0; let f=&mut (*self).next; *f=0;
+        let f=&mut (*self).ending; *f=false; let f=&mut (*self).done; *f=false;
+        let f=&mut (*self).last_read;*f=0;let f=&mut (*self).seen; *f=false; let f=&mut (*self).failed; *f=false;
+    }
+
+    /// Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
+    /// finish marks EOF only once all supplied input is accepted; an empty output can apply backpressure.
+    fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) -> Result<usize, Error> {
+        if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error.InvalidState); }
+        let level=(*self).level; let checksum=(*self).checksum; let dictionary=&*(*self).dictionary;
+        let mut used=(*self).used; let mut count=(*self).count; let mut next=(*self).next;
+        let mut ending=(*self).ending; let mut finished=(*self).done;
+        let mut seen=(*self).seen;
+        let staging=&mut *(*self).input; let pending=&mut *(*self).pending; let workspace=&mut *(*self).workspace;
+        let capacity=staging.len() as u64;
+        if capacity==0 || capacity>0xffffffff || (pending.len() as u64)<capacity*2+128 { return Err(Error.InvalidParams); }
+        let mut read:u64=0; let mut written:u64=0;
+        loop {
+            while next<count && written<output.len() as u64 { output[written]=pending[next]; next=next+STREAM_ONE; written=written+STREAM_ONE; }
+            if next<count { break; }
+            next=0; count=0;
+            if ending { finished=true; break; }
+            while read<input.len() as u64 && used<capacity { staging[used]=input[read]; used=used+STREAM_ONE; read=read+STREAM_ONE; }
+            let eof=finish && read==input.len() as u64;
+            if used<capacity && !eof { break; }
+            if used==0 && seen { if eof { ending=true; finished=true; } break; }
+            let params=Params { level: copy(level), checksum:copy(checksum) };
+            let encoded=match compress_with_dictionary(&staging[0..used],&mut pending[0..pending.len()],&params,&mut workspace[0..workspace.len()],&dictionary[0..dictionary.len()]) {
+                Ok(value)=>{value as u64}, Err(error)=>{let failure=&mut (*self).failed;*failure=true;return Err(error);},
+            };
+            used=0; count=encoded; seen=true;
+            if eof { ending=true; }
+        }
+        let f=&mut (*self).used;*f=used;
+        let f=&mut (*self).count;*f=count;
+        let f=&mut (*self).next;*f=next;
+        let f=&mut (*self).ending;*f=ending;
+        let f=&mut (*self).done;*f=copy(finished);
+        let f=&mut (*self).seen;*f=seen;
+        let f=&mut (*self).last_read;*f=read;
+        Ok(written as usize)
+    }
+}
+
+/// Buffers one complete encoded and decoded frame before exposing its validated output.
+/// The two borrowed buffers are hard per-frame budgets, not an unbounded-history window.
+pub struct Decoder {
+    /// Caller-owned storage for a bounded encoded frame.
+    encoded:&mut [u8],
+    /// Caller-owned storage for the bounded decoded frame.
+    decoded:&mut [u8],
+    /// Caller-owned codec scratch storage; required length is checked before use.
+    workspace:&mut [u8],
+    /// Borrowed optional dictionary bytes; they must outlive the codec.
+    dictionary:&[u8],
+    /// Number of bytes currently accumulated in input/pending storage.
+    used:u64,
+    /// Number of valid pending-output bytes.
+    count:u64,
+    /// Offset of the next pending byte to drain.
+    next:u64,
+    /// Records the caller's end-of-input request.
+    ending:bool,
+    /// Records that the current frame has been completely emitted/decoded.
+    done:bool,
+    /// Tracks whether input/progress has been observed for this frame.
+    seen:bool,
+    /// Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+    failed:bool,
+    /// Number of input bytes consumed by the latest streaming operation.
+    last_read:u64,
+}
+
+impl Decoder {
+    /// Returns the input accepted by the last successful process call.
+    fn consumed(&self)->usize { (*self).last_read as usize }
+    /// Reports EOF after all validated output has been drained.
+    fn finished(&self)->bool { (*self).done }
+
+    /// Borrows maximum-frame storage; Zstandard additionally needs its 128 KiB literal workspace.
+    fn new(encoded:&mut [u8], decoded:&mut [u8] ,workspace:&mut [u8],dictionary:&[u8]) -> Decoder {
+        Decoder { encoded:encoded, decoded:decoded, workspace:workspace,dictionary:dictionary,
+            used:0,count:0,next:0,ending:false,done:false,seen:false,failed:false,last_read:0 }
+    }
+    /// Starts a new stream with the same storage and dictionary, discarding pending data.
+    fn reset(&mut self) {
+        let f=&mut (*self).used;*f=0;let f=&mut (*self).count;*f=0;let f=&mut (*self).next;*f=0;
+        let f=&mut (*self).ending;*f=false;let f=&mut (*self).done;*f=false;
+        let f=&mut (*self).last_read;*f=0;let f=&mut (*self).seen;*f=false;let f=&mut (*self).failed;*f=false;
+    }
+    /// Returns validated output bytes written; consumed() reports accepted input.
+    /// Frame, checksum or state errors require reset or destruction; a truncated prefix waits for more input.
+    fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)->Result<usize,Error>{
+        if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error.InvalidState); }
+        let dictionary=&*(*self).dictionary;let workspace=&mut *(*self).workspace;
+        let mut used=(*self).used;let mut count=(*self).count;let mut next=(*self).next;
+        let mut ending=(*self).ending;let mut finished=(*self).done;
+        let mut seen=(*self).seen;
+        let encoded=&mut *(*self).encoded;let decoded=&mut *(*self).decoded;
+        let capacity=encoded.len() as u64;
+        if capacity==0 { return Err(Error.InvalidParams); }
+        let mut read:u64=0;let mut written:u64=0;
+        loop {
+            while next<count && written<output.len() as u64 { output[written]=decoded[next];next=next+STREAM_ONE;written=written+STREAM_ONE; }
+            if next<count { break; } count=0;next=0;
+            if used==0 && ending { if !seen { let failure=&mut (*self).failed;*failure=true;return Err(Error.TruncatedInput); } finished=true;break; }
+            while read<input.len() as u64 && used<capacity { encoded[used]=input[read];used=used+STREAM_ONE;read=read+STREAM_ONE; }
+            if finish && read==input.len() as u64 { ending=true; }
+            let mut consumed:u64=0;let mut produced:u64=0;
+            let framed=match frame_size(&encoded[0..used]) {
+                Ok(value)=>{value as u64},Err(error)=>{let failure=&mut (*self).failed;*failure=true;return Err(error);},
+            };
+            if framed!=0 {
+                let value=match decompress_with_dictionary(&encoded[0..framed],&mut decoded[0..decoded.len()],&mut workspace[0..workspace.len()],&dictionary[0..dictionary.len()]) {
+                    Ok(value)=>{value as u64},Err(error)=>{let failure=&mut (*self).failed;*failure=true;return Err(error);},
+                };
+                consumed=framed;produced=value;
+            }
+            if consumed==0 {
+                if ending { let failure=&mut (*self).failed;*failure=true;return Err(Error.TruncatedInput); }
+                if used==capacity { let failure=&mut (*self).failed;*failure=true;return Err(Error.FrameTooLarge); }
+                break;
+            }
+            let remaining=used-consumed;let mut i:u64=0;
+            while i<remaining { encoded[i]=encoded[consumed+i];i=i+STREAM_ONE; }
+            used=remaining;count=produced;seen=true;
+        }
+        let f=&mut (*self).used;*f=used;
+        let f=&mut (*self).count;*f=count;
+        let f=&mut (*self).next;*f=next;
+        let f=&mut (*self).ending;*f=ending;
+        let f=&mut (*self).done;*f=copy(finished);
+        let f=&mut (*self).seen;*f=seen;
+        let f=&mut (*self).last_read;*f=read;
+        Ok(written as usize)
+    }
+}

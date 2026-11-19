@@ -1,0 +1,13 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -452,7 +452,9 @@
+                     environment.pop(temporary)
+                 mode, typ = self.effects.definitions[task.typ].args[2]
+                 return (flow - {'next'}) | part, replace(completed, mode=mode, typ=typ)
+-            if isinstance(task, Value) and task.mode == 'execution' and task.deferred_field_updates:
++            if isinstance(task, Value) and task.mode == 'execution' and (
++                    task.deferred_field_updates or not task.pending_structure_calls
++                    and task.typ in self.effects.definitions and self.effects.infer(task.typ).complete):
+                 self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
+                 # A synchronous factory already mapped the deferred contract
+                 # onto these captured inputs. No synchronous body is available.

@@ -1,0 +1,16 @@
+// RT5/MT5: formerly rejected; exercised by test_plain_join_contracts.
+async fn leaf() -> Int { return 7; }
+fn wait() -> Result<Int, runtime::Error> {
+    let h = runtime::spawn(-> leaf());
+    return h.join();
+}
+fn relay(value: Result<Int, runtime::Error>) -> Result<Int, runtime::Error> {
+    return value;
+}
+fn main() {
+    let result = relay(wait());
+    match result {
+        Ok(value) => { print(value); },
+        Err(error) => { match error { runtime::Error::LaunchFailed => { print(99); } } }
+    }
+}

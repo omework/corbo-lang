@@ -1,0 +1,80 @@
+test_alias_and_parameter_return_relay (test_async_local_parent.AsyncLocalParentTests.test_alias_and_parameter_return_relay) ... ok
+test_conditional_results_and_early_return (test_async_local_parent.AsyncLocalParentTests.test_conditional_results_and_early_return) ... ok
+test_copies_do_not_retain_original_child_stack (test_async_local_parent.AsyncLocalParentTests.test_copies_do_not_retain_original_child_stack) ... ok
+test_existing_parent_receiver_in_child_blocks_and_loops (test_async_local_parent.AsyncLocalParentTests.test_existing_parent_receiver_in_child_blocks_and_loops) ... FAIL
+test_field_pool_cannot_be_promoted_with_root (test_async_local_parent.AsyncLocalParentTests.test_field_pool_cannot_be_promoted_with_root) ... ok
+test_loop_model_reuses_parent_slot (test_async_local_parent.AsyncLocalParentTests.test_loop_model_reuses_parent_slot) ... ok
+test_loop_result_with_continue (test_async_local_parent.AsyncLocalParentTests.test_loop_result_with_continue) ... ok
+test_match_result_and_branch_assignment (test_async_local_parent.AsyncLocalParentTests.test_match_result_and_branch_assignment) ... ok
+test_parent_identity_survives_child_reclamation (test_async_local_parent.AsyncLocalParentTests.test_parent_identity_survives_child_reclamation) ... ok
+test_placement_does_not_relax_moves (test_async_local_parent.AsyncLocalParentTests.test_placement_does_not_relax_moves) ... ok
+test_recorded_parent_and_successive_transfers (test_async_local_parent.AsyncLocalParentTests.test_recorded_parent_and_successive_transfers) ... ok
+test_replacement_keeps_old_until_new_is_evaluated (test_async_local_parent.AsyncLocalParentTests.test_replacement_keeps_old_until_new_is_evaluated) ... ok
+test_result_borrow_reserves_value (test_async_local_parent.AsyncLocalParentTests.test_result_borrow_reserves_value) ... ok
+
+======================================================================
+FAIL: test_existing_parent_receiver_in_child_blocks_and_loops (test_async_local_parent.AsyncLocalParentTests.test_existing_parent_receiver_in_child_blocks_and_loops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15616, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13848, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 921, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6410, in _lower_async_function
+    returned = emit_block(statement, body[index + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4301, in emit_block
+    return emit_region_block(statement.args[1], statement.region_limit, statement.line,
+                         valued=False, construct='bloc', following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4309, in emit_region_block
+    return emit_branches(None, body, None, line, **options)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4509, in emit_branches
+    returned_in_branch = conditional(*statement.args, statement.line, valued=False,
+                                     following=body[position + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3917, in conditional
+    return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+                         boolean=boolean)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4512, in emit_branches
+    assign(*statement.args, statement.line, following=body[position + 1:])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5488, in assign
+    require_local_async_value(source, line)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2143, in require_local_async_value
+    fail(line, f"'{name}' doit être rattaché au scope courant : utiliser -> à l’entrée du bloc")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 949, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: 'q' doit être rattaché au scope courant : utiliser -> à l’entrée du bloc
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 90, in test_existing_parent_receiver_in_child_blocks_and_loops
+    self.assertEqual(self.run_source(source).stdout,'1\n7\n' if flag=='true' else '1\n7\n1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 1: 'q' doit être rattaché au scope courant : utiliser -> à l’entrée du bloc
+
+----------------------------------------------------------------------
+Ran 13 tests in 10.568s
+
+FAILED (failures=1)

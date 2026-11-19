@@ -1,0 +1,111 @@
+--- before/crust.py
++++ after/crust.py
+@@ -4903,9 +4903,9 @@
+                 else:
+                     frame['observed_allocations'].add((source.id, typ))
+ 
+-    def check_vector_item_resets(self, reset_ids):
++    def check_vector_item_resets(self, reset_ids, consumed_tasks=frozenset()):
+         for allocation in self.allocations:
+-            if not allocation.alive:
++            if not allocation.alive or allocation.id in consumed_tasks:
+                 continue
+             if (allocation.typ.startswith(('Task<', 'Execution<'))
+                     and any(source.id in reset_ids for source in source_union(
+@@ -5721,7 +5721,7 @@
+             return f'{base}.data[{index}]', element, binding
+         self.fail('un accès à une variable tableau est attendu')
+ 
+-    def active_array_loans(self, after=False):
++    def active_array_loans(self, after=False, excluded_carriers=frozenset()):
+         scoped = [(binding, scope) for scope in self.scopes for binding in scope.bindings.values()
+                   if binding.valid and not binding.suspended
+                   and (binding.last > scope.clock if after else binding.last >= scope.clock)]
+@@ -5760,7 +5760,7 @@
+             if binding.array_root:
+                 yield binding
+             yield from (loan for _, loan in self.nested_array_loans(binding))
+-        carriers = [carrier for carrier in self.allocations if carrier.alive
++        carriers = [carrier for carrier in self.allocations if carrier.alive and carrier.id not in excluded_carriers
+                     and carrier.typ.startswith(('Task<', 'Execution<'))]
+         carriers.extend(binding.alloc for binding, _ in scoped if binding.kind in JOIN_BORROWS)
+         captures = {id(target.array_capture): target.array_capture for carrier in carriers
+@@ -9128,14 +9128,20 @@
+                 return source_union(*(a.sources for a in targets))
+             if symbol.kind == 'task_result_parameter':
+                 return binding.alloc.task_result_sources
++            if symbol.kind == 'task_reference_result_parameter':
++                projected, parents = self.project_task_result_captures(
++                    params[symbol.index][2], binding.alloc.dependencies, binding.alloc.borrow_parents)
++                return source_union(*(target.sources for _, targets in projected for target in targets),
++                                    *(allocation.sources for parent in parents
++                                      for allocation in self.reservation_allocations(parent)))
+             if symbol.kind == 'task_borrow_parameter':
+-                return source_union(*(target.sources
++                return source_union(*(held.sources
+                                       for _, targets in capture_fields(binding.alloc.dependencies, symbol.name)
+-                                      for target in targets))
++                                      for target in targets
++                                      for held in self.held_allocations(Binding(target.label, 'ref', '', target))))
+             if symbol.kind == 'task_utf8_parameter':
+                 return source_union(*(target.sources for _, targets in capture_fields(binding.alloc.dependencies, symbol.name)
+-                                      for target in targets if target.array_capture is not None
+-                                      and target.array_capture.static_type == 'uint8_t'))
++                                      for target in targets if target.array_capture is not None))
+             if symbol.kind in ('vector_element_parameter', 'task_parameter'):
+                 return binding.alloc.item_sources
+             if symbol.kind == 'reservation_parameter':
+@@ -10695,11 +10701,9 @@
+             if not source.supports_pool(typ):
+                 self.fail(f"source incompatible : '{params[index][0]}' attend une source Pool<{typ}> (exigence du contrat)")
+         reset_sources = {bindings[params[i][0]].source.id for i in effects.resets}
+-        if any(source.id in reset_sources for binding in bindings.values()
+-               if binding.kind in ('task', 'execution')
+-               for source in source_union(binding.alloc.item_sources,
+-                                          *(target.sources for target in self.dependency_targets(binding.alloc)))):
+-            self.fail('reset interdit : une allocation est capturée par une tâche transférée')
++        # Ordered source constraints protect captures until join and result
++        # targets until their last use. A whole-call prohibition would reject
++        # a reset occurring after both, even when the callee proves the order.
+         handle_writes = self.resolve_handle_writes(summary, params, bindings, reset_sources, opaque=modular)
+         write_pointers = [(write.target, write.target.c, *arguments[index][1:])
+                           for (index, _), write in zip(summary.handle_writes, handle_writes)]
+@@ -10860,9 +10864,13 @@
+         detached_captures = self.detached_async_captures(summary, params, bindings)
+         result_bindings = bindings.copy()
+         for pname, mode, typ in params:
+-            if mode in ('owned', 'mut') and typ in REFERENCE_VECTORS:
++            if (mode in ('owned', 'mut') and typ in REFERENCE_VECTORS
++                    or mode in ('task', 'execution')):
+                 # Detached projections in the contract refer to the input cases,
+                 # including cases the callee removes before returning.
++                # A concrete handle may also be consumed through a public
++                # signature which renumbers its captures. Result origins still
++                # refer to the input signature, not that consumed descriptor.
+                 result_bindings[pname] = copy.copy(bindings[pname])
+                 result_bindings[pname].alloc = copy.copy(bindings[pname].alloc)
+         try:
+@@ -11312,7 +11320,12 @@
+         owned = {b.alloc.id: b.alloc for b in bindings.values()
+                  if b.kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'task', 'execution', *JOIN_RESULT_TYPES) and b.alloc is not None}
+         resets = {bindings[params[i][0]].source.id for i in effects.resets}
+-        self.check_vector_item_resets(resets)
++        # These inputs are consumed by the opaque call. Ordered constraints
++        # have already checked resets against their captures and result uses;
++        # other live tasks still retain all of their reservations.
++        consumed_tasks = {key for key, allocation in owned.items()
++                          if allocation.typ.startswith(('Task<', 'Execution<'))}
++        self.check_vector_item_resets(resets, consumed_tasks)
+         affected = {a.id for a in self.allocations if a.alive and a.id not in owned
+                     and any(s.id in resets for s in a.sources)}
+         typed_updates = {key: proposed for key, (holder, proposed) in updates.items()
+@@ -11320,7 +11333,8 @@
+         if any(any(a.id in affected for a in self.held_allocations(b))
+                for frame in self.argument_frames for b in frame):
+             self.fail('reset interdit : une allocation est retenue par un argument en cours d’évaluation')
+-        if any(root.alloc and root.alloc.id in affected for loan in self.active_array_loans(after=True)
++        if any(root.alloc and root.alloc.id in affected for loan in self.active_array_loans(
++                after=True, excluded_carriers=consumed_tasks)
+                for root, _ in self.array_paths(loan)):
+             self.fail('reset interdit : une référence de tableau doit encore être utilisée')
+         for active in self.scopes:

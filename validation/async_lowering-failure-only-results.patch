@@ -1,0 +1,146 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -956,9 +956,11 @@
+     reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
++    owned_join_sync_types = {(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
++                            for mode in ('join_owned', 'join_nested') for _, typ in owned_sync_types}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+                        for mode in ('ref', 'mut') for _, typ in owned_sync_types}
+-    sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | pool_sync_types
++    sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+                          and public_signature(contract.result_type[1]) is not None}
+@@ -1223,7 +1225,7 @@
+             fail(line, 'prototype : appel synchrone depuis un état : signature non prise en charge')
+         if expected is not None and signature != expected:
+             fail(line, f'appel synchrone : résultat {signature[1]}, attendu {expected[1]}')
+-        if signature in owned_sync_types and not owned:
++        if signature in owned_sync_types | owned_join_sync_types and not owned:
+             fail(line, 'résultat propriétaire : recevoir, transférer ou drop explicitement')
+         if signature in handle_sync_types and not execution:
+             fail(line, 'handle lancé : recevoir puis attendre explicitement le résultat')
+@@ -1245,6 +1247,18 @@
+                     value = sync_owned_value(operand, line)
+                     if owned_result_types.get(value, 'Int') != typ:
+                         fail(line, f'argument propriétaire : allocation {typ} attendue')
++                elif (mode, typ) in owned_join_sync_types:
++                    if argument[0] == 'down' and is_owned_join(argument[1], nested=True):
++                        require_local_async_value(argument[1], line)
++                        value, payload, _ = consume_owned_join(argument[1], line)
++                    elif argument[0] == 'transfer' and sync_signature(argument[1]) in owned_join_sync_types:
++                        incoming_mode, _ = sync_signature(argument[1])
++                        value, _ = sync_call(argument[1], line, owned=True)
++                        payload = JOIN_PAYLOADS[incoming_mode]
++                    else:
++                        fail(line, 'argument Result propriétaire : transfert -> explicite requis')
++                    if payload != JOIN_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
++                        fail(line, 'argument Result propriétaire : type incompatible')
+                 elif (mode, typ) in pool_sync_types:
+                     value, held = pool_argument(argument, mode, typ, line)
+                     loans.extend(held)
+@@ -1286,10 +1300,17 @@
+                 if mode == 'owned':
+                     prepared_owners.append(snapshot)
+                     steps.append(f'{value} = NULL;')
++                elif (mode, typ) in owned_join_sync_types:
++                    field = 'value.allocation' if mode == 'join_nested' else 'allocation'
++                    success = f'{snapshot}.status == 0' + (f' && {snapshot}.value.status == 0' if mode == 'join_nested' else '')
++                    pending = temporary('Cell *')
++                    steps.extend((f'{pending} = ({success}) ? {snapshot}.{field} : NULL;',
++                                  f'{value}.{field} = NULL;'))
++                    prepared_owners.append(pending)
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
+                 argument_storage.append((pool_storage(argument[1]) if (mode, typ) in pool_sync_types
+-                                         else storage_of(value) if mode == 'owned' else frozenset()))
++                                         else storage_of(value) if mode == 'owned' or (mode, typ) in owned_join_sync_types else frozenset()))
+                 release_sync_argument_loans(following)
+                 argument_tails.pop()
+         finally:
+@@ -1340,7 +1361,7 @@
+                 replace(contract.result, structure_fields=contract.result.task_field_updates),
+                 contract.parameters, argument_loans, line)
+             return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+-        if signature in owned_sync_types:
++        if signature in owned_sync_types | owned_join_sync_types:
+             owned_result_types[value] = signature[1]
+             for candidate in contract.result.candidates:
+                 index = (candidate.parameter if candidate.kind == 'parameter' else
+@@ -2171,6 +2192,7 @@
+         elif kind in ('join_owned', 'join_nested'):
+             join_results[name] = value
+             storage_bindings[name] = storage_of(value[0])
++            scopes[-1][0][name] = None
+         elif kind == 'selection':
+             selections[name] = value
+             scopes[-1][0][name] = None
+@@ -2432,6 +2454,13 @@
+             scopes[-1][0][name] = None
+             return True
+         owned_initializer = initializer[1] if operator in ('array_transfer', 'new_transfer') else initializer
++        if sync_signature(owned_initializer) in owned_join_sync_types:
++            check_new_name(name, statement.line)
++            require_owned_result_use(statement, body, position, export_name)
++            mode, typ = sync_signature(owned_initializer)
++            value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
++            bind_transferred_value(name, mode, (value, JOIN_PAYLOADS[mode], None), statement)
++            return True
+         if sync_signature(owned_initializer) in owned_sync_types or owned_initializer[0] == 'new':
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+@@ -2797,6 +2826,10 @@
+             result, payload, loans = value, PLAIN_JOIN_FIELDS[mode], None
+         elif direct:
+             result, payload, loans = execution_await(subject, line, prepared=prepared_execution)
++        elif sync_signature(subject) in owned_join_sync_types:
++            mode, _ = sync_signature(subject)
++            result, _ = sync_call(subject, line, following=following, owned=True)
++            payload, loans, direct = JOIN_PAYLOADS[mode], None, True
+         elif subject[0] == 'name' and subject[1] in join_results:
+             name = subject[1]
+             check_access(name, line)
+@@ -4029,7 +4062,8 @@
+         if value[0] == 'move':
+             name = value[1]
+             names = set().union(*(scope[0] for scope in scopes[loop['depth']:]))
+-            if name not in names or any(name in loop['entry'][slot] for slot in (0, 1, 4, 9)):
++            imports = set().union(*(scope[1] for scope in scopes[loop['depth']:]))
++            if name not in names or (name not in imports and any(name in loop['entry'][slot] for slot in (0, 1, 4, 9))):
+                 fail(line, 'break <- exige une tâche, un handle ou un Result créé dans la boucle async')
+             local_names = fields.keys() - loop['fields']
+             kind, record = export_async_value(name, local_names, line, names=names, depth=loop['depth'])
+@@ -4392,7 +4426,13 @@
+                             selected_signature = signature
+                             target = temporary(ctype, array_dimensions(shape) if kind == 'array' else '')
+                         elif signature != selected_signature:
+-                            fail(terminal.line, 'même type et même mode requis dans toutes les branches async')
++                            from handle_types import common_public_handle
++                            common = (common_public_handle((selected_signature[2], signature[2]), functions)
++                                      if kind == selected_signature[0] == 'execution'
++                                      and signature[1] == selected_signature[1] else None)
++                            if common is None:
++                                fail(terminal.line, 'même type et même mode requis dans toutes les branches async')
++                            selected_signature = kind, child_returns_int, common
+                         if kind != 'array':
+                             if kind in ('owned', 'join_owned', 'join_nested'):
+                                 keep_storage(target, storage_of(result))
+@@ -4649,9 +4689,14 @@
+             else:
+                 fail(line, 'retour de tableau : transfert explicite <- requis')
+         elif returns_join:
+-            if value[0] != 'move' or not is_owned_join(value[1], nested=True):
++            if value[0] in ('array_transfer', 'new_transfer') and sync_signature(value[1]) in owned_join_sync_types:
++                mode, _ = sync_signature(value[1])
++                joined, _ = sync_call(value[1], line, following=(), owned=True)
++                payload = JOIN_PAYLOADS[mode]
++            elif value[0] == 'move' and is_owned_join(value[1], nested=True):
++                joined, payload, _ = consume_owned_join(value[1], line)
++            else:
+                 fail(line, 'retour de Result alloué : <- explicite requis')
+-            joined, payload, _ = consume_owned_join(value[1], line)
+             require_durable_storage(joined, 0, line)
+             if (payload != JOIN_PAYLOADS[join_return_mode]
+                     or owned_result_types.get(joined, 'Int') != result[1]):

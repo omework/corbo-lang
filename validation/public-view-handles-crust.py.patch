@@ -1,0 +1,38 @@
+--- before/crust.py
++++ crust.py
+@@ -2757,7 +2757,8 @@
+                             label = f'{pname}.{position}'
+                             storage = Binding(label, 'array', '', array_storage_scope=root.id)
+                             root.bindings[label] = storage
+-                            access = 'mut' if capture in SHARED_VECTOR_SLICE_MODES or capture == 'mut' else 'ref'
++                            access = 'mut' if (capture in SHARED_VECTOR_SLICE_MODES or capture == 'mut'
++                                               or is_public_handle(typ) and position == 5) else 'ref'
+                             element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(capture, capture), 'uint8_t')
+                             loan = Binding(label, 'array_' + access, '', static_type=element, array_root=storage,
+                                            async_array_reservation=True)
+@@ -4433,6 +4434,16 @@
+                                          for key, targets in projected if targets)
+             allocation.borrow_parents = tuple({id(parent): parent for parent in
+                                                (*allocation.borrow_parents, *parents)}.values())
++        if mode in ASYNC_CAPTURE_VIEW_MODES:
++            from async_lowering import utf8_result_parameters
++            definition = self.async_definitions[nominal][0]
++            indexes = utf8_result_parameters(definition,
++                {name: node for name, (node, _) in self.async_definitions.items()},
++                sync_contracts=self.function_contracts)
++            result_dependencies = tuple(
++                (('mut.5' if key.startswith('mut.') else 'ref.4')
++                 if mode in ASYNC_SHARED_VIEW_MODES else 'mut.4', targets)
++                for index in indexes for key, targets in capture_fields(allocation.dependencies, index))
+         allocation.dependencies = canonical_captures(allocation.dependencies, self.async_definitions[nominal][0].args[1])
+         # Result projections are independent of the captures released by join.
+         grouped = {}
+@@ -10484,6 +10495,8 @@
+                 else:
+                     kind, c, descriptor = self.expression(arg, caller, pname)
+                 borrowed_kind = UTF8_BORROW_MODES.get(mode)
++                if mode == 'byte_ref' and kind == 'array_ref' and descriptor[0] == 'uint8_t':
++                    kind = borrowed_kind
+                 if mode in ('text', 'byte_ref') and kind == mode and arg[0] == 'name':
+                     retained = self.lookup(arg[1]).utf8_capture_descriptor
+                     if retained is not None:

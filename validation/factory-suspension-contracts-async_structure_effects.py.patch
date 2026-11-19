@@ -1,0 +1,143 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -237,6 +237,44 @@
+             self.suspension_reason = str(error)
+         finally:
+             self.blocks = blocks
++
++    def observe_factory_suspensions(self, task, environment, line):
++        if task.deferred_suspension_updates is None or task.task_may_suspend is None:
++            self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
++            return
++        if not task.task_may_suspend:
++            return
++        branch = environment.copy()
++        blocks = self.blocks
++        self.blocks = [(outer.copy(), shadows.copy()) for outer, shadows in blocks]
++        try:
++            self.apply_factory_fields(task.deferred_suspension_updates, branch, line)
++            self.observe_suspension(branch, line)
++        except (IncompleteStructureEffects, self.effects.error) as error:
++            self.suspension_reason = str(error)
++        finally:
++            self.blocks = blocks
++
++    def apply_factory_fields(self, updates, environment, line):
++        for carrier, fields in updates:
++            temporary = '\0factory_carrier'
++            environment[temporary] = carrier
++            self.update_structure(environment, temporary, carrier, dict(fields), line)
++            environment.pop(temporary)
++
++    def complete_factory(self, task, environment, line):
++        temporary = '\0factory_task'
++        environment[temporary] = replace(task, mode='execution')
++        try:
++            part, completed = super().expression(('task_join', temporary), environment, line)
++        finally:
++            environment.pop(temporary)
++        if not isinstance(completed, Value) or completed.mode == 'unknown':
++            raise IncompleteStructureEffects('résultat de fabrique synchrone non raccordé')
++        # An inactive task's direct await cannot produce LaunchFailed.
++        self.apply_factory_fields(task.deferred_field_updates, environment, line)
++        mode, typ = self.effects.definitions[task.typ].args[2]
++        return part, replace(completed, mode=mode, typ=typ)
+ 
+     def collect(self, value, line, environment=None):
+         self.has_completion = True
+@@ -319,12 +357,20 @@
+         self.join_environments(environment, branches)
+ 
+     def select_task_names(self, task):
+-        if not isinstance(task, Value) or task.mode != 'task' or not task.pending_structure_calls:
++        if not isinstance(task, Value) or task.mode != 'task':
+             raise IncompleteStructureEffects('Select exige des instances async inactives aux captures identifiables')
++        if not task.pending_structure_calls and task.typ in self.effects.definitions:
++            return {task.typ}
+         return {self.pending[token][0] for token in task.pending_structure_calls}
+ 
+     def select_candidates(self, task):
+         self.select_task_names(task)
++        if not task.pending_structure_calls:
++            summary = self.effects.infer(task.typ)
++            if (task.deferred_suspension_updates is None or task.task_may_suspend is None
++                    or not summary.complete or summary.completion_result.owned_field_writes):
++                raise IncompleteStructureEffects('effets de fabrique dans Select non raccordés')
++            return [(task.typ, task, replace(summary, may_suspend=task.task_may_suspend))]
+         candidates = []
+         for token in task.pending_structure_calls:
+             name, actuals = self.pending[token]
+@@ -334,6 +380,18 @@
+             candidates.append((name, actuals, summary))
+         return candidates
+ 
++    def apply_select_result(self, name, actuals, summary, environment, line, phase):
++        if isinstance(actuals, Value):
++            branch = environment.copy()
++            if phase == 'suspension':
++                self.apply_factory_fields(actuals.deferred_suspension_updates, branch, line)
++                return branch, VOID
++            _, completed = self.complete_factory(actuals, branch, line)
++            return branch, completed
++        return self.apply_async_result(name, summary.parameters,
++            summary.suspension_result if phase == 'suspension' else summary.completion_result,
++            actuals, environment, line, phase)
++
+     def select_partial_states(self, candidates, environment, line, *, unpolled=True, suspended=True):
+         """A loser may not have been polled; never substitute its final writes."""
+         alternatives = [({'next'}, environment.copy())] if unpolled else []
+@@ -342,8 +400,8 @@
+                 blocks = self.blocks
+                 self.blocks = [(outer.copy(), shadows.copy()) for outer, shadows in blocks]
+                 try:
+-                    branch, _ = self.apply_async_result(name, summary.parameters,
+-                        summary.suspension_result, actuals, environment, line, 'suspension')
++                    branch, _ = self.apply_select_result(name, actuals, summary,
++                        environment, line, 'suspension')
+                 finally:
+                     self.blocks = blocks
+                 alternatives.append(({'next'}, branch))
+@@ -380,8 +438,8 @@
+                 for name, actuals, summary in candidates:
+                     if not summary.may_complete:
+                         continue
+-                    branch, value = self.apply_async_result(name, summary.parameters,
+-                        summary.completion_result, actuals, environment, line, 'completion')
++                    branch, value = self.apply_select_result(name, actuals, summary,
++                        environment, line, 'completion')
+                     for index, losers in enumerate(branches):
+                         if index != winner:
+                             branch = self.select_partial_states(losers, branch, line,
+@@ -449,27 +507,11 @@
+                 part, value = self.await_selection(task, environment, line)
+                 return (flow - {'next'}) | part, value
+             if isinstance(task, Value) and task.mode == 'task' and not task.pending_structure_calls:
+-                # The synchronous contract already instantiated result sources
+-                # and final field writes. It does not describe every suspended
+-                # prefix: keep that uncertainty explicit for Select analysis.
+-                self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
+-                temporary = '\0factory_task'
+-                environment[temporary] = replace(task, mode='execution')
+-                try:
+-                    part, completed = super().expression(('task_join', temporary), environment, line)
+-                finally:
+-                    environment.pop(temporary)
+-                if not isinstance(completed, Value) or completed.mode == 'unknown':
+-                    raise IncompleteStructureEffects('résultat de fabrique synchrone non raccordé')
+-                # Direct await has no LaunchFailed alternative. Publish the
+-                # actual completion writes, not the old fields of an unrun task.
+-                for carrier, fields in task.deferred_field_updates:
+-                    temporary = '\0completed_factory_carrier'
+-                    environment[temporary] = carrier
+-                    self.update_structure(environment, temporary, carrier, dict(fields), line)
+-                    environment.pop(temporary)
+-                mode, typ = self.effects.definitions[task.typ].args[2]
+-                return (flow - {'next'}) | part, replace(completed, mode=mode, typ=typ)
++                # The factory contract carries suspended prefixes independently
++                # of completion writes; neither takes effect at creation.
++                self.observe_factory_suspensions(task, environment, line)
++                part, completed = self.complete_factory(task, environment, line)
++                return (flow - {'next'}) | part, completed
+             if isinstance(task, Value) and task.mode == 'execution' and (
+                     task.deferred_field_updates or not task.pending_structure_calls
+                     and task.typ in self.effects.definitions and self.effects.infer(task.typ).complete):

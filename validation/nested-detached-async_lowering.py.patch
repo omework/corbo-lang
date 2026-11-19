@@ -1,0 +1,64 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1653,6 +1653,18 @@
+             if diverges:
+                 raise NoAsyncContinuation()
+             return '', 'Void'
++        def projected_argument_loans(target):
++            typ = contract.parameters[target.parameter][2]
++            if typ not in reference_structs:
++                fail(line, 'projection du résultat : structure prise en charge requise')
++            # Owned arguments have already yielded their field targets and
++            # lost their carrier metadata. Projecting again would turn a
++            # target into a fictional field inside that target.
++            captured = argument_fields.get((target.parameter, target.field))
++            if target.kind == 'detached_field_parameter' and captured is not None:
++                return captured
++            return project_result_field_loans(argument_loans[target.parameter], typ,
++                                              tuple(target.field.lstrip('.').split('.')))
+         value = temporary((output_types | handle_sync_types | task_sync_types)[signature])
+         steps.append(f'{value} = {call};')
+         if signature in handle_sync_types or signature in task_sync_types:
+@@ -1671,11 +1683,7 @@
+                 held = []
+                 for target in targets:
+                     if target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
+-                        typ = contract.parameters[target.parameter][2]
+-                        if typ not in reference_structs:
+-                            fail(line, 'projection du handle : structure prise en charge requise')
+-                        held.extend(project_result_field_loans(argument_loans[target.parameter], typ,
+-                                                              tuple(target.field.lstrip('.').split('.'))))
++                        held.extend(projected_argument_loans(target))
+                     elif target.kind == 'owned_capture_field':
+                         held.extend(argument_fields[(target.parameter, target.field)])
+                     elif target.kind in ('parameter', 'utf8_parameter', 'string_parameter', 'vector_parameter'):
+@@ -1756,11 +1764,7 @@
+             retained = []
+             for target in contract.result.reference_targets:
+                 if target.kind in ('inline_field_parameter', 'indirect_field_parameter', 'detached_field_parameter'):
+-                    typ = contract.parameters[target.parameter][2]
+-                    if typ not in reference_structs:
+-                        fail(line, 'projection du résultat : structure prise en charge requise')
+-                    retained.extend(project_result_field_loans(argument_loans[target.parameter], typ,
+-                                                               tuple(target.field.lstrip('.').split('.'))))
++                    retained.extend(projected_argument_loans(target))
+                 elif target.kind == 'parameter':
+                     retained.extend(argument_loans[target.parameter])
+                 else:
+@@ -2162,7 +2166,7 @@
+                         loans.extend(loan for group in field_loans.values() for loan in group)
+                         for path in result_paths.get(index, ()):
+                             field = '.'.join(path)
+-                            if dict(reference_structs.get(typ, ())).get(field) == '&Int':
++                            if borrowed_field_type(typ, stored_field_path('.' + field)) == '&Int':
+                                 returned_loans.extend(field_loans['.' + field])
+                     if storage_of(value) & implicit_stacks:
+                         if declaration.args[1][index][0] in declaration.handle_parameters:
+@@ -5424,6 +5428,7 @@
+         return [((holder, path), 'stored_mut_target' if typ == '&mut Int' else 'shared_target')]
+ 
+     def project_result_field_loans(loans, typ, path):
++        path = stored_field_path('.' + '.'.join(path))
+         projected = project_field_loans(loans, path)
+         if borrowed_field_type(typ, path) == '&Int':
+             # These origins identify the external target. They do not reserve

@@ -1,0 +1,82 @@
+--- before/crust.py
++++ after/crust.py
+@@ -5427,8 +5427,8 @@
+         layout = contained_field(self.enums, binding.alloc.typ, path)
+         if layout is None:
+             self.fail(f"sous-structure inconnue '{path}' dans {binding.alloc.typ}")
+-        if any(typ not in ('Int', '&Int', '&mut Int') for _, typ in self.enums[layout.typ]['']):
+-            self.fail('prototype : vue de sous-structure à champs typés ou propriétaires non encore raccordée')
++        if any(typ != 'Int' and reference_type(typ) is None for _, typ in self.enums[layout.typ]['']):
++            self.fail('prototype : vue de sous-structure à champs propriétaires non encore raccordée')
+         targets, parents = [], []
+         for holder in binding.referents or (binding.alloc,):
+             root = holder.inline_root or holder
+@@ -11764,14 +11764,20 @@
+                     continue
+                 binding = bindings[pname]
+                 for holder in binding.referents or (binding.alloc,):
+-                    proposed = (structure_updates or {}).get(holder.id)
++                    tracked = holder.inline_root or holder
++                    proposed = (structure_updates or {}).get(tracked.id)
+                     dependencies = (proposed[1].dependencies if proposed else
+-                                    next(state['dependencies'] for a, state in effects_base['allocations'] if a is holder))
++                                    next(state['dependencies'] for a, state in effects_base['allocations'] if a is tracked))
++                    if holder.inline_root is not None:
++                        from structure_views import project_fields
++                        dependencies = project_fields(dependencies, holder.inline_path)
+                     expected = {target.id for _, targets in dependencies for target in targets}
+                     expected_fields = {key: {target.id for target in targets}
+                                        for key, targets in dependencies}
+                     for path in paths:
+-                        actual = next(state for a, state in path['allocations'] if a is holder)
++                        actual = next(state for a, state in path['allocations'] if a is tracked)
++                        if holder.inline_root is not None:
++                            actual = actual | {'dependencies': project_fields(actual['dependencies'], holder.inline_path)}
+                         if typed_structure:
+                             if any(target.id not in expected_fields.get(key, ())
+                                    for key, targets in actual['dependencies'] for target in targets):
+@@ -11843,12 +11849,13 @@
+                 expected = entry_result or self.direct_result(summary, params, result_bindings, '')
+                 candidates = exit_frame['results'] + ([] if complete else [result])
+                 expected_ids = {a.id for a in expected.reference_targets}
+-                expected_holders = {loan.alloc.id for loan in self.match_reservations(expected.borrow_parents)}
++                expected_holders = {(loan.alloc.inline_root or loan.alloc).id
++                                    for loan in self.match_reservations(expected.borrow_parents)}
+                 for candidate in candidates:
+                     self.check_reference_destination(candidate[2], caller)
+                     if any(a.id not in expected_ids for a in candidate[2].reference_targets):
+                         self.fail('invariant interne : cible absente du contrat de résultat emprunté')
+-                    if any(loan.alloc.id not in expected_holders
++                    if any((loan.alloc.inline_root or loan.alloc).id not in expected_holders
+                            for loan in self.match_reservations(candidate[2].borrow_parents)):
+                         self.fail('invariant interne : porteur absent du contrat de résultat emprunté')
+                 result = (declared[0], '', expected)
+@@ -11963,6 +11970,7 @@
+             if any('/' in path for path, _ in fields):
+                 for path, target_symbols in fields:
+                     leaves = holders
++                    pointee_metadata = False
+                     while '/' in path:
+                         key, tail = path.split('/', 1)
+                         children = []
+@@ -11970,6 +11978,11 @@
+                             arm, _, member = key.partition('.')
+                             declared = dict(self.enums.get(holder.typ, {}).get(arm, ())).get(member, '')
+                             if not declared.startswith('A<'):
++                                # Contracts also cache transitive dependencies through
++                                # references. Replacing that reference changes the cache,
++                                # not the fields of its pointee. Only owned edges describe
++                                # descendant storage whose fields this effect updates.
++                                pointee_metadata = reference_type(declared) is not None
+                                 break
+                             owned = replacements.get(id(holder), {}).get(key,
+                                 dict(holder.owned_fields).get(key, ()))
+@@ -11984,6 +11997,8 @@
+                             path = tail
+                             continue
+                         break
++                    if pointee_metadata:
++                        continue
+                     if '/' in path:
+                         self.fail('mise à jour de champ : chemin indirect non propriétaire non raccordé')
+                     for leaf in leaves:

@@ -1,0 +1,46 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1446,9 +1446,13 @@
+                 root, path = target if isinstance(target,tuple) else (target,())
+                 if root in received_refs:
+                     continue
+-                if path or not (parameter_modes.get(root) == 'mut' or references.get(root) == 'owned' and root in mutable) or reference_types.get(root, collection_types.get(root)) != typ:
++                holder_type = reference_types.get(root, collection_types.get(root))
++                for component in path:
++                    child = dict(struct_layouts.get(holder_type, ())).get(component, '')
++                    holder_type = child[2:-1] if child.startswith('A<') else None
++                if not (parameter_modes.get(root) == 'mut' or references.get(root) == 'owned' and root in mutable) or holder_type != typ:
+                     fail(line,'prototype : dépendances de champs async exigent un porteur injecté')
+-                holders.append(root)
++                holders.append((root, path))
+             if not holders:
+                 fail(line,'prototype : dépendances de champs async sans porteur suivi')
+             for field, targets in changes:
+@@ -1476,7 +1480,7 @@
+                         durable_type = (source_type == 'Int' if not source_path else
+                                         dict(reference_structs.get(source_type, ())).get('.'.join(source_path)) in ('&Int', '&mut Int'))
+                         local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == 'Int'
+-                        local_holder = all(references.get(holder) == 'owned' for holder in holders)
++                        local_holder = all(references.get(holder) == 'owned' for holder, _ in holders)
+                         captured_reference = parameter_modes.get(root) == 'owned' and source_path and durable_type
+                         if not (parameter_modes.get(root) in ('ref','mut') and durable_type
+                                 or captured_reference or local_holder and local_target):
+@@ -1484,13 +1488,14 @@
+                         retained.append((origin,mode))
+                 if not retained:
+                     fail(line,'remplacement de champ async : cible sans provenance durable')
+-                for holder in holders:
+-                    key = ('stored_field',holder,path)
+-                    old = active_loans.get(key, initial_stored_field_loans(holder,path)) if len(holders)>1 else []
++                for holder, prefix in holders:
++                    full_path = (*prefix, *path)
++                    key = ('stored_field',holder,full_path)
++                    old = active_loans.get(key, initial_stored_field_loans(holder,full_path)) if len(holders)>1 else []
+                     # An unchanged field alternative owns its input capability;
+                     # it is not an outstanding reborrow of that same field.
+                     current = [(origin, 'stored_mut_target' if field_type == '&mut Int'
+-                                and origin == (holder, path) else mode) for origin, mode in retained]
++                                and origin == (holder, full_path) else mode) for origin, mode in retained]
+                     field_changes.append((key,list(dict.fromkeys((*old,*current)))))
+         return tuple((key, tuple(held)) for key, held in field_changes)
+ 

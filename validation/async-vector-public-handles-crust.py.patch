@@ -1,0 +1,132 @@
+--- before/crust.py
++++ crust.py
+@@ -2915,6 +2915,10 @@
+         result_fields = []
+         result_type = definition.args[2][1]
+         paths = tuple(aggregate_owned_paths(check.enums, result_type))
++        if is_handle_vector(result_type):
++            element = handle_vector_element(result_type)
++            paths = (('[]', element), *(
++                ('[]/' + path, child_type) for path, child_type in aggregate_owned_paths(check.enums, element)))
+         for path, child_type in paths:
+             group = find(('task_result_field_parameter', index, path))
+             source = sources.get(group)
+@@ -4813,6 +4817,9 @@
+                 typ = self.async_definitions[nominal][0].args[2][1]
+                 steps = path.split('/')
+                 for index, step in enumerate(steps):
++                    if step == '[]' and is_handle_vector(typ):
++                        typ = handle_vector_element(typ)
++                        continue
+                     arm, _, member = step.partition('.')
+                     declared = dict(self.enums.get(typ, {}).get(arm, ())).get(member, '')
+                     if index == len(steps) - 1 and reference_type(declared):
+@@ -8348,8 +8355,17 @@
+     def task_owned_result_fields(self, roots):
+         return self.merge_async_result_fields(*(
+             tuple((arm, *payload) for arm, payload in zip(('ok', 'err'), root.exchange_payloads))
+-            if root.exchange_payloads else self.owned_field_storage(root.owned_fields)
++            if root.exchange_payloads else self.allocation_field_storage(root)
+             for root in roots))
++
++    def allocation_field_storage(self, allocation, prefix=''):
++        fields = self.owned_field_storage(allocation.owned_fields, prefix)
++        if not is_handle_vector(allocation.typ):
++            return fields
++        path = prefix + '[]'
++        return self.merge_async_result_fields(fields,
++            (AsyncFieldStorage(path, allocation.item_sources, allocation.item_origins),),
++            *(self.allocation_field_storage(child, path + '/') for child in allocation.item_payloads))
+ 
+     @staticmethod
+     def merge_task_variants(groups):
+@@ -8405,7 +8421,7 @@
+                            tuple({origin: sources for child in targets
+                                   for origin, sources in child.recursive_projection_sources}.items())))
+             for child in targets:
+-                output.extend(self.owned_field_storage(child.owned_fields, path + '/'))
++                output.extend(self.allocation_field_storage(child, path + '/'))
+         return self.merge_async_result_fields(output)
+ 
+     def restore_async_owned_fields(self, allocation, fields, variants=frozenset()):
+@@ -10162,7 +10178,7 @@
+         return tuple(sources), tuple(origins), tuple(fresh)
+ 
+     def handle_result_metadata(self, summary, params, bindings, *, opaque=False):
+-        if summary.mode != 'owned' or not is_handle_vector(summary.typ):
++        if summary.mode not in ('owned', *JOIN_RESULT_TYPES) or not is_handle_vector(summary.typ):
+             return (), (), frozenset(), (), ()
+         candidates = []
+         for item in summary.candidates:
+@@ -10172,6 +10188,13 @@
+                 vector = bindings[params[item.parameter][0]].alloc
+                 positions, origins = vector.item_positions, vector.item_position_origins
+                 item_sources, item_origins = vector.item_sources, vector.item_origins
++            elif item.kind == 'task_capture':
++                task = bindings[params[item.parameter][0]].alloc
++                for path, sources, captured_origins in task.task_result_fields:
++                    if path == '[]':
++                        item_sources = source_union(item_sources, sources)
++                        item_origins |= captured_origins
++                positions = origins = None if item_sources else ()
+             positions = remaining_handle_positions(positions, item.vector_removals)
+             origins = remaining_handle_positions(origins, item.vector_removals)
+             fresh_positions = ((),) * len(positions) if positions is not None else None
+@@ -11742,7 +11765,7 @@
+                                   for child in self.aggregate_field_targets(root, symbol.name))
+                 for root in roots:
+                     groups.append((AsyncFieldStorage('', root.sources, root.origins, root.variants, root.recursive_projection_sources),
+-                                   *self.owned_field_storage(root.owned_fields)))
++                                   *self.allocation_field_storage(root)))
+             else:
+                 allocation = binding.alloc
+                 if symbol.kind == 'task_result_parameter':
+@@ -12498,7 +12521,7 @@
+                         continue
+                     state = next(attrs for a, attrs in path['allocations'] if a is allocation)
+                     self.check_return_sources(exit_frame, allocation)
+-                    checked = dict(state, item_sources=()) if declared[0] in JOIN_RESULT_TYPES else state
++                    checked = dict(state, item_sources=()) if declared[0] in JOIN_RESULT_TYPES and not is_handle_vector(declared[1]) else state
+                     self.check_result_contract(result_contract, allocation, checked)
+                     if declared[0] == 'buffered_handle_exchange':
+                         for arm, (contract, (sources, origins)) in enumerate(zip(exchange_contracts, state['exchange_payloads'])):
+@@ -12577,11 +12600,17 @@
+                 return self.split_slice_result(c, utf8_result[1])
+             return utf8_result[0], c, utf8_result[1]
+         if result[0] in JOIN_RESULT_TYPES:
++            fields = self.owned_field_storage(result_contract['owned_fields'])
++            if is_handle_vector(declared[1]):
++                prototype = Allocation(-1, caller.id, '', (), typ=declared[1],
++                    item_sources=result_contract['item_sources'], item_origins=result_contract['item_origins'],
++                    item_payloads=result_contract['returned_item_payloads'])
++                fields = self.merge_async_result_fields(fields, self.allocation_field_storage(prototype))
+             return self.join_allocation_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins, nested=result[0] if result[0] in OWNED_JOIN_TYPES else False, optional=result[0] if result[0] in OPTION_JOIN_TYPES else False, exchange=result[0] if result[0] in EXCHANGE_JOIN_TYPES else None, typ=declared[1],
+                                                absent=all(candidate[2].absent_owned_payload for candidate in results),
+                                                storage=signature.join_storage_result,
+-                                               owned_fields=self.owned_field_storage(result_contract['owned_fields']),
++                                               owned_fields=fields,
+                                                borrowed_fields=result_contract['dependencies'],
+                                                borrow_parents=result_contract['borrow_parents'], variants=result_contract['variants'])
+         if result[0] == 'handle_option':
+@@ -13051,6 +13080,11 @@
+             fields = result_owned_fields
+             if result.same_parameter is not None:
+                 fields = bindings[params[result.same_parameter][0]].alloc.owned_fields
++            storage_fields = self.owned_field_storage(fields)
++            if is_handle_vector(result.typ):
++                storage_fields = self.merge_async_result_fields(storage_fields, *(
++                    bindings[params[candidate.parameter][0]].alloc.task_result_fields
++                    for candidate in result.candidates if candidate.kind == 'task_capture'))
+             return self.join_allocation_result(c, sources, caller, f'retour {name}',
+                                                frozenset(origins), nested=result.mode if result.mode in OWNED_JOIN_TYPES else False, optional=result.mode if result.mode in OPTION_JOIN_TYPES else False, exchange=result.mode if result.mode in EXCHANGE_JOIN_TYPES else None, typ=result.typ,
+                                                absent=result.absent_owned_payload or bool(result.candidates) and all(
+@@ -13058,7 +13092,7 @@
+                                                    bindings[params[candidate.parameter][0]].alloc.absent_owned_payload
+                                                    for candidate in result.candidates),
+                                                storage=contract.join_storage_result,
+-                                               owned_fields=self.owned_field_storage(fields),
++                                               owned_fields=storage_fields,
+                                                borrowed_fields=dependencies, borrow_parents=parents, variants=variants)
+         if result.mode == 'handle_option':
+             prototype = Allocation(-1, caller.id, '', (), typ=result.typ, dependencies=dependencies,

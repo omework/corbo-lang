@@ -1,0 +1,31 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -367,6 +367,28 @@
+                     raise IncompleteStructureEffects('Select s’attend avec .await, pas join()')
+                 part, value = self.await_selection(task, environment, line)
+                 return (flow - {'next'}) | part, value
++            if isinstance(task, Value) and task.mode == 'task' and not task.pending_structure_calls:
++                # The synchronous contract already instantiated result sources
++                # and final field writes. It does not describe every suspended
++                # prefix: keep that uncertainty explicit for Select analysis.
++                self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
++                temporary = '\0factory_task'
++                environment[temporary] = replace(task, mode='execution')
++                try:
++                    part, completed = super().expression(('task_join', temporary), environment, line)
++                finally:
++                    environment.pop(temporary)
++                if not isinstance(completed, Value) or completed.mode == 'unknown':
++                    raise IncompleteStructureEffects('résultat de fabrique synchrone non raccordé')
++                # Direct await has no LaunchFailed alternative. Publish the
++                # actual completion writes, not the old fields of an unrun task.
++                for carrier, fields in task.deferred_field_updates:
++                    temporary = '\0completed_factory_carrier'
++                    environment[temporary] = carrier
++                    self.update_structure(environment, temporary, carrier, dict(fields), line)
++                    environment.pop(temporary)
++                mode, typ = self.effects.definitions[task.typ].args[2]
++                return (flow - {'next'}) | part, replace(completed, mode=mode, typ=typ)
+             if isinstance(task, Value) and task.mode == 'execution' and task.deferred_field_updates:
+                 self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
+                 # A synchronous factory already mapped the deferred contract

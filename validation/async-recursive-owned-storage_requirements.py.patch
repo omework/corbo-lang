@@ -1,0 +1,14 @@
+--- before/storage_requirements.py
++++ storage_requirements.py
+@@ -82,6 +82,11 @@
+                 actual = 'local' if source.name == 'data stack implicite' else 'pool'
+                 if actual != required:
+                     context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
++            elif source.kind == 'allocation_field_parameter' and source.element in structures:
++                # This metadata is emitted for owned A<T> fields, unlike
++                # borrowed fields. Their storage is independent of the carrier.
++                if required != 'pool':
++                    context.fail(line, 'exigence de stockage local incompatible avec un champ allocation A<T>')
+             elif source.kind == 'source_parameter':
+                 if required != 'pool':
+                     context.fail(line, 'exigence de stockage local incompatible avec une allocation de pool')

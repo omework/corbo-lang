@@ -1,0 +1,197 @@
+--- /tmp/crust-before-suspension-effects/async_structure_effects.py	2026-11-08 04:39:29
++++ async_structure_effects.py	2026-11-08 04:45:58
+@@ -1,6 +1,7 @@
+ """Infer deferred reference-field writes, separately from execution/loan checking.
+ 
+-These summaries describe normal completion, not task creation. They are not yet
++Completion and suspension summaries are distinct; neither runs at task creation.
++They are not yet
+ an authorization to lower a field-changing call: the backend must also carry
+ the effects through handles and enforce the corresponding lifetimes.
+ """
+@@ -9,6 +10,7 @@
+ from types import SimpleNamespace
+ 
+ from results import FunctionResult, ResultAnalyzer, ResultContext, Value, VOID
++from array_syntax import REFERENCE_VECTORS, reference_array_shape
+ 
+ 
+ class IncompleteStructureEffects(Exception):
+@@ -23,12 +25,20 @@
+     reason: str = ''
+     may_complete: bool | None = None
+     completion_result: FunctionResult | None = None
++    suspension_result: FunctionResult | None = None
++    may_suspend: bool | None = None
++    suspension_reason: str = ''
+ 
+     @property
+     def complete(self):
++        """Normal-completion inference only; suspension coverage is separate."""
+         return self.structure_fields is not None
+ 
++    @property
++    def suspension_complete(self):
++        return self.suspension_result is not None
+ 
++
+ class AsyncStructureEffectAnalyzer:
+     def __init__(self, definitions, sync_contracts, enums, error):
+         self.definitions = definitions
+@@ -71,7 +81,10 @@
+             result = context.infer()
+             summary = AsyncStructureEffects(parameters, result.structure_fields,
+                                             may_complete=context.has_completion,
+-                                            completion_result=result)
++                                            completion_result=result,
++                                            suspension_result=context.suspension_summary(),
++                                            may_suspend=context.has_suspension if not context.suspension_reason else None,
++                                            suspension_reason=context.suspension_reason)
+         except (IncompleteStructureEffects, self.error) as error:
+             summary = AsyncStructureEffects(parameters, None, str(error))
+         finally:
+@@ -81,10 +94,12 @@
+ 
+     def completion_symbol(self, name, summary):
+         """Use the ordinary result-contract interpreter without a callee body."""
+-        symbol = '\0async_completion:' + name
+-        result = summary.completion_result
++        return self.result_symbol(name, summary.parameters, summary.completion_result, 'completion')
++
++    def result_symbol(self, name, parameters, result, phase):
++        symbol = '\0async_' + phase + ':' + name
+         self.results.functions[symbol] = SimpleNamespace(
+-            args=(symbol, summary.parameters, (result.mode, result.typ), ()), line=0)
++            args=(symbol, parameters, (result.mode, result.typ), ()), line=0)
+         self.results.effects[symbol] = SimpleNamespace(may_return=True)
+         self.results.summaries[symbol] = result
+         return symbol
+@@ -100,7 +115,76 @@
+         self.effects = effects
+         self.pending = {}
+         self.has_completion = False
++        self.has_suspension = False
++        self.suspended_structures = {}
++        self.suspension_reason = ''
++        if any(mode in ('array_ref', 'array_mut') and reference_array_shape(typ)
++               or mode == 'mut' and (typ.startswith('A<') or typ in REFERENCE_VECTORS
++                   or typ in effects.results.enums and '' not in effects.results.enums[typ])
++               for _, mode, typ in self.params):
++            # Do not publish a FunctionResult with empty array/handle updates
++            # when only injected structure fields have been observed.
++            self.suspension_reason = 'effets suspendus des autres porteurs de références non raccordés'
+ 
++    def observe_suspension(self, environment, line):
++        self.has_suspension = True
++        for index, original in self.structure_inputs.items():
++            final = environment[f'\0structure:{index}']
++            fields = self.suspended_structures.setdefault(index, {})
++            for field, targets in final.fields:
++                if any(target.kind not in ('field_parameter', 'parameter', 'detached_field_parameter')
++                       or self.params[target.parameter][1] == 'owned' for target in targets):
++                    # A temporary write restored before completion may still
++                    # escape if a Select loser is destroyed at this suspension.
++                    self.suspension_reason = 'cible non durable dans un champ au point de suspension'
++                fields[field] = fields.get(field, frozenset()) | targets
++
++    def suspension_summary(self):
++        if self.suspension_reason:
++            return None
++        fields = tuple((index, tuple((field, targets) for field, targets in sorted(changes.items())
++                       if targets != dict(self.structure_inputs[index].fields)[field]))
++                       for index, changes in sorted(self.suspended_structures.items())
++                       if changes != dict(self.structure_inputs[index].fields))
++        return FunctionResult('void', 'Void', structure_fields=fields)
++
++    def apply_async_result(self, name, parameters, result, actuals, environment, line, phase):
++        branch = environment.copy()
++        names = tuple(f'\0async_argument:{i}' for i in range(len(actuals)))
++        for variable, value in zip(names, actuals):
++            branch[variable] = value
++        symbol = self.effects.result_symbol(name, parameters, result, phase)
++        _, completed = super().expression(
++            ('call', symbol, tuple(('name', variable) for variable in names)), branch, line)
++        # Saved capture names must publish their writes to all carrier aliases.
++        for index, _ in result.structure_fields:
++            owner = branch[names[index]].storage_owner
++            current = branch.get(owner)
++            if isinstance(current, Value):
++                for variable, alias in tuple(branch.items()):
++                    if isinstance(alias, Value) and alias.storage_owner == owner:
++                        branch[variable] = replace(alias, fields=current.fields)
++        for variable in names:
++            branch.pop(variable)
++        return branch, completed
++
++    def observe_child_suspensions(self, name, summary, actuals, environment, line):
++        if summary.suspension_result is None:
++            self.suspension_reason = summary.suspension_reason or summary.reason or 'effets suspendus inconnus'
++            return
++        if not summary.may_suspend:
++            return
++        blocks = self.blocks
++        self.blocks = [(outer.copy(), shadows.copy()) for outer, shadows in blocks]
++        try:
++            branch, _ = self.apply_async_result(name, summary.parameters, summary.suspension_result,
++                                               actuals, environment, line, 'suspension')
++            self.observe_suspension(branch, line)
++        except (IncompleteStructureEffects, self.effects.error) as error:
++            self.suspension_reason = str(error)
++        finally:
++            self.blocks = blocks
++
+     def collect(self, value, line, environment=None):
+         self.has_completion = True
+         super().collect(value if self.declared[0] in ('ref', 'mut') else VOID, line, environment)
+@@ -114,6 +198,11 @@
+         if expr is None:
+             return super().expression(expr, environment, line, expected_array)
+         op = expr[0]
++        if op == 'task_spawn':
++            # Completion contracts alone cannot bound concurrently running
++            # prefixes. Keep normal completion usable, but never report an
++            # empty suspension contract for this unsupported composition.
++            self.suspension_reason = 'effets suspendus de tâches lancées non raccordés'
+         if op == 'call' and expr[1] in self.effects.definitions:
+             definition = self.effects.definitions[expr[1]]
+             if len(expr[2]) != len(definition.args[1]):
+@@ -137,6 +226,7 @@
+             if 'next' not in flow:
+                 return flow, VOID
+             if isinstance(task, Value) and task.mode == 'execution' and task.deferred_field_updates:
++                self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
+                 # A synchronous factory already mapped the deferred contract
+                 # onto these captured inputs. No synchronous body is available.
+                 temporary = '\0factory_execution'
+@@ -161,28 +251,12 @@
+                 summary = self.effects.infer(name)
+                 if not summary.complete:
+                     raise IncompleteStructureEffects(summary.reason)
++                self.observe_child_suspensions(name, summary, actuals, environment, line)
+                 if not summary.may_complete:
+                     continue
+-                branch = environment.copy()
+-                names = tuple(f'\0async_argument:{i}' for i in range(len(actuals)))
+-                for variable, value in zip(names, actuals):
+-                    branch[variable] = value
+-                symbol = self.effects.completion_symbol(name, summary)
+-                _, completed = super().expression(
+-                    ('call', symbol, tuple(('name', variable) for variable in names)), branch, line)
++                branch, completed = self.apply_async_result(name, summary.parameters,
++                    summary.completion_result, actuals, environment, line, 'completion')
+                 completed_values.append(completed)
+-                # The call uses saved argument names, not the caller's names.
+-                # Publish updated carrier fields to its aliases before a later
+-                # field store can reconstruct the carrier from a stale value.
+-                for index, _ in summary.structure_fields:
+-                    owner = branch[names[index]].storage_owner
+-                    current = branch.get(owner)
+-                    if isinstance(current, Value):
+-                        for variable, alias in tuple(branch.items()):
+-                            if isinstance(alias, Value) and alias.storage_owner == owner:
+-                                branch[variable] = replace(alias, fields=current.fields)
+-                for variable in names:
+-                    branch.pop(variable)
+                 branches.append(({'next'}, branch))
+             self.join_environments(environment, branches)
+             if not branches:

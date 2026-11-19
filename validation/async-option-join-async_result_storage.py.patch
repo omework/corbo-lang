@@ -1,0 +1,37 @@
+--- /tmp/crust-before-async-option-join/async_result_storage.py
++++ async_result_storage.py
+@@ -25,7 +25,7 @@
+ 
+ def may_need_destination(node, structures):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'handle_option') or node.args[2][1] not in structures or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option') or node.args[2][1] not in structures or not effect or not effect.complete:
+         return False
+     return any(candidate.kind == 'fresh' and candidate.source.kind in ('local_value','allocation_parameter')
+                for candidate in effect.completion_result.candidates)
+@@ -33,7 +33,7 @@
+ 
+ def result_storage(node, local_parameters=frozenset()):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'handle_option'):
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option'):
+         return ResultStorage()
+     summary = effect.completion_result
+     if not summary.candidates:
+@@ -115,7 +115,7 @@
+     Local descendant sources remain unsupported and must not be promoted.
+     """
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'handle_option'):
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option'):
+         return None
+     summary = effect.completion_result
+     if (not summary.owned_fields and any(candidate.kind == 'vector_element' for candidate in summary.candidates)
+@@ -181,6 +181,6 @@
+ def borrowed_result_fields(node):
+     """Completed stored-reference origins, distinct from captures kept while running."""
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'handle_option') or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', 'handle_option') or not effect or not effect.complete:
+         return ()
+     return effect.completion_result.borrowed_fields

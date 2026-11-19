@@ -1,0 +1,36 @@
+--- tests/test_storage_requirements.py
++++ tests/test_storage_requirements.py
+@@ -7,6 +7,7 @@
+ ROOT=Path(__file__).resolve().parents[1]
+ PREFIX=captures.PREFIX
+ DUPLICATE='fn duplicate(p:&Point)-><-Point{let q=copy(p);return <-q;}'
++POOL_DUPLICATE='fn duplicate_pool(p:&Point)-><-A<Point>{let q=copy(p);return <-q;}'
+ 
+ class StorageRequirementTests(unittest.TestCase):
+     run_source=captures.AsyncLocalCaptureTests.run_source
+@@ -89,7 +90,7 @@
+         self.refused(source.replace('BEFORE','drop(->p);'),'emprunt|réserv|référenc')
+ 
+     def test_pool_requirement_accepts_matching_source(self):
+-        source=PREFIX+DUPLICATE+'''async fn leaf(p:&Point)->Int{let q:A<Point>=duplicate(p);yield;return q.x;}
++        source=PREFIX+POOL_DUPLICATE+'''async fn leaf(p:&Point)->Int{let q:A<Point>=duplicate_pool(p);yield;return q.x;}
+             fn main(){let mut points=pool<Point>(2);let p=points.new(x:8);let h=runtime::spawn(->leaf(&p));
+                 match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}'''
+         self.assertEqual(self.run_source(source).stdout,'8\n')
+@@ -100,11 +101,13 @@
+             types=['Point' if mask & (1<<i) else 'A<Point>' for i in range(2)]
+             inputs=['make('+str(i+2)+')' if mask & (1<<i) else 'points.new(x:'+str(i+2)+')'
+                     for i in range(2)]
+-            source=PREFIX+DUPLICATE+'''async fn leaf(a:&Point,b:&Point)->Int{
+-                let x:TYPE0=duplicate(a);yield;let y:TYPE1=duplicate(b);return x.x+y.x;}
++            source=PREFIX+DUPLICATE+POOL_DUPLICATE+'''async fn leaf(a:&Point,b:&Point)->Int{
++                let x:TYPE0=COPY0(a);yield;let y:TYPE1=COPY1(b);return x.x+y.x;}
+                 fn main(){let mut points=pool<Point>(4);let a=INPUT0;let b=INPUT1;
+                     let h=runtime::spawn(->leaf(&a,&b));match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}'''
+-            for i in range(2):source=source.replace('TYPE'+str(i),types[i]).replace('INPUT'+str(i),inputs[i])
++            for i in range(2):
++                source=source.replace('TYPE'+str(i),types[i]).replace('INPUT'+str(i),inputs[i])
++                source=source.replace('COPY'+str(i),'duplicate' if mask & (1<<i) else 'duplicate_pool')
+             with self.subTest(mask=mask):
+                 self.assertEqual(self.run_source(source).stdout,'5\n')
+                 expected=tuple((i,'local' if mask & (1<<i) else 'pool') for i in range(2))

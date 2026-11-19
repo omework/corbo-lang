@@ -1,0 +1,33 @@
+--- before/results.py
++++ after/results.py
+@@ -532,8 +532,20 @@
+         actual = public_handle_type(self.analyzer.async_functions[value.typ].args[2])
+         if actual != typ:
+             self.fail(line, f'handle {typ} attendu, reçu {actual}')
++        if value.typ == typ:
++            return value
+         fields = tuple((key, frozenset(targets)) for key, targets in canonical_captures(
+             value.fields, self.analyzer.async_functions[value.typ].args[1]))
++        result_mode = self.analyzer.async_functions[value.typ].args[2][0]
++        if result_mode in ('ref', 'mut'):
++            result_fields = {}
++            for target in value.reference_targets:
++                exclusive = target.kind == 'exclusive_join_parameter'
++                key = ('mut.5' if exclusive else 'ref.4') if result_mode == 'ref' else 'mut.4'
++                if exclusive:
++                    target = replace(target, kind='parameter')
++                result_fields.setdefault(key, set()).add(target)
++            fields += tuple((key, frozenset(targets)) for key, targets in result_fields.items())
+         return replace(value, typ=typ, fields=fields)
+ 
+     def unify_handle_values(self, values, line):
+@@ -572,7 +584,8 @@
+                                if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES))
+                 from handle_types import is_public_handle
+                 if is_public_handle(typ):
+-                    fields = tuple(('mut.3' if key == 'ref.3' else key, targets) for key, targets in fields)
++                    fields = tuple(('mut.' + key[4:] if key in ('ref.3', 'ref.5') else key, targets)
++                                   for key, targets in fields)
+                 indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {},
+                                                      sync_result_contract=self.analyzer.sync_result_contract)
+                 targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')

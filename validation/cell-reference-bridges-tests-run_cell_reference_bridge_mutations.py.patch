@@ -1,0 +1,78 @@
+--- before/tests/run_cell_reference_bridge_mutations.py
++++ after/tests/run_cell_reference_bridge_mutations.py
+@@ -0,0 +1,75 @@
++"""Contract and C-boundary faults, exercised in temporary compiler copies."""
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++import tempfile
++
++ROOT=Path(__file__).resolve().parents[1]
++MUTATIONS=(
++    ('forget_local_stores','results.py',
++     'self.record_stored_references(stored_targets(value))','pass',
++     'test_contract_requirement_crosses_relays_without_final_field_changes',
++     ('AssertionError',),'CONTRACT'),
++    ('forget_helper_requirements','results.py',
++     'for index in self.analyzer.infer(name).stored_reference_parameters:',
++     'for index in ():',
++     'test_contract_requirement_crosses_relays_without_final_field_changes',
++     ('AssertionError',),'CONTRACT'),
++    ('forget_diverging_helper_requirement','results.py',
++     'for index in self.analyzer.infer(name).stored_reference_parameters:',
++     'for index in (self.analyzer.infer(name).stored_reference_parameters if self.analyzer.effects[name].may_return else ()):',
++     'test_nonreturning_helper_still_requires_its_stored_input',
++     ('AssertionError',),'CONTRACT'),
++    ('choose_first_allocation_always','async_lowering.py',
++     'selected = candidates[-1]','selected = candidates[0]',
++     'test_named_reborrow_and_conditional_cell_selection',
++     ('AssertionError',),'EXECUTION'),
++    ('erase_bridge_cell_parameter','crust.py',
++     'elif index in contract.result.stored_reference_parameters:',
++     'elif False:',
++     'test_returned_reference_keeps_target_and_excludes_future_mutation',
++     ("champ 'data' : &Int requis",),'REJECTED_VALID'),
++    ('raw_pointer_abi_for_cell_snapshot','async_lowering.py',
++     "argument_ctype = 'Cell *'", "argument_ctype = 'int *'",
++     'test_local_pool_cell_is_not_copied_or_destroyed_by_bridge',
++     ('incompatible pointer types',),'C_ABI'),
++    ('forget_nonreturning_bridge_declaration','crust.py',
++     "qualifier = '_Noreturn ' if not contract.effects.may_return else ''", "qualifier = ''",
++     'test_nonreturning_helper_still_requires_its_stored_input',
++     ('non-void function does not return a value',),'C_ABI'),
++    ('forget_nonreturning_function_declaration','crust.py',
++     '''            qualifier = '_Noreturn ' if diverges else ''
++            if diverges:
++                self.lines.append('fail("non-returning synchronous function returned");')''',
++     "            qualifier = ''",
++     'test_nonreturning_helper_still_requires_its_stored_input',
++     ('non-void function does not return a value',),'C_ABI'),
++)
++
++
++def main():
++    success=True
++    for name,filename,before,after,method,diagnostics,stage in MUTATIONS:
++        with tempfile.TemporaryDirectory(prefix='crust-cell-reference-') as directory:
++            target=Path(directory)
++            for path in ROOT.glob('*.py'):shutil.copy2(path,target/path.name)
++            path=target/filename
++            original=path.read_text()
++            assert original.count(before)==1,(name,original.count(before))
++            path.write_text(original.replace(before,after))
++            script=f'''import sys,unittest
++sys.path[:0]=[{directory!r},{str(ROOT/'tests')!r}]
++r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromName(
++'test_cell_reference_bridges.CellReferenceBridgeTests.{method}'))
++sys.exit(not r.wasSuccessful())'''
++            result=subprocess.run([sys.executable,'-c',script],cwd=directory,
++                                  capture_output=True,text=True,timeout=60)
++        detected=result.returncode==1 and any(message in result.stderr for message in diagnostics)
++        print(name,'DETECTED_'+stage if detected else 'SURVIVED' if result.returncode==0 else 'INCONCLUSIVE',flush=True)
++        print(result.stdout+result.stderr,flush=True)
++        success &= detected
++    return int(not success)
++
++
++if __name__=='__main__':sys.exit(main())

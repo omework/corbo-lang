@@ -1,0 +1,227 @@
+--- before/results.py
++++ after/results.py
+@@ -27,7 +27,7 @@
+             return {'kind': 'parameter', 'parameter': params[self.index][0]}
+         if self.kind in ('allocation_parameter', 'task_parameter', 'task_result_parameter'):
+             return {'kind': self.kind, 'parameter': params[self.index][0]}
+-        if self.kind == 'allocation_field_parameter':
++        if self.kind in ('allocation_field_parameter', 'task_result_field_parameter'):
+             return {'kind': self.kind, 'parameter': params[self.index][0], 'field': self.name}
+         return {'kind': 'local', 'name': self.name}
+ 
+@@ -100,11 +100,19 @@
+             candidates.add(ResultCandidate('parameter', source.index))
+         elif source.kind == 'task_result_parameter':
+             candidates.add(ResultCandidate('task_capture', source.index))
+-        elif source.kind in ('source_parameter', 'local'):
++        elif source.kind in ('source_parameter', 'local', 'allocation_field_parameter', 'task_result_field_parameter'):
+             candidates.add(ResultCandidate('fresh', source=source))
+         else:
+             candidates.add(ResultCandidate('fresh', source=SourceOrigin('local', -1, 'capture')))
+     return frozenset(candidates)
++
++
++def merge_task_result_fields(values):
++    fields = {}
++    for value in values:
++        for path, sources in value.task_result_fields:
++            fields[path] = fields.get(path, frozenset()) | sources
++    return tuple(sorted(fields.items()))
+ 
+ 
+ @dataclass(frozen=True)
+@@ -132,6 +140,7 @@
+     owned_field_writes: tuple = ()
+     task_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_sources: frozenset[SourceOrigin] = frozenset()
++    task_result_fields: tuple = ()
+     # Includes temporary stores restored before return. Final field deltas
+     # alone cannot describe the reference representation needed by a bridge.
+     stored_reference_parameters: frozenset[int] = frozenset()
+@@ -172,6 +181,10 @@
+             description['task_forward_parameters'] = [params[i][0] for i in sorted(self.task_forward_parameters)]
+         if self.task_result_sources:
+             description['task_result_sources'] = [source.describe(params) for source in sorted(self.task_result_sources)]
++        if self.task_result_fields:
++            description['task_result_fields'] = [
++                {'field': path, 'sources': [source.describe(params) for source in sorted(sources)]}
++                for path, sources in self.task_result_fields]
+         if self.task_sources:
+             description['task_sources'] = [source.describe(params) for source in sorted(self.task_sources)]
+         if self.reference_appends:
+@@ -379,6 +392,7 @@
+     owned_alternatives: tuple = ()
+     task_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_sources: frozenset[SourceOrigin] = frozenset()
++    task_result_fields: tuple = ()
+     # Deferred field-effect analysis keeps capture snapshots until await/join.
+     # This is separate from storage identities of ordinary structures.
+     pending_structure_calls: frozenset = frozenset()
+@@ -532,6 +546,7 @@
+         self.returned_payload_absence = []
+         self.returned_task_sources = set()
+         self.returned_task_result_sources = set()
++        self.returned_task_result_fields = {}
+         self.task_wait_parameters = set()
+         self.task_forward_parameters = set()
+         self.returned_task_field_updates = {}
+@@ -634,6 +649,19 @@
+         return Value('array_refs', typ, fields=targets, rows=rows,
+                      container_origins=frozenset({('parameter', index, prefix)}))
+ 
++    def async_owned_result_value(self, mode, typ, sources, fields, prefix=''):
++        storage = dict(fields)
++        children = []
++        for arm, members in self.analyzer.enums.get(typ, {}).items():
++            for name, declared in members:
++                if declared.startswith('A<'):
++                    key = f'{arm}.{name}'
++                    path = prefix + key
++                    children.append((key, self.async_owned_result_value(
++                        'owned', declared[2:-1], storage.get(path, ()), fields, path + '/')))
++        return Value(mode, typ, async_owned_candidates(sources), owned_fields=tuple(children),
++                     fresh_variants=frozenset(self.analyzer.enums.get(typ, {})))
++
+     def owned_capture_storage(self, value, path=''):
+         """Resolve an owned descendant without inspecting the async body.
+ 
+@@ -682,7 +710,10 @@
+                 result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if owned_result_parameters(
+                     definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary) else frozenset()
+                 environment[name] = Value(mode, typ, fields=fields, reference_targets=targets, task_sources=sources,
+-                                          task_result_sources=result_sources, task_parameters=frozenset({index}))
++                                          task_result_sources=result_sources, task_parameters=frozenset({index}),
++                                          task_result_fields=tuple((path, frozenset({SourceOrigin(
++                                              'task_result_field_parameter', index, path)}))
++                                              for path, _ in aggregate_owned_paths(self.analyzer.enums, definition.args[2][1])))
+             elif typ == 'Allocator' or typ.startswith('Pool<'):
+                 environment[name] = SourceOrigin('source_parameter', index,
+                                                  element=typ[5:-1] if typ.startswith('Pool<') else None)
+@@ -801,6 +832,7 @@
+                               owned_fields=tuple(sorted(self.returned_owned_fields.items())),
+                               task_sources=frozenset(self.returned_task_sources),
+                               task_result_sources=frozenset(self.returned_task_result_sources),
++                              task_result_fields=tuple(sorted(self.returned_task_result_fields.items())),
+                               stored_reference_parameters=frozenset(self.stored_reference_parameters),
+                               task_wait_parameters=frozenset(self.task_wait_parameters),
+                               task_forward_parameters=frozenset(self.task_forward_parameters),
+@@ -977,11 +1009,13 @@
+                 value = self.public_handle_value(value, typ, line)
+             if not isinstance(value, Value) or (value.mode, value.typ) != (mode, typ):
+                 self.fail(line, f"retour de '{self.name}' : {mode} de {typ} attendu")
+-            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter')
++            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter', 'task_result_field_parameter')
+                    for source in value.task_sources | value.task_result_sources):
+                 self.fail(line, 'retour de tâche refusé : le pool de capture ne survit pas au retour')
+             self.returned_task_sources.update(value.task_sources)
+             self.returned_task_result_sources.update(value.task_result_sources)
++            for path, sources in value.task_result_fields:
++                self.returned_task_result_fields[path] = self.returned_task_result_fields.get(path, frozenset()) | sources
+             self.task_forward_parameters.update(value.task_parameters)
+             for carrier, fields in value.deferred_field_updates:
+                 for target in borrowed_targets(carrier):
+@@ -1314,6 +1348,7 @@
+                     handle_slot=first.handle_slot if all(value.handle_slot == first.handle_slot for value in values) else None,
+                     task_sources=frozenset(source for value in values for source in value.task_sources),
+                     task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
++                    task_result_fields=merge_task_result_fields(values),
+                     pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
+@@ -1504,7 +1539,7 @@
+                                        payload_reference=row_payload)
+                 if mode in ('owned', 'join_owned'):
+                     kind = 'join_owned' if mode == 'owned' else 'join_nested'
+-                    return flow, Value(kind, typ, async_owned_candidates(execution.task_result_sources))
++                    return flow, self.async_owned_result_value(kind, typ, execution.task_result_sources, execution.task_result_fields)
+                 if (plain := PLAIN_RETURN_JOINS.get((mode, typ))) is not None:
+                     return flow, Value(plain, PLAIN_JOIN_TYPES[plain])
+                 if mode == 'array':
+@@ -2141,6 +2176,7 @@
+                           input_items_written=any(value.input_items_written for value in returning),
+                           task_sources=frozenset(source for value in returning for source in value.task_sources),
+                           task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
++                    task_result_fields=merge_task_result_fields(returning),
+                           pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls),
+                     task_parameters=frozenset(index for value in returning for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in returning for update in value.deferred_field_updates),
+@@ -2205,6 +2241,7 @@
+                 owned_indexes = owned_result_parameters(declaration, self.analyzer.async_functions,
+                                                        sync_result=self.analyzer.sync_summary)
+                 task_result_sources = set()
++                task_result_fields = {}
+                 result_mode = declaration.args[2][0]
+                 targets, captures, task_sources = set(), [], set()
+                 captured_actuals = []
+@@ -2248,6 +2285,8 @@
+                                 task_sources.update(self.owned_capture_storage(value, field))
+                             if index in owned_indexes:
+                                 task_result_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
++                                for path, _ in aggregate_owned_paths(self.analyzer.enums, value.typ):
++                                    task_result_fields[path] = task_result_fields.get(path, frozenset()) | frozenset(self.owned_capture_storage(value, path))
+                     if index in result_paths:
+                         origins = borrowed_targets(value) if isinstance(value, Value) else ()
+                         _, capture_mode, capture_type = declaration.args[1][index]
+@@ -2265,7 +2304,8 @@
+                     field_summary and field_summary.complete) else frozenset()
+                 return flow, Value('task', name, fields=tuple(captures), reference_targets=frozenset(targets),
+                                    deferred_field_updates=pending,
+-                                   task_sources=frozenset(task_sources), task_result_sources=frozenset(task_result_sources))
++                                   task_sources=frozenset(task_sources), task_result_sources=frozenset(task_result_sources),
++                                   task_result_fields=tuple(sorted(task_result_fields.items())))
+             if name not in self.analyzer.functions:
+                 self.fail(line, f"fonction inconnue '{name}'")
+             params = self.analyzer.functions[name].args[1]
+@@ -2475,6 +2515,8 @@
+                             sources.update(candidate.storage() for candidate in actual.candidates)
+                         elif source.kind == 'allocation_field_parameter' and isinstance(actual, Value):
+                             sources.update(self.owned_capture_storage(actual, source.name))
++                        elif source.kind == 'task_result_field_parameter' and isinstance(actual, Value):
++                            sources.update(dict(actual.task_result_fields).get(source.name, ()))
+                         elif source.kind == 'task_parameter' and isinstance(actual, Value):
+                             sources.update(actual.task_sources)
+                         elif source.kind == 'task_result_parameter' and isinstance(actual, Value) and actual.task_result_sources:
+@@ -2489,7 +2531,8 @@
+                                                    for update in actuals[index].deferred_field_updates),
+                                    task_parameters=frozenset(origin for index in summary.task_forward_parameters
+                                                              for origin in actuals[index].task_parameters),
+-                                   task_result_sources=resolve_sources(summary.task_result_sources))
++                                   task_result_sources=resolve_sources(summary.task_result_sources),
++                                   task_result_fields=tuple((path, resolve_sources(sources)) for path, sources in summary.task_result_fields))
+             if summary.mode in ('ref', 'mut'):
+                 targets = set()
+                 for target in summary.reference_targets:
+@@ -2788,6 +2831,7 @@
+             input_items_written=any(value.input_items_written for value in values),
+             task_sources=frozenset(source for value in values for source in value.task_sources),
+             task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
++                    task_result_fields=merge_task_result_fields(values),
+             pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+                     task_parameters=frozenset(index for value in values for index in value.task_parameters),
+                     deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates),
+@@ -3276,11 +3320,21 @@
+                             for item in sorted(child.candidates) if item.kind == 'owned_projection')
+         if previous is not None and any(item.kind == 'owned_field_input' for item in child.candidates):
+             alternatives.append(previous)
+-        fresh = frozenset(ResultCandidate('fresh', source=actuals[item.source.index])
+-                          for item in child.candidates if item.kind == 'fresh'
+-                          and isinstance(actuals[item.source.index], SourceOrigin))
++        fresh = set()
++        for item in child.candidates:
++            if item.kind != 'fresh':
++                continue
++            actual = actuals[item.source.index]
++            if isinstance(actual, SourceOrigin):
++                fresh.add(ResultCandidate('fresh', source=actual))
++            elif item.source.kind == 'allocation_field_parameter':
++                fresh.update(ResultCandidate('fresh', source=source)
++                             for source in self.owned_capture_storage(actual, item.source.name))
++            elif item.source.kind == 'task_result_field_parameter':
++                fresh.update(ResultCandidate('fresh', source=source)
++                             for source in dict(actual.task_result_fields).get(item.source.name, ()))
+         if fresh:
+-            alternatives.append(replace(child, candidates=fresh, owned_fields=tuple(
++            alternatives.append(replace(child, candidates=frozenset(fresh), owned_fields=tuple(
+                 (field, self.resolve_owned_child(nested, actuals)) for field, nested in child.owned_fields)))
+         return merge_owned_values(alternatives) if alternatives else UNKNOWN
+ 

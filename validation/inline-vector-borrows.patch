@@ -1,0 +1,907 @@
+--- before/array_syntax.py
++++ after/array_syntax.py
+@@ -22,6 +22,14 @@
+ 
+ def handle_vector_element(typ):
+     return typ[len('Vector<A<'):-2] if is_handle_vector(typ) else None
++
++
++def is_payload_vector(typ):
++    return is_handle_vector(typ) or typ in INLINE_VECTOR_ELEMENTS
++
++
++def vector_payload_element(typ):
++    return INLINE_VECTOR_ELEMENTS.get(typ) or handle_vector_element(typ)
+ 
+ 
+ def register_handle_vector(typ):
+@@ -130,7 +138,7 @@
+     """Borrowed fields reachable through owned edges, preserving each path."""
+     if typ in visited:
+         return
+-    if (element := handle_vector_element(typ)) is not None:
++    if (element := vector_payload_element(typ)) is not None:
+         yield from owned_reference_paths(enums, element, prefix + '[]/', visited | {typ})
+         return
+     for arm, fields in enums.get(typ, {}).items():
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -20,6 +20,7 @@
+ from collections import ChainMap
+ from dataclasses import dataclass, replace
+ from array_syntax import INLINE_VECTOR_ELEMENTS, HANDLE_VECTOR, HANDLE_VECTORS, is_handle_vector, handle_vector_element, consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
++from array_syntax import vector_payload_element
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, ERROR_VALUE_MODES, ERROR_VALUE_TAGS, RESULT_ERROR_MODES
+ from utf8_syntax import (
+@@ -1066,8 +1067,8 @@
+     def inline_vector_layout(typ, line):
+         element = INLINE_VECTOR_ELEMENTS[typ]
+         layout = struct_layouts.get(element)
+-        if layout is None or any(kind != 'Int' for _, kind in layout):
+-            fail(line, 'prototype async : Vector de structure exige des champs Int raccordés')
++        if layout is None or any(kind not in ('Int', '&Int', '&mut Int') for _, kind in layout):
++            fail(line, 'prototype async : Vector de structure exige des champs Int, &Int ou &mut Int raccordés')
+         return element, layout
+ 
+     def check_handle_payload(typ, line):
+@@ -1158,7 +1159,7 @@
+ 
+     def concrete_borrow_field(typ, path):
+         """Resolve a finite stored path, even when its types repeat."""
+-        element = handle_vector_element(typ)
++        element = vector_payload_element(typ)
+         if element is not None and path and path[0] == '[]':
+             child = concrete_borrow_field(element, path[1:])
+             return ('[]/' + child[0], child[1]) if child is not None else None
+@@ -1183,6 +1184,8 @@
+         return field[1] if field is not None else None
+ 
+     def move_stored_fields(source, destination):
++        if source in inline_vector_items:
++            inline_vector_items[destination] = inline_vector_items.pop(source)
+         for key in list(active_loans):
+             if isinstance(key, tuple) and key[0] in ('stored_field', 'owned_storage') and key[1] == source:
+                 target = (key[0], destination, key[2])
+@@ -1216,7 +1219,13 @@
+             active_loans[('stored_field', holder, stored_field_path(field))] = list(dict.fromkeys(held))
+ 
+     def retain_vector_payload(receiver, incoming):
+-        element = handle_vector_element(collection_types[receiver])
++        element = vector_payload_element(collection_types[receiver])
++        if collection_types[receiver] in INLINE_VECTOR_ELEMENTS:
++            previous = inline_vector_items.get(receiver)
++            if receiver not in inline_vector_items and not any(owned_capture_field_loans(receiver, collection_types[receiver]).values()):
++                previous = ()
++            payload = tuple((field, tuple(held)) for field, held in owned_capture_field_loans(incoming, element).items())
++            inline_vector_items[receiver] = (*previous, payload) if previous is not None else None
+         for field, held in owned_capture_field_loans(incoming, element).items():
+             key = ('stored_field', receiver, ('[]', *stored_field_path(field)))
+             install_field_change(key, list(dict.fromkeys((*active_loans.get(key, ()), *held))))
+@@ -1228,9 +1237,14 @@
+                 active_loans[('stored_field', result, path[1:])] = list(held)
+ 
+     def clear_stored_fields(holder):
++        inline_vector_items.pop(holder, None)
+         for key in list(active_loans):
+             if isinstance(key, tuple) and key[0] in ('stored_field', 'owned_storage') and key[1] == holder:
+                 del active_loans[key]
++
++    # Immutable per-slot loan sets; an unknown layout retains the aggregate
++    # loans conservatively. Branch snapshots below preserve these positions.
++    inline_vector_items = {}
+ 
+     def owned_storage_fields(value):
+         holder = next((name for name, member in fields.items() if value == f'frame->{member}'), value)
+@@ -1329,7 +1343,7 @@
+         return None
+ 
+     def sync_borrow_argument(argument, mode, typ, line):
+-        if is_handle_vector(typ):
++        if vector_payload_element(typ) is not None:
+             if argument[0] not in ('ref', 'mut', 'name', 'reborrow'):
+                 fail(line, 'argument Vector<A<Int>> : emprunt explicite requis')
+             name = argument[1]
+@@ -1496,6 +1510,8 @@
+         steps.append(f'{cell} = {factory};')
+         owned_result_types[cell] = typ
+         keep_storage(cell, pool_storage(expr[1]))
++        if typ in INLINE_VECTOR_ELEMENTS:
++            inline_vector_items[cell] = ()
+         return cell
+ 
+     def structure_offset(layout, index):
+@@ -1526,6 +1542,8 @@
+     def inline_vector_value(expr, line, *, following=None):
+         receiver, index_expr, remove = inline_vector_source(expr)
+         element, layout = inline_vector_layout(collection_types[receiver], line)
++        if not remove and any(kind.startswith('&mut ') for _, kind in layout):
++            fail(line, 'structure non copiable : référence mutable')
+         if remove and not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable):
+             fail(line, 'remove exige un Vector mutable')
+         if following is not None:
+@@ -1553,6 +1571,24 @@
+         steps.append(f'{operation}(frame->{fields[receiver]}, {index}, {data});')
+         owned_result_types[cell] = element
+         keep_storage(cell, frozenset({destination}))
++        extract_vector_payload(receiver, cell)
++        slots = inline_vector_items.get(receiver)
++        if slots is not None:
++            literal = index_expr[1] if index_expr[0] == 'int' else None
++            if literal is not None and 0 <= literal < len(slots):
++                for field, held in slots[literal]:
++                    active_loans[('stored_field', cell, stored_field_path(field))] = list(held)
++                if remove:
++                    remaining = slots[:literal] + slots[literal + 1:]
++                    inline_vector_items[receiver] = remaining
++                    for field, _ in owned_capture_field_loans(receiver, collection_types[receiver]).items():
++                        path = stored_field_path(field)
++                        if path and path[0] == '[]':
++                            held = tuple(loan for slot in remaining for key, loans in slot
++                                         if stored_field_path(key) == path[1:] for loan in loans)
++                            install_field_change(('stored_field', receiver, path), list(dict.fromkeys(held)))
++            elif remove:
++                inline_vector_items[receiver] = None
+         return cell
+ 
+     def copy_structure_value(expr, line):
+@@ -1764,7 +1800,7 @@
+             selected = f'(({pointer}) == &({candidate})->value ? ({candidate}) : ({selected}))'
+         return selected
+ 
+-    def prepare_field_changes(summary, callee_parameters, argument_loans, line, argument_storage=None):
++    def prepare_field_changes(summary, callee_parameters, argument_loans, line, argument_storage=None, argument_fields=None):
+         def projected_type(typ, path):
+             remaining = iter(path)
+             for component in remaining:
+@@ -1837,7 +1873,9 @@
+                         source_path = stored_field_path(target.field)
+                         if reference_type(borrowed_field_type(source_type, source_path) or '') is None:
+                             fail(line, 'prototype : dépendances de champs sources non partagées non raccordées')
+-                        origins = project_result_field_loans(argument_loans[target.parameter], source_type, source_path)
++                        captured = None if argument_fields is None else argument_fields.get((target.parameter, target.field))
++                        origins = (captured if captured is not None else
++                                   project_result_field_loans(argument_loans[target.parameter], source_type, source_path))
+                     else:
+                         fail(line,'prototype : dépendances de champs async projetées non raccordées')
+                     for origin, mode in origins:
+@@ -1909,6 +1947,9 @@
+                     origins |= previous
+                 field_changes.append((key, [(origin, 'storage') for origin in origins]))
+         for index, slots, _, replacements, _ in summary.vector_writes:
++            if callee_parameters[index][2] in INLINE_VECTOR_ELEMENTS:
++                # Inline cases retain field loans, not the former local slot.
++                continue
+             from results import Value
+             items = frozenset(item for slot in (*slots, *(slot for _, slot in replacements)) for item in slot)
+             if not items:
+@@ -1950,6 +1991,8 @@
+             for changes in alternatives:
+                 held.extend(changes.get(key, initial))
+             install_field_change(key, list(dict.fromkeys(held)))
++            if key[1] in inline_vector_items:
++                inline_vector_items[key[1]] = None
+ 
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False, task=False):
+         from async_structure_effects import FIELD_RESULT_MODES
+@@ -2062,7 +2105,7 @@
+                 elif mode in ('ref', 'mut'):
+                     value, held = sync_borrow_argument(argument, mode, typ, line)
+                     loans.extend(held)
+-                    if is_handle_vector(typ):
++                    if vector_payload_element(typ) is not None:
+                         argument_fields.update(((index, path), group)
+                             for path, group in owned_capture_field_loans(value, typ).items())
+                     if typ in struct_layouts and any(storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
+@@ -2140,8 +2183,14 @@
+         if local_result or needs_task_output(contract.result.task_result_sources, lambda index: index in local_parameters):
+             local_source = local_destinations.get(expression_id) or implicit_stack()
+             prepared.append('&' + local_pools[local_source])
+-        for key, held in prepare_field_changes(contract.result, contract.parameters, argument_loans, line, argument_storage):
++        for key, held in prepare_field_changes(contract.result, contract.parameters, argument_loans, line, argument_storage, argument_fields):
+             install_field_change(key, held)
++            if key[1] in inline_vector_items:
++                inline_vector_items[key[1]] = None
++        for parameter, *_ in contract.result.vector_writes:
++            for origin, _ in argument_loans[parameter]:
++                if loan_root(origin) in inline_vector_items:
++                    inline_vector_items[loan_root(origin)] = None
+         for index in contract.result.task_wait_parameters:
+             if index in argument_tasks:
+                 apply_child_field_changes(argument_tasks[index][5], line, launched=True)
+@@ -2784,6 +2833,9 @@
+                 argument_loans.append(tuple(loans[argument_loan_start:]))
+                 argument_tails.pop()
+             task = temporary('CrustTask *')
++            for origin, mode in loans:
++                if mode == 'mut' and loan_root(origin) in inline_vector_items:
++                    inline_vector_items[loan_root(origin)] = None
+             target = specialize(callee, frozenset(local_captures)) if specialize else callee
+             if declaration.result_storage:
+                 plan = result_storage(declaration, local_captures)
+@@ -3897,10 +3949,10 @@
+         views = {name: loans for name, loans in utf8_view_loans.items() if name in visible}
+         storage = {name: origins for name, origins in storage_bindings.items()
+                    if name in set().union(*(scope[0].keys() for scope in scopes[:depth])) and name not in consumed}
+-        return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs, storage, selections.copy()
++        return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs, storage, selections.copy(), inline_vector_items.copy()
+ 
+     def non_utf8_control_state(state, *, ignore_stored_fields=False):
+-        task_state, handles, active, dead, joins, orders, views, refs, storage, selects = state
++        task_state, handles, active, dead, joins, orders, views, refs, storage, selects, items = state
+         mutable_ids = {id(loans) for local in refs for name, (loans, _) in local.items()
+                        if name in mutable_utf8_bindings}
+         return (task_state, handles, {key: value for key, value in active.items()
+@@ -3937,11 +3989,14 @@
+                     active[id(loans)] = loans
+         storage = {name: left[8].get(name, frozenset()) | right[8].get(name, frozenset())
+                    for name in left[8].keys() | right[8].keys()}
+-        return tasks_state, handles, active, dead, joins, orders, views, tuple(refs), storage, selects
++        items = {name: left[10].get(name) if left[10].get(name) == right[10].get(name) else None
++                 for name in left[10].keys() | right[10].keys()}
++        return tasks_state, handles, active, dead, joins, orders, views, tuple(refs), storage, selects, items
+ 
+     def restore_control_state(state):
+-        nonlocal tasks, selections, executions, active_loans, consumed, join_results, utf8_view_loans, storage_bindings
+-        tasks, executions, active_loans, consumed, join_results, orders, utf8_view_loans, refs, storage, selections = state
++        nonlocal tasks, selections, executions, active_loans, consumed, join_results, utf8_view_loans, storage_bindings, inline_vector_items
++        tasks, executions, active_loans, consumed, join_results, orders, utf8_view_loans, refs, storage, selections, items = state
++        inline_vector_items = items.copy()
+         selections = selections.copy()
+         storage_bindings = storage.copy()
+         tasks, executions, active_loans = tasks.copy(), executions.copy(), active_loans.copy()
+@@ -7920,8 +7975,10 @@
+             release_statement_loans(following)
+             check_access(receiver, line, write=True)
+             data = f'{incoming}->fields' if layout else '&(int){0}'
++            retain_vector_payload(receiver, incoming)
+             steps.extend((f'vector_push(frame->{fields[receiver]}, {data});',
+                           f'cell_drop({incoming});', f'{incoming} = NULL;'))
++            clear_stored_fields(incoming)
+             return True
+         if is_handle_vector(collection) and method == 'push':
+             line = statement.line
+--- before/constraints.py
++++ after/constraints.py
+@@ -19,6 +19,7 @@
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+ 
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
++from array_syntax import is_payload_vector, vector_payload_element
+ from array_syntax import HANDLE_VECTORS, INLINE_VECTOR_ELEMENTS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression, aggregate_owned_paths, aggregate_reference_paths, nested_reference_fields, replace_shared_vector_item, shared_vector_field_items, update_shared_vector_items, MUT_REF_VECTOR, REFERENCE_VECTORS, merge_exchange_payloads, UNKNOWN_VECTOR_REMOVALS, replace_handle_positions, remaining_handle_items, VECTOR_LAST_ITEM, last_handle_index, merge_handle_items, handle_items_at, handle_items_after_exchange, handle_items_after_removal, possible_handle_items, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, borrowed_array_name, update_array_aliases, update_structure_parameters, update_local_structure_locations, restore_array_binding, reference_array_path, reference_array_projection, replace_reference_fields, swap_reference_fields, reference_array_variable, project_reference_array, merge_container_positions, reference_type, reference_array_element, reference_tree_fields, reference_tree_slot, reference_tree_targets, merge_reference_values, merge_reference_rows, unflatten_reference_value, reference_value_place, replace_reference_rows, swapped_reference_rows, target_row_templates, rebuild_reference_tree, reference_tree_type
+ 
+@@ -110,7 +111,7 @@
+                             fields[key] = fields.get(key, frozenset()) | targets
+             object.__setattr__(self, 'fields', tuple(sorted(fields.items())))
+             return
+-        if not is_handle_vector(self.typ):
++        if not is_payload_vector(self.typ):
+             return
+         items = possible_handle_items(self.handle_items)
+         fields = {}
+@@ -124,7 +125,7 @@
+ 
+     @property
+     def all_assets(self):
+-        items = possible_handle_items(self.handle_items) if is_handle_vector(self.typ) else self.assets
++        items = possible_handle_items(self.handle_items) if is_payload_vector(self.typ) else self.assets
+         retained = frozenset(asset for item in self.handle_payloads
+                              if items is None or item.assets & items for asset in item.all_assets)
+         return self.assets | self.reservations | self.task_result_assets | self.task_reference_assets | retained | frozenset(
+@@ -528,12 +529,12 @@
+                     key = f'\0handle:{index}'
+                     environment[name] = replace(environment[name], storage_owner=key)
+                     environment[key] = Value('owned', content, frozenset({asset}), tuple(fields))
+-                if is_handle_vector(content) and mode in ('owned', 'mut', *OWNED_JOIN_TYPES):
+-                    source = Source('vector_element_parameter', index, element=handle_vector_element(content))
++                if is_payload_vector(content) and mode in ('owned', 'ref', 'mut', *OWNED_JOIN_TYPES):
++                    source = Source('vector_element_parameter', index, element=vector_payload_element(content))
+                     item = Asset(('vector_element', index), source)
+                     history[item] = frozenset()
+                     contained_sources.add(source)
+-                    element = handle_vector_element(content)
++                    element = vector_payload_element(content)
+                     paths = dict(aggregate_reference_paths(self.analyzer.enums, element))
+                     paths.update((path, pointee) for path, _, pointee in owned_reference_paths(self.analyzer.enums, element))
+                     paths.update(aggregate_owned_paths(self.analyzer.enums, element))
+@@ -721,7 +722,7 @@
+ 
+     def remember_handle_payload(self, environment, receiver, item):
+         vector = environment.get(receiver)
+-        if not isinstance(vector, Value) or not is_handle_vector(vector.typ):
++        if not isinstance(vector, Value) or not is_payload_vector(vector.typ):
+             return
+         owner = vector.storage_owner or receiver
+         for name in (owner, receiver):
+@@ -759,7 +760,7 @@
+                 self.invalidate_handle_items(state)
+                 return Value('owned', 'Int')
+         items = vector.handle_items if isinstance(vector, Value) else None
+-        typ = handle_vector_element(vector.typ) if isinstance(vector, Value) else 'Int'
++        typ = vector_payload_element(vector.typ) if isinstance(vector, Value) else 'Int'
+         result = restore_handle_payload(Value('owned', typ, handle_items_at(items, index) or frozenset()), vector)
+         self.touch(result, state, line)
+         if isinstance(items, tuple) and items:
+@@ -796,7 +797,7 @@
+     def invalidate_handle_items(state):
+         for environment in (state.environment, *state.shadows):
+             for name, value in environment.items():
+-                if isinstance(value, Value) and is_handle_vector(value.typ) and value.handle_items is not None:
++                if isinstance(value, Value) and is_payload_vector(value.typ) and value.handle_items is not None:
+                     environment[name] = replace(value, handle_items=None)
+ 
+     @staticmethod
+@@ -1263,13 +1264,19 @@
+                     return paths, Value('byte', 'u8')
+             if op == 'array_vector_remove' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
+                 element = INLINE_VECTOR_ELEMENTS[values[0].typ]
++                index = expr[2][1] if expr[2][0] == 'int' else None
++                payload = self.extract_vector_item(paths['next'], expr[1], index, line)
+                 origin = id(expr[1])
+                 source = Source('local', origin, 'data stack implicite', element)
+                 assets = frozenset({self.born(('remove', origin), source, paths['next'])})
+-                return paths, Value('owned', element, assets)
++                return paths, replace(payload, mode='owned', typ=element, assets=assets)
+             if op == 'array_index' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
+-                return paths, Value('inline_vector_slot', INLINE_VECTOR_ELEMENTS[values[0].typ],
+-                                    values[0].all_assets, projection_assets=values[0].all_assets)
++                vector = values[0]
++                index = expr[2][1] if expr[2][0] == 'int' else None
++                payload = restore_handle_payload(Value('owned', INLINE_VECTOR_ELEMENTS[vector.typ],
++                    handle_items_at(vector.handle_items, index) or frozenset()), vector)
++                return paths, replace(payload, mode='inline_vector_slot', assets=vector.assets,
++                                      projection_assets=vector.assets)
+             if op == 'array_index' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 vector = values[0]
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+@@ -1659,7 +1666,7 @@
+                                 frozenset(a for v in evaluated if isinstance(v, Value)
+                                           for a in v.reservations) if op == 'new_enum' else frozenset(),
+                                 variants=frozenset({arm}) if arm is not None else frozenset(),
+-                                handle_items=() if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) else None)
++                                handle_items=() if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS, *INLINE_VECTOR_ELEMENTS) else None)
+         if op == 'call':
+             return self.call(expr, state, line)
+         return {'next': state}, UNKNOWN
+@@ -1911,9 +1918,11 @@
+                                 self.fail(line, 'provenance des éléments du vecteur inconnue pour cet appel')
+                             assets.update(handle_items_at(donor, index))
+                         else:
+-                            source = actuals[item.source.index]
++                            source = (Source('local', id(expr), 'inline vector case', vector_payload_element(actuals[parameter].typ))
++                                      if item.source.kind == 'local_value' and actuals[parameter].typ in INLINE_VECTOR_ELEMENTS
++                                      else actuals[item.source.index])
+                             assets.add(self.born(('vector_call', id(expr), source), source, current))
+-                    incoming = Value('owned', handle_vector_element(actuals[parameter].typ), frozenset(assets))
++                    incoming = Value('owned', vector_payload_element(actuals[parameter].typ), frozenset(assets))
+                     def resolve_payload(payload, root_assets):
+                         inherited = [actuals[item.parameter] for item in payload.candidates if item.kind == 'parameter']
+                         fields = dict(merge_fields(inherited)) if inherited else {}
+@@ -1941,7 +1950,8 @@
+                     for payload in dict(result.vector_write_payloads).get(parameter, ()):
+                         if payload.candidates.intersection(slot):
+                             self.remember_handle_payload(current.environment, receiver, resolve_payload(payload, incoming.assets))
+-                    self.retain_handle_origin(incoming, current)
++                    if actuals[parameter].typ not in INLINE_VECTOR_ELEMENTS:
++                        self.retain_handle_origin(incoming, current)
+                     self.publish_handle_exchange(current, (receiver, index, incoming.assets, index is None), exact=exact)
+             updated_structures = {}
+             for parameter, fields in result.structure_fields:
+--- before/crust.py
++++ after/crust.py
+@@ -25,7 +25,7 @@
+ from handle_option_types import option_type, option_element
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
+ from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+-from array_syntax import INLINE_VECTOR_ELEMENTS, register_vector_type
++from array_syntax import INLINE_VECTOR_ELEMENTS, register_vector_type, is_payload_vector, vector_payload_element
+ from array_syntax import consumed_result_expression
+ from integer_syntax import exact_integer_conversion
+ from collections import ChainMap
+@@ -3033,7 +3033,7 @@
+                                                   f'symbolic_source_{sid}')
+                     root.sources.append(sources[group])
+                 item_source = sources[group]
+-                element = handle_vector_element(allocation.typ)
++                element = vector_payload_element(allocation.typ)
+                 if item_source.element_type not in (None, element):
+                     check.fail('contraintes de sources incompatibles avec le type des éléments')
+                 item_source.element_type = element
+@@ -3251,7 +3251,7 @@
+                             allocation.item_sources = check.owned_field_sources(merged.owned_fields)
+                     if mode in ('ref', 'mut', 'owned', 'handle_option', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
+                         add_owned_fields(allocation, index)
+-                    if is_handle_vector(typ) and mode in ('owned', 'mut', *JOIN_RESULT_TYPES):
++                    if is_payload_vector(typ) and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES):
+                         add_vector_items(allocation, index)
+             for index, element in self.function_effects[name].pool_requirements:
+                 source = root.bindings[f'input_{index}'].source
+@@ -8952,8 +8952,8 @@
+         if element not in self.struct_fields:
+             self.fail(f'Vector<{element}> : type de structure inconnu')
+         fields = self.enums[element]['']
+-        if any(kind != 'Int' for _, kind in fields):
+-            self.fail('prototype : champs empruntés ou propriétaires des structures en Vector à raccorder')
++        if any(kind not in ('Int', '&Int', '&mut Int') for _, kind in fields):
++            self.fail('prototype : champs propriétaires et références nominales des structures en Vector à raccorder')
+         return element, self.field_offset(fields, len(fields)) or '0'
+ 
+     def inline_vector_operation(self, expr, binding, method, args, scope, label):
+@@ -8985,6 +8985,8 @@
+                 self.fail(f'push exige une valeur {element}, pas A<{element}>')
+             if self.loans(incoming):
+                 self.fail('transfert interdit : structure encore empruntée')
++            destination = next(active for active in self.scopes if active.id == binding.alloc.scope)
++            self.check_borrow_destination(incoming, destination)
+         finally:
+             self.argument_frames.pop()
+         self.expression_clock(expr)
+@@ -8992,11 +8994,23 @@
+         # Only the payload occupies the vector case, never a Cell pointer.
+         data = f'{value}->fields' if size != '0' else '&(int){0}'
+         self.lines.append(f'vector_push({binding.c}, {data});')
++        vector = binding.alloc
++        # The inline value no longer depends on its former physical slot.
++        # Keep its identity only to select the stored loan graph by position.
++        for origin in incoming.origins:
++            self.origin_sources[origin] = vector.sources[0]
++        if incoming.dependencies:
++            item = replace(self.copy_owned_tree(incoming, vector.scope), sources=vector.sources)
++            vector.item_payloads = self.merge_item_payloads(vector.item_payloads, (item,))
++        vector.item_origins |= incoming.origins
++        self.update_handle_positions(vector, None, incoming.origins, append=True)
+         self.destroy(incoming)
+         return 'void', '', None
+ 
+     def receive_inline_vector_item(self, expr, binding, index_expr, scope, label, *, remove=False):
+         element, size = self.inline_vector_layout(binding.alloc.typ)
++        if not remove and any(kind.startswith('&mut ') for _, kind in self.enums[element]['']):
++            self.fail('structure non copiable : référence mutable')
+         self.access(binding, write=remove)
+         reservation = Binding(binding.name, 'mut' if remove else 'ref', binding.c, binding.alloc,
+                               borrow_parents=(binding,))
+@@ -9023,6 +9037,19 @@
+         data = f'{allocation.c}->fields' if size != '0' else '&(int){0}'
+         operation = 'vector_remove' if remove else 'vector_read'
+         self.lines.append(f'{operation}({binding.c}, {index}, {data});')
++        vector = binding.alloc
++        index = index_expr[1] if index_expr[0] == 'int' else None
++        positions = vector.item_position_origins
++        origins = (positions[index] if positions is not None and index is not None and 0 <= index < len(positions)
++                   else vector.item_origins)
++        prototype = self.extracted_payload(vector, origins)
++        if prototype is not None:
++            allocation.dependencies = prototype.dependencies
++            allocation.borrow_parents = prototype.borrow_parents
++            if remove:
++                allocation.field_capability_id = prototype.field_capability_id or prototype.id
++        if remove:
++            self.remove_handle_position(vector, index)
+         self.allocations.append(allocation)
+         scope.allocations.append(allocation)
+         self.origin_sources[allocation.id] = destination
+@@ -10308,13 +10335,14 @@
+         return source_union(*(tuple(bindings[params[index][0]].source for index in item.vector_added_pools)
+                               for item in summary.candidates))
+ 
+-    def vector_layout_storage(self, layout, params, bindings, *, opaque):
++    def vector_layout_storage(self, layout, params, bindings, *, opaque, inline_sources=None):
+         sources, origins, fresh = [], [], []
+         for slot in layout:
+             slot_sources, slot_origins, slot_fresh = (), set(), ()
+             for item in slot:
+                 if item.kind == 'fresh':
+-                    item_sources = self.parameter_storage(item.source, params, bindings)
++                    item_sources = (inline_sources if inline_sources is not None and item.source.kind == 'local_value'
++                                    else self.parameter_storage(item.source, params, bindings))
+                     slot_fresh = source_union(slot_fresh, item_sources)
+                     item_origins = set()
+                     if opaque:
+@@ -13000,14 +13028,15 @@
+                    for index, slots, exact, replacements, removals in result.vector_writes}
+         expected = []
+         for index, (name, mode, typ) in enumerate(params):
+-            if mode != 'mut' or not is_handle_vector(typ):
++            if mode != 'mut' or not is_payload_vector(typ):
+                 continue
+             binding = bindings[name]
+             holders = binding.referents or (binding.alloc,)
+             slots, exact, replacements, removals = updates.get(index, ((), True, (), ()))
+             if len(holders) != 1 and (slots or replacements or removals or not exact):
+                 self.fail('push sur vecteur emprunté : porteur ambigu')
+-            _, origins, fresh = self.vector_layout_storage(slots, params, bindings, opaque=False)
++            inline_sources = holders[0].sources if typ in INLINE_VECTOR_ELEMENTS else None
++            _, origins, fresh = self.vector_layout_storage(slots, params, bindings, opaque=False, inline_sources=inline_sources)
+             indices = tuple(position for position, _ in replacements)
+             _, replacement_origins, replacement_fresh = self.vector_layout_storage(
+                 tuple(slot for _, slot in replacements), params, bindings, opaque=False)
+@@ -13049,7 +13078,8 @@
+             if len(holders) != 1:
+                 self.fail('push sur vecteur emprunté : porteur ambigu')
+             vector = holders[0]
+-            sources, origins, _ = self.vector_layout_storage(slots, params, bindings, opaque=True)
++            sources, origins, _ = self.vector_layout_storage(slots, params, bindings, opaque=True,
++                inline_sources=vector.sources if vector.typ in INLINE_VECTOR_ELEMENTS else None)
+             indices = tuple(position for position, _ in replacements)
+             replacement_sources, replacement_origins, _ = self.vector_layout_storage(
+                 tuple(slot for _, slot in replacements), params, bindings, opaque=True)
+@@ -13077,10 +13107,19 @@
+                 for payload in payloads:
+                     if not payload.candidates.intersection(slot):
+                         continue
+-                    resolved = self.resolve_owned_fields((('[]', payload),), params, bindings, owner)
++                    payload_bindings = bindings
++                    if vector.typ in INLINE_VECTOR_ELEMENTS:
++                        payload_bindings = bindings | {'\0local-result': Binding('inline case', 'source', '', source=vector.sources[0])}
++                    resolved = self.resolve_owned_fields((('[]', payload),), params, payload_bindings, owner)
+                     for prototype in dict(resolved).get('[]', ()):
+                         prototype.origins = slot_origins
++                        if vector.typ in INLINE_VECTOR_ELEMENTS:
++                            prototype.sources = vector.sources
+                         proposed.item_payloads = self.merge_item_payloads(proposed.item_payloads, (prototype,))
++            if vector.typ in INLINE_VECTOR_ELEMENTS:
++                proposed.item_sources = ()
++                if proposed.item_position_origins is not None:
++                    proposed.item_positions = ((),) * len(proposed.item_position_origins)
+             self.check_borrow_destination(proposed, owner)
+             updates.append((vector, proposed))
+         return updates
+@@ -15860,7 +15899,7 @@
+                 child.owned_fields = tuple(owned)
+                 child.item_sources = check.owned_field_sources(owned)
+                 return child
+-            element = handle_vector_element(allocation.typ)
++            element = vector_payload_element(allocation.typ)
+             source = MemorySource(check.uid(), external.id, 'symbolic', allocation.label + '_items',
+                                   'NULL', element_type=element)
+             external.sources.append(source)
+@@ -15912,7 +15951,7 @@
+                 root.allocations.append(allocation)
+                 check.origin_sources[allocation.id] = source
+                 owned_bridge_fields(allocation, parameter)
+-                if is_handle_vector(typ):
++                if is_payload_vector(typ):
+                     vector_bridge_payload(allocation)
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
+@@ -16000,7 +16039,7 @@
+                 check.allocations.append(allocation)
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+-                if is_handle_vector(typ):
++                if is_payload_vector(typ):
+                     vector_bridge_payload(allocation)
+                 if typ in self.struct_fields:
+                     # The async ABI carries an interior descriptor even when
+--- before/results.py
++++ after/results.py
+@@ -18,6 +18,7 @@
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ASYNC_SHARED_VIEW_MODES, VECTOR_SLICE_ELEMENTS, VECTOR_SPLIT_TYPES, SHARED_VECTOR_SLICE_MODES, VECTOR_SLICE_MODES, VECTOR_MUT_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, UTF8_BORROW_MODES, VALUE_MODES, UTF8_VALUE_RESULT_FAMILIES
+ from dataclasses import dataclass, field, replace
+ from handle_exchange_types import exchange_type, exchange_element, exchange_optional
++from array_syntax import is_payload_vector, vector_payload_element
+ from array_syntax import HANDLE_VECTORS, INLINE_VECTOR_ELEMENTS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import aggregate_owned_paths
+ from array_syntax import merge_structure_choices
+@@ -567,7 +568,7 @@
+             object.__setattr__(self, 'fields', tuple(sorted(fields.items())))
+             object.__setattr__(self, 'owned_fields', tuple(owned))
+             return
+-        if not is_handle_vector(self.typ):
++        if not is_payload_vector(self.typ):
+             return
+         items = possible_handle_items(self.handle_items)
+         active = tuple(item for item in self.handle_payloads
+@@ -733,7 +734,7 @@
+         mode, typ = node.args[2]
+         mutable_containers = any((parameter_mode == 'array_mut' and reference_array_shape(parameter_type))
+                                  or (reference_array_shape(parameter_type) and reference_array_shape(reference_array_element(parameter_type)[1]))
+-                                 or (parameter_mode == 'mut' and parameter_type in (*HANDLE_VECTORS, *REFERENCE_VECTORS))
++                                 or (parameter_mode == 'mut' and parameter_type in (*HANDLE_VECTORS, *REFERENCE_VECTORS, *INLINE_VECTOR_ELEMENTS))
+                                  or (parameter_mode == 'mut' and parameter_type.startswith('A<'))
+                                  or (parameter_mode == 'mut' and any(
+                                      reference_type(typ)
+@@ -1142,17 +1143,17 @@
+                 tracks_reference_items = typ in REFERENCE_VECTORS and mode in ('owned', 'mut')
+                 if typ in REFERENCE_VECTORS:
+                     fields = (('.items', frozenset({BorrowTarget('detached_field_parameter', index, '.items')})),)
+-                origins = (frozenset({('vector_parameter', index)}) if is_handle_vector(typ)
++                origins = (frozenset({('vector_parameter', index)}) if is_payload_vector(typ)
+                            else frozenset({('owned_parameter', index)})
+                            if tracks_reference_items or (mode == 'owned' and typ in self.analyzer.enums)
+                            else frozenset())
+                 environment[name] = Value(mode, typ, frozenset({ResultCandidate('parameter', index)}), fields,
+                                           structure_origins=origins,
+                                           handle_items=(frozenset({ResultCandidate('vector_element', index)})
+-                                                        if is_handle_vector(typ) and mode in ('owned', 'mut', *OWNED_JOIN_TYPES)
++                                                        if is_payload_vector(typ) and mode in ('owned', 'ref', 'mut', *OWNED_JOIN_TYPES)
+                                                         else fields[0][1] if tracks_reference_items else None),
+                                           input_item_history=InputVectorHistory()
+-                                          if (is_handle_vector(typ) and mode in ('owned', 'mut', *OWNED_JOIN_TYPES))
++                                          if (is_payload_vector(typ) and mode in ('owned', 'ref', 'mut', *OWNED_JOIN_TYPES))
+                                           or (typ in REFERENCE_VECTORS and mode == 'mut') else None)
+         def vector_payload(index, typ, path='[]', seen=frozenset()):
+             if typ in seen:
+@@ -1169,9 +1170,9 @@
+                          fresh_variants=frozenset(self.analyzer.enums.get(typ, {})), owned_fields=children)
+ 
+         for index, (name, mode, typ) in enumerate(self.params):
+-            if is_handle_vector(typ):
++            if is_payload_vector(typ):
+                 environment[name] = replace(environment[name], handle_payloads=(
+-                    vector_payload(index, handle_vector_element(typ)),))
++                    vector_payload(index, vector_payload_element(typ)),))
+             elif mode == 'buffered_handle_exchange':
+                 payloads = tuple(replace(vector_payload(index, exchange_element(typ), arm),
+                     candidates=candidates) for arm, candidates in zip(('ok', 'err'), environment[name].exchange_payloads)
+@@ -1295,7 +1296,7 @@
+ 
+     def collect_vector_writes(self, visible, line):
+         for index, (name, mode, typ) in enumerate(self.params):
+-            if mode != 'mut' or not is_handle_vector(typ):
++            if mode != 'mut' or not is_payload_vector(typ):
+                 continue
+             final = visible[name]
+             history = final.input_item_history
+@@ -1313,7 +1314,8 @@
+                                        if item.kind != 'vector_element' or item.parameter != index),)
+                     exact = False
+                 if any(item.kind not in ('parameter', 'vector_element') and (
+-                        item.kind != 'fresh' or item.source.kind != 'source_parameter')
++                        item.kind != 'fresh' or (item.source.kind != 'source_parameter'
++                        and not (typ in INLINE_VECTOR_ELEMENTS and item.source.kind == 'local_value')))
+                        for slot in (*slots, *(row for _, row in replacements)) for item in slot):
+                     self.fail(line, 'le pool de l’élément doit survivre au vecteur emprunté')
+             self.vector_write_paths.setdefault(index, []).append((slots, exact, replacements, removals))
+@@ -1705,6 +1707,9 @@
+     def resolve_vector_slot(slot, actuals):
+         items = set()
+         for item in slot:
++            if item.kind == 'fresh' and item.source.kind == 'local_value':
++                items.add(item)
++                continue
+             actual = actuals[item.parameter if item.kind != 'fresh' else item.source.index]
+             if item.kind == 'parameter':
+                 candidates = actual.candidates
+@@ -1858,7 +1863,7 @@
+ 
+     def remember_handle_payload(self, environment, receiver, item):
+         vector = environment.get(receiver)
+-        if not isinstance(vector, Value) or not is_handle_vector(vector.typ):
++        if not isinstance(vector, Value) or not is_payload_vector(vector.typ):
+             return
+         owner = vector.storage_owner or receiver
+         for name in (owner, receiver):
+@@ -1869,7 +1874,7 @@
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+         vector = environment.get(receiver)
+-        if not isinstance(vector, Value) or not is_handle_vector(vector.typ):
++        if not isinstance(vector, Value) or not is_payload_vector(vector.typ):
+             return
+         owner = vector.storage_owner
+         alias = vector if owner is not None else None
+@@ -1905,7 +1910,7 @@
+                 return extracted_handle(None)
+         items = vector.handle_items if isinstance(vector, Value) else None
+         candidates = vector_result_candidates(vector, index, last=last)
+-        typ = handle_vector_element(vector.typ) if isinstance(vector, Value) else 'Int'
++        typ = vector_payload_element(vector.typ) if isinstance(vector, Value) else 'Int'
+         result = (Value('handle_option', typ) if optional and items == ()
+                   and not candidates else extracted_handle(candidates, typ))
+         result = restore_handle_payload(result, vector)
+@@ -1940,7 +1945,7 @@
+     def invalidate_handle_items(self, environment, *, writing=False):
+         for bindings in (environment, *(shadows for _, shadows in self.blocks)):
+             for name, value in bindings.items():
+-                if isinstance(value, Value) and is_handle_vector(value.typ):
++                if isinstance(value, Value) and is_payload_vector(value.typ):
+                     bindings[name] = replace(value, handle_items=None, input_item_history=None,
+                                              input_items_written=value.input_items_written or (writing and any(
+                                                  candidate.kind == 'parameter' for candidate in value.candidates)))
+@@ -2372,16 +2377,20 @@
+                     return flow, Value('byte', 'u8')
+             if op == 'array_vector_remove' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
+                 element = INLINE_VECTOR_ELEMENTS[values[0].typ]
++                index = expr[2][1] if expr[2][0] == 'int' else None
++                payload = self.extract_vector_item(environment, expr[1], index)
+                 # The lowered operation tuple is rebuilt at each inference pass.
+                 # Its receiver is the stable source AST node for this operation.
+                 origin = id(expr[1])
+                 candidate = ResultCandidate('fresh', source=SourceOrigin('local_value', origin, 'data stack implicite', element))
+-                return flow, Value('owned', element, frozenset({candidate}), fresh_variants=frozenset({''}),
+-                                   structure_origins=frozenset({origin}))
++                return flow, replace(payload, mode='owned', typ=element, candidates=frozenset({candidate}),
++                                     fresh_variants=frozenset({''}), structure_origins=frozenset({origin}))
+             if op == 'array_index' and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS:
+                 element = INLINE_VECTOR_ELEMENTS[values[0].typ]
+                 candidate = ResultCandidate('fresh', source=SourceOrigin('local_value', id(expr), 'data stack implicite', element))
+-                return flow, Value('inline_vector_slot', element, copy_candidates=frozenset({candidate}))
++                index = expr[2][1] if expr[2][0] == 'int' else None
++                payload = restore_handle_payload(extracted_handle(vector_result_candidates(values[0], index), element), values[0])
++                return flow, replace(payload, mode='inline_vector_slot', copy_candidates=frozenset({candidate}))
+             if op == 'array_index' and isinstance(values[0], Value) and is_handle_vector(values[0].typ):
+                 root = values[0]
+                 index = expr[2][1] if expr[2][0] == 'int' else None
+@@ -2574,7 +2583,7 @@
+                 return {'next'}, parent
+             if parent.mode == 'array_refs':
+                 return {'next'}, replace(parent, container_borrow=True, container_mode=expr[2])
+-            if parent.typ.startswith('A<') or is_handle_vector(parent.typ):
++            if parent.typ.startswith('A<') or is_payload_vector(parent.typ):
+                 return {'next'}, replace(parent, mode=expr[2])
+             if parent.typ in self.analyzer.enums:
+                 return {'next'}, replace(parent, mode=expr[2], reference_targets=borrowed_targets(parent))
+@@ -2610,7 +2619,7 @@
+                         reference_targets=value.reference_targets or frozenset({BorrowTarget('local')}))
+                 if value.mode in ('ref', 'mut'):
+                     self.fail(line, 'emprunt imbriqué non pris en charge : & sur un emprunt ajoute un niveau ; utiliser son nom')
+-                if is_handle_vector(value.typ):
++                if is_payload_vector(value.typ):
+                     return {'next'}, replace(value, mode=op, storage_owner=expr[1])
+                 value = Value(op, value.typ, value.candidates, value.fields, value.fresh_variants,
+                               borrowed_targets(value) or (frozenset({BorrowTarget('local')}) if fixed_array_shape(value.typ) else frozenset()),
+@@ -2851,8 +2860,8 @@
+             return flow, Value('owned', typ, frozenset({ResultCandidate('fresh', source=source)}),
+                                tuple(fields), frozenset({arm}) if arm is not None else frozenset(),
+                                owned_fields=tuple(owned_fields),
+-                               structure_origins=frozenset({id(expr)}) if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) or typ in self.analyzer.enums else frozenset(),
+-                               handle_items=() if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) else None)
++                               structure_origins=frozenset({id(expr)}) if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS, *INLINE_VECTOR_ELEMENTS) or typ in self.analyzer.enums else frozenset(),
++                               handle_items=() if typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS, *INLINE_VECTOR_ELEMENTS) else None)
+         if op == 'call':
+             name, args = expr[1:]
+             if name in self.analyzer.async_functions:
+@@ -4330,6 +4339,9 @@
+         for item in child.candidates:
+             if item.kind != 'fresh':
+                 continue
++            if item.source.kind == 'local_value':
++                fresh.add(item)
++                continue
+             actual = actuals[item.source.index]
+             if isinstance(actual, SourceOrigin):
+                 fresh.add(ResultCandidate('fresh', source=actual))
+--- before/tests/test_inline_vector_borrows.py
++++ after/tests/test_inline_vector_borrows.py
+@@ -0,0 +1,126 @@
++"""Inline vector fields retain their loans through moves, copies and extraction."""
++from pathlib import Path
++import unittest
++import test_select_source as harness
++
++ROOT=Path(__file__).resolve().parents[1]
++SHARED='struct View{value:&Int}'
++SETUP='let mut p=pool<Int>(2);let mut number=p.new(7);let mut q=pool<Vector<View>>(1);let mut v=q.new();'
++
++class InlineVectorBorrowTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_recorded_shared_remove_and_drop(self):
++        s=(ROOT/'validation/inline-vector-borrows-sync.crust').read_text()
++        self.assertEqual(self.run_source(s).stdout,'7\n')
++        for where in ('let result=', 'print(*result.value);'):
++            for bad in ('drop(->number);','number=20;'):
++                self.refused(s.replace('let number=','let mut number=').replace(where,bad+where),
++                             'emprunt|réserv|détruit|valide')
++
++    def test_shared_copy_preserves_target_not_vector(self):
++        s=SHARED+'fn main(){'+SETUP+'''v.push(->View{value:&number});
++            let a=copy(v[0]);let b=copy(a);drop(->v);print(*a.value);drop(->a);
++            print(*b.value);drop(->b);number=19;print(*number);}'''
++        self.assertEqual(self.run_source(s).stdout,'7\n7\n19\n')
++        self.refused(s.replace('print(*b.value);','number=20;print(*b.value);'),'emprunt|réserv')
++
++    def test_mutable_field_transfer_and_release(self):
++        s='struct View{value:&mut Int}fn main(){'+SETUP+'''let item=View{value:&mut number};v.push(->item);
++            let mut r=<-v.remove(0);drop(->v);let mut loan=&mut *r.value;loan.set(11);print(*r.value);
++            drop(->r);number=19;print(*number);}'''
++        self.assertEqual(self.run_source(s).stdout,'11\n19\n')
++        self.refused(s.replace('let mut r=', 'print(*number);let mut r='),'emprunt|réserv|exclus')
++        self.refused(s.replace('let mut r=<-v.remove(0);','let mut r=copy(v[0]);'),'copiable|copie')
++        self.refused(s.replace('let mut loan=&mut *r.value;loan.set(11);','number=20;let mut loan=&mut *r.value;loan.set(11);'),'emprunt|réserv')
++
++    def test_two_positions_release_only_extracted_loan(self):
++        s='struct View{value:&mut Int}fn main(){'+SETUP+'''let mut other=p.new(9);
++            v.push(->View{value:&mut number});v.push(->View{value:&mut other});
++            let r=<-v.remove(0);drop(->r);number=11;
++            let mut remaining=<-v.remove(0);let mut loan=&mut *remaining.value;loan.set(13);drop(->remaining);
++            print(*number);print(*other);}'''
++        self.assertEqual(self.run_source(s).stdout,'11\n13\n')
++        self.refused(s.replace('number=11;','number=11;other=20;'),'emprunt|réserv')
++
++    def test_scope_dependency_survives_carrier_move(self):
++        s=SHARED+'fn main(){'+SETUP+'''{let item=View{value:&number};v.push(->item);}
++            let r=<-v.remove(0);print(*r.value);}'''
++        self.assertEqual(self.run_source(s).stdout,'7\n')
++        self.refused(s.replace('{let item=View{value:&number};',
++            '{print(*number);let local=p.new(9);let item=View{value:&local};'),'durable|survit|scope|emprunt actif')
++
++    def test_functions_and_returned_element(self):
++        helpers='''fn insert(v:&mut Vector<View>, item:->View){v.push(->item);}
++            fn take(v:&mut Vector<View>)-><-View{return <-v.remove(0);}
++            fn relay(v:&mut Vector<View>)-><-View{return <-take(&mut *v);}'''
++        s=SHARED+helpers+'fn main(){'+SETUP+'''let item=View{value:&number};insert(&mut v,->item);
++            let r=relay(&mut v);drop(->v);print(*r.value);drop(->r);number=19;print(*number);}'''
++        self.assertEqual(self.run_source(s).stdout,'7\n19\n')
++        self.refused(s.replace('drop(->r);number=19;print(*number);','drop(->r);').replace(
++            'print(*r.value);','drop(->number);print(*r.value);'),'emprunt|réserv|détruit')
++
++    def test_branch_merge_and_slot_reuse_in_loop(self):
++        s=SHARED+'fn main(){'+SETUP+'''let other=p.new(9);
++            if true{v.push(->View{value:&number});}else{v.push(->View{value:&other});}
++            let r=<-v.remove(0);drop(->v);print(*r.value);drop(->r);
++            let mut i=0;while i<3{let mut current=q.new();current.push(->View{value:&number});
++                let out=<-current.remove(0);print(*out.value);drop(->out);drop(->current);i=i+1;}
++            number=19;print(*number);}'''
++        self.assertEqual(self.run_source(s).stdout,'7\n7\n7\n7\n19\n')
++        self.refused(s.replace('print(*r.value);','drop(->other);print(*r.value);'),'emprunt|réserv|détruit')
++
++    def test_fresh_injected_insert_and_shared_copy_contract(self):
++        helpers='''fn fill(v:&mut Vector<View>, n:&Int){v.push(->View{value:n});}
++            fn read(v:&Vector<View>)-><-View{let r=copy(v[0]);return <-r;}'''
++        s=SHARED+helpers+'fn main(){'+SETUP+'''fill(&mut v,&number);
++            let a=read(&v);let b=read(&v);drop(->v);print(*a.value);drop(->a);
++            print(*b.value);drop(->b);}'''
++        self.assertEqual(self.run_source(s).stdout,'7\n7\n')
++        self.refused(s.replace('print(*b.value);','drop(->number);print(*b.value);'),'emprunt|réserv')
++
++    def test_nested_fields_and_return_from_child(self):
++        s='struct Inner{value:&Int}struct View{left:Int,inner:Inner}fn main(){'+SETUP+'''
++            let r={v.push(->View{left:3,inner:Inner{value:&number}});let out=<-v.remove(0);<-out};
++            drop(->v);print(r.left);print(*r.inner.value);drop(->r);number=19;print(*number);}'''
++        self.assertEqual(self.run_source(s).stdout,'3\n7\n19\n')
++        self.refused(s.replace('print(r.left);','number=20;print(r.left);'),'emprunt|réserv')
++
++class InlineVectorAsyncBorrowTests(InlineVectorBorrowTests):
++    @staticmethod
++    def async_source(source):
++        helpers, body=source.split('fn main(){',1)
++        body=body.strip()
++        assert body.endswith('}')
++        body=body[:-1].replace('drop(->v);','drop(->v);yield;')
++        return helpers+'async fn work()->Int{yield;'+body+'''return 0;}
++            fn main(){let h=runtime::spawn(->work());match h.join(){
++                Ok(_)=>{},Err(_)=>{print(99);}}}'''
++
++    def run_source(self, source):
++        return harness.SelectSourceTests.run_source(self,self.async_source(source))
++
++    def refused(self, source, diagnostic):
++        return harness.SelectSourceTests.refused(self,self.async_source(source),diagnostic)
++
++
++class InlineVectorCaptureTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_owned_capture_returns_borrowed_payload(self):
++        original=(ROOT/'validation/inline-vector-borrows-capture.crust').read_text()
++        for mutable in (False,True):
++            source=(original.replace('value:&Int','value:&mut Int').replace('value:&number','value:&mut number')
++                    if mutable else original)
++            self.assertEqual(self.run_source(source).stdout,'7\n19\n0\n')
++            self.refused(source.replace('number=19;print(*number);','').replace(
++                'let h=','drop(->number);let h='),'emprunt|réserv|utilisable')
++            self.refused(source.replace('number=19;print(*number);','').replace(
++                'print(*r.value);','drop(->number);print(*r.value);'),'emprunt|réserv')
++
++
++if __name__=='__main__':unittest.main()
+--- before/tests/test_select_contracts.py
++++ after/tests/test_select_contracts.py
+@@ -227,8 +227,8 @@
+         Cell *c=cell_new(&p,3,"c"),*d=cell_new(&p,4,"d");
+         Cell *v=local_cell_new(&local,&layout,sizeof(Cell *),"v");cell_store_ref(v,0,a);
+         Cell *w=local_cell_new(&local,&layout,sizeof(Cell *),"w");cell_store_ref(w,0,b);
+-        CrustTask *left=crust_async_left_create(v,&c->value,c);
+-        CrustTask *right=crust_async_right_create(w,&d->value,d);
++        CrustTask *left=crust_async_left_create(structure_reference_for((CrustStructureView){0},v),&c->value,c);
++        CrustTask *right=crust_async_right_create(structure_reference_for((CrustStructureView){0},w),&d->value,d);
+         CrustSelectBranch branches[]={{left,left->discard_suspended},{right,right->discard_suspended}};
+         CrustSelect selection;task_select_init(&selection,branches,2);
+         CrustTask parent={0};assert(task_select_poll(&selection,&parent)==TASK_STEP_RETURN);

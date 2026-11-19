@@ -1,0 +1,29 @@
+"""Stable selectors for a task capture and an optional borrowed field path."""
+
+
+def capture_index(selector):
+    return int(str(selector).partition('/')[0])
+
+
+def capture_slot_matches(slot, selector):
+    # A bare parameter selects all its fields; a path selects only that field.
+    selector = str(selector)
+    return slot == selector or '/' not in selector and slot.startswith(selector + '/')
+
+
+def capture_slots(fields, selector):
+    return tuple((slot, targets) for slot, targets in fields
+                 if capture_slot_matches(slot, selector))
+
+
+def capture_fields(fields, selector):
+    return tuple((key, targets) for key, targets in fields
+                 if capture_slot_matches(key.partition('.')[2], selector))
+
+
+def result_capture_selector(target):
+    if target.kind in ('parameter', 'exclusive_join_parameter'):
+        return str(target.parameter)
+    if target.kind == 'field_parameter':
+        return f'{target.parameter}/{target.field}'
+    return None

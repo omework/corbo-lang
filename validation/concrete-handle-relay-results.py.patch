@@ -1,0 +1,27 @@
+--- before/results.py
++++ after/results.py
+@@ -540,9 +540,10 @@
+         if result_mode in ('ref', 'mut'):
+             result_fields = {}
+             for target in value.reference_targets:
+-                exclusive = target.kind == 'exclusive_join_parameter'
++                exclusive = (target.kind == 'exclusive_join_parameter' or any(
++                    key.startswith('mut.') and target in origins for key, origins in value.fields))
+                 key = ('mut.5' if exclusive else 'ref.4') if result_mode == 'ref' else 'mut.4'
+-                if exclusive:
++                if target.kind == 'exclusive_join_parameter':
+                     target = replace(target, kind='parameter')
+                 result_fields.setdefault(key, set()).add(target)
+             fields += tuple((key, frozenset(targets)) for key, targets in result_fields.items())
+@@ -2386,6 +2387,11 @@
+                     if target.kind == 'task_capture_parameter':
+                         fields = actual.fields if isinstance(actual, Value) else ()
+                         origins = capture_result_origins(fields, (target.field,), summary.mode == 'ref')
++                        from handle_types import is_public_handle
++                        if not origins and isinstance(actual, Value) and is_public_handle(actual.typ):
++                            # Public result groups are alternatives. Conversion
++                            # of a concrete handle may leave one group empty.
++                            continue
+                         if isinstance(actual, Value) and actual.mode in ('task', 'execution'):
+                             from async_lowering import int_reference_row
+                             declaration = self.analyzer.async_functions[actual.typ]

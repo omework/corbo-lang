@@ -1,0 +1,33 @@
+lose_runtime_destination DETECTED 1
+test_result_identity_after_child_release (test_async_result_storage.AsyncResultStorageTests.test_result_identity_after_child_release) ... FAIL
+
+======================================================================
+FAIL: test_result_identity_after_child_release (test_async_result_storage.AsyncResultStorageTests.test_result_identity_after_child_release)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 116, in test_result_identity_after_child_release
+    run=self.storage_probe(source, '''
+        CrustTask *task=crust_async_work_create();assert(task_poll(task)==TASK_SUSPENDED);
+    ...<7 lines>...
+        assert(observed_close_count==1 && observed_closed[0]==destination);
+    ''')
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 21, in storage_probe
+    return captures.AsyncLocalCaptureTests.storage_probe(self, source, body)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 153, in storage_probe
+    return self.run_c_oracle(code+'\n#include <assert.h>\nint main(void){crust_task_context_init();'+body+
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             'crust_task_context_close();return 0;}')
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12419, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpmau8fpsk/task.c:476:17: runtime error: member access within null pointer of type 'Source' (aka 'struct Source')
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpmau8fpsk/task.c:476:17 
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.640s
+
+FAILED (failures=1)
+

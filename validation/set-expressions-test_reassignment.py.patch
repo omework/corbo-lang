@@ -1,0 +1,50 @@
+--- before/tests/test_reassignment.py
++++ after/tests/test_reassignment.py
+@@ -81,7 +81,7 @@
+         self.check_sources(
+             'fn make(mem: &mut Allocator) -> <- Int { '
+             'mem.reset(); let mut fresh = new(mem) Int(20); return <- fresh; } '
+-            'let mut data = new(memory) Int(10); data = make(&mut memory); print(data);',
++            'let mut data = new(memory) Int(10); if *data != 10 { print(999); } data = make(&mut memory); print(data);',
+             ['destroy data=10', 'destroy fresh=20'], '20\n')
+ 
+     def test_replacement_from_another_source_retains_its_provenance(self):
+@@ -89,16 +89,16 @@
+             'let mut other = pool<Int>(1); '
+             'fn make(mem: &mut Pool<Int>) -> <- Int { '
+             'let mut fresh = new(mem) Int(20); return <- fresh; } '
+-            'let mut data = new(memory) Int(10); data = make(&mut other); '
++            'let mut data = new(memory) Int(10); if *data != 10 { print(999); } data = make(&mut other); '
+             'memory.reset(); print(data); other.drop(-> data); other.reset();',
+             ['destroy data=10', 'destroy fresh=20'], '20\n')
+ 
+     def test_move_replacement_consumes_rhs_handle(self):
+-        self.check_sources('let mut data = new(memory) Int(10); let mut next = new(memory) Int(20); '
++        self.check_sources('let mut data = new(memory) Int(10); if *data != 10 { print(999); } let mut next = new(memory) Int(20); '
+                            'data = <- next; print(data);',
+                            ['destroy data=10', 'destroy next=20'], '20\n')
+-        self.rejected('let mut data = new(memory) Int(10); let mut next = new(memory) Int(20); '
+-                      'data = <- next; print(next);', 'plus utilisable')
++        self.rejected('let mut data = new(memory) Int(10); if *data != 10 { print(999); } let mut next = new(memory) Int(20); '
++                      'data = <- next; print(data); print(next);', 'plus utilisable')
+ 
+     def test_two_pool_slots_support_repeated_reassignment_and_hole_reuse(self):
+         program = ('let mut memory = pool<Int>(2); '
+@@ -125,7 +125,7 @@
+                     self.execute(
+                         'fn make(mem: &mut Pool<Int>) -> <- Int { '
+                         'let mut fresh = new(mem) Int(20); return <- fresh; } '
+-                        'let mut memory = pool<Int>(1); let mut data = new(memory) Int(10); '
++                        'let mut memory = pool<Int>(1); let mut data = new(memory) Int(10); if *data != 10 { print(999); } '
+                         'data = ' + expression + '; print(data);')
+                 self.assertIn('pool capacity exceeded', failure.exception.stderr)
+                 self.assertNotIn('destroy ', failure.exception.stderr)
+@@ -157,7 +157,7 @@
+             ['destroy data=10', 'destroy data=20'], '20\n')
+ 
+     def test_generated_c_materializes_rhs_before_dropping_old_value(self):
+-        code = compile_source('let mut memory = allocator(); let mut data = new(memory) Int(10); '
++        code = compile_source('let mut memory = allocator(); let mut data = new(memory) Int(10); if *data != 10 { print(999); } '
+                               'data = new(memory) Int(20); print(data);')
+         self.assertLess(code.index('20, "data"'), code.index('cell_drop(', code.index('int main(void)')))
+ 

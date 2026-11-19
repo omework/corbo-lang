@@ -1,0 +1,17 @@
+--- before/constraints.py
++++ constraints.py
+@@ -1342,6 +1342,14 @@
+                     actual_type = public_handle_type(self.analyzer.async_functions[value.typ].args[2])
+                     if actual_type != typ:
+                         self.fail(line, f'handle {typ} attendu, reçu {actual_type}')
++                    if value.typ != typ:
++                        from async_lowering import utf8_result_parameters
++                        definition = self.analyzer.async_functions[value.typ]
++                        if definition.args[2][0] in ASYNC_CAPTURE_VIEW_MODES:
++                            indexes = utf8_result_parameters(definition, self.analyzer.async_functions)
++                            returned = frozenset(asset for key, assets in value.fields
++                                                 if int(key) in indexes for asset in assets)
++                            value = replace(value, fields=(('4', returned),))
+                     value = replace(value, typ=typ)
+                 actuals.append(value)
+                 if 'next' in paths and isinstance(value, Source):

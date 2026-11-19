@@ -1,0 +1,73 @@
+--- async_lowering.py (before)
++++ async_lowering.py
+@@ -1177,6 +1177,17 @@
+                 target = (key[0], destination, key[2])
+                 held = active_loans.pop(key)
+                 active_loans[target] = list(dict.fromkeys((*active_loans.get(target, ()), *held)))
++
++    def summary_borrowed_fields(summary):
++        fields = {}
++        def collect(value, prefix):
++            for field, targets in getattr(value, 'borrowed_fields', getattr(value, 'fields', ())):
++                key = prefix + field
++                fields[key] = fields.get(key, frozenset()) | targets
++            for field, child in value.owned_fields:
++                collect(child, prefix + field + '/')
++        collect(summary, '')
++        return tuple(fields.items())
+ 
+     def retain_result_fields(holder, summary_fields, argument_loans, line, argument_fields=None):
+         for field, targets in summary_fields:
+@@ -1726,6 +1737,15 @@
+                 preserved_replacements.add((index, stored_field_path(field)))
+             for path, targets in replacement_fields(child, field):
+                 changes[path] = changes.get(path, frozenset()) | targets
++        # Vector writes publish the payload loans as well as the element pools.
++        # [] denotes any live element, so adding a payload must retain the
++        # previous alternatives until their removal is established separately.
++        for index, payloads in summary.vector_write_payloads:
++            changes = structure_changes.setdefault(index, {})
++            preserved_replacements.add((index, ('[]',)))
++            for child in payloads:
++                for path, targets in replacement_fields(child, '[]'):
++                    changes[path] = changes.get(path, frozenset()) | targets
+         field_changes = []
+         for index, changes in structure_changes.items():
+             changes = changes.items()
+@@ -1796,7 +1816,7 @@
+             for candidate in child.candidates:
+                 if candidate.kind == 'owned_field_input':
+                     origins.update(previous)
+-                elif candidate.kind in ('parameter', 'owned_projection'):
++                elif candidate.kind in ('parameter', 'owned_projection', 'vector_element'):
+                     origins.update(input_storage(candidate.parameter))
+                 elif candidate.kind == 'fresh' and candidate.source.kind in (
+                         'source_parameter', 'allocation_parameter', 'allocation_field_parameter'):
+@@ -1826,6 +1846,8 @@
+                 key = ('owned_storage', holder, (*prefix, 'items'))
+                 previous = frozenset(origin for origin, _ in active_loans.get(key, ()))
+                 origins = replacement_storage(Value('owned', 'Int', candidates=items), previous) | previous
++                for payload in dict(summary.vector_write_payloads).get(index, ()):
++                    origins |= replacement_storage(payload, previous)
+                 depth = next((position for position in reversed(range(len(scopes))) if holder in scopes[position][0]), 0)
+                 leaving = {name for scope in scopes[depth + 1 if references.get(holder) == 'owned' else 0:]
+                            for name in scope[0] if name in local_pools}
+@@ -1969,6 +1991,9 @@
+                 elif mode in ('ref', 'mut'):
+                     value, held = sync_borrow_argument(argument, mode, typ, line)
+                     loans.extend(held)
++                    if is_handle_vector(typ):
++                        argument_fields.update(((index, path), group)
++                            for path, group in owned_capture_field_loans(value, typ).items())
+                     if typ in struct_layouts and any(storage_bindings.get(loan_root(target), frozenset()) & implicit_stacks
+                                                      for target, _ in held):
+                         local_parameters.add(index)
+@@ -2226,7 +2251,7 @@
+                 for arm, candidates in zip(('ok', 'err'), contract.result.exchange_payloads):
+                     origins = frozenset().union(*(candidate_storage(candidate) for candidate in candidates))
+                     active_loans[('owned_storage', value, (arm,))] = [(origin, 'storage') for origin in origins]
+-            retain_result_fields(value, contract.result.borrowed_fields, argument_loans, line, argument_fields)
++            retain_result_fields(value, summary_borrowed_fields(contract.result), argument_loans, line, argument_fields)
+             return value, signature[1]
+         if signature in view_sync_types:
+             retained_views = []

@@ -1,0 +1,288 @@
+--- async_lowering.py.before
+
++++ async_lowering.py
+
+@@ -286,9 +286,11 @@
+
+         return name, tuple(index[1] if index[0] == 'int' else None for index in indices)
+ 
+     def task_calls_at(operand, tasks, awaited, line):
+-        if operand[0] == 'call':
++        if operand[0] in ('task_spawn', 'transfer'):
++            yield from task_calls_at(operand[1], tasks, awaited, line)
++        elif operand[0] == 'call':
+             yield operand, awaited
+-        elif operand[0] in ('name', 'move') and operand[1] in tasks:
++        elif operand[0] in ('name', 'move', 'down') and operand[1] in tasks:
+             yield from task_calls_at(*tasks[operand[1]], line)
+         elif operand[0] in ('scope', 'value_match', 'loop_expr'):
+             if operand[0] == 'loop_expr':
+@@ -336,7 +338,7 @@
+
+         elif expr[0] == 'await':
+             awaited[variable] = expr[1], tasks.copy(), awaited.copy()
+             tasks.pop(variable, None)
+-        elif expr[0] in ('call', 'move', 'scope', 'if_expr', 'loop_expr', 'value_match'):
++        elif expr[0] in ('call', 'move', 'scope', 'if_expr', 'loop_expr', 'value_match', 'task_spawn'):
+             tasks[variable] = expr, tasks.copy(), awaited.copy()
+             awaited.pop(variable, None)
+         else:
+@@ -396,7 +398,9 @@
+
+         return mode, origins
+ 
+     def reference_origin(expr, task_calls, awaited, line):
+-        if expr[0] in ('if_expr', 'scope'):
++        if expr[0] == 'utf8_value' and expr[1][0] == 'name' and expr[1][1] in awaited:
++            return awaited_origin(*awaited[expr[1][1]], line)
++        if expr[0] in ('if_expr', 'scope', 'value_match'):
+             def branch(body):
+                 if isinstance(body, tuple):
+                     return reference_origin(body, task_calls, awaited, line)
+@@ -409,7 +413,7 @@
+
+                     elif statement.op == 'if_yield':
+                         return reference_origin(statement.args[0], local_tasks, local_awaited, statement.line)
+                 return None
+-            arms = expr[2:] if expr[0] == 'if_expr' else (expr[2],)
++            arms = expr[2:] if expr[0] == 'if_expr' else (expr[1] if expr[0] == 'value_match' else expr[2],)
+             possibilities = [origin for body in arms if (origin := branch(body)) is not None]
+             if not possibilities:
+                 fail(line, diagnostic)
+@@ -1286,12 +1290,43 @@
+
+         active_loans[id(loans)] = loans
+         return pointer, loans, element
+ 
++    def joined_reference_shape(subject):
++        if subject[0] == 'name' and subject[1] in join_results:
++            record = join_results[subject[1]]
++            if record is not None:
++                return {'reference': ('ref', 'Int'), 'mutable_reference': ('mut', 'Int'),
++                        'mutable_byte_reference': ('mut', 'u8')}.get(record[1])
++        if subject[0] != 'await':
++            return None
++        operand = subject[1]
++        nominal = None
++        if operand[0] == 'name' and executions.get(operand[1]) is not None:
++            nominal = executions[operand[1]][3]
++        elif operand[0] == 'task_spawn':
++            operand = operand[1]
++            if operand[0] == 'transfer' and operand[1][0] == 'call':
++                nominal = operand[1][1]
++            elif operand[0] == 'down' and tasks.get(operand[1]) is not None:
++                nominal = tasks[operand[1]][3]
++        signature = functions[nominal].args[2] if nominal in functions else None
++        return signature if signature and signature[0] in ('ref', 'mut') else None
++
+     def reference_shape(expr, bindings=None):
+         # Probe without evaluating; reference_value checks every continuing arm.
+         if bindings is None:
+             bindings = {name: (mode, reference_types.get(name, 'Int'))
+                         for name, mode in references.items()
+                         if mode in ('ref', 'mut') and name not in collection_types}
++        if expr[0] == 'value_match':
++            nodes = expr[1]
++            local = bindings.copy()
++            if nodes and nodes[0].op == 'var':
++                local[nodes[0].args[0]] = joined_reference_shape(nodes[0].args[1])
++            if nodes and nodes[-1].op == 'if_yield':
++                return reference_shape(nodes[-1].args[0], local)
++            return None
++        if expr[0] == 'utf8_value' and expr[1][0] == 'name':
++            return bindings.get(expr[1][1])
+         if expr[0] in ('name', 'reborrow'):
+             shape = bindings.get(expr[1])
+             return (expr[2], shape[1]) if shape and expr[0] == 'reborrow' else shape
+@@ -1334,6 +1369,8 @@
+
+         return retained
+ 
+     def reference_value(expr, line, *, following=None):
++        if expr[0] == 'value_match':
++            return match_async_result(expr[1], line, following=following, boolean=None, reference_result=True)
+         if expr[0] == 'if_expr':
+             test = condition_value(expr[1], line)
+             return emit_branches(test, expr[2], expr[3], line, valued=True, construct='if',
+@@ -1558,7 +1595,7 @@
+
+                 del names[name]
+                 names[name] = None
+ 
+-    def match_async_result(nodes, line, *, valued=True, transfer_result=False, following=None, boolean=False):
++    def match_async_result(nodes, line, *, valued=True, transfer_result=False, following=None, boolean=False, reference_result=False):
+         # A value enum with one variant still evaluates and type-checks its
+         # subject. Its single arm does not require a two-branch Result shape.
+         if len(nodes) == 3 and tuple(n.op for n in nodes[:2]) == ('var', 'var'):
+@@ -1571,7 +1608,7 @@
+
+                 if mode is None:
+                     fail(line, 'match : erreur builtin requise')
+                 return match_builtin_error(nodes, mode, value, line, valued=valued, transfer_result=transfer_result,
+-                                           following=following, boolean=boolean)
++                                           following=following, boolean=boolean, reference_result=reference_result)
+             computed_error = (tag[0] == 'utf8_tag' and tag[2] == ('int', 0)
+                               and subject[0] in ('scope', 'if_expr', 'loop_expr', 'value_match')
+                               and (nodes[2].op == 'scope' or nodes[2].op == 'if_yield'
+@@ -1582,15 +1619,19 @@
+
+                 if error_type in ERROR_VALUE_MODES:
+                     return match_builtin_error(nodes, ERROR_VALUE_MODES[error_type], prepared_error, line,
+                                                valued=valued, transfer_result=transfer_result,
+-                                               following=following, boolean=boolean)
++                                               following=following, boolean=boolean, reference_result=reference_result)
+                 if error_type != 'runtime::Error':
+                     fail(line, 'match : une valeur d’erreur est requise')
+             if tag[0] == 'utf8_tag' and (tag[2] == ('int', 15) or is_runtime_error(subject) or computed_error):
+                 if tag[2] not in (('int', 0), ('int', 15)) or tag[3] != ('int', 0):
+                     fail(line, 'match runtime::Error : variante incompatible')
+                 value = prepared_error if prepared_error is not None else runtime_error_value(subject, line, following=following)
+-                steps.append(f'if ({value} != CRUST_RUNTIME_LAUNCH_FAILED) abort();')
++                snapshot = temporary('CrustRuntimeError')
++                steps.append(f'{snapshot} = {value};')
++                steps.append(f'if ({snapshot} != CRUST_RUNTIME_LAUNCH_FAILED) abort();')
+                 if valued:
++                    if reference_result:
++                        return reference_value(nodes[2].args[0], line, following=following)
+                     return infer_scalar_value(nodes[2].args[0], line, following=following)
+                 if nodes[2].op != 'scope':
+                     fail(line, 'match runtime::Error : un seul bras attendu')
+@@ -1603,7 +1644,7 @@
+
+         subject = nodes[0].args[1]
+         if wrapped_utf8_family(subject) is not None:
+             return match_wrapped_utf8(nodes, line, valued=valued, transfer_result=transfer_result,
+-                                      following=following, boolean=boolean)
++                                      following=following, boolean=boolean, reference_result=reference_result)
+         scalar_result = None
+         prepared_execution = None
+         if subject[0] in ('scope', 'if_expr', 'loop_expr', 'value_match'):
+@@ -1630,7 +1671,7 @@
+
+             if mode in UTF8_VALUE_RESULT_FAMILIES:
+                 return match_wrapped_utf8(nodes, line, valued=valued, transfer_result=transfer_result,
+                                           following=following, boolean=boolean,
+-                                          prepared=(UTF8_VALUE_RESULT_FAMILIES[mode], value))
++                                          prepared=(UTF8_VALUE_RESULT_FAMILIES[mode], value), reference_result=reference_result)
+             if mode not in PLAIN_JOIN_TYPES:
+                 fail(line, 'match async : résultat faillible requis')
+             result, payload, loans = value, PLAIN_JOIN_FIELDS[mode], None
+@@ -1669,8 +1710,9 @@
+
+             fail(line, 'match de handle : attend Ok et Err')
+         test = f'{result}.status == {status}'
+         return emit_branches(test, yes, no, line, valued=valued,
+-                             join_payload=(result, payload, status, loans, direct), construct='match',
+-                             transfer_result=transfer_result, following=following, boolean=boolean)
++                             join_payload=(result, payload, status, loans, direct, subject[1] if not direct and subject[0] == 'name' else None), construct='match',
++                             transfer_result=transfer_result, following=following, boolean=boolean,
++                             reference_result=reference_result)
+ 
+     def vector_result_operation(expr):
+         if expr[0] == 'array_replace':
+@@ -2034,7 +2076,7 @@
+
+         snapshot, index = indexed_text_view(receiver, arguments[0], line, following=following)
+         return f'text_char_at({snapshot}, {index})'
+ 
+-    def match_vector_result(nodes, line, *, valued, transfer_result, following, boolean, prepared=None):
++    def match_vector_result(nodes, line, *, valued, transfer_result, following, boolean, prepared=None, reference_result=False):
+         (subject_name, subject), (tag_name, tag) = (node.args for node in nodes[:2])
+         family = prepared[0] if prepared is not None else wrapped_utf8_family(subject)
+         mode = WRAPPED_UTF8_MODES[family]
+@@ -2060,17 +2102,17 @@
+
+                 condition, yes, no = branch[1:] if valued else branch
+                 test = condition_value(condition, line)
+             return emit_branches(test, yes, no, line, valued=valued, construct='match',
+-                                 transfer_result=transfer_result, following=following, boolean=boolean)
++                                 transfer_result=transfer_result, following=following, boolean=boolean, reference_result=reference_result)
+         finally:
+             del vector_match_payloads[subject_name]
+             del utf8_match_tags[tag_name]
+ 
+-    def match_wrapped_utf8(nodes, line, *, valued, transfer_result, following, boolean, prepared=None):
++    def match_wrapped_utf8(nodes, line, *, valued, transfer_result, following, boolean, prepared=None, reference_result=False):
+         (subject_name, subject), (tag_name, tag) = (node.args for node in nodes[:2])
+         family = prepared[0] if prepared is not None else wrapped_utf8_family(subject)
+         if WRAPPED_UTF8_MODES[family] in VECTOR_VALUE_RESULT_FAMILIES:
+             return match_vector_result(nodes, line, valued=valued, transfer_result=transfer_result,
+-                                       following=following, boolean=boolean, prepared=prepared)
++                                       following=following, boolean=boolean, prepared=prepared, reference_result=reference_result)
+         allowed = (0, 4) if family == 4 else (0, 3, 5, 7, 6 if family == 10 else family)
+         if family in (1, 12):
+             allowed += (13,)  # Unqualified OutOfBounds / NotCharBoundary patterns.
+@@ -2096,7 +2138,7 @@
+
+                 condition, yes, no = branch[1:] if valued else branch
+                 test = condition_value(condition, line)
+             return emit_branches(test, yes, no, line, valued=valued, construct='match',
+-                                 transfer_result=transfer_result, following=following, boolean=boolean)
++                                 transfer_result=transfer_result, following=following, boolean=boolean, reference_result=reference_result)
+         finally:
+             del utf8_match_results[subject_name]
+             del wrapped_utf8_family_by_result[subject_name]
+@@ -2291,7 +2333,7 @@
+
+         check_access(expr[1], line)
+         return value_place(expr[1])
+ 
+-    def match_builtin_error(nodes, mode, value, line, *, valued, transfer_result, following, boolean):
++    def match_builtin_error(nodes, mode, value, line, *, valued, transfer_result, following, boolean, reference_result=False):
+         tag_name, tag = nodes[1].args
+         if tag[2] not in (('int', 0), ('int', ERROR_VALUE_TAGS[mode])) or tag[3] != ('int', 0):
+             fail(line, 'match d’erreur builtin : variante incompatible')
+@@ -2307,7 +2349,7 @@
+
+                 condition, yes, no = branch[1:] if valued else branch
+                 test = condition_value(condition, line)
+             return emit_branches(test, yes, no, line, valued=valued, construct='match erreur',
+-                                 transfer_result=transfer_result, following=following, boolean=boolean)
++                                 transfer_result=transfer_result, following=following, boolean=boolean, reference_result=reference_result)
+         finally:
+             del utf8_match_tags[tag_name]
+ 
+@@ -2853,7 +2895,7 @@
+
+                 scopes[-1][0].update((name, None) for name in scopes[-2][0] if name in imports)
+             body = body[prefix_count:]
+             if join_payload:
+-                result, payload_field, status, result_loans, direct = join_payload
++                result, payload_field, status, result_loans, direct, result_carrier = join_payload
+                 success = (status == 0) == (index == 0)
+                 binds_payload = body and body[0].op == 'var' and body[0].args[1][0] == 'utf8_value'
+                 if result_loans is not None and (not success or (direct and not binds_payload)):
+@@ -2949,6 +2991,8 @@
+
+                             if direct:
+                                 active_loans.pop(id(result_loans), None)
+                             payload_loans = list(result_loans)
++                            if result_carrier is not None:
++                                payload_loans.append((result_carrier, 'mut' if payload_field in ('mutable_reference', 'mutable_byte_reference') else 'ref'))
+                             references[payload] = 'mut' if payload_field in ('mutable_reference', 'mutable_byte_reference') else 'ref'
+                             reference_types[payload] = 'u8' if payload_field == 'mutable_byte_reference' else 'Int'
+                             if references[payload] == 'mut':
+@@ -3300,7 +3344,11 @@
+
+         elif returns_ref:
+             if value[0] in ('name', 'ref', 'mut', 'reborrow') and value[1] in collection_types:
+                 fail(line, 'retour emprunté Int incompatible avec une collection')
+-            if push_new_receiver(value) is not None:
++            if value[0] in ('if_expr', 'scope', 'value_match'):
++                pointer, _, signature = reference_value(value, line, following=())
++                if signature != result:
++                    fail(line, 'retour emprunté async : type ou mode incompatible')
++            elif push_new_receiver(value) is not None:
+                 pointer, _, element = vector_push_new_value(value, line, following=())
+                 if result != ('mut', element):
+                     fail(line, 'retour push_new : type incompatible')
+@@ -3311,6 +3359,8 @@
+
+             elif value[0] in ('ref_expr', 'mut_expr'):
+                 pointer, _ = capture_array_place(value[1], result[0], line, expected_element='uint8_t' if result[1] == 'u8' else 'int')
+             else:
++                if value[0] not in ('name', 'reborrow') or references.get(value[1]) not in ('ref', 'mut'):
++                    fail(line, 'retour emprunté async : référence requise, pas un Result')
+                 check_access(value[1], line)
+                 if reference_types.get(value[1], 'Int') != result[1]:
+                     fail(line, 'retour emprunté async : type incompatible')

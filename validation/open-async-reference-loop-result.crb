@@ -1,0 +1,15 @@
+async fn choose(flag:Int,a:&mut Int,b:&mut Int)->&mut Int {
+    let mut selected=loop {
+        yield;
+        if flag==1 {break &mut *a;}
+        break &mut *b;
+    };
+    yield;
+    return selected;
+}
+fn main() {
+    let mut p=pool<Int>(2);let mut a=p.new(10);let mut b=p.new(20);
+    let h=runtime::spawn(->choose(1,&mut a,&mut b));
+    match h.join() {Ok(value)=>{*value=30;},Err(_)=>{print(999);}}
+    print(a);print(b);
+}

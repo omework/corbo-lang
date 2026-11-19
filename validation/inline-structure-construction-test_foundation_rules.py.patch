@@ -1,0 +1,49 @@
+--- /tmp/crust-before-inline-structure-construction/test_foundation_rules.py
++++ tests/test_foundation_rules.py
+@@ -6490,12 +6490,12 @@
+         source = """
+             struct Point { x: Int, y: Int, z: Int }
+             fn show(n: Int) -> Int { print(n); return n; }
+-            fn make(points: &mut Pool<Point>) -> <- Point {
+-                let p: Point = points.new(y: show(9), x: show(4));
++            fn make(points: &mut Pool<Point>) -> <- A<Point> {
++                let p: A<Point> = points.new(y: show(9), x: show(4));
+                 return <- p;
+             }
+             let mut points = pool<Point>(1);
+-            let p: Point = make(&mut points);
++            let p: A<Point> = make(&mut points);
+             address(p);
+             print(p);
+             drop(-> p);
+@@ -6519,8 +6519,8 @@
+         source = """
+             struct View { target: &Int, marker: Int }
+             fn clear(p: &mut Pool<Int>) -> Int { p.reset(); return 0; }
+-            fn make(views: &mut Pool<View>, target: &Int) -> <- View {
+-                let v: View = views.new(target: target);
++            fn make(views: &mut Pool<View>, target: &Int) -> <- A<View> {
++                let v: A<View> = views.new(target: target);
+                 return <- v;
+             }
+             let mut views = pool<View>(1);
+@@ -6618,8 +6618,8 @@
+             struct Path { segment: Segment, code: Int }
+             struct Segment { start: Point, end: Point }
+             struct Point { x: Int, y: Int }
+-            fn make(paths: &mut Pool<Path>) -> <- Path {
+-                let path: Path = paths.new(code: 9);
++            fn make(paths: &mut Pool<Path>) -> <- A<Path> {
++                let path: A<Path> = paths.new(code: 9);
+                 return <- path;
+             }
+             let mut paths = pool<Path>(1);
+@@ -6672,7 +6672,7 @@
+             ('segment.start.x: mark(2)', 'segment.start.x: mark(2), segment.start.x: 3',
+              'champ initialisé plusieurs fois'),
+             ('segment.start.x: mark(2)', 'segment.start.missing: mark(2)', 'champ inconnu'),
+-            ('segment.start.x: mark(2)', 'segment.start: mark(2)', 'champ inconnu'),
++            ('segment.start.x: mark(2)', 'segment.start: mark(2)', 'construction inline Point'),
+             ('segment.start.target: target,', '', 'aucune valeur par défaut'),
+             ('print(path);', 'drop(-> target); print(path);', 'emprunt encore utilisé'),
+             ('make(&mut paths, &target)',

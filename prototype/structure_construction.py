@@ -1,0 +1,78 @@
+"""Lower contained structure literals to the outer allocation's field layout.
+
+Only literal initialization is folded. A named value or a pooled allocation
+is not silently copied or moved into the payload of another allocation.
+"""
+from dataclasses import replace
+
+
+def lower_contained_literals(nodes, structures, error):
+    def fail(line, message):
+        raise error(f'ligne {line}: {message}')
+
+    def fields(typ, provided, environment, line, prefix=''):
+        seen = set()
+        output = []
+        for name, value in provided:
+            field_type = typ
+            for component in name.split('.'):
+                field_type = dict(structures.get(field_type, ())).get(component)
+            if field_type is None:
+                fail(line, f"champ inconnu '{name}' dans {typ}")
+            path = prefix + name
+            if field_type in structures:
+                if (not isinstance(value, tuple) or value[0] != 'new_enum'
+                        or value[1] is not None or value[2] != field_type or value[3] != ''):
+                    fail(line, f"champ '{path}' : construction inline {field_type} requise")
+            if any(name == previous or name.startswith(previous + '.') or previous.startswith(name + '.')
+                   for previous in seen):
+                fail(line, f"champ initialisé plusieurs fois : '{prefix + name}'")
+            seen.add(name)
+            if field_type in structures:
+                output.extend(fields(field_type, value[4], environment, line, path + '.'))
+            else:
+                output.append((path, walk(value, environment, line)))
+        return output
+
+    def pool_type(value, environment):
+        if not isinstance(value, tuple) or not value:
+            return None
+        if value[0] == 'source' and value[1] == 'pool':
+            return value[3]
+        if value[0] in ('name', 'ref', 'mut', 'reborrow'):
+            return environment.get(value[1])
+        return None
+
+    def block(body, incoming, line):
+        environment = incoming.copy()
+        output = []
+        for node in body:
+            lowered = walk(node, environment, line)
+            output.append(lowered)
+            if hasattr(node, 'op') and node.op == 'var':
+                name, value = node.args
+                typ = pool_type(value, environment)
+                environment.pop(name, None)
+                if typ is not None:
+                    environment[name] = typ
+        return output
+
+    def walk(value, environment, line):
+        if hasattr(value, 'op'):
+            if value.op in ('fn', 'async_fn'):
+                name, parameters, result, body = value.args
+                pools = {name: typ[5:-1] for name, _, typ in parameters
+                         if typ.startswith('Pool<')}
+                return replace(value, args=(name, parameters, result, block(body, pools, value.line)))
+            return replace(value, args=walk(value.args, environment, value.line))
+        if isinstance(value, list):
+            return block(value, environment, line)
+        if isinstance(value, tuple):
+            if value and value[0] == 'new_enum':
+                typ = value[2] or environment.get(value[1])
+                if typ in structures and value[3] == '':
+                    return (*value[:4], fields(typ, value[4], environment, line))
+            return tuple(walk(item, environment, line) for item in value)
+        return value
+
+    return block(nodes, {}, 1)

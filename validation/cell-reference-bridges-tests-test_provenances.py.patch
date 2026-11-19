@@ -1,0 +1,14 @@
+--- before/tests/test_provenances.py
++++ after/tests/test_provenances.py
+@@ -255,9 +255,10 @@
+             'loop { a.reset(); if *state == 1 { let mut value = make(a, b, *state); return <- value; } '
+             'state.set(1); continue; } } '
+             'let mut memory = pool<Int>(1); let mut other = pool<Int>(1); let mut old = new(memory) Int(99); '
++            'print(old); '
+             'let mut controls = allocator(); let mut state = new(controls) Int(0); '
+             'let mut result = work(&mut memory, &mut other, &mut state); print(result); memory.reset(); other.reset();')
+-        self.assertEqual(result.stdout, '20\n')
++        self.assertEqual(result.stdout, '99\n20\n')
+         self.assertEqual(result.stderr.count('destroy old=99'), 1)
+         self.assertEqual(result.stderr.count('destroy y=20'), 1)
+ 

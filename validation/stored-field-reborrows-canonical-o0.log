@@ -1,0 +1,51 @@
+test_async_and_native_results_preserve_original_reservation (test_stored_field_reborrows.StoredFieldReborrowTests.test_async_and_native_results_preserve_original_reservation) ... ERROR
+test_direct_and_named_shared_construction (test_stored_field_reborrows.StoredFieldReborrowTests.test_direct_and_named_shared_construction) ... ok
+test_mutable_field_stored_and_reborrowed (test_stored_field_reborrows.StoredFieldReborrowTests.test_mutable_field_stored_and_reborrowed) ... ok
+test_no_promotion_of_original_carrier (test_stored_field_reborrows.StoredFieldReborrowTests.test_no_promotion_of_original_carrier) ... ok
+test_recorded_case_and_original_carrier_protection (test_stored_field_reborrows.StoredFieldReborrowTests.test_recorded_case_and_original_carrier_protection) ... ok
+test_sync_helpers_methods_and_relay_into_constructor (test_stored_field_reborrows.StoredFieldReborrowTests.test_sync_helpers_methods_and_relay_into_constructor) ... ok
+
+======================================================================
+ERROR: test_async_and_native_results_preserve_original_reservation (test_stored_field_reborrows.StoredFieldReborrowTests.test_async_and_native_results_preserve_original_reservation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_stored_field_reborrows.py", line 60, in test_async_and_native_results_preserve_original_reservation
+    self.assertEqual(self.run_native(source).stdout,'9\n7\n7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15102, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15095, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13596, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13233, in verify
+    nodes = lower_native_blocks(nodes, Node, Error)
+  File "/Users/jabarkarim/sources/crust/native_threads.py", line 289, in lower_native_blocks
+    return NativeBlocks(nodes, node_type, error).run() if contains(nodes) else nodes
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/native_threads.py", line 278, in run
+    rewritten, _ = self.block(self.nodes, {}, [])
+                   ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/native_threads.py", line 254, in block
+    body, _ = self.block(body, local, [])
+              ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/native_threads.py", line 237, in block
+    expression, signature = self.expression(args[1], env, result_paths)
+                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/native_threads.py", line 132, in expression
+    return transformed, self.declared(binding[1], 'scalar' if op == 'deref' else mode)
+                        ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/native_threads.py", line 35, in declared
+    capability = reference_type(typ)
+  File "/Users/jabarkarim/sources/crust/array_syntax.py", line 95, in reference_type
+    if typ.startswith('&mut '):
+       ^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'startswith'
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.776s
+
+FAILED (errors=1)

@@ -1,0 +1,45 @@
+--- /tmp/crust-before-recursive-owned-joins/async_result_storage.py
++++ async_result_storage.py
+@@ -1,4 +1,7 @@
+ """Storage of an owned async result, evaluated for a static instantiation."""
++from owned_join_types import (
++    OWNED_JOIN_TYPES,
++)
+ from option_join_types import (
+     OPTION_JOIN_TYPES,
+ )
+@@ -31,7 +34,7 @@
+ 
+ def may_need_destination(node, structures):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange') or node.args[2][1] not in structures or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange') or node.args[2][1] not in structures or not effect or not effect.complete:
+         return False
+     return any(candidate.kind == 'fresh' and candidate.source.kind in ('local_value','allocation_parameter')
+                for candidate in effect.completion_result.candidates)
+@@ -39,7 +42,7 @@
+ 
+ def result_storage(node, local_parameters=frozenset()):
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange'):
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange'):
+         return ResultStorage()
+     summary = effect.completion_result
+     if not summary.candidates:
+@@ -121,7 +124,7 @@
+     Local descendant sources remain unsupported and must not be promoted.
+     """
+     effect = getattr(node, 'field_effect_summary', None)
+-    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange'):
++    if not effect or not effect.complete or node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange'):
+         return None
+     summary = effect.completion_result
+     if (summary.mode == 'buffered_handle_exchange' or summary.mode in EXCHANGE_JOIN_TYPES) and len(summary.exchange_payloads) == 2:
+@@ -197,6 +200,6 @@
+ def borrowed_result_fields(node):
+     """Completed stored-reference origins, distinct from captures kept while running."""
+     effect = getattr(node, 'field_effect_summary', None)
+-    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange') or not effect or not effect.complete:
++    if node.args[2][0] not in ('owned', 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES, 'handle_option', 'buffered_handle_exchange') or not effect or not effect.complete:
+         return ()
+     return effect.completion_result.borrowed_fields

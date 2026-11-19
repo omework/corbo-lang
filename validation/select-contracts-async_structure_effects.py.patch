@@ -1,0 +1,134 @@
+--- /tmp/crust-before-select-contracts/async_structure_effects.py	2026-11-08 04:52:31
++++ async_structure_effects.py	2026-11-08 04:58:27
+@@ -114,6 +114,7 @@
+             node.args[0], node.args[1], declared, node.args[3])))
+         self.effects = effects
+         self.pending = {}
++        self.selections = {}
+         self.has_completion = False
+         self.has_suspension = False
+         self.suspended_structures = {}
+@@ -193,11 +194,111 @@
+         if any(isinstance(value, Value) and value.pending_structure_calls for value in actuals):
+             raise IncompleteStructureEffects(
+                 'effets différés transmis à un auxiliaire synchrone non raccordés')
++
++    def select_task_names(self, task):
++        if not isinstance(task, Value) or task.mode != 'task' or not task.pending_structure_calls:
++            raise IncompleteStructureEffects('Select exige des instances async inactives aux captures identifiables')
++        return {self.pending[token][0] for token in task.pending_structure_calls}
++
++    def select_candidates(self, task):
++        self.select_task_names(task)
++        candidates = []
++        for token in task.pending_structure_calls:
++            name, actuals = self.pending[token]
++            summary = self.effects.infer(name)
++            if not summary.complete or not summary.suspension_complete:
++                raise IncompleteStructureEffects(summary.reason or summary.suspension_reason)
++            candidates.append((name, actuals, summary))
++        return candidates
++
++    def select_partial_states(self, candidates, environment, line, *, unpolled=True, suspended=True):
++        """A loser may not have been polled; never substitute its final writes."""
++        alternatives = [({'next'}, environment.copy())] if unpolled else []
++        for name, actuals, summary in candidates:
++            if suspended and summary.may_suspend:
++                blocks = self.blocks
++                self.blocks = [(outer.copy(), shadows.copy()) for outer, shadows in blocks]
++                try:
++                    branch, _ = self.apply_async_result(name, summary.parameters,
++                        summary.suspension_result, actuals, environment, line, 'suspension')
++                finally:
++                    self.blocks = blocks
++                alternatives.append(({'next'}, branch))
++        merged = environment.copy()
++        self.join_environments(merged, alternatives)
++        return merged
++
++    def await_selection(self, selection, environment, line):
++        signatures, exits, values = set(), [], []
++        for token in selection.pending_structure_calls:
++            branches, unreachable = [], False
++            for task in self.selections[token]:
++                candidates = [] if unreachable else self.select_candidates(task)
++                branches.append(candidates)
++                if candidates and all(not summary.may_suspend for _, _, summary in candidates):
++                    # This branch either returns Ready or never yields control;
++                    # in either case later branches cannot be polled.
++                    unreachable = True
++            signatures.update(self.effects.definitions[name].args[2]
++                              for candidates in branches for name, _, _ in candidates)
++            if len(signatures) != 1:
++                raise IncompleteStructureEffects('Select exige le même type de résultat dans chaque branche')
++            # Pending is possible only if every branch can suspend. An
++            # immediately ready branch prevents an outward suspension.
++            if all(any(summary.may_suspend for _, _, summary in candidates) for candidates in branches):
++                partial = environment.copy()
++                for candidates in branches:
++                    partial = self.select_partial_states(candidates, partial, line, unpolled=False)
++                self.observe_suspension(partial, line)
++            for winner, candidates in enumerate(branches):
++                if any(not any(summary.may_suspend for _, _, summary in earlier)
++                       for earlier in branches[:winner]):
++                    continue
++                for name, actuals, summary in candidates:
++                    if not summary.may_complete:
++                        continue
++                    branch, value = self.apply_async_result(name, summary.parameters,
++                        summary.completion_result, actuals, environment, line, 'completion')
++                    for index, losers in enumerate(branches):
++                        if index != winner:
++                            branch = self.select_partial_states(losers, branch, line,
++                                unpolled=index > winner,
++                                suspended=index < winner or bool(summary.may_suspend))
++                    exits.append(({'next'}, branch))
++                    values.append(value)
++        if not exits:
++            return set(), VOID
++        self.join_environments(environment, exits)
++        mode, typ = signatures.pop()
++        if mode in ('ref', 'mut'):
++            return {'next'}, Value(mode, typ,
++                reference_targets=frozenset(t for value in values for t in value.reference_targets),
++                payload_reference=any(value.payload_reference for value in values))
++        if mode not in ('scalar', 'bool', 'byte', 'char', 'void'):
++            raise IncompleteStructureEffects('résultat Select agrégé non raccordé aux effets de champs')
++        return {'next'}, Value(mode, typ)
+ 
+     def expression(self, expr, environment, line, expected_array=None):
+         if expr is None:
+             return super().expression(expr, environment, line, expected_array)
+         op = expr[0]
++        if op == 'task_select':
++            flow, branches, signatures = {'next'}, [], set()
++            for argument in expr[1]:
++                if 'next' not in flow:
++                    return flow, VOID
++                part, task = self.expression(argument, environment, line)
++                flow = (flow - {'next'}) | part
++                if 'next' not in flow:
++                    return flow, VOID
++                signatures.update(self.effects.definitions[name].args[2] for name in self.select_task_names(task))
++                if len(signatures) != 1:
++                    raise IncompleteStructureEffects('Select exige le même type de résultat dans chaque branche')
++                branches.append(task)
++            token = (id(expr), tuple(branches))
++            self.selections[token] = tuple(branches)
++            mode, typ = signatures.pop()
++            return flow, Value('selection', f'Select<{mode}:{typ}>', pending_structure_calls=frozenset({token}))
+         if op == 'task_spawn':
+             # Completion contracts alone cannot bound concurrently running
+             # prefixes. Keep normal completion usable, but never report an
+@@ -225,6 +326,11 @@
+             flow, task = self.expression(operand, environment, line)
+             if 'next' not in flow:
+                 return flow, VOID
++            if isinstance(task, Value) and task.mode == 'selection':
++                if op != 'await':
++                    raise IncompleteStructureEffects('Select s’attend avec .await, pas join()')
++                part, value = self.await_selection(task, environment, line)
++                return (flow - {'next'}) | part, value
+             if isinstance(task, Value) and task.mode == 'execution' and task.deferred_field_updates:
+                 self.suspension_reason = 'effets suspendus de fabrique synchrone non raccordés'
+                 # A synchronous factory already mapped the deferred contract

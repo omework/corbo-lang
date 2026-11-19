@@ -1,0 +1,55 @@
+test_mutable_stored_view_reborrow_through_function (test_stored_inline_views.StoredInlineViewTests.test_mutable_stored_view_reborrow_through_function) ... FAIL
+test_replace_between_whole_and_interior_references (test_stored_inline_views.StoredInlineViewTests.test_replace_between_whole_and_interior_references) ... ok
+test_returned_carrier_and_reference_survive_producer (test_stored_inline_views.StoredInlineViewTests.test_returned_carrier_and_reference_survive_producer) ... ok
+test_shared_copy_detaches_from_carrier_but_keeps_root (test_stored_inline_views.StoredInlineViewTests.test_shared_copy_detaches_from_carrier_but_keeps_root) ... ok
+test_store_through_interior_carrier (test_stored_inline_views.StoredInlineViewTests.test_store_through_interior_carrier) ... ok
+
+======================================================================
+FAIL: test_mutable_stored_view_reborrow_through_function (test_stored_inline_views.StoredInlineViewTests.test_mutable_stored_view_reborrow_through_function)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16516, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14655, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3144, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10242, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11724, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13131, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13362, in statements
+    self.array_access(self.struct_int_view(place, binding), write=True, after=True)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6289, in array_access
+    self.fail(f"accès à '{binding.name}' incompatible avec un emprunt actif")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1970, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 4: accès à 'p' incompatible avec un emprunt actif
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_stored_inline_views.py", line 38, in test_mutable_stored_view_reborrow_through_function
+    self.assertEqual(self.run_source(source).stdout,'11\n11\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: accès à 'p' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.037s
+
+FAILED (failures=1)

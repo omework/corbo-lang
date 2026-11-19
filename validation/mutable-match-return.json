@@ -1,0 +1,83 @@
+{
+  "accepted": [
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn stop(x:&mut Int){loop{}}fn edit(x:&mut Int){x.set(20);}fn run(w:&mut W){match &mut w{W.Other{data:r}=>{stop(r);},W.Bound{data:r}=>{edit(r);}}print(w);}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};run(&mut w);print(n);",
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);},W.Other{data:r}=>{edit(r);}}print(n);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);}}print(w);p.reset();q.reset();",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{{forward(r);}print(r);r.set(21);edit(r);print(r);}}print(w);print(n);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child.set(30);},W.Other{data:r}=>{let mut child=identity(r);address(child);child.set(40);}}print(n);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn relay(x:&mut Int)->&mut Int{return identity(x);}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=relay(r);child.set(20);print(child);r.set(30);}}print(w);print(n);",
+    "fn read(x:&Int)->Int{return *x;}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);},W.Other{data:r}=>{let value=read(r);print(value);}}",
+    "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);r.set(20);print(value);print(r);}}print(w);print(n);"
+  ],
+  "rejected": [
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&n};match &mut w{W.Bound{data:r}=>{edit(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);},W.Other{data:r}=>{edit(r,r);}}print(n);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn duo(x:&mut Int,y:&Int){x.set(20);print(y);}match &mut w{W.Bound{data:r}=>{duo(r,r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn identity(x:&mut Int)->&mut Int{return x;}match &mut w{W.Bound{data:r}=>{identity(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn identity(x:&mut Int)->&mut Int{return x;}match &mut w{W.Bound{data:r}=>{let other=identity(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn reset(x:&mut Int,p:&mut Pool<Int>){x.set(20);p.reset();}match &mut w{W.Bound{data:r}=>{reset(r,&mut p);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(&mut r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(n);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);print(n);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);}}print(n);print(w);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &w{W.Bound{data:r}=>{edit(r);}}",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn relay(x:&mut Int)->&mut Int{return identity(x);}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=relay(r);edit(r);print(child);}}",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn relay(x:&mut Int)->&mut Int{return identity(x);}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=relay(r);print(child);print(n);}}",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn relay(x:&mut Int)->&mut Int{return identity(x);}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=relay(r);print(child);}}print(child);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn relay(x:&mut Int)->&mut Int{return identity(x);}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=relay(r);print(r);print(child);}}",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn relay(x:&mut Int)->&mut Int{return identity(x);}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=relay(r);r.set(30);print(child);}}",
+    "fn read(x:&Int)->Int{return *x;}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);},W.Other{data:r}=>{let value=read(r,r);print(value);}}",
+    "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);print(n);}}",
+    "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);}}print(value);"
+  ],
+  "mutations": [
+    {
+      "fault": "allow access through parent with a live child",
+      "before": "        for binding in active:\n            if binding is exclude or id(binding) in parents",
+      "after": "        for binding in active:\n            if exclude is not None and any(p is exclude for p in binding.borrow_parents):\n                continue\n            if binding is exclude or id(binding) in parents",
+      "test": "test_returned_mutable_reborrow_ends_at_last_use",
+      "detected": true,
+      "stderr": "======================================================================\nFAIL: test_returned_mutable_reborrow_ends_at_last_use (test_mutable_match_calls.MutableMatchCallTests.test_returned_mutable_reborrow_ends_at_last_use) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpn2osnnkm/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_returned_mutable_reborrow_ends_at_last_use (test_mutable_match_calls.MutableMatchCallTests.test_returned_mutable_reborrow_ends_at_last_use) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpn2osnnkm/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_returned_mutable_reborrow_ends_at_last_use (test_mutable_match_calls.MutableMatchCallTests.test_returned_mutable_reborrow_ends_at_last_use) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpn2osnnkm/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_returned_mutable_reborrow_ends_at_last_use (test_mutable_match_calls.MutableMatchCallTests.test_returned_mutable_reborrow_ends_at_last_use) (stage='compile_source')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpn2osnnkm/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_returned_mutable_reborrow_ends_at_last_use (test_mutable_match_calls.MutableMatchCallTests.test_returned_mutable_reborrow_ends_at_last_use) (stage='verify_program')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpn2osnnkm/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: Error not raised\n\n======================================================================\nFAIL: test_returned_mutable_reborrow_ends_at_last_use (test_mutable_match_calls.MutableMatchCallTests.test_returned_mutable_reborrow_ends_at_last_use) (stage='compile_source')\n----------------------------------------------------------------------\ncrust.Error: ligne 1: invariant interne : emprunt mutable non exclusif\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpn2osnnkm/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: \"emprunt actif\" does not match \"ligne 1: invariant interne : emprunt mutable non exclusif\"\n\n----------------------------------------------------------------------\nRan 1 test in 0.310s\n\nFAILED (failures=6)\n"
+    }
+  ],
+  "C": [
+    {
+      "source": "fn reborrow(x:&mut Int)->&mut Int{return x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=reborrow(r);child.set(20);print(child);r.set(30);}}print(w);print(n);",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "20\nW.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn reborrow(x:&mut Int)->&mut Int{return x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=reborrow(r);child.set(20);print(child);r.set(30);}}print(w);print(n);",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "20\nW.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn reborrow(x:&mut Int)->&mut Int{return x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=reborrow(r);child.set(20);print(child);r.set(30);}}print(w);print(n);",
+      "flags": [
+        "-Os"
+      ],
+      "stdout": "20\nW.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn reborrow(x:&mut Int)->&mut Int{return x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let mut child=reborrow(r);child.set(20);print(child);r.set(30);}}print(w);print(n);",
+      "flags": [
+        "-O2",
+        "-fsanitize=undefined",
+        "-fno-sanitize-recover=all"
+      ],
+      "stdout": "20\nW.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    }
+  ],
+  "suites": {
+    "standard": "----------------------------------------------------------------------\nRan 749 tests in 311.199s\n\nOK\n",
+    "ubsan": "----------------------------------------------------------------------\nRan 77 tests in 33.448s\n\nOK\n"
+  }
+}

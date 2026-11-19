@@ -1,0 +1,134 @@
+--- before/results.py
++++ after/results.py
+@@ -498,6 +498,7 @@
+     # Equal-length paths retain a tuple of per-slot alternatives. A join with
+     # different lengths retains only the set of possible elements.
+     handle_items: tuple[frozenset[ResultCandidate], ...] | frozenset[ResultCandidate] | None = None
++    handle_payloads: tuple = ()
+     handle_exchange: tuple | None = None
+     exchange_payloads: tuple = ()
+     handle_slot: tuple[frozenset, int | None] | None = None
+@@ -541,6 +542,16 @@
+ 
+ def extracted_handle(items, typ='Int'):
+     return Value('owned', typ, items or frozenset({UNKNOWN_HANDLE_ITEM}))
++
++
++def restore_handle_payload(value, carrier):
++    if not isinstance(carrier, Value):
++        return value
++    payloads = tuple(item for item in carrier.handle_payloads if item.candidates & value.candidates)
++    if not payloads:
++        return value
++    merged = merge_owned_values(payloads)
++    return replace(merged, mode=value.mode, typ=value.typ, candidates=value.candidates)
+ 
+ 
+ def merge_input_item_history(values):
+@@ -1692,6 +1703,7 @@
+                     copy_candidates=frozenset(candidate for value in values for candidate in value.copy_candidates),
+                     structure_origins=frozenset(origin for value in values for origin in value.structure_origins),
+                     handle_items=merge_handle_items(values),
++                    handle_payloads=tuple(dict.fromkeys(item for value in values for item in value.handle_payloads)),
+                     input_item_history=merge_input_item_history(values),
+                     input_items_changed=any(value.input_items_changed for value in values),
+                     input_items_written=any(value.input_items_written for value in values),
+@@ -1711,6 +1723,16 @@
+                     deferred_suspension_vectors=merge_task_vector_updates(values, 'deferred_suspension_vectors'),
+                     task_may_suspend=merge_task_may_suspend(values),
+                     absent_owned_payload=all(value.absent_owned_payload for value in values))
++
++    def remember_handle_payload(self, environment, receiver, item):
++        vector = environment.get(receiver)
++        if not isinstance(vector, Value) or not is_handle_vector(vector.typ):
++            return
++        owner = vector.storage_owner or receiver
++        for name in (owner, receiver):
++            root = environment.get(name)
++            if isinstance(root, Value):
++                environment[name] = replace(root, handle_payloads=tuple(dict.fromkeys((*root.handle_payloads, item))))
+ 
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+@@ -1754,6 +1776,7 @@
+         typ = handle_vector_element(vector.typ) if isinstance(vector, Value) else 'Int'
+         result = (Value('handle_option', typ) if optional and items == ()
+                   and not candidates else extracted_handle(candidates, typ))
++        result = restore_handle_payload(result, vector)
+         if last:
+             index = last_handle_index(items)
+         if isinstance(vector, Value):
+@@ -1811,7 +1834,7 @@
+             items = handle_items_after_exchange(root.handle_items, index, candidates, weak=not exact)
+             history = root.input_item_history
+             history = history.replace_slot(index, candidates) if exact and history is not None else None
+-            environment[name] = replace(root, handle_items=items, input_item_history=history,
++            environment[name] = replace(root, handle_items=items, handle_payloads=tuple(dict.fromkeys((*root.handle_payloads, incoming))), input_item_history=history,
+                                         input_items_written=root.input_items_written or any(
+                                             candidate.kind == 'parameter' for candidate in root.candidates))
+ 
+@@ -2054,6 +2077,8 @@
+                 incoming = item.candidates if isinstance(item, Value) else frozenset()
+                 receiver = expr[1][1] if expr[1][0] == 'name' else None
+                 vector = environment.get(receiver)
++                self.remember_handle_payload(environment, receiver, item)
++                vector = environment.get(receiver)
+                 old_items = vector.handle_items if isinstance(vector, Value) else None
+                 append = op not in ('array_handle_exchange', 'array_buffered_replace')
+                 index = expr[2][1] if not append and expr[2][0] == 'int' else None
+@@ -2066,9 +2091,9 @@
+                     old = frozenset() if append else handle_items_at(old_items, index) or frozenset()
+                     typ = exchange_type(handle_vector_element(vector.typ), append)
+                     return flow, Value('buffered_handle_exchange', typ, incoming | old,
+-                                       exchange_payloads=(old, incoming))
++                                       exchange_payloads=(old, incoming), handle_payloads=vector.handle_payloads)
+                 return flow, Value('handle_exchange', handle_vector_element(vector.typ), incoming,
+-                                   handle_items=handle_items_at(old_items, index), handle_exchange=exchange)
++                                   handle_items=handle_items_at(old_items, index), handle_exchange=exchange, handle_payloads=vector.handle_payloads)
+             if op == 'array_handle_exchange_status':
+                 return flow, SCALAR
+             if op == 'array_handle_exchange_value':
+@@ -2076,8 +2101,8 @@
+                 if exchange.mode in ('mutable_ref_replace', 'mutable_ref_try_push'):
+                     return flow, replace(exchange, mode='mut', typ='Int')
+                 if expr[2][1] != 0:
+-                    return flow, Value('owned', exchange.typ, exchange.candidates)
+-                return flow, extracted_handle(exchange.handle_items, exchange.typ)
++                    return flow, restore_handle_payload(Value('owned', exchange.typ, exchange.candidates), exchange)
++                return flow, restore_handle_payload(extracted_handle(exchange.handle_items, exchange.typ), exchange)
+             if op == 'array_handle_len':
+                 return flow, SCALAR
+             if op == 'array_buffered_exchange_status':
+@@ -2091,7 +2116,7 @@
+                     return flow, replace(exchange, mode='mut', typ='Int')
+                 if not isinstance(exchange, Value) or len(exchange.exchange_payloads) != 2:
+                     self.fail(line, 'match (-> résultat) exige un résultat de replace ou try_push')
+-                return flow, extracted_handle(exchange.exchange_payloads[arm == 5], exchange_element(exchange.typ))
++                return flow, restore_handle_payload(extracted_handle(exchange.exchange_payloads[arm == 5], exchange_element(exchange.typ)), exchange)
+             if op == 'array_handle_option_status':
+                 return flow, SCALAR
+             if op == 'array_handle_option_value':
+@@ -3409,6 +3434,7 @@
+             structure_choices=merge_structure_choices(values),
+             owned_fields=merge_reference_rows(values, 'owned_fields'),
+             handle_items=merge_handle_items(values),
++                    handle_payloads=tuple(dict.fromkeys(item for value in values for item in value.handle_payloads)),
+             exchange_payloads=merge_exchange_payloads(values),
+             input_item_history=merge_input_item_history(values),
+             input_items_changed=any(value.input_items_changed for value in values),
+@@ -3613,6 +3639,7 @@
+                     tail = replace(merge_reference_values(values),
+                                    payload_reference=any(value.payload_reference for value in values),
+                                    handle_items=merge_handle_items(values),
++                    handle_payloads=tuple(dict.fromkeys(item for value in values for item in value.handle_payloads)),
+                                    input_item_history=merge_input_item_history(values),
+                                    input_items_changed=any(value.input_items_changed for value in values),
+                                    input_items_written=any(value.input_items_written for value in values))
+@@ -3699,6 +3726,7 @@
+             return flow, replace(merge_reference_values(values),
+                                  payload_reference=any(value.payload_reference for value in values),
+                                  handle_items=merge_handle_items(values),
++                    handle_payloads=tuple(dict.fromkeys(item for value in values for item in value.handle_payloads)),
+                                  input_item_history=merge_input_item_history(values),
+                                  input_items_changed=any(value.input_items_changed for value in values),
+                                  input_items_written=any(value.input_items_written for value in values))

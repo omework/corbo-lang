@@ -1,0 +1,372 @@
+--- /tmp/crust-before-async-option-join/crust.py
++++ crust.py
+@@ -52,12 +52,14 @@
+ JOIN_BORROWS = ('join_ref', 'join_mut')
+ JOIN_OWNED_TYPE = 'Result<A<Int>,runtime::Error>'
+ JOIN_NESTED_TYPE = f'Result<{JOIN_OWNED_TYPE},runtime::Error>'
+-JOIN_RESULT_TYPES = {'join_owned': JOIN_OWNED_TYPE, 'join_nested': JOIN_NESTED_TYPE}
+-JOIN_RESULT_C_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult'}
+-JOIN_RESULT_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation'}
++JOIN_RESULT_TYPES = {'join_owned': JOIN_OWNED_TYPE, 'join_nested': JOIN_NESTED_TYPE, 'join_option': 'Result<Option<A<Int>>,runtime::Error>'}
++JOIN_RESULT_C_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult', 'join_option': 'CrustOptionJoinResult'}
++JOIN_RESULT_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'join_option': 'value.value'}
+ 
+ 
+ def join_allocation_signature(typ):
++    if typ == 'Result<Option<A<Int>>,runtime::Error>':
++        return 'join_option', 'Int', 'pool'
+     for mode, prefix, suffix, storage in (
+             ('join_owned', 'Result<A<', '>,runtime::Error>', 'pool'),
+             ('join_nested', 'Result<Result<A<', '>,runtime::Error>,runtime::Error>', 'pool'),
+@@ -4014,8 +4016,8 @@
+                 c_type = f'{typ} *'
+             elif kind in ('handle_option', 'buffered_handle_exchange'):
+                 c_type = 'VectorHandleResult'
+-            elif kind in ('join_owned', 'join_nested'):
+-                c_type = 'CrustNestedJoinResult' if kind == 'join_nested' else 'CrustJoinResult'
++            elif kind in ('join_owned', 'join_nested', 'join_option'):
++                c_type = JOIN_RESULT_C_TYPES[kind]
+             elif kind in ('task', 'execution'):
+                 c_type = 'CrustTask *' if kind == 'task' else 'CrustExecution'
+             elif kind == 'vector_split':
+@@ -4025,7 +4027,7 @@
+             else:
+                 c_type = typ[0] if kind == 'array_refs' else typ if kind == 'array' else 'int' if kind == 'scalar' else 'Cell *'
+             declaration = f'{c_type} {frame["result_c"]}'
+-            if kind in ('join_owned', 'join_nested'):
++            if kind in ('join_owned', 'join_nested', 'join_option'):
+                 self.flag_declarations.append(declaration + ' = {0};')
+             else:
+                 self.lines.append(declaration + ';')
+@@ -4075,7 +4077,7 @@
+             if expr[0] != 'move':
+                 self.fail('break avec valeur exige un receveur')
+             binding = self.lookup(expr[1])
+-            if binding.kind not in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested',
++            if binding.kind not in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option',
+                                     'task', 'execution'):
+                 self.fail('seule une allocation explicite est déplaçable')
+             self.warn('transfert sans receveur', expr[1])
+@@ -4093,7 +4095,7 @@
+                     self.check_array_move(binding)
+                     binding.valid = False
+                     kind, c, allocation = 'array', binding.c, binding.static_type
+-            elif binding.kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested',
++            elif binding.kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option',
+                                   'task', 'execution'):
+                 if not any(s.bindings.get(binding.name) is binding
+                            for s in self.scopes[self.scopes.index(destination) + 1:]):
+@@ -4117,7 +4119,7 @@
+             self.fail('break : transfert de tableau par <- requis')
+         copied_result = expr[0] == 'array_transfer' and expr[1][0] == 'array_copy'
+         if (kind == 'void' or (kind == 'owned' and expr[0] != 'move' and not copied_result)
+-                or (kind in ('join_owned', 'join_nested', 'task', 'execution') and expr[0] != 'move')
++                or (kind in ('join_owned', 'join_nested', 'join_option', 'task', 'execution') and expr[0] != 'move')
+                 or (kind in ('handle_option', 'buffered_handle_exchange') and expr[0] not in (
+                     'move', 'array_handle_option_pop', 'array_buffered_replace', 'array_buffered_try_push'))):
+             self.fail('break : valeur attendue, avec <- explicite pour une allocation')
+@@ -4154,7 +4156,7 @@
+                 frame['values'] = [(mode, typ, value) for mode, _, value in frame['values']]
+         if frame['values'] and (kind, typ) != frame['values'][0][:2]:
+             self.fail('break : même type et même mode requis sur toutes les sorties')
+-        if kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested',
++        if kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option',
+                     'task', 'execution') and allocation is not None:
+             durable = {s.id for s in self.scopes[:self.scopes.index(destination) + 1]}
+             for source in allocation.sources:
+@@ -4209,11 +4211,11 @@
+         values = [allocation for _, _, allocation in frame['values']]
+         if kind == 'buffered_handle_exchange':
+             return self.join_buffered_exchange(c, [vars(a) for a in values], frame['destination'], name)
+-        if kind in ('join_owned', 'join_nested'):
++        if kind in ('join_owned', 'join_nested', 'join_option'):
+             return self.join_allocation_result(c, source_union(*(a.sources for a in values)),
+                                                frame['destination'], name,
+                                                frozenset(origin for a in values for origin in a.origins),
+-                                               nested=kind == 'join_nested', typ=typ,
++                                               nested=kind == 'join_nested', optional=kind == 'join_option', typ=typ,
+                                                absent=all(a.absent_owned_payload for a in values),
+                                                storage=self.join_payload_storage(vars(a) for a in values),
+                                                owned_fields=self.task_owned_result_fields(values),
+@@ -4921,9 +4923,9 @@
+                     if hidden is not None and taken == (code == 5):
+                         if hidden.kind in (*JOIN_BORROWS, *MUTABLE_SLICE_JOINS):
+                             hidden.valid = False
+-                        elif hidden.kind in ('join_owned', 'join_nested'):
++                        elif hidden.kind in ('join_owned', 'join_nested', 'join_option'):
+                             hidden.valid = hidden.alloc.alive = hidden.alloc.definite = False
+-                    elif hidden is not None and hidden.kind in ('join_owned', 'join_nested') and isinstance(body, list):
++                    elif hidden is not None and hidden.kind in ('join_owned', 'join_nested', 'join_option') and isinstance(body, list):
+                         entry = next((index for index, statement in enumerate(body) if statement.op != '->'), len(body))
+                         if not (entry < len(body) and body[entry].op == 'var'
+                                 and body[entry].args[1] == ('utf8_value', ('name', name))):
+@@ -4986,11 +4988,11 @@
+                         selected_utf8_paths.update(((id(root), id(parent)), (root, parent))
+                                                    for root, parent in allocation[1])
+                         kind, allocation = UTF8_SIGNATURE_MODES[kind], None
+-                    if kind in ('join_owned', 'join_nested', 'task', 'execution') and isinstance(body, tuple):
++                    if kind in ('join_owned', 'join_nested', 'join_option', 'task', 'execution') and isinstance(body, tuple):
+                         self.fail('expression if : le résultat alloué exige un bloc avec transfert <-')
+                     if kind not in COPY_VALUE_TYPES and kind not in (
+                             'owned', 'array', 'array_refs', 'handle_option', 'buffered_handle_exchange',
+-                            'join_owned', 'join_nested', 'vector_split', 'task', 'execution',
++                            'join_owned', 'join_nested', 'join_option', 'vector_split', 'task', 'execution',
+                             'ref', 'mut', 'array_ref', 'array_mut'):
+                         self.fail('une expression if exige une valeur copiable ou une allocation transférée par <-')
+                     if kind in ('array_ref', 'array_mut'):
+@@ -5045,7 +5047,7 @@
+                         c = f'structure_reference_for({result_c}, {c})'
+                     self.lines.append(f'{result_c} = {c};')
+                 if valued and selected_kind in ('owned', 'handle_option', 'buffered_handle_exchange', 'join_owned',
+-                                                'join_nested', 'task', 'execution') and allocation is not None:
++                                                'join_nested', 'join_option', 'task', 'execution') and allocation is not None:
+                     selected_sources = source_union(selected_sources, allocation.sources)
+                     selected_item_states.append(vars(allocation).copy())
+                     selected_origins |= allocation.origins
+@@ -5091,8 +5093,8 @@
+                       'CrustExecution' if selected_kind == 'execution' else
+                       'VectorHandleResult' if selected_kind in ('handle_option', 'buffered_handle_exchange') else
+                       COPY_VALUE_TYPES.get(selected_kind, 'Cell *'))
+-            if selected_kind in ('join_owned', 'join_nested'):
+-                join_type = 'CrustNestedJoinResult' if selected_kind == 'join_nested' else 'CrustJoinResult'
++            if selected_kind in ('join_owned', 'join_nested', 'join_option'):
++                join_type = JOIN_RESULT_C_TYPES[selected_kind]
+                 self.flag_declarations.append(f'{join_type} {result_c} = {{0}};')
+             else:
+                 self.lines.append(f'{c_type} {result_c};')
+@@ -5138,9 +5140,9 @@
+                 return 'array', result_c, selected_type
+             if selected_kind == 'array_refs':
+                 return 'array_refs', result_c, (selected_type[0], self.merge_stored_array_loans(selected_array_loans))
+-            if selected_kind in ('join_owned', 'join_nested'):
++            if selected_kind in ('join_owned', 'join_nested', 'join_option'):
+                 return self.join_allocation_result(result_c, selected_sources, self.scopes[-1],
+-                                                   source_name, selected_origins, nested=selected_kind == 'join_nested', typ=selected_type,
++                                                   source_name, selected_origins, nested=selected_kind == 'join_nested', optional=selected_kind == 'join_option', typ=selected_type,
+                                                    absent=all(state['absent_owned_payload'] for state in selected_item_states),
+                                                    storage=self.join_payload_storage(selected_item_states),
+                                                    borrowed_fields=selected_dependencies,
+@@ -7423,7 +7425,7 @@
+             byte_results = ('byte_replace_result', 'bytes_replace_result')
+             value_results = (*VECTOR_VALUE_ERRORS, 'shared_ref_replace', 'shared_ref_try_push')
+             unit_results = (*UNIT_RESULT_MODES, 'shared_ref_try_push')
+-            join_results = (*PLAIN_JOIN_TYPES, 'join_text', 'join_byte_ref', 'join_void', 'join_owned', 'join_nested', 'join_array',
++            join_results = (*PLAIN_JOIN_TYPES, 'join_text', 'join_byte_ref', 'join_void', 'join_owned', 'join_nested', 'join_option', 'join_array',
+                             *('borrowed_join_' + mode for mode in ASYNC_CAPTURE_VIEW_MODES),
+                             *('join_' + mode for mode in UTF8_VALUE_RESULT_FAMILIES), *JOIN_BORROWS)
+             results = ('char_at_result', 'char_from_str_result', 'integer_conversion_result', *text_results, *byte_results, *join_results,
+@@ -7454,12 +7456,15 @@
+                 self.lines.append(f'{typ} {name} = {{0}};')
+                 self.emit_array_bridge(name, descriptor.c, scalar_array_layout(descriptor.typ)[0], to_native=False)
+                 return 'array', name, typ
+-            if kind in ('join_owned', 'join_nested'):
++            if kind in ('join_owned', 'join_nested', 'join_option'):
+                 binding = self.lookup(receiver[1])
+                 if not binding.name.startswith('\0char-result-'):
+                     self.fail('extraire une allocation de join exige un match')
+                 binding.valid = descriptor.alive = descriptor.definite = False
+                 self.lines.append(f'*({descriptor.guard}) = 0;')
++                if kind == 'join_option':
++                    return self.buffered_handle_result(f'({value}).value', descriptor.sources, scope,
++                                                       label, descriptor.origins)
+                 if kind == 'join_nested':
+                     return self.join_allocation_result(f'({value}).value', descriptor.sources, scope,
+                                                        label, descriptor.origins, typ=descriptor.typ,
+@@ -8256,8 +8261,12 @@
+             self.fail('branches Result : stockage incompatible (T local / allocation A<T>)')
+         return next(iter(kinds), None)
+ 
+-    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, typ='Int', absent=False, storage=None, owned_fields=(), borrowed_fields=(), borrow_parents=(), variants=frozenset()):
+-        cell = f'{name}.value.allocation' if nested else f'{name}.allocation'
++    def join_allocation_result(self, name, sources, scope, label, origins, *, nested=False, optional=False, typ='Int', absent=False, storage=None, owned_fields=(), borrowed_fields=(), borrow_parents=(), variants=frozenset()):
++        # Like buffered_handle_result, a resolved empty optional source set
++        # carries no allocation. The outer Result still needs its descriptor.
++        absent = absent or (optional and not sources)
++        storage = 'pool' if optional else storage
++        cell = f'{name}.value.value' if optional else f'{name}.value.allocation' if nested else f'{name}.allocation'
+         _, _, payload = self.receive_extracted_handle(cell, sources, scope, label, origins=origins, typ=typ)
+         payload.item_sources = sources
+         payload.absent_owned_payload = absent
+@@ -8282,9 +8291,9 @@
+         restore_borrowed_fields(payload, borrowed_fields)
+         payload.borrow_parents = borrow_parents
+         self.check_borrow_destination(payload, scope)
+-        payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested else None
++        payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested or optional else None
+         self.guard_buffered_handle(name, payload, '==', payload_status=payload_status)
+-        return ('join_nested' if nested else 'join_owned'), name, payload
++        return ('join_option' if optional else 'join_nested' if nested else 'join_owned'), name, payload
+ 
+     def guard_buffered_handle(self, name, allocation, comparison, *, payload_status=None):
+         guard = f'live{self.uid()}'
+@@ -9704,7 +9713,7 @@
+             return binding.kind, binding.c, binding.alloc
+         if binding.kind in ('task', 'execution'):
+             self.fail('une tâche ou un handle ne peut pas être copiée ni empruntée')
+-        if binding.kind in ('join_owned', 'join_nested') and op == 'move':
++        if binding.kind in ('join_owned', 'join_nested', 'join_option') and op == 'move':
+             if binding.alloc.scope != scope.id:
+                 self.fail('<- exige un résultat rattaché au scope courant')
+             binding.valid = False
+@@ -9768,7 +9777,7 @@
+             self.lines.append(f'int {c} = {binding.c}->value;')
+             return 'scalar', c, None
+         if op == 'name':
+-            if binding.kind in ('join_owned', 'join_nested', 'join_array'):
++            if binding.kind in ('join_owned', 'join_nested', 'join_option', 'join_array'):
+                 return binding.kind, binding.c, binding.alloc
+             if binding.kind in ('shared_ref_option', 'shared_ref_replace', 'shared_ref_try_push', *JOIN_BORROWS):
+                 self.access(binding)
+@@ -10630,7 +10639,7 @@
+         summary = effect.completion_result if effect and effect.complete else None
+         known = {field for field, _ in fields}
+         inherited = {}
+-        if summary and summary.mode in ('owned', 'join_owned', 'join_nested'):
++        if summary and summary.mode in ('owned', 'join_owned', 'join_nested', 'join_option'):
+             for candidate in summary.candidates:
+                 if candidate.kind != 'parameter':
+                     continue
+@@ -11087,7 +11096,7 @@
+             self.fail('spawn exige une tâche inactive du scope courant' if spawn else
+                       'join exige un handle d’exécution du scope courant')
+         task_name = allocation.typ.split('<', 1)[1][:-1]
+-        if spawn and self.async_definitions[task_name][0].args[2][0] == 'join_nested':
++        if spawn and self.async_definitions[task_name][0].args[2][0] in ('join_nested', 'join_option'):
+             self.fail('spawn avec trois niveaux de Result non pris en charge')
+         self.expression_clock(expr)
+         self.thread_runtime_used = True
+@@ -11117,8 +11126,6 @@
+         c = f'joined{uid}'
+         node, _ = self.async_definitions[task_name]
+         mode, typ = node.args[2]
+-        if mode == 'handle_option':
+-            self.fail('prototype : enveloppe Result<Option<A<Int>>,runtime::Error> de join non raccordée')
+         effects = getattr(node, 'field_effect_summary', None)
+         absent_payload = bool(effects is not None and effects.complete and
+                               (effects.may_complete is False or effects.completion_result.absent_owned_payload))
+@@ -11142,6 +11149,12 @@
+             self.lines.append(f'{COPY_VALUE_TYPES[outer]} {c} = {{0}};')
+             self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.value).status;')
+             return outer, c, None
++        if mode == 'handle_option':
++            self.flag_declarations.append(f'CrustOptionJoinResult {c} = {{0}};')
++            self.lines.append(f'{c}.status = task_join_into(&{value}, &{c}.value).status;')
++            return self.join_allocation_result(c, allocation.task_result_sources, scope, label,
++                                               allocation.task_result_origins, optional=True,
++                                               absent=absent_payload)
+         if mode == 'join_owned':
+             self.flag_declarations.append(f'CrustNestedJoinResult {c} = {{0}};')
+             self.lines.append(f'{c} = task_join_nested(&{value});')
+@@ -12269,7 +12282,7 @@
+             return utf8_result[0], c, utf8_result[1]
+         if result[0] in JOIN_RESULT_TYPES:
+             return self.join_allocation_result(c, result_contract['sources'], caller,
+-                                               f'retour {name}', conditional_origins, nested=result[0] == 'join_nested', typ=declared[1],
++                                               f'retour {name}', conditional_origins, nested=result[0] == 'join_nested', optional=result[0] == 'join_option', typ=declared[1],
+                                                absent=all(candidate[2].absent_owned_payload for candidate in results),
+                                                storage=signature.join_storage_result,
+                                                owned_fields=self.owned_field_storage(result_contract['owned_fields']),
+@@ -12713,7 +12726,7 @@
+             if result.same_parameter is not None:
+                 fields = bindings[params[result.same_parameter][0]].alloc.owned_fields
+             return self.join_allocation_result(c, sources, caller, f'retour {name}',
+-                                               frozenset(origins), nested=result.mode == 'join_nested', typ=result.typ,
++                                               frozenset(origins), nested=result.mode == 'join_nested', optional=result.mode == 'join_option', typ=result.typ,
+                                                absent=result.absent_owned_payload or bool(result.candidates) and all(
+                                                    candidate.kind == 'parameter' and
+                                                    bindings[params[candidate.parameter][0]].alloc.absent_owned_payload
+@@ -13547,7 +13560,7 @@
+         if operation == 'array_pop_handle':
+             return binding.alloc is not None and binding.alloc.typ == HANDLE_VECTOR
+         return binding.kind in ('handle_option', 'handle_exchange', 'buffered_handle_exchange',
+-                                'join_owned', 'join_nested')
++                                'join_owned', 'join_nested', 'join_option')
+ 
+     def statements(self, scope, nodes, returns, continuation=(), stack_break=None, expected_array=None,
+                    *, prove_static_utf8=False):
+@@ -13877,7 +13890,7 @@
+                     kind, value, _ = result
+                     result = kind, value, self.has_static_utf8_storage(expr, kind, value)
+                 if returns == 'value_match' and expr[0] == 'if_expr' and result[0] in (
+-                        'owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested',
++                        'owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option',
+                         'array', 'array_refs', 'vector_split', 'task', 'execution'):
+                     continue
+                 if returns in ('if', 'match_result') and result[0] == 'vector_split':
+@@ -14043,7 +14056,7 @@
+                         self.fail(f"résultat propriétaire '{name}' sans usage explicite")
+                 label = 'drop-result' if name.startswith('\0drop-result-') else name
+                 kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+-                if kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested'):
++                if kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option'):
+                     if node.discarded_pattern or name == '_':
+                         self.fail('un motif _ ne peut pas écarter une allocation possédée')
+                     if self.last_use(name, nodes[i + 1:], kind) < 0:
+@@ -14091,7 +14104,7 @@
+                     scope.bindings[name] = Binding(name, kind, c, allocation,
+                                                    last=self.last_use(name, nodes[i + 1:], kind))
+                     continue
+-                if kind in ('join_owned', 'join_nested'):
++                if kind in ('join_owned', 'join_nested', 'join_option'):
+                     if (op != 'var' or node.compact_transfer
+                             or expr[0] not in ('task_join', 'task_join_value', 'name', 'move', 'scope',
+                                                'loop_expr', 'if_expr', 'value_match', 'call', 'utf8_value')):
+@@ -14422,7 +14435,7 @@
+                     self.fail('-> est autorisé uniquement à l’entrée d’un scope enfant')
+                 binding = self.lookup(args[0])
+                 allocation = binding.alloc
+-                if binding.kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested'):
++                if binding.kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option'):
+                     if parent.bindings.get(binding.name) is not binding:
+                         self.fail('-> exige un résultat rattaché au parent direct')
+                 else:
+@@ -14444,7 +14457,7 @@
+                 if not parent:
+                     self.fail('aucun scope parent pour <-')
+                 binding = self.lookup(args[0])
+-                if binding.kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested'):
++                if binding.kind in ('handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'join_option'):
+                     if scope.bindings.get(binding.name) is not binding:
+                         self.fail('<- exige un résultat rattaché au scope actuel')
+                     allocation = binding.alloc
+@@ -14526,7 +14539,7 @@
+                     self.lines.append(f'(void){binding.c};')
+                     binding.valid = False
+                     continue
+-                if binding.kind in ('join_owned', 'join_nested'):
++                if binding.kind in ('join_owned', 'join_nested', 'join_option'):
+                     if op != 'drop_value' or binding.alloc.scope != scope.id:
+                         self.fail('drop de résultat alloué exige un résultat du scope courant')
+                     self.destroy(binding.alloc)
+@@ -15293,12 +15306,12 @@
+                 prototype = Allocation(check.uid(), root.id, parameter, (source,), c=pointer, typ=typ)
+                 owned_bridge_fields(prototype, pointer)
+                 kind, _, allocation = check.join_allocation_result(parameter, (source,), root, parameter,
+-                    frozenset(), nested=mode == 'join_nested', typ=typ,
++                    frozenset(), nested=mode == 'join_nested', optional=mode == 'join_option', typ=typ,
+                     owned_fields=check.task_owned_result_fields((prototype,)))
+                 check.lines.append(f'(void)*({allocation.guard});')
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, kind, parameter, allocation, mutable=True)
+-                ctype = 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
++                ctype = JOIN_RESULT_C_TYPES[mode]
+             elif mode in ASYNC_CAPTURE_VIEW_MODES:
+                 element = VECTOR_SLICE_ELEMENTS.get(SHARED_VECTOR_SLICE_MODES.get(mode, mode), 'uint8_t')
+                 storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+@@ -15413,7 +15426,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[key]
+         mode = contract.result_type[0]
+-        ctype = ('VectorHandleResult' if mode == 'handle_option' else 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('VectorHandleResult' if mode == 'handle_option' else JOIN_RESULT_C_TYPES[mode] if mode in JOIN_RESULT_TYPES else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         qualifier = '_Noreturn ' if not contract.effects.may_return else ''
+         signature = f'static {qualifier}{ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+@@ -16743,6 +16756,7 @@
+ }
+ 
+ typedef struct { int status; Cell *value; } VectorHandleResult;
++typedef struct { int status; VectorHandleResult value; } CrustOptionJoinResult;
+ 
+ static int vector_replace(Cell *cell, int index, void *value) {
+     VectorItems *items = vector_items(cell);

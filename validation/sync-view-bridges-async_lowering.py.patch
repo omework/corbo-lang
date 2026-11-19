@@ -1,0 +1,208 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -85,7 +85,7 @@
+             'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult'}[mode]
+ 
+ 
+-def utf8_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_contracts=None):
++def utf8_result_parameters(node, functions, cache=None, active=frozenset(), *, sync_contracts=None, sync_result_contract=None):
+     if getattr(node, "public_result_views", ()):
+         return frozenset(node.public_result_views)
+     function_name, parameters, result, body = node.args
+@@ -167,14 +167,15 @@
+         if child.args[2][0] not in ASYNC_CAPTURE_VIEW_MODES or len(arguments) != len(child.args[1]):
+             return None
+         positions = utf8_result_parameters(child, functions, cache, active | {function_name},
+-                                          sync_contracts=sync_contracts)
++                                          sync_contracts=sync_contracts, sync_result_contract=sync_result_contract)
+         return {origin for position in positions for origin in mentions(arguments[position], expanding)}
+ 
+     def mentions(value, expanding=frozenset()):
+-        if (sync_contracts and isinstance(value, tuple) and value and value[0] == 'call'
+-                and value[1] in sync_contracts):
+-            contract = sync_contracts[value[1]]
+-            if (contract.result_type[0] in ASYNC_CAPTURE_VIEW_MODES
++        if isinstance(value, tuple) and value and value[0] == 'call':
++            contract = (sync_contracts or {}).get(value[1])
++            if contract is None and sync_result_contract is not None:
++                contract = sync_result_contract(value[1])
++            if (contract is not None and contract.result_type[0] in ASYNC_CAPTURE_VIEW_MODES
+                     and len(value[2]) == len(contract.parameters)
+                     and all(target.kind in ('utf8_parameter', 'parameter', 'string_parameter', 'vector_parameter')
+                             for target in contract.result.reference_targets)):
+@@ -894,7 +895,7 @@
+     reference_structs = {typ: fields for typ, fields in struct_layouts.items()
+                      if all(field_type in ('Int', '&Int', '&mut Int') for _, field_type in fields)}
+     reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
+-    view_sync_types = {('byte_ref', 'u8'): 'const unsigned char *'}
++    view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+                        for mode in ('ref', 'mut') for _, typ in owned_sync_types}
+@@ -1058,9 +1059,19 @@
+                 elif (mode, typ) in pool_sync_types:
+                     value, held = pool_argument(argument, mode, typ, line)
+                     loans.extend(held)
+-                elif mode == 'byte_ref':
+-                    value = static_byte_ref_value(argument, line)
+-                    held = list(local_utf8_loans(argument, value))
++                elif (mode, typ) in view_sync_types:
++                    operand = ('reborrow', argument[1], 'mut') if mode in SHARED_VECTOR_SLICE_MODES and argument[0] == 'name' else argument
++                    if mode == 'text':
++                        value = static_text_value(operand, line)
++                    elif mode == 'byte_ref':
++                        value = static_byte_ref_value(operand, line)
++                    elif mode in VECTOR_SLICE_ELEMENTS:
++                        value = vector_view_value(operand, line, mode)
++                    elif mode in SHARED_VECTOR_SLICE_MODES:
++                        value = mutable_slice_value(operand, line, mode)
++                    else:
++                        value = wrapped_utf8_value(operand, line)
++                    held = list(local_utf8_loans(operand, value))
+                     loans.extend(held)
+                 elif mode in ('ref', 'mut'):
+                     value, held = sync_borrow_argument(argument, mode, typ, line)
+@@ -1117,7 +1128,7 @@
+                     fail(line, 'prototype : vue synchrone sans paramètre direct')
+                 retained_views.extend(argument_loans[target.parameter])
+             utf8_result_loans[value] = tuple(retained_views)
+-            return value, '&u8'
++            return value, SCALAR_TYPES[signature[0]]
+         if signature in reference_sync_types and borrow:
+             retained = []
+             for target in contract.result.reference_targets:
+@@ -2402,6 +2413,9 @@
+         return result
+ 
+     def wrapped_utf8_family(expr):
++        signature = sync_signature(expr)
++        if signature and signature in view_sync_types and signature[0] in UTF8_VALUE_RESULT_FAMILIES:
++            return UTF8_VALUE_RESULT_FAMILIES[signature[0]]
+         if operation := vector_result_operation(expr):
+             return VECTOR_VALUE_RESULT_FAMILIES[operation[0]]
+         if expr[0] == 'utf8_try_slice':
+@@ -2463,6 +2477,9 @@
+         return vector_view_value(expr, line, 'vector_bytes')
+ 
+     def vector_view_mode(expr):
++        signature = sync_signature(expr)
++        if signature and signature[0] in VECTOR_SLICE_ELEMENTS:
++            return signature[0]
+         op = expr[0]
+         if (op == 'name' and expr[1] not in mutable_slices) or (op == 'reborrow' and expr[2] == 'ref'):
+             return slice_bindings.get(expr[1])
+@@ -2478,12 +2495,17 @@
+         return signature[0] if signature and signature[0] in VECTOR_SLICE_ELEMENTS else None
+ 
+     def mutable_slice_mode(expr):
++        signature = sync_signature(expr)
++        if signature and signature[0] in SHARED_VECTOR_SLICE_MODES:
++            return signature[0]
+         if expr[0] == 'reborrow' and expr[2] == 'mut' and expr[1] in mutable_slices:
+             return next(mode for mode, shared in SHARED_VECTOR_SLICE_MODES.items() if shared == slice_bindings[expr[1]])
+         signature = await_signature(expr)
+         return signature[0] if signature and signature[0] in SHARED_VECTOR_SLICE_MODES else None
+ 
+     def mutable_slice_value(expr, line, mode, *, following=None):
++        if sync_signature(expr) == (mode, VALUE_MODES[mode]):
++            return sync_call(expr, line, (mode, VALUE_MODES[mode]), following=following)[0]
+         if expr[0] == 'name' and expr[1] in mutable_slices:
+             expr = 'reborrow', expr[1], 'mut'
+         if mutable_slice_mode(expr) == mode:
+@@ -2498,6 +2520,8 @@
+         fail(line, f'une tranche mutable {SCALAR_TYPES[mode]} est requise')
+ 
+     def vector_view_value(expr, line, mode, *, following=None):
++        if sync_signature(expr) == (mode, VALUE_MODES[mode]):
++            return sync_call(expr, line, (mode, VALUE_MODES[mode]), following=following)[0]
+         diagnostic = f'une tranche {VALUE_MODES[mode][1:-1]} ({SCALAR_TYPES[mode]}) est requise'
+         op = expr[0]
+         if op in ('scope', 'if_expr', 'value_match', 'loop_expr') or computed_await(expr):
+@@ -2623,13 +2647,16 @@
+             del pending_splits[pair_name]
+ 
+     def wrapped_utf8_value(subject, line, *, following=None):
++        signature = sync_signature(subject)
++        if signature and signature in view_sync_types:
++            return sync_call(subject, line, signature, following=following)[0]
+         if operation := vector_result_operation(subject):
+             return vector_result_value(operation, subject, line, following=following)
+         if subject[0] == 'utf8_try_slice':
+             value = prepare_text_slice(subject, line, fallible=True)
+             saved = temporary('CrustTextResult')
+             steps.append(f'{saved} = {value};')
+-            utf8_result_loans[saved] = local_utf8_loans(subject[1])
++            utf8_result_loans[saved] = local_utf8_loans(subject, value)
+             return saved
+         if subject[0] == 'array_integer_try_from':
+             value, typ = infer_scalar_value(subject[1], line, following=following)
+@@ -3054,7 +3081,7 @@
+     def is_static_text(expr):
+         if expr[0] == 'utf8_value' and expr[1][0] == 'name' and utf8_match_payloads.get(expr[1][1]) == 'text':
+             return True
+-        return (expr[0] == 'text' or await_signature(expr) == ('text', 'str') or (expr[0] == 'name' and expr[1] in text_bindings)
++        return (expr[0] == 'text' or sync_signature(expr) == ('text', 'str') or await_signature(expr) == ('text', 'str') or (expr[0] == 'name' and expr[1] in text_bindings)
+                 or (expr[0] == 'utf8_slice' and (is_static_text(expr[1])
+                     or expr[1][0] == 'name' and collection_types.get(expr[1][1]) == 'String')))
+ 
+@@ -3081,9 +3108,10 @@
+             loans = [(name, 'mut' if references.get(name) == 'mut' else 'ref')]
+         else:
+             view = static_text_value(receiver, line, following=following)
+-            loans = list(local_utf8_loans(receiver))
++            loans = list(local_utf8_loans(receiver, view))
+         snapshot = temporary('CrustText')
+         steps.append(f'{snapshot} = {view};')
++        utf8_result_loans[snapshot] = tuple(loans)
+         active_loans[id(loans)] = loans
+         try:
+             offset = expression(index, line)
+@@ -3097,7 +3125,9 @@
+                 (receiver[0] == 'text' and index[1] >= len(receiver[1]))):
+             fail(line, 'indice UTF-8 hors bornes')
+         snapshot, offset = indexed_text_view(receiver, index, line, following=following)
+-        return f'text_byte_address({snapshot}, {offset})'
++        pointer = f'text_byte_address({snapshot}, {offset})'
++        utf8_result_loans[pointer] = utf8_result_loans.get(snapshot, ())
++        return pointer
+ 
+     def is_static_byte_ref(expr):
+         return (sync_signature(expr) == ('byte_ref', 'u8')
+@@ -3142,6 +3172,8 @@
+         return value_place(expr[1])
+ 
+     def static_text_value(expr, line, *, following=None):
++        if sync_signature(expr) == ('text', 'str'):
++            return sync_call(expr, line, ('text', 'str'), following=following)[0]
+         if expr[0] == 'await' and (await_signature(expr) == ('text', 'str') or computed_await(expr)):
+             return await_task(expr, line, returns_value=True, scalar_type='&str')
+         if expr[0] in ('scope', 'if_expr', 'value_match', 'loop_expr'):
+@@ -3174,7 +3206,7 @@
+             view = static_text_value(receiver, line)
+         steps.append(f'{snapshot} = {view};')
+         prepared = []
+-        loans = list(local_utf8_loans(receiver))
++        loans = list(local_utf8_loans(receiver, view))
+         active_loans[id(loans)] = loans
+         try:
+             for bound in bounds:
+@@ -3186,7 +3218,9 @@
+             del active_loans[id(loans)]
+         end = prepared[1] if len(prepared) == 2 else '0'
+         operation = 'text_try_slice' if fallible else 'text_slice'
+-        return f'{operation}({snapshot}, {prepared[0]}, {end}, {int(len(prepared) == 2)})'
++        value = f'{operation}({snapshot}, {prepared[0]}, {end}, {int(len(prepared) == 2)})'
++        utf8_result_loans[value] = tuple(loans)
++        return value
+ 
+     def condition_value(condition, line):
+         if condition[0] == 'truth':
+@@ -5379,6 +5413,8 @@
+ 
+     def set_reference(statement, following):
+         if statement.op in ('call', 'array_statement') and sync_signature(statement.args[0]) is not None:
++            if sync_signature(statement.args[0])[1].startswith('Result<'):
++                fail(statement.line, 'résultat faillible sans usage explicite')
+             if statement.args[0][0] == 'method_call' and sync_signature(statement.args[0]) != ('void', 'Void'):
+                 fail(statement.line, 'résultat de méthode sans receveur explicitement utilisé')
+             sync_call(statement.args[0], statement.line, following=following)

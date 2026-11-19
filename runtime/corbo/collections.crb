@@ -1,0 +1,236 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Vector movement and map slot reuse preserve the same element ownership callbacks as the C reference.
+/// Appends a child-region/slot link for recursive cleanup; the child descriptor and slot flag must remain valid.
+fn region_push_owned(region:usize,item:usize,slot:usize) {
+    let place=region_add(copy(region));
+    s_RegionOwner_region(copy(place),copy(item));
+    s_RegionOwner_slot(copy(place),copy(slot));
+}
+/// Appends a byte or machine-word scalar according to the region element width.
+fn region_push(region:usize,value:i64) {
+    let place=region_add(copy(region));
+    if g_Region_width(copy(region))==1 {
+        write_byte(copy(place),unsigned_bits(copy(value)));
+    } else {
+        write_word(copy(place),unsigned_bits(copy(value)));
+    }
+}
+/// Appends a row of machine words from caller storage; the source must cover the region element width.
+fn region_push_row(region:usize,row:usize) {
+    let element=region_add(copy(region));
+    let mut index:usize=0;
+    while copy(index)<g_Region_width(copy(region))/8 {
+        write_word(copy(element)+copy(index)*8,read_word(copy(row)+copy(index)*8));
+        index=copy(index)+1;
+    }
+}
+/// Reads a signed word in a checked row/field position; invalid positions terminate.
+fn region_read_row(region:usize,index:usize,field:usize)->i64 {
+    if copy(index)>=g_Region_len(copy(region)) || copy(field)>=g_Region_width(copy(region))/8 {
+        region_error();
+    }
+    signed_bits(read_word(g_Region_data(copy(region))+copy(index)*g_Region_width(copy(region))+copy(field)*8))
+}
+/// Appends count bytes through checked element growth; source must contain count readable bytes.
+fn region_append(region:usize,data:usize,count:usize) {
+    if copy(count)>g_Region_bytes(copy(region))-g_Region_len(copy(region)) {
+        region_error();
+    }
+    let mut index:usize=0;
+    while copy(index)<copy(count) {
+        region_push(copy(region),signed_bits(read_byte(copy(data)+copy(index))));
+        index=copy(index)+1;
+    }
+}
+/// Reads a checked byte or machine-word element and returns its signed bit representation.
+fn region_read(region:usize,index:usize)->i64 {
+    if copy(index)>=g_Region_len(copy(region)) {
+        region_error();
+    }
+    let data=g_Region_data(copy(region));
+    if g_Region_width(copy(region))==1 {
+        signed_bits(read_byte(copy(data)+copy(index)))
+    } else {
+        signed_bits(read_word(copy(data)+copy(index)*8))
+    }
+}
+/// Grows byte storage through the synchronized path, then copies a readable source range into the new tail.
+fn value_region_append(region:usize,data:usize,count:usize) {
+    if copy(count)==0 {
+        return;
+    }
+    let old=g_Region_len(copy(region));
+    if copy(count)>g_Region_bytes(copy(region))-copy(old) {
+        region_error();
+    }
+    s_Region_len(copy(region),copy(old)+copy(count)-1);
+    drop(value_region_add(copy(region)));
+    memory_copy(g_Region_data(copy(region))+copy(old),copy(data),copy(count));
+}
+/// Moves the selected element into out and shifts the remaining tail; out must hold one element and index must be live.
+fn vector_remove(region:usize,index:u64,out:usize) {
+    let length=g_Region_len(copy(region));
+    if copy(index)>=copy(length) {
+        fault(4);
+    }
+    let width=g_Region_width(copy(region));
+    let pointer=g_Region_data(copy(region))+copy(index)*copy(width);
+    memory_copy(copy(out),copy(pointer),copy(width));
+    s_Region_len(copy(region),copy(length)-1);
+    memory_move(copy(pointer),copy(pointer)+copy(width),(copy(length)-1-copy(index))*copy(width));
+}
+/// Moves the last element into out and shortens the region; returns false without writing when empty.
+fn vector_pop(region:usize,out:usize)->bool {
+    let length=g_Region_len(copy(region));
+    if copy(length)==0 {
+        return false;
+    }
+    s_Region_len(copy(region),copy(length)-1);
+    memory_copy(copy(out),g_Region_data(copy(region))+(copy(length)-1)*g_Region_width(copy(region)),g_Region_width(copy(region)));
+    true
+}
+/// Destroys pooled elements from the last slot to the first, then releases the vector's region.
+fn destroy_owned_region(region:usize) {
+    let mut index=g_Region_len(copy(region));
+    while copy(index)!=0 {
+        index=copy(index)-1;
+        put(g_Region_data(copy(region))+copy(index)*size_Owned());
+    }
+    value_region_drop(copy(region));
+}
+/// Rounds a map header or entry width to max_align_t, terminating on overflow.
+fn map_align(bytes:usize)->usize {
+    let alignment=max_alignment();
+    if copy(bytes)>max_size()-(copy(alignment)-1) {
+        region_error();
+    }
+    return (copy(bytes)+copy(alignment)-1)/copy(alignment)*copy(alignment);
+}
+/// Maps a map descriptor and initializes its stable region storage with an optional element cleanup callback.
+fn map_new(width:usize,dispose:usize)->usize {
+    let map=os_metadata(size_RegionalMap());
+    if copy(map)==0 {
+        region_error();
+    }
+    memory_zero(copy(map),size_RegionalMap());
+    s_RegionalMap_width(copy(map),copy(width));
+    s_RegionalMap_dispose(copy(map),copy(dispose));
+    value_region_new(a_RegionalMap_region(copy(map)),1,0,get_current_band()==0 && get_global_budget()==0);
+    copy(map)
+}
+/// Commits additional bytes in a map region without moving existing entries; capacity failure terminates.
+fn map_extend(map:usize,bytes:usize) {
+    let region=a_RegionalMap_region(copy(map));
+    let length=g_Region_len(copy(region));
+    if copy(bytes)==0 || copy(bytes)>g_Region_bytes(copy(region))-copy(length) {
+        region_error();
+    }
+    s_Region_len(copy(region),copy(length)+copy(bytes)-1);
+    drop(value_region_add(copy(region)));
+}
+/// Returns the bucket-chain link containing key or the insertion link at its end; bucket storage must be initialized.
+fn map_link(map:usize,key:u64)->usize {
+    let mut hash=wrapping_multiply(copy(key)^(copy(key)>>30),0xbf58476d1ce4e5b9);
+    hash=copy(hash)^(copy(hash)>>27);
+    let data=g_Region_data(a_RegionalMap_region(copy(map)));
+    let mut link=copy(data)+(copy(hash)%16)*8;
+    while read_word(copy(link))!=0 {
+        let entry=copy(data)+read_word(copy(link));
+        if g_MapEntry_key(copy(entry))==copy(key) {
+            break;
+        }
+        link=a_MapEntry_next(copy(entry));
+    }
+    copy(link)
+}
+/// Returns the stored value address for key, or zero when absent; the map retains ownership.
+fn map_get(map:usize,key:u64)->usize {
+    let region=a_RegionalMap_region(copy(map));
+    if g_Region_len(copy(region))==0 {
+        return 0;
+    }
+    let slot=read_word(map_link(copy(map),copy(key)));
+    if copy(slot)!=0 {
+        g_Region_data(copy(region))+copy(slot)+map_align(size_MapEntry())
+    } else {
+        0
+    }
+}
+/// Moves incoming bytes into a stable entry. Returns true and moves the replaced bytes into previous when the key exists.
+fn map_insert(map:usize,key:u64,incoming:usize,previous:usize)->bool {
+    let region=a_RegionalMap_region(copy(map));
+    if g_Region_len(copy(region))==0 {
+        let bytes=map_align(16*8);
+        map_extend(copy(map),copy(bytes));
+        memory_zero(g_Region_data(copy(region)),copy(bytes));
+    }
+    let header=map_align(size_MapEntry());
+    let link=map_link(copy(map),copy(key));
+    let mut slot=read_word(copy(link));
+    let replaced=copy(slot)!=0;
+    let data=g_Region_data(copy(region));
+    let width=g_RegionalMap_width(copy(map));
+    if copy(replaced) {
+        memory_copy(copy(previous),copy(data)+copy(slot)+copy(header),copy(width));
+    } else {
+        let free=g_RegionalMap_free_slot(copy(map));
+        if copy(free)!=0 {
+            slot=copy(free);
+            s_RegionalMap_free_slot(copy(map),g_MapEntry_next(copy(data)+copy(slot)));
+        } else {
+            if copy(width)>max_size()-copy(header) {
+                region_error();
+            }
+            slot=g_Region_len(copy(region));
+            map_extend(copy(map),map_align(copy(header)+copy(width)));
+        }
+        s_MapEntry_key(copy(data)+copy(slot),copy(key));
+        s_MapEntry_next(copy(data)+copy(slot),0);
+        write_word(copy(link),copy(slot));
+    }
+    memory_copy(copy(data)+copy(slot)+copy(header),copy(incoming),copy(width));
+    copy(replaced)
+}
+/// Unlinks key and moves its value into previous; returns false without writing when absent and indexes the freed slot for reuse.
+fn map_remove(map:usize,key:u64,previous:usize)->bool {
+    let region=a_RegionalMap_region(copy(map));
+    if g_Region_len(copy(region))==0 {
+        return false;
+    }
+    let link=map_link(copy(map),copy(key));
+    let slot=read_word(copy(link));
+    if copy(slot)==0 {
+        return false;
+    }
+    let data=g_Region_data(copy(region));
+    let entry=copy(data)+copy(slot);
+    memory_copy(copy(previous),copy(data)+copy(slot)+map_align(size_MapEntry()),g_RegionalMap_width(copy(map)));
+    write_word(copy(link),g_MapEntry_next(copy(entry)));
+    s_MapEntry_next(copy(entry),g_RegionalMap_free_slot(copy(map)));
+    s_RegionalMap_free_slot(copy(map),copy(slot));
+    true
+}
+/// Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage.
+fn map_drop(slot:usize) {
+    let map=read_word(copy(slot));
+    if copy(map)==0 {
+        return;
+    }
+    write_word(copy(slot),0);
+    let dispose=g_RegionalMap_dispose(copy(map));
+    let region=a_RegionalMap_region(copy(map));
+    if copy(dispose)!=0 && g_Region_len(copy(region))!=0 {
+        let data=g_Region_data(copy(region));
+        let mut index:usize=0;
+        while copy(index)<16 {
+            let mut at=read_word(copy(data)+copy(index)*8);
+            while copy(at)!=0 {
+                call_drop(copy(dispose),copy(data)+copy(at)+map_align(size_MapEntry()));
+                at=g_MapEntry_next(copy(data)+copy(at));
+            }
+            index=copy(index)+1;
+        }
+    }
+    value_region_drop(copy(region));
+    os_unmap(copy(map),size_RegionalMap());
+}

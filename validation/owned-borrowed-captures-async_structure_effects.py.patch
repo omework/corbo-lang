@@ -1,0 +1,22 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -62,6 +62,8 @@
+             if additions <= self.owned_structures:
+                 break
+             self.owned_structures.update(additions)
++        self.owned_structures.update(typ for typ, variants in enums.items() if '' in variants and all(
++            field in ('Int', '&Int', '&mut Int') for _, field in variants['']))
+         # Only the published synchronous contracts cross this boundary. The
+         # function bodies are deliberately absent from the symbolic adapter.
+         functions = {name: SimpleNamespace(
+@@ -149,6 +151,10 @@
+     def observe_suspension(self, environment, line):
+         self.has_suspension = True
+         for index, original in self.structure_inputs.items():
++            if self.params[index][1] == 'owned':
++                # A moved carrier is internal to this state. Its current fields
++                # are not stores into an external borrowed carrier on suspension.
++                continue
+             final = environment[f'\0structure:{index}']
+             fields = self.suspended_structures.setdefault(index, {})
+             for field, targets in final.fields:

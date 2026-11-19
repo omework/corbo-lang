@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! C ABI policy entry points. Aggregate argument/result marshalling is isolated in exports.py.
+/// Initializes C-owned runtime storage with optional fixed-stack, region-stack and region-width budgets; repeated initialization terminates.
+fn corbo_runtime_init(fixed:usize,regions:usize,region:usize) {
+    if get_base()!=0 {
+        storage_error();
+    }
+    if copy(region)!=0 {
+        set_global_limit(copy(region));
+    }
+    set_global_budget(copy(regions));
+    reserve(if copy(fixed)!=0 {
+        copy(fixed)
+    } else {
+        get_global_fixed_budget()
+    });
+}
+/// Releases the calling thread's C-owned runtime after all live resources and workers have been cleaned up; a stopped runtime is a no-op.
+fn corbo_runtime_shutdown() {
+    if get_base()==0 {
+        return;
+    }
+    region_restore(0);
+    region_release();
+    release();
+    set_base(0);
+    set_cursor(0);
+    set_limit(0);
+    set_committed(0);
+    set_mapped_size(0);
+    memory_zero(global_band_address(),size_RegionBand());
+}
+/// Allocates count aligned elements on the calling thread's initialized stack; invalid size/alignment or exhaustion terminates.
+fn corbo_datastack_alloc(size:usize,alignment:usize,count:usize)->usize {
+    if get_base()==0 || copy(size)==0 || copy(alignment)==0 || (copy(alignment)&(copy(alignment)-1))!=0 || copy(alignment)>max_alignment() {
+        storage_error();
+    }
+    push(copy(size),copy(alignment),copy(count))
+}
+/// Writes the current cursor, stack identity and region-scope marker to caller-provided CorboStackMark storage.
+fn corbo_datastack_mark(out:usize) {
+    s_CorboStackMark_position(copy(out),get_cursor());
+    s_CorboStackMark_stack(copy(out),get_base());
+    s_CorboStackMark_region_scope(copy(out),get_current_band());
+}
+/// Writes current cursor, committed bytes and fixed-stack capacity to caller-provided CorboStackInfo storage.
+fn corbo_datastack_info(out:usize) {
+    s_CorboStackInfo_position(copy(out),get_cursor());
+    s_CorboStackInfo_committed(copy(out),get_committed());
+    s_CorboStackInfo_capacity(copy(out),get_limit());
+}
+/// Restores a mark from this stack after caller cleanup; rejects foreign or forward marks and preserves live transferred regions.
+fn corbo_datastack_rewind(mark:usize) {
+    if get_base()==0 || g_CorboStackMark_stack(copy(mark))!=get_base() || g_CorboStackMark_position(copy(mark))>get_cursor() {
+        storage_error();
+    }
+    lock();
+    region_restore(g_CorboStackMark_region_scope(copy(mark)));
+    set_cursor(g_CorboStackMark_position(copy(mark)));
+    unlock();
+}
+/// Creates fixed slots for each enum arm on the current datastack; zero element width or invalid capacity terminates.
+fn corbo_pool_create(slots:usize,size:usize,arms:usize)->usize {
+    if copy(size)==0 {
+        storage_error();
+    }
+    new_pool(copy(slots),region_stride(copy(size)),copy(arms))
+}
+/// Claims a slot in the selected arm and writes an allocation descriptor to out; invalid arms or exhaustion terminate.
+fn corbo_pool_take(out:usize,pool:usize,arm:usize) {
+    if copy(pool)==0 || copy(arm)>=g_Pools_arms(copy(pool)) {
+        storage_error();
+    }
+    pool_take(copy(out),copy(pool),copy(arm));
+}
+/// Initializes a stable caller-owned region descriptor for element_size bytes per item; dedicated selects independent band storage.
+fn corbo_region_new(region:usize,size:usize,dedicated:bool) {
+    if copy(size)==0 {
+        region_error();
+    }
+    value_region_new(copy(region),copy(size),0,copy(dedicated));
+}
+/// Destroys child-region links, releases payload storage and zeroes the caller's region descriptor.
+fn corbo_region_drop(region:usize) {
+    value_region_drop(copy(region));
+    memory_zero(copy(region),size_Region());
+}
+/// Returns the experimental C ABI version; clients must use the matching runtime header.
+fn corbo_runtime_abi_version()->u32 {
+    1
+}
+/// Requests immediate reclamation of complete unused pages without changing live values or their reserved address ranges.
+fn corbo_free_pages() {
+    reclaim_scope(true);
+}
+/// Returns an allocation's payload address without transferring ownership or extending its lifetime.
+fn corbo_allocation_data(allocation:usize)->usize {
+    g_Owned_slot(copy(allocation))
+}
+/// Destroys a live allocation before releasing its slot and clears its pool link; a cleared descriptor is harmless.
+fn corbo_allocation_drop(allocation:usize) {
+    put(copy(allocation));
+}
+/// Enters a local region scope with the requested maximum region size and count budget.
+fn corbo_region_enter(maximum:usize,count:usize) {
+    scoped_region_enter(copy(maximum),copy(count),copy(count));
+}
+/// Appends one uninitialized region element and returns its address; region exhaustion terminates.
+fn corbo_region_push(region:usize)->usize {
+    value_region_add(copy(region))
+}
+/// Maps a map descriptor and initializes its stable region storage with an optional element cleanup callback.
+fn corbo_map_new(size:usize,dispose:usize)->usize {
+    map_new(copy(size),copy(dispose))
+}
+/// Returns the stored value address for key, or zero when absent; the map retains ownership.
+fn corbo_map_get(map:usize,key:u64)->usize {
+    map_get(copy(map),copy(key))
+}
+/// Moves incoming bytes into a stable entry. Returns true and moves the replaced bytes into previous when the key exists.
+fn corbo_map_insert(map:usize,key:u64,incoming:usize,previous:usize)->bool {
+    map_insert(copy(map),copy(key),copy(incoming),copy(previous))
+}
+/// Unlinks key and moves its value into previous; returns false without writing when absent and indexes the freed slot for reuse.
+fn corbo_map_remove(map:usize,key:u64,previous:usize)->bool {
+    map_remove(copy(map),copy(key),copy(previous))
+}
+/// Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage.
+fn corbo_map_drop(map:usize) {
+    map_drop(copy(map));
+}

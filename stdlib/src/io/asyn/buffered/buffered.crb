@@ -1,0 +1,175 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Asynchronous buffered byte streams with caller-provided storage.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+
+    #(type: E)
+    /// Preserves the stream's error type and reports writes that make no progress.
+    pub enum BufferedError<E> {
+        /// Wraps the underlying stream error without changing its type.
+        Stream {
+            /// Underlying stream error retained with its original type.
+            error: E
+        },
+        /// A nonempty write made no progress.
+        WriteZero,
+    }
+
+    /// Reads ahead from a borrowed byte stream into a borrowed buffer.
+    #(type: E)
+    #(type: T<E> with {
+        async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, E>;
+    })
+    pub struct BufReader<T, E> {
+        /// Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+        stream: &mut T,
+        /// Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+        buffer: &mut [u8],
+        /// Offset of the next unread/unsent buffered byte.
+        start: u64,
+        /// Exclusive end of the valid buffered byte range.
+        end: u64,
+    }
+
+    impl BufReader<T, E> {
+        /// Borrows the constrained stream and buffer. An empty buffer uses direct reads.
+        async fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E> {
+            BufReader { stream: stream, buffer: buffer, start: 0, end: 0 }
+        }
+
+        /// Borrows the TCP connection and buffer. An empty buffer uses direct reads.
+        async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E> {
+            BufReader { stream: stream, buffer: buffer, start: 0, end: 0 }
+        }
+
+        /// Reads into the output, returning the bytes copied. Dropping the reader
+        /// discards unread buffered bytes. The underlying stream has already consumed them.
+        async fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>> {
+            if output.len() == 0 { return Ok(0); }
+            let next = &mut (*self).start;
+            let filled = &mut (*self).end;
+            let mut start = *next;
+            let mut end = *filled;
+            let buffer = &mut *(*self).buffer;
+            let capacity = buffer.len() as u64;
+            let requested = output.len() as u64;
+            let stream = &mut *(*self).stream;
+            if start == end {
+                if requested >= capacity {
+                    match stream.read(output).await {
+                        Ok(count) => { return Ok(count); },
+                        Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                    }
+                }
+                let received = match stream.read(&mut buffer[0..capacity]).await {
+                    Ok(count) => { count as u64 },
+                    Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                };
+                end = received;
+                start = 0;
+            }
+
+            let available = end - start;
+            let count = if requested < available { requested } else { available };
+            let mut i: u64 = 0;
+            while i < count {
+                output[i] = buffer[start + i];
+                i = i + 1;
+            }
+            *next = start + count;
+            *filled = end;
+            Ok(count as usize)
+        }
+    }
+
+    /// Holds pending output in a borrowed buffer. Call `flush()` to write it to the stream.
+    #(type: E)
+    #(type: T<E> with {
+        async fn write(&mut self, buffer: &[u8]) -> Result<usize, E>;
+    })
+    pub struct BufWriter<T, E> {
+        /// Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+        stream: &mut T,
+        /// Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+        buffer: &mut [u8],
+        /// Offset of the next unread/unsent buffered byte.
+        start: u64,
+        /// Exclusive end of the valid buffered byte range.
+        end: u64,
+    }
+
+    impl BufWriter<T, E> {
+        /// Borrows the constrained stream and buffer. An empty buffer uses direct writes.
+        async fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E> {
+            BufWriter { stream: stream, buffer: buffer, start: 0, end: 0 }
+        }
+
+        /// Borrows the TCP connection and buffer. An empty buffer uses direct writes.
+        async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E> {
+            BufWriter { stream: stream, buffer: buffer, start: 0, end: 0 }
+        }
+
+        /// Accepts a prefix of the input and returns the number accepted.
+        /// Flushes previously buffered bytes when the buffer is already full.
+        async fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>> {
+            if input.len() == 0 { return Ok(0); }
+            let capacity = {
+                let buffer = &*(*self).buffer;
+                buffer.len() as u64
+            };
+            if capacity == 0 {
+                let stream = &mut *(*self).stream;
+                match stream.write(input).await {
+                    Ok(count) => {
+                        if copy(count) == 0 { return Err(BufferedError.WriteZero); }
+                        return Ok(count);
+                    },
+                    Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                }
+            }
+            if (*self).end == capacity {
+                match self.flush().await {
+                    Ok(()) => {},
+                    Err(error) => { return Err(error); },
+                }
+            }
+
+            let end = (*self).end;
+            let available = capacity - end;
+            let requested = input.len() as u64;
+            let count = if requested < available { requested } else { available };
+            let buffer = &mut *(*self).buffer;
+            let mut i: u64 = 0;
+            while i < count {
+                buffer[end + i] = input[i];
+                i = i + 1;
+            }
+            let filled = &mut (*self).end;
+            *filled = end + count;
+            Ok(count as usize)
+        }
+
+        /// Writes pending bytes to the stream. After an error, retrying starts at the
+        /// first byte the stream has yet to accept. Destruction discards pending bytes.
+        async fn flush(&mut self) -> Result<(), BufferedError<E>> {
+            let mut start = (*self).start;
+            let end = (*self).end;
+            let buffer = &*(*self).buffer;
+            let stream = &mut *(*self).stream;
+            let cursor = &mut (*self).start;
+            while start < end {
+                let count = match stream.write(&buffer[start..end]).await {
+                    Ok(count) => { count as u64 },
+                    Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                };
+                if count == 0 { return Err(BufferedError.WriteZero); }
+                start = start + count;
+                *cursor = copy(start);
+            }
+            *cursor = 0;
+            let filled = &mut (*self).end;
+            *filled = 0;
+            Ok(())
+        }
+    }
+#(endif)

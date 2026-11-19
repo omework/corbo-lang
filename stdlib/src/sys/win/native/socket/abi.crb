@@ -1,0 +1,837 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Windows ARM64 and x86-64 Winsock bindings and socket completion helpers.
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Initializes the platform socket subsystem where initialization is required.
+    pub fn startup() -> i64 {
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #416
+                mov x0, #514
+                add x1, sp, #0
+                bl WSAStartup
+                mov ${raw}, x0
+                add sp, sp, #416
+            }
+        }
+        raw
+    }
+
+    /// Releases platform socket subsystem state acquired by startup.
+    pub fn cleanup() {
+        @unchecked {
+            @asm {
+                bl WSACleanup
+            }
+        }
+    }
+
+    /// Creates a Winsock IPv4 socket of the requested kind.
+    pub fn open(kind: i64) -> (i64, u64) {
+        let mut socket: u64 = 0;
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, #2
+                mov x1, ${kind}
+                mov x2, #0
+                bl socket
+                mov ${socket}, x0
+                cmn x0, #1
+                b.ne 2f
+                bl WSAGetLastError
+                neg x0, x0
+                mov ${status}, x0
+                2:
+            }
+        }
+        (status, socket)
+    }
+
+    /// Requests a connection to the IPv4 address and port and returns a native status.
+    pub fn connect(socket: u64, ipv4: u32, port: u16) -> i64 {
+        let port_bits = port as usize;
+        let ipv4_bits = ipv4 as usize;
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #16
+                mov w9, #2
+                str w9, [sp, #0]
+                mov x9, ${port_bits}
+                rev16 w9, w9
+                strh w9, [sp, #2]
+                mov x9, ${ipv4_bits}
+                rev w9, w9
+                str w9, [sp, #4]
+                str xzr, [sp, #8]
+                mov x0, ${socket}
+                add x1, sp, #0
+                mov x2, #16
+                bl connect
+                sxtw x0, w0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+                add sp, sp, #16
+            }
+        }
+        raw
+    }
+
+    /// Associates a socket with a local IPv4 address and port and returns a native status.
+    pub fn bind(socket: u64, ipv4: u32, port: u16) -> i64 {
+        let port_bits = port as usize;
+        let ipv4_bits = ipv4 as usize;
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #16
+                mov w9, #2
+                str w9, [sp, #0]
+                mov x9, ${port_bits}
+                rev16 w9, w9
+                strh w9, [sp, #2]
+                mov x9, ${ipv4_bits}
+                rev w9, w9
+                str w9, [sp, #4]
+                str xzr, [sp, #8]
+                mov x0, ${socket}
+                add x1, sp, #0
+                mov x2, #16
+                bl bind
+                sxtw x0, w0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+                add sp, sp, #16
+            }
+        }
+        raw
+    }
+
+    /// Marks a bound stream socket as listening using the supplied backlog.
+    pub fn listen(socket: u64, backlog: i32) -> i64 {
+        let backlog_bits = backlog as i64;
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${socket}
+                mov x1, ${backlog_bits}
+                bl listen
+                sxtw x0, w0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+            }
+        }
+        raw
+    }
+
+    /// Accepts a native socket and returns its status and handle.
+    pub fn accept(socket: u64) -> (i64, u64) {
+        let mut accepted: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${socket}
+                mov x1, #0
+                mov x2, #0
+                bl accept
+                mov ${accepted}, x0
+                cmn x0, #1
+                b.ne 2f
+                bl WSAGetLastError
+                neg x0, x0
+                mov ${error}, x0
+                2:
+            }
+        }
+        (error, accepted)
+    }
+
+    /// Closes the Winsock socket handle.
+    pub fn close(socket: u64) {
+        @unchecked {
+            @asm {
+                mov x0, ${socket}
+                bl closesocket
+            }
+        }
+    }
+
+    /// Translates a completed Winsock operation's native error code.
+    pub fn completion_error(code: u64) -> i64 {
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${code}
+                neg x0, x0
+                mov ${result}, x0
+            }
+        }
+        result
+    }
+
+    /// Updates the Winsock context after an overlapped accept or connect.
+    pub fn update_context(socket: u64, accepting: bool, listener: u64) -> i64 {
+        let option: i64 = if accepting { 28683 } else { 28688 };
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${socket}
+                mov w1, #65535
+                mov x9, ${option}
+                mov w2, w9
+                mov x3, #0
+                mov w4, #0
+                mov w10, #0x7010
+                cmp w2, w10
+                b.eq 1f
+                mov x9, ${listener}
+                str x9, [sp]
+                mov x3, sp
+                mov w4, #8
+                1:
+                bl setsockopt
+                cbz w0, 2f
+                bl WSAGetLastError
+                neg x0, x0
+                mov ${result}, x0
+                2:
+                add sp, sp, #16
+            }
+        }
+        result
+    }
+
+    /// Applies the platform socket options needed by this backend.
+    pub fn configure(socket: u64) -> i64 { drop(socket); 0 }
+
+    /// Queries the local or peer IPv4 endpoint and returns its native address representation.
+    pub fn endpoint(socket: u64, remote: u64) -> (i64, u64) {
+        let mut raw: i64 = 0;
+        let mut peer_port: u16 = 0;
+        let mut peer_ip: u32 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #32
+                str xzr, [sp, #0]
+                mov w9, #16
+                str w9, [sp, #16]
+                mov x0, ${socket}
+                add x1, sp, #0
+                add x2, sp, #16
+                mov x9, ${remote}
+                cbz x9, 3f
+                bl getpeername
+                b 4f
+                3:
+                bl getsockname
+                4:
+                sxtw x0, w0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+                ldrh w9, [sp, #2]
+                rev16 w9, w9
+                mov ${peer_port}, w9
+                ldr w9, [sp, #4]
+                rev w9, w9
+                mov ${peer_ip}, w9
+                add sp, sp, #32
+            }
+        }
+        (raw, ((peer_ip as u64) << 16) | (peer_port as u64))
+    }
+
+    /// Extracts packed IPv4 bits and a host-order port from the native endpoint.
+    pub fn decode_peer(peer: u64) -> (u32, u16) {
+        let mut ip: u32 = 0;
+        let mut port: u16 = 0;
+        @unchecked {
+            @asm {
+                mov x9, ${peer}
+                mov ${port}, w9
+                lsr x9, x9, #16
+                mov ${ip}, w9
+            }
+        }
+        (ip, port)
+    }
+
+    /// Sends bytes to the connected endpoint and returns status and byte count.
+    pub fn send(socket: u64, buffer: &[u8], mut length: usize) -> (i64, usize) {
+        if length > 2147483647 { length = 2147483647; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub sp, sp, #16
+                mov x0, ${socket}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, #0
+                bl send
+                sxtw x0, w0
+                mov ${count}, x0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+                add sp, sp, #16
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+
+    /// Reads from a connected socket and returns status and byte count.
+    pub fn receive(socket: u64, buffer: &mut [u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length > 2147483647 { length = 2147483647; }
+        if length == 0 { return (0, 0); }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                mov x0, ${socket}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, #0
+                bl recv
+                sxtw x0, w0
+                mov ${count}, x0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+
+    /// Sends bytes to a specified native endpoint and returns status and byte count.
+    pub fn send_to(socket: u64, buffer: &[u8], length: usize, ipv4: u32, port: u16) -> (i64, usize) {
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        let port_bits = port as usize;
+        let ipv4_bits = ipv4 as usize;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub sp, sp, #16
+                mov w9, #2
+                str w9, [sp, #0]
+                mov x9, ${port_bits}
+                rev16 w9, w9
+                strh w9, [sp, #2]
+                mov x9, ${ipv4_bits}
+                rev w9, w9
+                str w9, [sp, #4]
+                str xzr, [sp, #8]
+                mov x0, ${socket}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, #0
+                add x4, sp, #0
+                mov x5, #16
+                bl sendto
+                sxtw x0, w0
+                mov ${count}, x0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+                add sp, sp, #16
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+
+    /// Reads one datagram and returns status, byte count and native sender address.
+    pub fn receive_from(socket: u64, buffer: &mut [u8]) -> (i64, usize, u64) {
+        let mut length = buffer.len();
+        if length > 2147483647 { length = 2147483647; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        let mut peer_ip: u32 = 0;
+        let mut peer_port: u16 = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub sp, sp, #32
+                mov x0, ${socket}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, #0
+                mov w9, #16
+                str w9, [sp, #16]
+                add x4, sp, #0
+                add x5, sp, #16
+                bl recvfrom
+                sxtw x0, w0
+                mov ${count}, x0
+                tbz x0, #63, 1f
+                bl WSAGetLastError
+                neg x0, x0
+                1:
+                mov ${raw}, x0
+                ldrh w9, [sp, #2]
+                rev16 w9, w9
+                mov ${peer_port}, w9
+                ldr w9, [sp, #4]
+                rev w9, w9
+                mov ${peer_ip}, w9
+                add sp, sp, #32
+            }
+        }
+        if raw < 0 { return (raw, 0, 0); }
+        let peer = ((peer_ip as u64) << 16) | (peer_port as u64);
+        return (0, count, peer);
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Initializes the platform socket subsystem where initialization is required.
+    pub fn startup() -> i64 {
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 448
+                mov rcx, 514
+                lea rdx, [rsp + 32]
+                call WSAStartup
+                mov ${raw}, rax
+                add rsp, 448
+            }
+        }
+        raw
+    }
+
+    /// Releases platform socket subsystem state acquired by startup.
+    pub fn cleanup() {
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                call WSACleanup
+                add rsp, 32
+            }
+        }
+    }
+
+    /// Creates a Winsock IPv4 socket of the requested kind.
+    pub fn open(kind: i64) -> (i64, u64) {
+        let mut socket: u64 = 0;
+        let mut status: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, 2
+                mov rdx, ${kind}
+                mov r8, 0
+                call socket
+                mov ${socket}, rax
+                cmp rax, -1
+                jne 2f
+                call WSAGetLastError
+                neg rax
+                mov ${status}, rax
+                2:
+                add rsp, 32
+            }
+        }
+        (status, socket)
+    }
+
+    /// Requests a connection to the IPv4 address and port and returns a native status.
+    pub fn connect(socket: u64, ipv4: u32, port: u16) -> i64 {
+        let port_bits = port as usize;
+        let ipv4_bits = ipv4 as usize;
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 48
+                mov DWORD PTR [rsp + 32], 2
+                mov rax, ${port_bits}
+                ror ax, 8
+                mov WORD PTR [rsp + 34], ax
+                mov rax, ${ipv4_bits}
+                bswap eax
+                mov DWORD PTR [rsp + 36], eax
+                mov QWORD PTR [rsp + 40], 0
+                mov rcx, ${socket}
+                lea rdx, [rsp + 32]
+                mov r8, 16
+                call connect
+                cdqe
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                add rsp, 48
+            }
+        }
+        raw
+    }
+
+    /// Associates a socket with a local IPv4 address and port and returns a native status.
+    pub fn bind(socket: u64, ipv4: u32, port: u16) -> i64 {
+        let port_bits = port as usize;
+        let ipv4_bits = ipv4 as usize;
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 48
+                mov DWORD PTR [rsp + 32], 2
+                mov rax, ${port_bits}
+                ror ax, 8
+                mov WORD PTR [rsp + 34], ax
+                mov rax, ${ipv4_bits}
+                bswap eax
+                mov DWORD PTR [rsp + 36], eax
+                mov QWORD PTR [rsp + 40], 0
+                mov rcx, ${socket}
+                lea rdx, [rsp + 32]
+                mov r8, 16
+                call bind
+                cdqe
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                add rsp, 48
+            }
+        }
+        raw
+    }
+
+    /// Marks a bound stream socket as listening using the supplied backlog.
+    pub fn listen(socket: u64, backlog: i32) -> i64 {
+        let backlog_bits = backlog as i64;
+        let mut raw: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${socket}
+                mov rdx, ${backlog_bits}
+                call listen
+                cdqe
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                add rsp, 32
+            }
+        }
+        raw
+    }
+
+    /// Accepts a native socket and returns its status and handle.
+    pub fn accept(socket: u64) -> (i64, u64) {
+        let mut accepted: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${socket}
+                mov rdx, 0
+                mov r8, 0
+                call accept
+                mov ${accepted}, rax
+                cmp rax, -1
+                jne 2f
+                call WSAGetLastError
+                neg rax
+                mov ${error}, rax
+                2:
+                add rsp, 32
+            }
+        }
+        (error, accepted)
+    }
+
+    /// Closes the Winsock socket handle.
+    pub fn close(socket: u64) {
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${socket}
+                call closesocket
+                add rsp, 32
+            }
+        }
+    }
+
+    /// Translates a completed Winsock operation's native error code.
+    pub fn completion_error(code: u64) -> i64 {
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                mov rax, ${code}
+                neg rax
+                mov ${result}, rax
+            }
+        }
+        result
+    }
+
+    /// Updates the Winsock context after an overlapped accept or connect.
+    pub fn update_context(socket: u64, accepting: bool, listener: u64) -> i64 {
+        let option: i64 = if accepting { 28683 } else { 28688 };
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 48
+                mov rcx, ${socket}
+                mov edx, 65535
+                mov rax, ${option}
+                mov r8d, eax
+                xor r9d, r9d
+                mov QWORD PTR [rsp + 32], 0
+                cmp eax, 0x7010
+                je 1f
+                mov rax, ${listener}
+                mov QWORD PTR [rsp + 40], rax
+                lea r9, [rsp + 40]
+                mov QWORD PTR [rsp + 32], 8
+                1:
+                call setsockopt
+                test eax, eax
+                jz 2f
+                call WSAGetLastError
+                neg rax
+                mov ${result}, rax
+                2:
+                add rsp, 48
+            }
+        }
+        result
+    }
+
+    /// Applies the platform socket options needed by this backend.
+    pub fn configure(socket: u64) -> i64 { drop(socket); 0 }
+
+    /// Queries the local or peer IPv4 endpoint and returns its native address representation.
+    pub fn endpoint(socket: u64, remote: u64) -> (i64, u64) {
+        let mut raw: i64 = 0;
+        let mut peer_port: u16 = 0;
+        let mut peer_ip: u32 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 64
+                mov QWORD PTR [rsp + 32], 0
+                mov DWORD PTR [rsp + 48], 16
+                mov rcx, ${socket}
+                lea rdx, [rsp + 32]
+                lea r8, [rsp + 48]
+                mov r10, ${remote}
+                test r10, r10
+                je 3f
+                call getpeername
+                jmp 4f
+                3:
+                call getsockname
+                4:
+                cdqe
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                movzx eax, WORD PTR [rsp + 34]
+                ror ax, 8
+                mov ${peer_port}, ax
+                mov eax, DWORD PTR [rsp + 36]
+                bswap eax
+                mov ${peer_ip}, eax
+                add rsp, 64
+            }
+        }
+        (raw, ((peer_ip as u64) << 16) | (peer_port as u64))
+    }
+
+    /// Extracts packed IPv4 bits and a host-order port from the native endpoint.
+    pub fn decode_peer(peer: u64) -> (u32, u16) {
+        let mut ip: u32 = 0;
+        let mut port: u16 = 0;
+        @unchecked {
+            @asm {
+                mov rax, ${peer}
+                mov ${port}, ax
+                shr rax, 16
+                mov ${ip}, eax
+            }
+        }
+        (ip, port)
+    }
+
+    /// Sends bytes to the connected endpoint and returns status and byte count.
+    pub fn send(socket: u64, buffer: &[u8], mut length: usize) -> (i64, usize) {
+        if length > 2147483647 { length = 2147483647; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 48
+                mov rcx, ${socket}
+                mov rdx, ${address}
+                mov r8, ${length}
+                mov r9, 0
+                call send
+                cdqe
+                mov ${count}, rax
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                add rsp, 48
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+
+    /// Reads from a connected socket and returns status and byte count.
+    pub fn receive(socket: u64, buffer: &mut [u8]) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length > 2147483647 { length = 2147483647; }
+        if length == 0 { return (0, 0); }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 32
+                mov rcx, ${socket}
+                mov rdx, ${address}
+                mov r8, ${length}
+                mov r9, 0
+                call recv
+                cdqe
+                mov ${count}, rax
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                add rsp, 32
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+
+    /// Sends bytes to a specified native endpoint and returns status and byte count.
+    pub fn send_to(socket: u64, buffer: &[u8], length: usize, ipv4: u32, port: u16) -> (i64, usize) {
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        let port_bits = port as usize;
+        let ipv4_bits = ipv4 as usize;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 64
+                mov DWORD PTR [rsp + 48], 2
+                mov rax, ${port_bits}
+                ror ax, 8
+                mov WORD PTR [rsp + 50], ax
+                mov rax, ${ipv4_bits}
+                bswap eax
+                mov DWORD PTR [rsp + 52], eax
+                mov QWORD PTR [rsp + 56], 0
+                mov rcx, ${socket}
+                mov rdx, ${address}
+                mov r8, ${length}
+                mov r9, 0
+                lea rax, [rsp + 48]
+                mov QWORD PTR [rsp + 32], rax
+                mov QWORD PTR [rsp + 40], 16
+                call sendto
+                cdqe
+                mov ${count}, rax
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                add rsp, 64
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (0, count);
+    }
+
+    /// Reads one datagram and returns status, byte count and native sender address.
+    pub fn receive_from(socket: u64, buffer: &mut [u8]) -> (i64, usize, u64) {
+        let mut length = buffer.len();
+        if length > 2147483647 { length = 2147483647; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        let mut peer_ip: u32 = 0;
+        let mut peer_port: u16 = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 80
+                mov rcx, ${socket}
+                mov rdx, ${address}
+                mov r8, ${length}
+                mov r9, 0
+                mov DWORD PTR [rsp + 64], 16
+                lea rax, [rsp + 48]
+                mov QWORD PTR [rsp + 32], rax
+                lea rax, [rsp + 64]
+                mov QWORD PTR [rsp + 40], rax
+                call recvfrom
+                cdqe
+                mov ${count}, rax
+                test rax, rax
+                jns 1f
+                call WSAGetLastError
+                neg rax
+                1:
+                mov ${raw}, rax
+                movzx eax, WORD PTR [rsp + 50]
+                ror ax, 8
+                mov ${peer_port}, ax
+                mov eax, DWORD PTR [rsp + 52]
+                bswap eax
+                mov ${peer_ip}, eax
+                add rsp, 80
+            }
+        }
+        if raw < 0 { return (raw, 0, 0); }
+        let peer = ((peer_ip as u64) << 16) | (peer_port as u64);
+        return (0, count, peer);
+    }
+#(endif)

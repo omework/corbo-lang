@@ -1,0 +1,71 @@
+--- /tmp/crust-before-borrowed-completion/async_lowering.py	2026-11-08 03:59:27
++++ async_lowering.py	2026-11-08 04:00:05
+@@ -397,6 +397,21 @@
+     name, parameters, result, body = node.args
+     if result not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
+         return frozenset()
++    completion = getattr(node, 'field_effect_summary', None)
++    if completion and completion.complete and completion.structure_fields:
++        # The syntax-only projection sees the input field even when the body
++        # replaced it. The completed contract distinguishes old and new targets.
++        paths = set()
++        for target in completion.completion_result.reference_targets:
++            if target.kind in ('parameter', 'exclusive_join_parameter'):
++                path = ()
++            elif target.kind in ('detached_field_parameter', 'inline_field_parameter', 'indirect_field_parameter'):
++                path = tuple(target.field.lstrip('.').split('.'))
++            else:
++                fail(node.line, 'prototype : provenance du résultat de terminaison non raccordée')
++            paths.add((target.parameter, path))
++        cache[name] = frozenset(paths)
++        return cache[name]
+     if name in cache:
+         return cache[name]
+     if name in visiting:
+@@ -1156,7 +1171,7 @@
+         if not any(alternatives):
+             return
+         if (node.field_effect_summary is None or not node.field_effect_summary.complete
+-                or result[0] not in ('scalar', 'bool', 'byte', 'char', 'void')):
++                or result[0] not in ('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut')):
+             fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
+         alternatives = [dict(changes) for changes in alternatives]
+         for key in set().union(*(changes.keys() for changes in alternatives)):
+@@ -1171,7 +1186,7 @@
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+         if contract.result.structure_fields and (node.field_effect_summary is None
+-                or not node.field_effect_summary.complete or result[0] not in ('scalar','bool','byte','char','void')):
++                or not node.field_effect_summary.complete or result[0] not in ('scalar','bool','byte','char','void','ref','mut')):
+             fail(line, 'prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé')
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+@@ -4556,8 +4571,27 @@
+ 
+     def store_struct_field(place, rhs, line, *, following):
+         name, cell, offset, path, typ = struct_field(place, line, write=True)
++        if typ == '&Int':
++            if node.field_effect_summary is None or not node.field_effect_summary.complete:
++                fail(line, 'prototype : remplacement de champ référence sans contrat de terminaison')
++            pointer, held = sync_borrow_argument(rhs, 'ref', 'Int', line)
++            target = stored_reference_cell(pointer, held, line)
++            saved = temporary('Cell *')
++            steps.append(f'{saved} = {target};')
++            release_statement_loans(following)
++            check_access(name, line, write=True, path=path)
++            from results import FunctionResult, BorrowTarget
++            summary = FunctionResult('void', 'Void', structure_fields=(
++                (0, (('.' + '.'.join(path), frozenset({BorrowTarget('parameter', 1)})),)),))
++            parameters = (('carrier', 'mut', reference_types[name]), ('target', 'ref', 'Int'))
++            changes = prepare_field_changes(summary, parameters,
++                [[(name, 'mut'), *received_refs.get(name, ())], held], line)
++            steps.append(f'cell_store_ref({cell}, {offset}, {saved});')
++            for key, loans in changes:
++                active_loans[key] = list(loans)
++            return
+         if typ != 'Int':
+-            fail(line, 'prototype : remplacement de champ référence dans un état non raccordé')
++            fail(line, 'prototype : remplacement de champ référence mutable dans un état non raccordé')
+         value = expression(rhs, line, following=following)
+         saved = temporary('int')
+         steps.append(f'{saved} = {value};')

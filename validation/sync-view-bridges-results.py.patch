@@ -1,0 +1,22 @@
+--- before/results.py
++++ after/results.py
+@@ -549,7 +549,8 @@
+         if result_mode in ASYNC_CAPTURE_VIEW_MODES:
+             from async_lowering import utf8_result_parameters
+             definition = self.analyzer.async_functions[value.typ]
+-            indexes = utf8_result_parameters(definition, self.analyzer.async_functions)
++            indexes = utf8_result_parameters(definition, self.analyzer.async_functions,
++                sync_result_contract=self.analyzer.sync_result_contract)
+             result_fields = {}
+             for index in indexes:
+                 for key, targets in capture_fields(value.fields, index):
+@@ -1412,7 +1413,8 @@
+                         if origin.kind == 'parameter' and declaration.args[1][index][2] == 'String'
+                         else replace(origin, kind='vector_parameter')
+                         if origin.kind == 'parameter' and declaration.args[1][index][2] in VECTOR_SLICE_MODES else origin
+-                        for index in utf8_result_parameters(declaration, self.analyzer.async_functions)
++                        for index in utf8_result_parameters(declaration, self.analyzer.async_functions,
++                            sync_result_contract=self.analyzer.sync_result_contract)
+                         for _, targets in capture_fields(execution.fields, index) for origin in targets)
+                     return flow, Value('join_' + mode, typ, reference_targets=origins)
+                 if mode in UTF8_VALUE_RESULT_FAMILIES:

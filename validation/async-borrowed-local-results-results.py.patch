@@ -1,0 +1,47 @@
+--- /tmp/crust-before-async-borrowed-local-results/results.py
++++ /Users/jabarkarim/sources/crust/results.py
+@@ -1552,7 +1552,20 @@
+                                        payload_reference=row_payload)
+                 if mode in ('owned', 'join_owned'):
+                     kind = 'join_owned' if mode == 'owned' else 'join_nested'
+-                    return flow, self.async_owned_result_value(kind, typ, execution.task_result_sources, execution.task_result_fields)
++                    result = self.async_owned_result_value(kind, typ, execution.task_result_sources, execution.task_result_fields)
++                    from async_result_storage import borrowed_result_fields
++                    fields = []
++                    for field, targets in borrowed_result_fields(declaration):
++                        origins = set()
++                        for target in targets:
++                            if target.kind not in ('parameter', 'exclusive_join_parameter'):
++                                origins.add(BorrowTarget('local'))
++                            else:
++                                for key, capture in execution.fields:
++                                    if int(key.partition('.')[2]) == target.parameter:
++                                        origins.update(capture)
++                        fields.append((field, frozenset(origins)))
++                    return flow, replace(result, fields=tuple(fields))
+                 if (plain := PLAIN_RETURN_JOINS.get((mode, typ))) is not None:
+                     return flow, Value(plain, PLAIN_JOIN_TYPES[plain])
+                 if mode == 'array':
+@@ -1792,10 +1805,9 @@
+                 if values[0].mode == 'join_array':
+                     return flow, Value('array', values[0].typ)
+                 if values[0].mode == 'join_nested':
+-                    return flow, Value('join_owned', values[0].typ, values[0].candidates,
+-                                       absent_owned_payload=values[0].absent_owned_payload)
++                    return flow, replace(values[0], mode='join_owned')
+                 if values[0].mode == 'join_owned':
+-                    return flow, Value('owned', values[0].typ, values[0].candidates)
++                    return flow, replace(values[0], mode='owned', absent_owned_payload=False)
+                 if values[0].mode in ('join_ref', 'join_mut'):
+                     targets = frozenset(replace(origin, kind='vector_parameter')
+                         if origin.kind == 'parameter' and self.params[origin.parameter][2] in VECTOR_SLICE_MODES
+@@ -2766,6 +2778,9 @@
+                     actual = actuals[target.parameter]
+                     if target.kind == 'parameter':
+                         resolved |= stored_targets(actual)
++                    elif target.kind == 'task_capture_parameter':
++                        resolved |= frozenset(origin for _, origins in capture_fields(actual.fields, target.field)
++                                              for origin in origins)
+                     elif target.kind == 'shared_field_parameter' and target.detached_prefix:
+                         resolved |= frozenset(projected_field_origin(origin, target)
+                                               for origin in borrowed_targets(actual)) or frozenset({BorrowTarget('local')})

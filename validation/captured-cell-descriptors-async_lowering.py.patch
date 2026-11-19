@@ -1,0 +1,89 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1066,6 +1066,11 @@
+             root, path = target if isinstance(target, tuple) else (target, ())
+             if root in received_refs:
+                 # Its actual origins are also present in the prepared loans.
++                continue
++            if not path and parameter_modes.get(root) in ('ref', 'mut') and reference_types.get(root) == 'Int':
++                index = next(i for i, (parameter, _, _) in enumerate(parameters) if parameter == root)
++                node.cell_reference_parameters.add(index)
++                candidates.append(f'frame->capture_cell_{index}')
+                 continue
+             if not path and references.get(root) == 'owned' and root not in collection_types:
+                 candidates.append(f'frame->{fields[root]}')
+@@ -1390,6 +1395,7 @@
+         argument_depth = len(argument_tails)
+         try:
+             for index, (argument, (_, mode, typ)) in enumerate(zip(arguments, declaration.args[1])):
++                argument_loan_start = len(loans)
+                 if declaration.native_block:
+                     check_access(argument[1], line, write=True)
+                 argument_tails.append((len(scopes) - 1, arguments[index + 1:]))
+@@ -1604,6 +1610,11 @@
+                         returned_loans.extend(held_storage)
+                 steps.append(f'{captured} = {value};')
+                 captures.append(captured)
++                if index in declaration.cell_reference_parameters:
++                    descriptor = stored_reference_cell(captured, loans[argument_loan_start:], line)
++                    captured_cell = temporary('Cell *')
++                    steps.append(f'{captured_cell} = {descriptor};')
++                    captures.append(captured_cell)
+                 if mode == 'owned':
+                     if argument[0] == 'down':
+                         consumed.add(name)
+@@ -5731,6 +5742,8 @@
+     )
+     frame_slots[node.args[0]] = task_holder_count
+     members += ''.join(internal_members)
++    members += ''.join(f'    Cell *capture_cell_{index};\n'
++                       for index in sorted(node.cell_reference_parameters))
+     if returns_value:
+         members += f'    {result_ctype} result{array_dimensions(returns_array)};\n'
+     dispatch = ''.join(f'    case {point}: goto resume_{point};\n'
+@@ -5742,7 +5755,7 @@
+         result_copy = (f'    {prefix}_state *frame = ({prefix}_state *)task;\n'
+                        '    memcpy(out, frame->result, sizeof frame->result);') if all(returns_array) else (
+                            '    (void)task;\n    (void)out;')
+-    arguments = ''.join(f', {capture_ctype(mode, typ)} capture_{i}' for i, (_, mode, typ) in enumerate(parameters))
++    arguments = ''.join(', ' + declaration for declaration in task_capture_declarations(node))
+     initialize = ''
+     for i, ((parameter, mode, _), member) in enumerate(zip(parameters, captures)):
+         if mode == 'array':
+@@ -5752,6 +5765,8 @@
+                 initialize += f'    (void)capture_{i};\n'
+         else:
+             initialize += f'    frame->{member} = capture_{i};\n'
++        if i in node.cell_reference_parameters:
++            initialize += f'    frame->capture_cell_{i} = capture_cell_{i};\n'
+     inactive_cleanup = []
+     for name, mode, _ in reversed(parameters):
+         cell = f'frame->{fields[name]}'
+@@ -5812,8 +5827,15 @@
+ """
+ 
+ 
++def task_capture_declarations(node):
++    for i, (_, mode, typ) in enumerate(node.args[1]):
++        yield f'{capture_ctype(mode, typ)} capture_{i}'
++        if i in node.cell_reference_parameters:
++            yield f'Cell * capture_cell_{i}'
++
++
+ def task_factory_signature(name, node):
+-    declarations = ', '.join(f'{capture_ctype(mode, typ)} capture_{i}' for i, (_, mode, typ) in enumerate(node.args[1])) or 'void'
++    declarations = ', '.join(task_capture_declarations(node)) or 'void'
+     return f'static CrustTask *crust_async_{name}_create({declarations})'
+ 
+ 
+@@ -5848,8 +5870,8 @@
+         if threaded:
+             checks.append(f'    for (size_t i = 0; i < {capacity}; ++i) '
+                           f'task_queue_entry_destroy(&crust_task_context.queue_entries_{name}[i]);')
+-        parameters = range(len(node.args[1]))
+-        captures = ''.join(f', capture_{i}' for i in parameters)
++        captures = ''.join(', ' + declaration.rsplit(' ', 1)[-1]
++                           for declaration in task_capture_declarations(node))
+         reap = '    task_thread_reap(&crust_abandoned_tasks);\n' if threaded else ''
+         factories.append(
+             f'{task_factory_signature(name, node)} {{\n'

@@ -1,0 +1,125 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -409,7 +409,7 @@
+             contract = sync_result_contract(callee)
+         return contract
+     name, parameters, result, body = node.args
+-    if result not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
++    if result[0] not in ('ref', 'mut'):
+         return frozenset()
+     completion = getattr(node, 'field_effect_summary', None)
+     completed_targets = completion.completion_result.reference_targets if completion and completion.complete else ()
+@@ -927,7 +927,7 @@
+ 
+ def lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type, frame_slots=None,
+                          *, sync_contracts=None, sync_bridge=None, struct_layouts=None, enum_layouts=None,
+-                         local_parameters=frozenset(), variant_name=None, specialize=None):
++                         local_parameters=frozenset(), variant_name=None, specialize=None, inline_layouts=None):
+     # Each retry starts with fresh lowering state. Only finite sets of source
+     # names survive, so no emitted frame member or cleanup is duplicated.
+     node = expand_reference_return_branches(node)
+@@ -939,7 +939,7 @@
+             result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                            enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                            sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+-                                           local_parameters, variant_name, specialize)
++                                           local_parameters, variant_name, specialize, inline_layouts or {})
+         except _WidenUtf8Loop as request:
+             entry = hints.setdefault(request.key, {})
+             changed = False
+@@ -961,7 +961,7 @@
+ 
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+                           utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts, enum_layouts,
+-                          local_parameters, variant_name, specialize):
++                          local_parameters, variant_name, specialize, inline_layouts):
+     from functools import partial
+     capture_type = partial(capture_ctype, structures=struct_layouts)
+     from handle_types import HandleDefinitions, public_signature
+@@ -2066,6 +2066,7 @@
+     awaited_reference_types = {}
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
++            and not (result[0] in ('ref', 'mut') and result[1] in reference_structs)
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_aggregates)
+             and result not in (
+@@ -2806,7 +2807,10 @@
+         status_result = None
+         payload = {'ref': 'reference', 'mut': 'mutable_reference', 'owned': 'allocation',
+                    'join_owned': 'nested'}.get(mode)
+-        if (mode, typ) == ('mut', 'u8'):
++        if typ in struct_layouts and mode in ('ref', 'mut'):
++            payload = 'mutable_structure_reference' if mode == 'mut' else 'structure_reference'
++            awaited_reference_types[result] = typ
++        elif (mode, typ) == ('mut', 'u8'):
+             payload = 'mutable_byte_reference'
+         if outer:
+             payload = PLAIN_JOIN_FIELDS[outer]
+@@ -2985,6 +2989,8 @@
+         if subject[0] == 'name' and subject[1] in join_results:
+             record = join_results[subject[1]]
+             if record is not None:
++                if record[1] in ('structure_reference', 'mutable_structure_reference'):
++                    return ('mut' if record[1] == 'mutable_structure_reference' else 'ref', awaited_reference_types[record[0]])
+                 return {'reference': ('ref', 'Int'), 'mutable_reference': ('mut', 'Int'),
+                         'mutable_byte_reference': ('mut', 'u8')}.get(record[1])
+         if subject[0] != 'await':
+@@ -5240,9 +5246,10 @@
+                                 active_loans.pop(id(result_loans), None)
+                             payload_loans = list(result_loans)
+                             if result_carrier is not None:
+-                                payload_loans.append((result_carrier, 'mut' if payload_field in ('mutable_reference', 'mutable_byte_reference') else 'ref'))
+-                            references[payload] = 'mut' if payload_field in ('mutable_reference', 'mutable_byte_reference') else 'ref'
+-                            reference_types[payload] = 'u8' if payload_field == 'mutable_byte_reference' else 'Int'
++                                payload_loans.append((result_carrier, 'mut' if payload_field in ('mutable_reference', 'mutable_byte_reference', 'mutable_structure_reference') else 'ref'))
++                            references[payload] = 'mut' if payload_field in ('mutable_reference', 'mutable_byte_reference', 'mutable_structure_reference') else 'ref'
++                            reference_types[payload] = (awaited_reference_types[result] if payload_field in ('structure_reference', 'mutable_structure_reference')
++                                                        else 'u8' if payload_field == 'mutable_byte_reference' else 'Int')
+                             if references[payload] == 'mut':
+                                 mutable.add(payload)
+                             received_refs[payload] = payload_loans
+@@ -5852,12 +5859,21 @@
+                 return name, f'frame->{fields[name]}', offset, tuple(path.split('.')), field_type
+         fail(line, f"champ inconnu '{path}' dans {typ}")
+ 
++    def inline_field_layout(place, bindings=None):
++        if place[0] != 'field':
++            return None
++        signature = bindings.get(place[1]) if bindings is not None else None
++        typ = (signature[1] if signature else None) if bindings is not None else reference_types.get(place[1], collection_types.get(place[1]))
++        return next((layout for layout in inline_layouts.get(typ, ()) if layout.path == place[2]), None)
++
+     def field_reference_shape(expr, bindings=None):
+         if expr[0] not in ('ref_expr', 'mut_expr', 'field'):
+             return None
+         place = expr if expr[0] == 'field' else expr[1][1] if expr[1][0] == 'field_deref' else expr[1]
+         if place[0] != 'field':
+             return None
++        if expr[0] != 'field' and expr[1][0] == 'field' and (contained := inline_field_layout(place, bindings)) is not None:
++            return ('mut' if expr[0] == 'mut_expr' else 'ref', contained.typ)
+         if bindings is None:
+             typ = reference_types.get(place[1], collection_types.get(place[1]))
+         else:
+@@ -5917,6 +5933,21 @@
+     def borrow_struct_field(expr, mode, line):
+         indirect = expr[0] == 'field' or expr[1][0] == 'field_deref'
+         place = expr if expr[0] == 'field' else expr[1][1] if indirect else expr[1]
++        if not indirect and (contained := inline_field_layout(place)) is not None:
++            name = place[1]
++            if mode == 'mut' and not (references.get(name) == 'mut' or references.get(name) == 'owned' and name in mutable):
++                fail(line, 'emprunt de sous-structure : accès mutable requis')
++            path = tuple(place[2].split('.'))
++            reservation = 'mut' if references.get(name) == 'mut' else mode
++            check_access(name, line, write=reservation == 'mut', path=path)
++            source_type = reference_types.get(name, collection_types.get(name))
++            offset = structure_offset(struct_layouts[source_type], contained.first)
++            size = structure_offset(struct_layouts[contained.typ], contained.count)
++            metadata = local_layouts.setdefault(contained.typ, f'{prefix}_local_layout_{len(local_layouts)}')
++            cell = f'frame->{fields[name]}'
++            pointer = f'structure_subview(structure_reference_for((CrustStructureView){{0}}, {cell}), {offset}, {size}, &{metadata})'
++            loans = project_field_loans([(name, reservation), *received_refs.get(name, ())], path)
++            return pointer, loans
+         name, cell, offset, path, typ = struct_field(place, line, write=mode == 'mut')
+         if indirect:
+             owned_structure = typ.startswith('A<') and typ[2:-1] in pool_structures

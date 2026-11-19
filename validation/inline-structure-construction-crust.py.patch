@@ -1,0 +1,11 @@
+--- /tmp/crust-before-inline-structure-construction/crust.py
++++ crust.py
+@@ -14192,6 +14192,8 @@
+         self.layout_structures(structure_lines)
+         from type_features import resolve_features
+         nodes = resolve_features(list(self.lower_implementations(nodes)), self.enums, Error)
++        from structure_construction import lower_contained_literals
++        nodes = lower_contained_literals(nodes, self.struct_fields, Error)
+         recursive_inputs = set()
+         async_functions = {node.args[0]: node for node in nodes if node.op == 'async_fn'}
+         async_graph, explicit_capacities = configure(async_functions, entries, Error,

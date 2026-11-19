@@ -1,0 +1,413 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! TLS 1.3 handshake framing, extensions and Certificate message encoding.
+
+use std::crypto::x509::{PublicKey as X509PublicKey, validate_server_path};
+
+// Wire integers and parsers for the initial P-256 TLS 1.3 exchange.
+/// Extracts the low byte of a handshake length or offset.
+fn hand_octet(number: usize) -> u8 {
+    let mut n = number;
+    let mut byte: u8 = 0;
+    let mut bit: usize = 0;
+    while bit < 8 {
+        let low: u8 = if (n & 1) == 0 { 0 } else { 1 };
+        byte = byte | (low << bit);
+        n = n >> 1;
+        bit = bit + 1;
+    }
+    byte
+}
+
+/// Reads a two-byte big-endian field from the given position.
+fn get16(bytes: &[u8], at: usize) -> usize {
+    (bytes[at] as usize) * 256 + (bytes[at + 1] as usize)
+}
+
+/// Reads a three-byte big-endian field from the given position.
+fn get24(bytes: &[u8], at: usize) -> usize {
+    (bytes[at] as usize) * 65536 + (bytes[at + 1] as usize) * 256 + (bytes[at + 2] as usize)
+}
+
+/// Writes a two-byte big-endian field at the given position.
+fn put16(bytes: &mut [u8], at: usize, value: usize) {
+    bytes[at] = hand_octet(value >> 8);
+    bytes[at + 1] = hand_octet(value);
+}
+
+/// Writes a three-byte big-endian field at the given position.
+fn put24(bytes: &mut [u8], at: usize, value: usize) {
+    bytes[at] = hand_octet(value >> 16);
+    bytes[at + 1] = hand_octet(value >> 8);
+    bytes[at + 2] = hand_octet(value);
+}
+
+/// Writes the handshake message type and three-byte body length.
+fn handshake_header(output: &mut [u8], kind: u8, size: usize) {
+    output[0] = kind;
+    let capacity = output.len();
+    put24(&mut output[0..capacity], 1, size - 4);
+}
+
+/// Copies a byte slice into the destination at the given offset.
+fn place(output: &mut [u8], at: usize, input: &[u8]) {
+    let mut i: usize = 0;
+    while i < input.len() {
+        output[at + i] = input[i];
+        i = i + 1;
+    }
+}
+
+/// Compares two byte slices by content.
+fn equal_bytes(a: &[u8], b: &[u8]) -> bool {
+    let size = a.len();
+    if size != b.len() { return false; }
+    let mut i: usize = 0;
+    while i < size {
+        if a[i] != b[i] { return false; }
+        i = i + 1;
+    }
+    true
+}
+
+/// Searches a sequence of 16-bit wire identifiers for the requested value.
+fn contains16(bytes: &[u8], number: usize) -> bool {
+    let limit = bytes.len();
+    if limit % 2 != 0 { return false; }
+    let mut i: usize = 0;
+    while i < limit {
+        if get16(&bytes[0..limit], copy(i)) == number { return true; }
+        i = i + 2;
+    }
+    false
+}
+
+/// Checks framing and duplicate identifiers across an extension vector.
+fn extensions_valid(bytes: &[u8]) -> bool {
+    let end = bytes.len();
+    let mut at: usize = 0;
+    let mut count: usize = 0;
+    let mut seen: [u64; 64] = [0; 64];
+    while at < end {
+        if end - at < 4 || count == 64 { return false; }
+        let kind = get16(&bytes[0..end], copy(at));
+        let size = get16(&bytes[0..end], at + 2);
+        if size > end - at - 4 { return false; }
+        let mut i: usize = 0;
+        while i < count {
+            if seen[i] == (kind as u64) { return false; }
+            i = i + 1;
+        }
+        seen[count] = kind as u64;
+        count = count + 1;
+        at = at + 4 + size;
+    }
+    true
+}
+
+/// Locates the requested extension in a validated extension vector.
+fn find_extension(bytes: &[u8], kind: usize) -> usize {
+    let end = bytes.len();
+    let mut at: usize = 0;
+    while at < end {
+        let size = get16(&bytes[0..end], at + 2);
+        if get16(&bytes[0..end], copy(at)) == kind { return at + 4; }
+        at = at + 4 + size;
+    }
+    0
+}
+
+/// Checks the ClientHello extensions required by the current P-256 profile.
+fn decode_client_extensions(ext: &[u8]) -> usize {
+    let end = ext.len();
+    if !extensions_valid(&ext[0..end]) { return 0; }
+    let versions = find_extension(&ext[0..end], 43);
+    let groups = find_extension(&ext[0..end], 10);
+    let signatures = find_extension(&ext[0..end], 13);
+    let shares = find_extension(&ext[0..end], 51);
+    if versions == 0 || groups == 0 || signatures == 0 || shares == 0 { return 0; }
+
+    let version_size = get16(&ext[0..end], versions - 2);
+    if version_size < 3 || (ext[versions] as usize) != version_size - 1 { return 0; }
+    if !contains16(&ext[versions + 1..versions + version_size], 772) { return 0; }
+    let group_size = get16(&ext[0..end], groups - 2);
+    if group_size < 4 || get16(&ext[0..end], copy(groups)) != group_size - 2 { return 0; }
+    if !contains16(&ext[groups + 2..groups + group_size], 23) { return 0; }
+    let signature_size = get16(&ext[0..end], signatures - 2);
+    if signature_size < 4 || get16(&ext[0..end], copy(signatures)) != signature_size - 2 { return 0; }
+    if !contains16(&ext[signatures + 2..signatures + signature_size], 1027) { return 0; }
+
+    let share_size = get16(&ext[0..end], shares - 2);
+    if share_size < 2 || get16(&ext[0..end], copy(shares)) != share_size - 2 { return 0; }
+    let share_end = shares + share_size;
+    let mut at = shares + 2;
+    let mut selected: usize = 0;
+    while at < share_end {
+        if share_end - at < 4 { return 0; }
+        let size = get16(&ext[0..end], at + 2);
+        if size == 0 || size > share_end - at - 4 { return 0; }
+        if get16(&ext[0..end], copy(at)) == 23 {
+            if size != 65 || selected != 0 { return 0; }
+            selected = at + 4;
+        }
+        at = at + 4 + size;
+    }
+    selected
+}
+
+/// Reads the client's P-256 public point from ClientHello.
+fn client_share(hello: &[u8]) -> usize {
+    let end = hello.len();
+    if end < 45 || hello[0] != 1 || get16(&hello[0..end], 4) != 771 { return 0; }
+    let sid = hello[38] as usize;
+    if sid > 32 || end - 39 < sid + 2 { return 0; }
+    let suites = 39 + sid;
+    let suite_size = get16(&hello[0..end], copy(suites));
+    let compression = suites + 2 + suite_size;
+    if end < compression + 4 { return 0; }
+    if !contains16(&hello[suites + 2..compression], 4865) { return 0; }
+    if hello[compression] != 1 || hello[compression + 1] != 0 { return 0; }
+    let start = compression + 4;
+    if get16(&hello[0..end], start - 2) != end - start { return 0; }
+    let offset = decode_client_extensions(&hello[start..end]);
+    if offset == 0 { return 0; }
+    start + offset
+}
+
+/// Reads the server's selected P-256 public point from ServerHello.
+fn server_share(hello: &[u8]) -> usize {
+    let end = hello.len();
+    // This client's initial legacy session ID is empty.
+    if end < 44 || hello[0] != 2 || get16(&hello[0..end], 4) != 771
+       || hello[38] != 0 || get16(&hello[0..end], 39) != 4865 || hello[41] != 0 { return 0; }
+    let retry: [u8; 32] = [207,33,173,116,229,154,97,17,190,29,140,2,30,101,184,145,
+                          194,162,17,22,122,187,140,94,7,158,9,226,200,168,51,156];
+    if equal_bytes(&hello[6..38], &retry[..]) { return 0; }
+    if get16(&hello[0..end], 42) != end - 44 || end != 123 { return 0; }
+    let ext = &hello[44..end];
+    if !extensions_valid(&ext[0..79]) { return 0; }
+    let versions = find_extension(&ext[0..79], 43);
+    let share = find_extension(&ext[0..79], 51);
+    if versions == 0 || share == 0 { return 0; }
+    if get16(&ext[0..79], versions - 2) != 2 || get16(&ext[0..79], versions) != 772 { return 0; }
+    if get16(&ext[0..79], share - 2) != 69 || get16(&ext[0..79], copy(share)) != 23
+       || get16(&ext[0..79], share + 2) != 65 { return 0; }
+    48 + share
+}
+
+/// Serializes the client random, offered cipher suite, key share and optional DNS name.
+fn encode_client_hello(random: &[u8], key: &[u8], name: &[u8], output: &mut [u8]) -> usize {
+    let prefix: [u8; 31] = [0,0,2,19,1,1,0,0,98,0,43,0,3,2,3,4,
+                           0,10,0,4,0,2,0,23,0,13,0,4,0,2,4];
+    // The remaining byte of signature_algorithms and the key_share header.
+    let suffix: [u8; 11] = [3,0,51,0,71,0,69,0,23,0,65];
+    let name_size = name.len();
+    let extra: usize = if name_size == 0 { 0 } else { 9 + name_size };
+    let size = 145 + extra;
+    handshake_header(&mut output[0..size], 1, copy(size));
+    output[4] = 3;
+    output[5] = 3;
+    place(&mut output[0..size], 6, &random[0..32]);
+    place(&mut output[0..size], 38, &prefix[..]);
+    place(&mut output[0..size], 69, &suffix[..]);
+    place(&mut output[0..size], 80, &key[0..65]);
+    if name_size != 0 {
+        put16(&mut output[0..size], 45, 98 + extra);
+        put16(&mut output[0..size], 145, 0);
+        put16(&mut output[0..size], 147, 5 + name_size);
+        put16(&mut output[0..size], 149, 3 + name_size);
+        output[151] = 0;
+        put16(&mut output[0..size], 152, copy(name_size));
+        place(&mut output[0..size], 154, &name[0..name_size]);
+    }
+    size
+}
+
+/// Serializes the server random, selected cipher suite and P-256 key share.
+fn encode_server_hello(random: &[u8], key: &[u8], session: &[u8], output: &mut [u8]) -> usize {
+    let sid = session.len();
+    let size = 123 + sid;
+    let prefix: [u8; 19] = [19,1,0,0,79,0,43,0,2,3,4,0,51,0,69,0,23,0,65];
+    handshake_header(&mut output[0..size], 2, copy(size));
+    output[4] = 3;
+    output[5] = 3;
+    place(&mut output[0..size], 6, &random[0..32]);
+    output[38] = hand_octet(copy(sid));
+    place(&mut output[0..size], 39, &session[0..sid]);
+    place(&mut output[0..size], 39 + sid, &prefix[..]);
+    place(&mut output[0..size], 58 + sid, &key[0..65]);
+    size
+}
+
+/// Checks the required framing of an EncryptedExtensions message.
+fn valid_encrypted_extensions(message: &[u8], offered_name: bool) -> bool {
+    let size = message.len();
+    if size < 6 || get16(&message[0..size], 4) != size - 6 { return false; }
+    if !extensions_valid(&message[6..size]) { return false; }
+    let mut at: usize = 6;
+    while at < size {
+        let number = get16(&message[0..size], copy(at));
+        let length = get16(&message[0..size], at + 2);
+        if number == 0 {
+            if !offered_name || length != 0 { return false; }
+        } else if number == 10 {
+            if length < 4 || length % 2 != 0
+               || get16(&message[0..size], at + 4) != length - 2 { return false; }
+        } else { return false; }
+        at = at + 4 + length;
+    }
+    true
+}
+
+/// Serializes a certificate list in a TLS Certificate handshake message.
+fn encode_certificate_list(list: &[u8], output: &mut [u8]) -> usize {
+    let length = list.len();
+    let size = 8 + length;
+    handshake_header(&mut output[0..size], 11, copy(size));
+    output[4] = 0;
+    put24(&mut output[0..size], 5, copy(length));
+    place(&mut output[0..size], 8, &list[0..length]);
+    size
+}
+
+/// Serializes a single DER certificate in a TLS Certificate handshake message.
+fn encode_certificate(certificate: &[u8], output: &mut [u8]) -> usize {
+    let length = certificate.len();
+    let size = 13 + length;
+    handshake_header(&mut output[0..size], 11, copy(size));
+    output[4] = 0;
+    put24(&mut output[0..size], 5, length + 5);
+    put24(&mut output[0..size], 8, copy(length));
+    place(&mut output[0..size], 11, &certificate[0..length]);
+    put16(&mut output[0..size], 11 + length, 0);
+    size
+}
+
+// Offsets describe the original handshake message held by the caller.
+/// Stores the byte ranges of a parsed TLS Certificate message in the caller's input.
+pub struct Certificate {
+    /// Byte length of the TLS Certificate request context.
+    context_size: u64,
+    /// Number of parsed certificate-list entries.
+    entries: u64,
+    /// Start/end offsets of the bounded certificate DER entries.
+    der_ranges: [u64; 16],
+    /// Start/end offsets of each certificate entry's extensions.
+    extension_ranges: [u64; 16],
+}
+
+/// Parses framing and computes each certificate and per-entry extension range.
+fn decode_certificate_entries(input: &[u8], start: usize, context_size: u64) -> Result<Certificate, HandshakeError> {
+    let size = input.len();
+    let mut result = Certificate { context_size: context_size, entries: 0,
+                                  der_ranges: [0; 16], extension_ranges: [0; 16] };
+    let mut at = start;
+    let mut count: u64 = 0;
+    while at < size {
+        if count == 8 || size - at < 5 { return Err(HandshakeError.Protocol); }
+        let length = get24(&input[0..size], copy(at));
+        let begin = at + 3;
+        if length == 0 || length > size - begin - 2 { return Err(HandshakeError.Protocol); }
+        let end = begin + length;
+        let extension_length = get16(&input[0..size], copy(end));
+        let extension_start = end + 2;
+        if extension_length > size - extension_start { return Err(HandshakeError.Protocol); }
+        let next = extension_start + extension_length;
+        if !extensions_valid(&input[extension_start..next]) { return Err(HandshakeError.Protocol); }
+        let der_begin = &mut result.der_ranges[count * 2];
+        *der_begin = begin as u64;
+        let der_end = &mut result.der_ranges[count * 2 + 1];
+        *der_end = end as u64;
+        let ext_begin = &mut result.extension_ranges[count * 2];
+        *ext_begin = extension_start as u64;
+        let ext_end = &mut result.extension_ranges[count * 2 + 1];
+        *ext_end = next as u64;
+        at = next;
+        count = count + 1;
+    }
+    let entries = &mut result.entries;
+    *entries = count;
+    Ok(result)
+}
+
+impl Certificate {
+    /// Parses a complete TLS Certificate handshake message and records the ranges in it.
+    fn from_message(input: &[u8]) -> Result<Certificate, HandshakeError> {
+        let size = input.len();
+        if size < 8 || input[0] != 11 || get24(&input[0..size], 1) != size - 4 {
+            return Err(HandshakeError.Protocol);
+        }
+        let context = input[4] as usize;
+        let list = 8 + context;
+        if size < list || get24(&input[0..size], 5 + context) != size - list {
+            return Err(HandshakeError.Protocol);
+        }
+        decode_certificate_entries(&input[0..size], list, context as u64)
+    }
+
+    /// Returns the request context length in bytes.
+    fn context_length(&self) -> u64 { (*self).context_size }
+
+    /// Returns the start and exclusive end of the request context.
+    fn context_range(&self) -> (u64, u64) {
+        return (5, 5 + (*self).context_size);
+    }
+
+    /// Returns the number of certificate entries in the handshake message.
+    fn count(&self) -> u64 { (*self).entries }
+
+    /// Returns the start and exclusive end of the DER bytes for an entry.
+    fn der_range(&self, index: u64) -> (u64, u64) {
+        if index >= (*self).entries { return (0, 0); }
+        return ((*self).der_ranges[2 * index], (*self).der_ranges[2 * index + 1]);
+    }
+
+    /// Returns the start and exclusive end of the encoded extensions for an entry.
+    fn extensions_range(&self, index: u64) -> (u64, u64) {
+        if index >= (*self).entries { return (0, 0); }
+        return ((*self).extension_ranges[2 * index], (*self).extension_ranges[2 * index + 1]);
+    }
+
+    /// Checks the request context and entry extensions for the supported server profile.
+    fn supports_server_certificate(&self) -> bool {
+        if (*self).context_size != 0 || (*self).entries == 0 { return false; }
+        let mut i: u64 = 0;
+        while i < (*self).entries {
+            if (*self).extension_ranges[2 * i] != (*self).extension_ranges[2 * i + 1] {
+                return false;
+            }
+            i = i + 1;
+        }
+        true
+    }
+
+    /// Checks the received certificate against a configured pin and obtains the associated public key.
+    fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64)
+                  -> Result<X509PublicKey, HandshakeError> {
+        match validate_server_path(&input[0..input.len()], &(*self).der_ranges, (*self).entries,
+                                     &anchor[0..anchor.len()], &hostname[0..hostname.len()], now) {
+            Ok(key) => { Ok(key) },
+            Err(error) => { drop(error); Err(HandshakeError.Authentication) },
+        }
+    }
+}
+
+/// Checks the framing of the outgoing TLS certificate list.
+fn valid_outgoing_chain(input: &[u8]) -> bool {
+    let size = input.len();
+    if size == 0 || size > 16777211 { return false; }
+    match decode_certificate_entries(&input[0..size], 0, 0) {
+        Ok(certificate) => { certificate.supports_server_certificate() },
+        Err(error) => { drop(error); false },
+    }
+}
+
+/// Forms the signed CertificateVerify input from the transcript hash and the server context string.
+fn certificate_input(digest: &[u8]) -> [u8; 130] {
+    let context: [u8; 33] = [84,76,83,32,49,46,51,44,32,115,101,114,118,101,114,32,
+                            67,101,114,116,105,102,105,99,97,116,101,86,101,114,105,102,121];
+    let mut input: [u8; 130] = [32; 130];
+    place(&mut input[..], 64, &context[..]);
+    input[97] = 0;
+    place(&mut input[..], 98, &digest[0..32]);
+    input
+}

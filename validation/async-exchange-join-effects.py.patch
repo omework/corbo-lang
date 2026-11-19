@@ -1,0 +1,17 @@
+--- /tmp/crust-before-async-exchange-join/effects.py
++++ effects.py
+@@ -1,4 +1,5 @@
+ """Infer external source effects without concrete allocations or C emission."""
++from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+ from utf8_syntax import PLAIN_JOIN_TYPES, PLAIN_JOIN_PAYLOADS, PLAIN_RETURN_JOINS
+ from utf8_syntax import VECTOR_SPLIT_TYPES, VECTOR_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, VECTOR_PAYLOAD_TYPES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, VALUE_MODES
+@@ -121,6 +122,8 @@
+ 
+ 
+ def result_type_name(mode, typ):
++    if mode in EXCHANGE_JOIN_TYPES:
++        return EXCHANGE_JOIN_TYPES[mode]
+     if mode in ('task', 'execution'):
+         return f'{mode.capitalize()}<{typ}>'
+     if mode == 'join_option':

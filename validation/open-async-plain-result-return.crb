@@ -1,0 +1,20 @@
+// Ancien écart RT5/RT6 ; exécuté par test_nested_plain_results depuis sa correction.
+// RT5/RT6: returning a business Result from an async function adds an outer Result at join.
+async fn leaf() -> Int { return 7; }
+async fn wait() -> Result<Int, runtime::Error> {
+    let handle = runtime::spawn(-> leaf());
+    let result = handle.await;
+    return result;
+}
+fn main() {
+    let execution = runtime::spawn(-> wait());
+    match execution.join() {
+        Ok(inner) => {
+            match inner {
+                Ok(value) => { print(value); },
+                Err(_) => { print(98); }
+            }
+        },
+        Err(_) => { print(99); }
+    }
+}

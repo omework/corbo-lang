@@ -1,0 +1,211 @@
+native_routed_through_scheduler DETECTED
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12485, in run_c_oracle
+    run = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 557, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 1221, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 2154, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 1268, in _check_timeout
+    raise TimeoutExpired(
+    ...<2 lines>...
+            stderr=b''.join(stderr_seq) if stderr_seq else None)
+subprocess.TimeoutExpired: Command '['/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpgsjw_gpj/task']' timed out after 10 seconds
+
+======================================================================
+FAIL: test_native_launch_bypasses_both_scheduler_callbacks (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_launch_bypasses_both_scheduler_callbacks) (asynchronous=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 186, in test_native_launch_bypasses_both_scheduler_callbacks
+    self.assertEqual(self.lifecycle(asynchronous, False, poison=True).stdout,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : Assertion failed: (status == (fail_native ? EAGAIN : 0)), function main, file task.c, line 655.
+
+
+----------------------------------------------------------------------
+Ran 1 test in 10.743s
+
+FAILED (failures=1, errors=1)
+
+native_suspension_accepted DETECTED
+test_native_runner_rejects_a_suspended_block (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_runner_rejects_a_suspended_block) ... FAIL
+
+======================================================================
+FAIL: test_native_runner_rejects_a_suspended_block (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_runner_rejects_a_suspended_block)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 275, in test_native_runner_rejects_a_suspended_block
+    run = self.run_c_oracle(self.runtime() + harness, expected_error='')
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12489, in run_c_oracle
+    self.assertNotEqual(run.returncode, 0)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0
+
+----------------------------------------------------------------------
+Ran 1 test in 0.651s
+
+FAILED (failures=1)
+
+failed_launch_cleanup_erased DETECTED
+ive_waits_publish_result_cleanup_and_slot_reuse) ... 
+  test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=False, failed=True) ... FAIL
+  test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=True, failed=True) ... FAIL
+
+======================================================================
+FAIL: test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=False, failed=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 180, in test_native_waits_publish_result_cleanup_and_slot_reuse
+    self.assertEqual(self.lifecycle(asynchronous, failed).stdout,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : Assertion failed: (released == 1 && execution.task == NULL), function main, file task.c, line 666.
+
+
+======================================================================
+FAIL: test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=True, failed=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 180, in test_native_waits_publish_result_cleanup_and_slot_reuse
+    self.assertEqual(self.lifecycle(asynchronous, failed).stdout,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : Assertion failed: (released == 1 && execution.task == NULL), function main, file task.c, line 663.
+
+
+----------------------------------------------------------------------
+Ran 1 test in 3.244s
+
+FAILED (failures=2)
+
+completion_published_before_body DETECTED
+test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) ... 
+  test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=True, failed=False) ... FAIL
+
+======================================================================
+FAIL: test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=True, failed=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 180, in test_native_waits_publish_result_cleanup_and_slot_reuse
+    self.assertEqual(self.lifecycle(asynchronous, failed).stdout,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : 
+
+----------------------------------------------------------------------
+Ran 1 test in 3.226s
+
+FAILED (failures=1)
+
+release_before_result_extraction DETECTED
+_cleanup_and_slot_reuse) ... 
+  test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=False, failed=False) ... FAIL
+  test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=True, failed=False) ... FAIL
+
+======================================================================
+FAIL: test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=False, failed=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 180, in test_native_waits_publish_result_cleanup_and_slot_reuse
+    self.assertEqual(self.lifecycle(asynchronous, failed).stdout,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : Assertion failed: (task_slot_address(f->slot) == f && f->owned == 22), function take, file task.c, line 622.
+
+
+======================================================================
+FAIL: test_native_waits_publish_result_cleanup_and_slot_reuse (test_native_thread_runtime.NativeThreadRuntimeTests.test_native_waits_publish_result_cleanup_and_slot_reuse) (asynchronous=True, failed=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 180, in test_native_waits_publish_result_cleanup_and_slot_reuse
+    self.assertEqual(self.lifecycle(asynchronous, failed).stdout,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_runtime.py", line 167, in lifecycle
+    return self.run_c_oracle(self.runtime(poison) + harness)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : Assertion failed: (task_slot_address(f->slot) == f && f->owned == 22), function take, file task.c, line 622.
+
+
+----------------------------------------------------------------------
+Ran 1 test in 3.711s
+
+FAILED (failures=2)
+
+native_block_inherits_async DETECTED
+uspensions_are_refused_inside_native_block_in_async_function) (body='if true { yield; }')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_parser.py", line 41, in test_suspensions_are_refused_inside_native_block_in_async_function
+    with self.subTest(body=body), self.assertRaisesRegex(Error, 'exige un corps async fn'):
+                                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_suspensions_are_refused_inside_native_block_in_async_function (test_native_thread_parser.NativeThreadParserTests.test_suspensions_are_refused_inside_native_block_in_async_function) (body='{ let value = task.await; }')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_parser.py", line 41, in test_suspensions_are_refused_inside_native_block_in_async_function
+    with self.subTest(body=body), self.assertRaisesRegex(Error, 'exige un corps async fn'):
+                                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_suspensions_are_refused_inside_native_block_in_async_function (test_native_thread_parser.NativeThreadParserTests.test_suspensions_are_refused_inside_native_block_in_async_function) (body='return task.await;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_parser.py", line 41, in test_suspensions_are_refused_inside_native_block_in_async_function
+    with self.subTest(body=body), self.assertRaisesRegex(Error, 'exige un corps async fn'):
+                                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_suspensions_are_refused_inside_native_block_in_async_function (test_native_thread_parser.NativeThreadParserTests.test_suspensions_are_refused_inside_native_block_in_async_function) (body='take(task.await);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_native_thread_parser.py", line 41, in test_suspensions_are_refused_inside_native_block_in_async_function
+    with self.subTest(body=body), self.assertRaisesRegex(Error, 'exige un corps async fn'):
+                                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=6)
+

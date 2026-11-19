@@ -1,0 +1,17 @@
+--- before/contracts.py
++++ after/contracts.py
+@@ -18,11 +18,13 @@
+     static_async_parameters: frozenset[int] = frozenset()
+     synchronous_task_slots: int = 0
+     storage_requirements: tuple[tuple[int, str], ...] = ()
++    join_storage_result: str | None = None
+ 
+ 
+ def function_contracts(functions, effects, results, constraints):
+     return {name: FunctionContract(tuple(node.args[1]), node.args[2], effects[name],
+                                    results[name], constraints[name], node.mutable_parameters,
+                                    node.handle_parameters, node.handle_result,
+-                                   storage_requirements=getattr(node, 'storage_requirements', ()))
++                                   storage_requirements=getattr(node, 'storage_requirements', ()),
++                                   join_storage_result=getattr(node, 'join_storage_result', None))
+             for name, node in functions.items()}

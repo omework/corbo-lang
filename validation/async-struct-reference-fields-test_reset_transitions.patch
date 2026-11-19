@@ -1,0 +1,102 @@
+--- test_reset_transitions.before
++++ test_reset_transitions.py
+@@ -24,27 +24,27 @@
+ 
+     def test_collective_destruction_skips_explicit_drop_and_final_cleanup(self):
+         self.check_sources('let mut a = new(memory) Int(1); let mut b = new(memory) Int(2); '
+-                           'let mut c = new(memory) Int(3); drop(-> b); memory.reset();',
+-                           ['destroy b=2', 'destroy c=3', 'destroy a=1'])
++                           'let mut c = new(memory) Int(3); print(a); print(c); drop(-> b); memory.reset();',
++                           ['destroy b=2', 'destroy c=3', 'destroy a=1'], '1\n3\n')
+ 
+     def test_nested_reset_destroys_child_before_parent_and_preserves_other_source(self):
+         self.check_sources('let mut other = allocator(); let mut safe = new(other) Int(99); '
+                            'let mut a = new(memory) Int(1); { let mut b = new(memory) Int(2); '
+-                           'memory.reset(); } print(safe);',
+-                           ['destroy b=2', 'destroy a=1', 'destroy safe=99'], '99\n')
++                           'print(a); print(b); memory.reset(); } print(safe);',
++                           ['destroy b=2', 'destroy a=1', 'destroy safe=99'], '1\n2\n99\n')
+ 
+     def test_reception_order_overrides_creation_order(self):
+         self.check_sources('let mut a = new(memory) Int(1); let mut b = new(memory) Int(2); '
+-                           '{ -> a; <- a; } memory.reset();',
+-                           ['destroy a=1', 'destroy b=2'])
++                           '{ -> a; <- a; } print(a); print(b); memory.reset();',
++                           ['destroy a=1', 'destroy b=2'], '1\n2\n')
+ 
+     def test_nested_function_reset_destroys_caller_values_at_the_reset_point(self):
+         self.check_sources(
+             'fn clear(mem: &mut Allocator) { let mut before = new(mem) Int(3); '
+             'print(before); mem.reset(); let mut after = new(mem) Int(4); print(after); } '
+             'fn forward(mem: &mut Allocator) { clear(mem); } '
+-            'let mut a = new(memory) Int(1); let mut b = new(memory) Int(2); forward(&mut memory);',
+-            ['destroy before=3', 'destroy b=2', 'destroy a=1', 'destroy after=4'], '3\n4\n')
++            'let mut a = new(memory) Int(1); let mut b = new(memory) Int(2); print(a); print(b); forward(&mut memory);',
++            ['destroy before=3', 'destroy b=2', 'destroy a=1', 'destroy after=4'], '1\n2\n3\n4\n')
+ 
+     def test_reset_of_returned_allocation_uses_its_original_source(self):
+         self.check_sources(
+@@ -57,8 +57,8 @@
+         for before, after in (
+             ('', 'print(data);'), ('', 'address(data);'), ('', 'drop(-> data);'),
+             ('', 'let mut moved = <- data; print(moved);'),
+-            ('let mut view = &data;', 'read(&view);'),
+-            ('let mut view = &mut data;', 'write(&mut view);'),
++            ('let mut view = &data;', 'read(view);'),
++            ('let mut view = &mut data;', 'write(view);'),
+         ):
+             for operation in ('memory.reset();', 'clear(&mut memory);'):
+                 with self.subTest(before=before, after=after, operation=operation):
+@@ -124,10 +124,11 @@
+             'enum E { A { n: Int }, B { x: Int, y: Int } } let mut memory = pool<E>(2); '
+             'fn clear(mem: &mut Pool<E>) { mem.reset(); } '
+             'let mut a = new(memory) E.A { n: 1 }; let mut b = new(memory) E.B { x: 2, y: 3 }; '
+-            'let mut c = new(memory) E.A { n: 4 }; address(a); address(b); clear(&mut memory); '
++            'let mut c = new(memory) E.A { n: 4 }; print(c); address(a); address(b); clear(&mut memory); '
+             'let mut d = new(memory) E.A { n: 5 }; let mut e = new(memory) E.B { x: 6, y: 7 }; '
+             'address(d); address(e); print(d); print(e);')
+         lines = result.stdout.splitlines()
++        self.assertEqual(lines.pop(0), 'E.A(4)')
+         self.assertEqual(lines[:2], lines[2:4])
+         self.assertEqual(lines[4:], ['E.A(5)', 'E.B(6, 7)'])
+         self.assertEqual([s for s in result.stderr.splitlines() if s.startswith('destroy ')],
+@@ -138,10 +139,10 @@
+         self.check_sources(
+             'fn clear(mem: &mut Allocator) { mem.reset(); } '
+             'fn replace(mem: &mut Allocator) -> <- Int { '
+-            'let mut local = new(mem) Int(2); { clear(mem); '
++            'let mut local = new(mem) Int(2); print(local); { clear(mem); '
+             'let mut fresh = new(mem) Int(3); return <- fresh; } } '
+-            'let mut outer = new(memory) Int(1); let mut result = replace(&mut memory); print(result);',
+-            ['destroy local=2', 'destroy outer=1', 'destroy fresh=3'], '3\n')
++            'let mut outer = new(memory) Int(1); print(outer); let mut result = replace(&mut memory); print(result);',
++            ['destroy local=2', 'destroy outer=1', 'destroy fresh=3'], '1\n2\n3\n')
+ 
+     def test_repeated_resets_do_not_repeat_destruction(self):
+         for factory in self.factories:
+@@ -149,10 +150,11 @@
+                 result = self.execute(
+                     'let mut memory = ' + factory + '; '
+                     'fn clear(mem: &mut Allocator) { mem.reset(); mem.reset(); } '
+-                    'let mut a = new(memory) Int(1); clear(&mut memory); '
+-                    'let mut b = new(memory) Int(2); clear(&mut memory);')
++                    'let mut a = new(memory) Int(1); print(a); clear(&mut memory); '
++                    'let mut b = new(memory) Int(2); print(b); clear(&mut memory);')
+                 self.assertEqual([s for s in result.stderr.splitlines() if s.startswith('destroy ')],
+-                                 ['destroy a=1', 'destroy b=2'])
++                                 ['destroy a=1', 'destroy b=2'], '1\n2\n')
++                self.assertEqual(result.stdout, '1\n2\n')
+                 self.assertEqual(result.stderr.splitlines().count('reset'), 4)
+ 
+     def test_future_enum_borrow_in_any_arm_prevents_collective_destruction(self):
+@@ -162,8 +164,8 @@
+                     'enum E { A, B } let mut memory = pool<E>(1); '
+                     'fn clear(mem: &mut Pool<E>) { mem.reset(); } '
+                     'fn read(a: &E) { print(a); } '
+-                    'let mut a = new(memory) E.A; let mut b = new(memory) E.B; '
+-                    'let mut view = &' + arm.lower() + '; clear(&mut memory); read(&view);',
++                    'let mut a = new(memory) E.A; let mut b = new(memory) E.B; print(a); print(b); '
++                    'let mut view = &' + arm.lower() + '; clear(&mut memory); read(view);',
+                     'reset interdit.*encore être utilisé')
+ 
+ 

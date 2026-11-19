@@ -1,0 +1,20 @@
+struct Inner { view: &Int }
+struct Outer { inner: A<Inner> }
+async fn consume(value: -> Outer) -> Int { yield; drop(->value); return 1; }
+fn make(value: -> Outer) -> <-consume { return <-consume(->value); }
+fn again(task: -> consume) -> <-consume { return <-task; }
+async fn work() -> Int {
+    let mut numbers = pool<Int>(1);
+    let number = numbers.new(9);
+    let mut inners = pool<Inner>(1);
+    let inner = inners.new(view: &number);
+    let outer = Outer { inner: <-inner };
+    let task = again(->make(->outer));
+    let result = task.await;
+    drop(->number);
+    return result;
+}
+fn main() {
+    let handle = runtime::spawn(->work());
+    match handle.join() { Ok(n) => { print(n); }, Err(_) => { print(99); } }
+}

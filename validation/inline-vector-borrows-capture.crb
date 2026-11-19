@@ -1,0 +1,12 @@
+struct View{value:&Int}
+async fn take(mut v:->A<Vector<View>>)-><-View{
+    yield;let r=<-v.remove(0);return <-r;
+}
+fn main(){
+    let mut p=pool<Int>(1);let mut number=p.new(7);
+    let mut q=pool<Vector<View>>(1);let mut v=q.new();
+    v.push(->View{value:&number});let task=take(->v);
+    let h=runtime::spawn(->task);
+    match h.join(){Ok(r)=>{print(*r.value);drop(->r);},Err(_)=>{print(99);}}
+    number=19;print(*number);let fresh=q.new();print(fresh.len());
+}

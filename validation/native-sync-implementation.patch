@@ -1,0 +1,643 @@
+--- before/crust.py
++++ crust.py
+@@ -1859,6 +1859,9 @@
+         self.async_frame_slots = {}
+         self.async_pool_capacities = {}
+         self.async_reference_paths = {}
++        self.async_sync_bridges = {}
++        self.async_sync_prototypes = []
++        self.async_sync_calls = {}
+         self.inline_array_projections = {}
+         self.thread_runtime_used = False
+         self.async_thread_runtime_used = False
+@@ -2932,9 +2935,11 @@
+             except PathsReturned:
+                 pass
+             self.warnings.update(check.warnings)
++            self.collect_async_slots(check)
+             self.function_contracts[name] = replace(
+-                self.function_contracts[name], static_async_parameters=frozenset(check.static_async_parameters))
+-            self.collect_async_slots(check)
++                self.function_contracts[name], static_async_parameters=frozenset(check.static_async_parameters),
++                synchronous_task_slots=len(check.async_slot_records) + sum(
++                    self.function_contracts[callee].synchronous_task_slots for callee in check.contract_call_log))
+             self.verified_functions.add(name)
+             self.body_call_contracts[name] = tuple(check.contract_call_log)
+ 
+@@ -13114,7 +13119,8 @@
+         nodes = resolve_features(list(self.lower_implementations(nodes)), self.enums, Error)
+         recursive_inputs = set()
+         async_functions = {node.args[0]: node for node in nodes if node.op == 'async_fn'}
+-        async_graph, explicit_capacities = configure(async_functions, entries, Error)
++        async_graph, explicit_capacities = configure(async_functions, entries, Error,
++            {node.args[0]: node for node in nodes if node.op == 'fn'})
+         for node in nodes:
+             if node.op == 'async_fn':
+                 self.line = node.line
+@@ -13123,14 +13129,7 @@
+                     self.fail('main doit rester synchrone')
+                 if name in self.functions or name in self.async_definitions:
+                     self.fail(f"nom de fonction déjà utilisé : '{name}'")
+-                from async_lowering import lower_async_function
+-                def warn_async(line, message, variable):
+-                    self.warnings.add(f"ligne {line}: {message} : '{variable}'")
+-                def enable_threads():
+-                    self.thread_runtime_used = self.async_thread_runtime_used = True
+-                self.async_definitions[name] = node, lower_async_function(
+-                    node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+-                    self.declared_array_type, self.async_frame_slots)
++                self.async_definitions[name] = node, None
+                 continue
+             if node.op in ('enum', 'struct'):
+                 continue
+@@ -13277,12 +13276,87 @@
+                                                       self.function_results, Error, self.enums, async_functions).infer_all()
+         self.function_contracts = function_contracts(self.functions, self.function_effects,
+                                                      self.function_results, self.function_constraints)
++        # Synchronous callers can join a borrowed result before frame C is
++        # emitted. Its provenance contract must already be available then.
++        from async_lowering import borrowed_result_paths
++        def fail_async_contract(line, message):
++            raise Error(f'ligne {line}: {message}')
++        for node in async_functions.values():
++            borrowed_result_paths(node, async_functions, fail_async_contract, self.async_reference_paths)
++        from async_lowering import lower_async_function
++        def warn_async(line, message, variable):
++            self.warnings.add(f"ligne {line}: {message} : '{variable}'")
++        def enable_threads():
++            self.thread_runtime_used = self.async_thread_runtime_used = True
++        for name, (node, _) in self.async_definitions.items():
++            self.async_definitions[name] = node, lower_async_function(
++                node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
++                self.declared_array_type, self.async_frame_slots,
++                sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
+         self.verify_function_bodies()
++        for parent, callees in self.async_sync_calls.items():
++            self.async_frame_slots[parent] += sum(
++                self.function_contracts[callee].synchronous_task_slots for callee in callees)
+         if 'main' not in self.functions:
+             self.verify_top_level(main)
+         self.async_pool_capacities = capacities(async_graph, explicit_capacities,
+                                                 self.async_sync_slots, self.async_frame_slots, Error)
+         return main
++
++    def reserve_async_sync_bridge(self, name, parent):
++        """Call-site verification uses signatures/effects, never callee C."""
++        self.async_sync_calls.setdefault(parent, set()).add(name)
++        if name not in self.async_sync_bridges:
++            symbol = f'crust_sync_bridge_{self.uid()}'
++            self.async_sync_bridges[name] = symbol, not self.function_contracts[name].effects.may_return
++        return self.async_sync_bridges[name]
++
++    def emit_async_sync_bridge(self, name):
++        """Emit an ordinary synchronous ABI once, using the checked backend.
++
++        Only independent scalar inputs/results cross this boundary for now.
++        Callee-local pools, loans and cleanup use the synchronous verifier.
++        Separate compiler state prevents speculative lowering/loop retries from
++        leaking those local lifetimes into a caller's frame.
++        """
++        contract = self.function_contracts[name]
++        check = Compiler(allow_legacy_reset=self.allow_legacy_reset)
++        for attr in ('functions', 'async_definitions', 'async_reference_paths', 'enums', 'struct_fields',
++                     'function_effects', 'function_results', 'function_constraints', 'function_contracts',
++                     'array_types', 'array_definitions', 'handle_slot_types'):
++            setattr(check, attr, getattr(self, attr))
++        check.serial = self.serial
++        root = Scope(check.uid(), 'synchronous bridge inputs', None)
++        check.scopes.append(root)
++        parameters, arguments = [], []
++        for index, (_, mode, typ) in enumerate(contract.parameters):
++            parameter = f'bridge_input_{index}'
++            root.bindings[parameter] = Binding(parameter, mode, parameter)
++            parameters.append(f'{COPY_VALUE_TYPES[mode]} {parameter}')
++            arguments.append(('name', parameter))
++        call = ('call', name, arguments)
++        check.index_expression(call)
++        result = None
++        try:
++            result = check.invoke(call, root)
++            check.finish_scope(root)
++        except PathsReturned:
++            pass
++        check.record_async_slots()
++        symbol, _ = self.async_sync_bridges[name]
++        mode = contract.result_type[0]
++        ctype = 'void' if mode == 'void' else COPY_VALUE_TYPES[mode]
++        signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
++        lines = check.flag_declarations + check.lines
++        if result is not None and mode != 'void':
++            lines.append(f'return {result[1]};')
++        self.definitions.extend(check.definitions)
++        self.definitions.append(signature + ' {\n' + '\n'.join('    ' + line for line in lines) + '\n}\n')
++        self.async_sync_prototypes.append(signature + ';')
++        self.serial = check.serial
++        self.warnings.update(check.warnings)
++        self.thread_runtime_used |= check.thread_runtime_used
++        self.async_thread_runtime_used |= check.async_thread_runtime_used
+ 
+     def lower_implementations(self, nodes):
+         for node in nodes:
+@@ -13308,6 +13382,8 @@
+ 
+     def compile(self, nodes):
+         main = self.verify(nodes)
++        for name in self.async_sync_bridges:
++            self.emit_async_sync_bridge(name)
+         exit_value = '0'
+         if 'main' in self.functions:
+             root = Scope(self.uid(), 'root', None)
+@@ -13356,6 +13432,7 @@
+                 runtime += '\nstatic void task_abandon_async(CrustAsyncExecution *);\n'
+             runtime += '\n' + '\n'.join(self.array_definitions) + '\n'
+             runtime += '\n'.join(task_factory_signature(name, node) + ';' for name, node in definitions.items())
++            runtime += '\n' + '\n'.join(self.async_sync_prototypes) + '\n'
+             runtime += '\n'.join(code for _, code in self.async_definitions.values())
+             runtime += lower_task_context(
+                 definitions, capacities=self.async_pool_capacities,
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -766,7 +766,8 @@
+         self.additions = additions
+ 
+ 
+-def lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type, frame_slots=None):
++def lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type, frame_slots=None,
++                         *, sync_contracts=None, sync_bridge=None):
+     # Each retry starts with fresh lowering state. Only finite sets of source
+     # names survive, so no emitted frame member or cleanup is duplicated.
+     node = expand_reference_return_branches(node)
+@@ -776,7 +777,8 @@
+         slots = {}
+         try:
+             result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+-                                           enable_threads, result_parameters_cache, array_c_type, hints, slots)
++                                           enable_threads, result_parameters_cache, array_c_type, hints, slots,
++                                           sync_contracts or {}, sync_bridge)
+         except _WidenUtf8Loop as request:
+             entry = hints.setdefault(request.key, {})
+             changed = False
+@@ -796,11 +798,55 @@
+ 
+ 
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+-                          utf8_loop_hints, frame_slots):
++                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge):
+     name, parameters, result, body = node.args
+ 
+     def fail(line, message):
+         raise error(f'ligne {line}: {message}')
++
++    scalar_sync_types = {('scalar', 'Int'): 'int', ('byte', 'u8'): 'uint8_t',
++                         ('char', 'char'): 'CrustChar'}
++
++    def sync_signature(expr):
++        if expr[0] == 'call' and expr[1] in sync_contracts:
++            return sync_contracts[expr[1]].result_type
++        return None
++
++    def sync_call(expr, line, expected=None, *, following=None):
++        contract = sync_contracts[expr[1]]
++        if contract.effects.blocking_join and not node.native_block:
++            fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
++        signature = contract.result_type
++        if (signature not in scalar_sync_types and signature != ('void', 'Void')
++                or any((mode, typ) not in scalar_sync_types for _, mode, typ in contract.parameters)):
++            fail(line, 'prototype : appel synchrone depuis un état : signature scalaire Int, u8, char ou Void requise')
++        if expected is not None and signature != expected:
++            fail(line, f'appel synchrone : résultat {signature[1]}, attendu {expected[1]}')
++        if len(expr[2]) != len(contract.parameters):
++            fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
++        prepared = []
++        for argument, (_, mode, typ) in zip(expr[2], contract.parameters):
++            # A literal receives the explicit u8 parameter's context; names
++            # and computed values keep their own type and are never truncated.
++            if mode == 'byte' and argument[0] == 'int' and 0 <= argument[1] <= 255:
++                value, actual = str(argument[1]), 'u8'
++            else:
++                value, actual = infer_scalar_value(argument, line)
++            if actual != typ:
++                fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
++            snapshot = temporary(scalar_sync_types[(mode, typ)])
++            steps.append(f'{snapshot} = {value};')
++            prepared.append(snapshot)
++        symbol, diverges = sync_bridge(expr[1], node.args[0])
++        call = symbol + '(' + ', '.join(prepared) + ')'
++        if signature == ('void', 'Void') or diverges:
++            steps.append(call + ';')
++            if diverges:
++                raise NoAsyncContinuation()
++            return '', 'Void'
++        value = temporary(scalar_sync_types[signature])
++        steps.append(f'{value} = {call};')
++        return value, signature[1]
+ 
+     if any(not (scalar_array_layout(typ)[0] or int_reference_row(typ, mode))
+            if mode in ('array', *ARRAY_BORROWS) else
+@@ -2360,6 +2406,8 @@
+         return array_elements.get(root) == 'uint8_t' and len(indices) == len(arrays[root])
+ 
+     def byte_value(expr, line, *, context='une opération u8', following=None):
++        if sync_signature(expr) is not None:
++            return sync_call(expr, line, ('byte', 'u8'), following=following)[0]
+         if vector_remove_type(expr) == 'u8':
+             return vector_remove_value(expr, line, following=following)
+         if expr[0] == 'array_byte_literal':
+@@ -2507,6 +2555,8 @@
+         return value_place(expr[1])
+ 
+     def char_value(expr, line, *, context, following=None):
++        if sync_signature(expr) is not None:
++            return sync_call(expr, line, ('char', 'char'), following=following)[0]
+         if (expr[0] == 'utf8_value' and expr[1][0] == 'name'
+                 and utf8_match_payloads.get(expr[1][1]) == 'char'):
+             return f'char_result_value({utf8_match_results[expr[1][1]]})'
+@@ -4071,6 +4121,8 @@
+         steps.append(f'{value_place(receiver)} = {value};')
+ 
+     def expression(expr, line, *, following=None):
++        if sync_signature(expr) is not None:
++            return sync_call(expr, line, ('scalar', 'Int'), following=following)[0]
+         op = expr[0]
+         if (typ := vector_remove_type(expr)) is not None:
+             if typ != 'Int':
+@@ -4208,6 +4260,11 @@
+         return f'(({ctype})({value}))', expr[2]
+ 
+     def infer_scalar_value(expr, line, *, following=None):
++        if sync_signature(expr) is not None:
++            value, typ = sync_call(expr, line, following=following)
++            if typ == 'Void':
++                fail(line, 'un appel Void ne fournit pas de valeur')
++            return value, typ
+         if (typ := vector_remove_type(expr)) is not None:
+             return vector_remove_value(expr, line, following=following), typ
+         if (mode := builtin_error_mode(expr)) is not None:
+@@ -4699,6 +4756,9 @@
+         return True
+ 
+     def set_reference(statement, following):
++        if statement.op == 'call' and sync_signature(statement.args[0]) is not None:
++            sync_call(statement.args[0], statement.line, following=following)
++            return True
+         if statement.op in ('call', 'array_statement'):
+             expr = statement.args[0]
+             if vector_remove_type(expr) is not None:
+--- before/async_capacity.py
++++ async_capacity.py
+@@ -7,15 +7,27 @@
+ """
+ 
+ 
+-def creation_graph(definitions):
+-    def calls(value):
++def creation_graph(definitions, synchronous=None):
++    synchronous = synchronous or {}
++    def calls(value, visiting=frozenset()):
+         if hasattr(value, 'args'):
+-            yield from calls(value.args)
++            yield from calls(value.args, visiting)
+         elif isinstance(value, (tuple, list)):
+-            if value and value[0] == 'call' and len(value) == 3 and value[1] in definitions:
+-                yield value[1]
++            if value and value[0] == 'call' and len(value) == 3:
++                name = value[1]
++                if name in definitions:
++                    yield name
++                elif name in synchronous and name not in visiting:
++                    yield from calls(synchronous[name].args[3], visiting | {name})
++            if value and value[0] == 'method_call' and len(value) == 4:
++                # Receiver resolution belongs to the type checker. Include
++                # every possible concrete method here so a local call cannot
++                # hide task creation from the capacity graph.
++                for name in synchronous:
++                    if name.endswith('.' + value[2]) and name not in visiting:
++                        yield from calls(synchronous[name].args[3], visiting | {name})
+             for item in value:
+-                yield from calls(item)
++                yield from calls(item, visiting)
+     return {name: set(calls(node.args[3])) for name, node in definitions.items()}
+ 
+ 
+@@ -32,8 +44,8 @@
+     return order, remaining
+ 
+ 
+-def configure(definitions, entries, error):
+-    graph = creation_graph(definitions)
++def configure(definitions, entries, error, synchronous=None):
++    graph = creation_graph(definitions, synchronous)
+     public = {name.split('$feature', 1)[0] for name in definitions}
+     specified = {}
+     for name, capacity, line in entries:
+--- before/effects.py
++++ effects.py
+@@ -98,6 +98,7 @@
+     allocations: frozenset[tuple[int, str]]
+     may_return: bool
+     pool_requirements: frozenset[tuple[int, str]] = frozenset()
++    blocking_join: bool = False
+ 
+     def describe(self, params):
+         return {
+@@ -135,6 +136,7 @@
+         self.error = error
+         self.summaries = {}
+         self.visiting = set()
++        self.blocking_join_frames = []
+ 
+     def fail(self, line, message):
+         raise self.error(f'ligne {line}: {message}')
+@@ -151,6 +153,7 @@
+         if name in self.visiting:
+             self.fail(node.line, 'prototype : récursion non prise en charge')
+         self.visiting.add(name)
++        self.blocking_join_frames.append(False)
+         try:
+             _, params, _, body = node.args
+             environment = {}
+@@ -169,10 +172,12 @@
+                     pools.add((index, typ[5:-1]))
+             outcomes = self.nodes(body, environment, resets, allocations, pools)
+             result = FunctionEffects(frozenset(resets), frozenset(allocations),
+-                                     bool(outcomes & {'next', 'return'}), frozenset(pools))
++                                     bool(outcomes & {'next', 'return'}), frozenset(pools),
++                                     self.blocking_join_frames[-1])
+             self.summaries[name] = result
+             return result
+         finally:
++            self.blocking_join_frames.pop()
+             self.visiting.remove(name)
+ 
+     def source(self, name, environment, line, write=True):
+@@ -402,6 +407,8 @@
+                 self.fail(line, f"type du receveur indéterminé pour '{builtin[2]}'")
+         expr = candidate or expr
+         op = expr[0]
++        if op in ('task_join', 'task_join_value'):
++            self.blocking_join_frames[-1] = True
+         if op == 'arithmetic' or op.startswith(('array_', 'utf8_')):
+             flow = {'next'}
+             for operand in (expr[2:] if op == 'arithmetic' else array_operands(expr)):
+@@ -513,6 +520,7 @@
+                 self.fail(line, f"'{pname}' attend une source {typ}")
+             actual_sources[index] = source
+         summary = self.infer(name)
++        self.blocking_join_frames[-1] |= summary.blocking_join
+         for index, typ in summary.pool_requirements:
+             self.require_pool(actual_sources[index], typ, allocations, pools, line)
+         for index in summary.resets:
+--- before/contracts.py
++++ contracts.py
+@@ -16,6 +16,7 @@
+     handle_parameters: frozenset[str] = frozenset()
+     handle_result: bool = False
+     static_async_parameters: frozenset[int] = frozenset()
++    synchronous_task_slots: int = 0
+ 
+ 
+ def function_contracts(functions, effects, results, constraints):
+--- /dev/null
++++ tests/test_native_sync_calls.py
+@@ -0,0 +1,183 @@
++"""Synchronous contracts and C calls used by native/async states."""
++from pathlib import Path
++import unittest
++from unittest.mock import patch
++
++from crust import Compiler, Error, Parser, compile_source, verify_program
++import test_native_blocks as native_tests
++
++
++class NativeSyncCallTests(unittest.TestCase):
++    run_c_oracle = native_tests.NativeBlockTests.run_c_oracle
++    run_native = native_tests.NativeBlockTests.run_native
++    assert_destroyed = native_tests.NativeBlockTests.assert_destroyed
++    wrap = staticmethod(native_tests.NativeBlockTests.wrap)
++
++    def test_recorded_minimal_helper(self):
++        source = (Path(__file__).resolve().parents[1] / 'validation/open-native-sync-helper.crust').read_text()
++        self.assertEqual(self.run_native(source).stdout, '8\n')
++
++    def test_nested_calls_preserve_argument_and_cleanup_order(self):
++        declarations = '''
++          fn item(n:Int)->Int{print(n);return n;}
++          fn pair(a:Int,b:Int)->Int{print(30);return a*10+b;}
++          fn leaf(n:Int)->Int{
++            let mut p=pool<Int>(1);let a=p.new(n);let vue=&a;
++            let value=*vue;drop(->a);let b=p.new(value+1);return *b;
++          }
++          fn relay(n:Int)->Int{return leaf(n)+1;}
++          fn observe(n:Int){print(n);}
++        '''
++        for asynchronous in (False, True):
++            body = 'let n=pair(item(1),item(2));observe(n);return relay(n);'
++            source = declarations + ('''async fn work()->Int{BODY}
++                fn main(){let h=runtime::spawn(->work());
++                match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}'''
++                if asynchronous else '''fn main(){let h=runtime::thread({BODY});
++                match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}''').replace('BODY', body)
++            with self.subTest(asynchronous=asynchronous):
++                run = self.run_native(source)
++                self.assertEqual(run.stdout, '1\n2\n30\n12\n14\n')
++                self.assert_destroyed(run, [12,13])
++
++    def test_helper_local_borrow_contracts_drop_and_source_lifetime(self):
++        template = '''
++          fn read(v:&Int)->Int{return *v;}
++          fn helper(n:Int)->Int{let mut p=pool<Int>(1);let a=p.new(n);
++            let vue=&a;BEFORE let result=read(vue);AFTER return result;}
++          fn main(){let h=runtime::thread({return helper(7);});
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}
++        '''
++        source = template.replace('BEFORE','').replace('AFTER','drop(->a);')
++        run = self.run_native(source)
++        self.assertEqual(run.stdout,'7\n')
++        self.assert_destroyed(run,[7])
++        for before,after in [('drop(->a);',''),('', 'drop(->a);print(vue);'),('', 'p.reset();')]:
++            with self.subTest(before=before,after=after),self.assertRaises(Error):
++                verify_program(template.replace('BEFORE',before).replace('AFTER',after))
++
++    def test_byte_char_and_explicit_conversion(self):
++        source = '''fn byte(b:u8)->u8{return b;}
++          fn character(c:char)->char{return c;}
++          fn main(){let h=runtime::thread({
++            let a:u8=7;let b=byte(a);print(b as Int);
++            let result="é".char_at(0);
++            match result{Ok(c)=>{print(character(c));},Err(_)=>{print(99);}}
++            return byte(8);
++          });match h.join(){Ok(v)=>{print(v as Int);},Err(_)=>{print(99);}}}'''
++        self.assertEqual(self.run_native(source).stdout,'7\né\n8\n')
++        for old,new in [('byte(a)','byte(256)'),('byte(a)','byte(true)'),
++                        ('byte(a)','byte(1,2)'),('byte(a)','byte(&a)'),
++                        ('print(b as Int)','print(byte(a))')]:
++            with self.subTest(new=new),self.assertRaises(Error):
++                verify_program(source.replace(old,new))
++
++    def test_captured_allocation_read_by_value_stays_reserved_until_wait(self):
++        template = '''fn add(n:Int)->Int{return n+1;}
++          fn main(){let mut p=pool<Int>(1);let mut a=p.new(7);let vue=&mut a;
++            let h=runtime::thread({->(vue);return add(*vue);});BEFORE
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}
++            a=9;print(a);drop(->a);}'''
++        self.assertEqual(self.run_native(template.replace('BEFORE','')).stdout,'8\n9\n')
++        for conflict in ('print(a);','a=2;','drop(->a);','print(vue);'):
++            with self.subTest(conflict=conflict),self.assertRaises(Error):
++                verify_program(template.replace('BEFORE',conflict))
++
++    def test_transitive_join_allowed_in_native_refused_in_async(self):
++        declarations = '''async fn child(n:Int)->Int{yield;return n;}
++          fn wait(n:Int)->Int{let h=runtime::spawn(->child(n));
++            match h.join(){Ok(v)=>{return v;},Err(_)=>{return 90;}}}
++          fn relay(n:Int)->Int{return wait(n);}
++        '''
++        source = declarations + '''fn main(){let h=runtime::thread({return relay(7);});
++          match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}'''
++        self.assertEqual(self.run_native(source).stdout,'7\n')
++        self.assertEqual(self.run_native(source,fail_at=2).stdout,'90\n')
++        self.assertEqual(self.run_native(source,fail_at=1).stdout,'99\n')
++        for fn in ('wait','relay'):
++            invalid = declarations + 'async fn work()->Int{return '+fn+'(7);}'
++            with self.subTest(fn=fn),self.assertRaisesRegex(Error,'join réservé.*auxiliaires'):
++                verify_program(invalid)
++        with self.assertRaisesRegex(Error,'attente requise|join requis'):
++            verify_program(source.replace('match h.join(){Ok(v)=>{return v;},Err(_)=>{return 90;}}','return 7;'))
++
++    def test_indirect_state_slots_count_for_each_live_parent(self):
++        source = '''async fn child(n:Int)->Int{yield;return n;}
++          fn helper(n:Int)->Int{
++            let a=runtime::spawn(->child(n));let b=runtime::spawn(->child(n+1));
++            let c=runtime::spawn(->child(n+2));
++            let x=match a.join(){Ok(v)=>{v},Err(_)=>{90}};
++            let y=match b.join(){Ok(v)=>{v},Err(_)=>{90}};
++            let z=match c.join(){Ok(v)=>{v},Err(_)=>{90}};return x+y+z;
++          }
++          fn relay(n:Int)->Int{return helper(n);}
++        '''
++        # Eight retained parents can each hold three child handles. Keeping
++        # only two parents let unrelated conservative counts hide a missing
++        # per-frame contribution (the first mutation run exposed that gap).
++        source += 'fn main(){' + ''.join(
++            f'let h{i}=runtime::thread({{return relay({i});}});' for i in range(8))
++        source += ''.join(
++            f'match h{i}.join(){{Ok(v)=>{{print(v);}},Err(_)=>{{print(99);}}}}' for i in range(8)) + '}'
++        compiler=Compiler()
++        compiler.compile(Parser(source).parse())
++        self.assertGreaterEqual(compiler.async_pool_capacities['child'],24)
++        self.assertEqual(self.run_native(source).stdout,''.join(f'{3*i+3}\n' for i in range(8)))
++
++    def test_helper_task_creation_without_join_is_not_a_blocking_effect(self):
++        source='''async fn child(n:Int)->Int{yield;return n;}
++          fn helper(n:Int)->Int{let task=child(n);drop(->task);return n+1;}
++          async fn run()->Int{return helper(7);}
++          fn main(){let h=runtime::spawn(->run());
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}'''
++        self.assertEqual(self.run_native(source).stdout,'8\n')
++
++    def test_hidden_creation_cycle_needs_explicit_capacity(self):
++        source='''async fn recur(n:Int)->Int{return helper(n);}
++          fn helper(n:Int)->Int{let t=recur(n);drop(->t);return n;}
++          fn main(){let h=runtime::spawn(->recur(7));
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}'''
++        with self.assertRaisesRegex(Error,'async_pool_sizes requis.*'):
++            verify_program(source)
++        self.assertEqual(self.run_native('#(directive, async_pool_sizes={recur:2})'+source).stdout,'7\n')
++
++    def test_argument_return_leaves_caller_without_invoking_helper(self):
++        source='''fn first()->Int{print(1);return 3;}
++          fn pair(a:Int,b:Int)->Int{print(99);return a+b;}
++          fn main(){let h=runtime::thread({return pair(first(),{return 7;});});
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(90);}}}'''
++        self.assertEqual(self.run_native(source).stdout,'1\n7\n')
++
++    def test_local_method_creation_is_included_in_capacity_graph(self):
++        source='''struct Maker{n:Int}
++          impl Maker{fn make(self:&Maker)->Int{
++            let task=child(self.n);drop(->task);return self.n;}}
++          async fn child(n:Int)->Int{return helper(n);}
++          fn helper(n:Int)->Int{let m=Maker{n:n};return m.make();}
++          fn main(){let h=runtime::spawn(->child(7));
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}'''
++        with self.assertRaisesRegex(Error,'async_pool_sizes requis'):
++            verify_program(source)
++        self.assertEqual(self.run_native('#(directive, async_pool_sizes={child:2})'+source).stdout,'7\n')
++
++    def test_check_uses_contracts_without_emitting_synchronous_callees(self):
++        source='''fn add(n:Int)->Int{return n+1;}
++          fn relay(n:Int)->Int{return add(n);}
++          fn main(){let h=runtime::thread({return relay(1)+relay(2);});
++            match h.join(){Ok(v)=>{print(v);},Err(_)=>{print(99);}}}'''
++        visits=[]
++        original=Compiler.block
++        def track(check,*args,**kwargs):
++            if args and args[0].startswith('appel '):
++                visits.append((args[0],tuple(check.call_stack)))
++            return original(check,*args,**kwargs)
++        with patch.object(Compiler,'block',track), patch.object(
++                Compiler,'emit_async_sync_bridge',side_effect=AssertionError('backend reached during check')):
++            checked=verify_program(source)
++        self.assertEqual(visits,[('appel add',('add',)),('appel relay',('relay',)),('appel main',('main',))])
++        self.assertEqual(checked.definitions,[])
++        self.assertEqual(checked.body_call_contracts['relay'],('add',))
++
++
++if __name__ == '__main__':
++    unittest.main()
+--- /dev/null
++++ tests/run_native_sync_mutations.py
+@@ -0,0 +1,55 @@
++"""Inject faults into temporary compilers; keep the tests/oracles unchanged."""
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++import tempfile
++
++ROOT = Path(__file__).resolve().parents[1]
++MUTATIONS = [
++    ('arguments_reversed', 'async_lowering.py',
++     'for argument, (_, mode, typ) in zip(expr[2], contract.parameters):',
++     'for argument, (_, mode, typ) in reversed(list(zip(expr[2], contract.parameters))):',
++     'test_nested_calls_preserve_argument_and_cleanup_order'),
++    ('hidden_join_accepted', 'async_lowering.py',
++     'if contract.effects.blocking_join and not node.native_block:',
++     'if False:', 'test_transitive_join_allowed_in_native_refused_in_async'),
++    ('indirect_creation_edges_lost', 'async_capacity.py',
++     'synchronous = synchronous or {}', 'synchronous = {}',
++     'test_hidden_creation_cycle_needs_explicit_capacity'),
++    ('helper_slots_omitted', 'crust.py',
++     'self.async_frame_slots[parent] += sum(', 'self.async_frame_slots[parent] += 0 * sum(',
++     'test_indirect_state_slots_count_for_each_live_parent'),
++]
++
++
++def main():
++    detected_all = True
++    for name, filename, before, after, test in MUTATIONS:
++        if sys.argv[1:] and name not in sys.argv[1:]:
++            continue
++        source = (ROOT / filename).read_text()
++        if source.count(before) != 1:
++            raise SystemExit(f'{name}: anchor count {source.count(before)}')
++        with tempfile.TemporaryDirectory(prefix='crust-native-sync-mut-') as folder:
++            target = Path(folder)
++            for path in ROOT.glob('*.py'):
++                shutil.copy2(path, target / path.name)
++            (target / filename).write_text(source.replace(before, after))
++            script = f'''import sys,unittest
++sys.path[:0]=[{folder!r},{str(ROOT/'tests')!r}]
++suite=unittest.defaultTestLoader.loadTestsFromName('test_native_sync_calls.NativeSyncCallTests.{test}')
++result=unittest.TextTestRunner(verbosity=2).run(suite)
++sys.exit(not result.wasSuccessful())
++'''
++            run = subprocess.run([sys.executable, '-c', script], cwd=folder,
++                                 capture_output=True, text=True, timeout=120)
++            detected = run.returncode == 1 and 'FAIL:' in run.stderr
++            print(name, 'DETECTED' if detected else 'SURVIVED' if run.returncode == 0 else 'INCONCLUSIVE', flush=True)
++            print(run.stderr[-3500:], flush=True)
++            detected_all &= detected
++    return 0 if detected_all else 1
++
++
++if __name__ == '__main__':
++    sys.exit(main())

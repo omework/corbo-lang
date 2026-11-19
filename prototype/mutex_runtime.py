@@ -1,0 +1,294 @@
+"""Internal mutex ABI for generated code.
+
+Storage is supplied by generated owners/frames, never allocated here. Callers
+must end all borrows and workers before destroying the mutex or ticket storage.
+"""
+
+MUTEX_CELL_RUNTIME = r'''
+typedef union {
+    int integer;
+    uint64_t bytes;
+} CrustMutexValue;
+
+typedef struct {
+    union {
+        CrustSyncMutex sync;
+        CrustAsyncMutex async;
+    } lock;
+    CrustMutexValue value;
+} CrustMutexCell;
+
+_Static_assert(offsetof(Cell, fields) % _Alignof(CrustMutexCell) == 0,
+               "mutex payload alignment");
+_Static_assert(offsetof(Cell, fields) % _Alignof(CrustSyncGuard) == 0,
+               "mutex guard alignment");
+_Static_assert(offsetof(Cell, fields) % _Alignof(CrustAsyncGuard) == 0,
+               "async mutex guard alignment");
+
+static CrustMutexCell *crust_mutex_cell(Cell *cell) {
+    return (CrustMutexCell *)(void *)cell->fields;
+}
+static CrustSyncGuard *crust_guard_cell(Cell *cell) {
+    return (CrustSyncGuard *)(void *)cell->fields;
+}
+static CrustAsyncGuard *crust_async_guard_cell(Cell *cell) {
+    return (CrustAsyncGuard *)(void *)cell->fields;
+}
+static void *crust_guard_value(Cell *cell, int asynchronous) {
+    return asynchronous ? crust_async_guard_cell(cell)->value : crust_guard_cell(cell)->value;
+}
+static void crust_drop_sync_mutex_cell(Cell *cell) {
+    if (crust_sync_mutex_destroy(&crust_mutex_cell(cell)->lock.sync))
+        fail("invalid sync mutex cleanup");
+}
+static void crust_drop_async_mutex_cell(Cell *cell) {
+    if (crust_async_mutex_destroy(&crust_mutex_cell(cell)->lock.async))
+        fail("invalid async mutex cleanup");
+}
+static void crust_drop_sync_guard_cell(Cell *cell) {
+    if (crust_sync_guard_drop(crust_guard_cell(cell)))
+        fail("invalid sync mutex guard cleanup");
+}
+static void crust_drop_async_guard_cell(Cell *cell) {
+    if (crust_async_guard_drop(crust_async_guard_cell(cell)))
+        fail("invalid async mutex guard cleanup");
+}
+static const Source crust_sync_mutex_layout = {.drop_payload = crust_drop_sync_mutex_cell};
+static const Source crust_async_mutex_layout = {.drop_payload = crust_drop_async_mutex_cell};
+static const Source crust_sync_guard_layout = {.drop_payload = crust_drop_sync_guard_cell};
+static const Source crust_async_guard_layout = {.drop_payload = crust_drop_async_guard_cell};
+
+static Cell *crust_make_mutex(Source *source, int asynchronous,
+        const void *initial, size_t size, const char *label) {
+    const Source *layout = asynchronous ? &crust_async_mutex_layout : &crust_sync_mutex_layout;
+    Cell *cell = local_cell_new(source, layout, sizeof(CrustMutexCell), label);
+    CrustMutexCell *mutex = crust_mutex_cell(cell);
+    if (size > sizeof mutex->value) fail("invalid mutex value size");
+    memcpy(&mutex->value, initial, size);
+    int error = asynchronous
+        ? crust_async_mutex_init(&mutex->lock.async, &mutex->value, NULL)
+        : crust_sync_mutex_init(&mutex->lock.sync, &mutex->value, NULL);
+    if (error) fail("mutex initialization failed");
+    return cell;
+}
+
+static void crust_drop_mutex_object(void *value) {
+    cell_drop(value);
+}
+
+static Cell *crust_make_object_mutex(Source *source, int asynchronous, Cell *value,
+                                    const char *label) {
+    const Source *layout = asynchronous ? &crust_async_mutex_layout : &crust_sync_mutex_layout;
+    Cell *cell = local_cell_new(source, layout, sizeof(CrustMutexCell), label);
+    CrustMutexCell *mutex = crust_mutex_cell(cell);
+    int error = asynchronous
+        ? crust_async_mutex_init(&mutex->lock.async, value, crust_drop_mutex_object)
+        : crust_sync_mutex_init(&mutex->lock.sync, value, crust_drop_mutex_object);
+    if (error) fail("mutex initialization failed");
+    return cell;
+}
+
+static Cell *crust_lock_sync_mutex(Source *source, Cell *mutex, const char *label) {
+    Cell *cell = local_cell_new(source, &crust_sync_guard_layout, sizeof(CrustSyncGuard), label);
+    *crust_guard_cell(cell) = (CrustSyncGuard){0};
+    crust_sync_mutex_lock(&crust_mutex_cell(mutex)->lock.sync, crust_guard_cell(cell));
+    return cell;
+}
+static Cell *crust_take_async_guard(Source *source, CrustAsyncGuard *guard, const char *label) {
+    Cell *cell = local_cell_new(source, &crust_async_guard_layout, sizeof(CrustAsyncGuard), label);
+    *crust_async_guard_cell(cell) = *guard;
+    *guard = (CrustAsyncGuard){0};
+    return cell;
+}
+'''
+
+MUTEX_RUNTIME = r'''
+/* MT9: a synchronous guard is thread-affine. The compiler must additionally
+   reject holding it across a suspension, even when the next poll uses the
+   same thread. These internal operations cannot establish that static rule. */
+typedef struct {
+    pthread_mutex_t gate;
+    void *value;
+    void (*destroy_value)(void *);
+} CrustSyncMutex;
+typedef struct {
+    CrustSyncMutex *mutex;
+    pthread_t owner;
+    void *value;
+} CrustSyncGuard;
+
+static int crust_sync_mutex_init(CrustSyncMutex *mutex, void *value,
+                                  void (*destroy_value)(void *)) {
+    int error = pthread_mutex_init(&mutex->gate, NULL);
+    if (error) return error;
+    mutex->value = value;
+    mutex->destroy_value = destroy_value;
+    return 0;
+}
+static void crust_sync_mutex_lock(CrustSyncMutex *mutex, CrustSyncGuard *guard) {
+    if (guard->mutex) abort();
+    task_queue_lock(&mutex->gate);
+    *guard = (CrustSyncGuard){mutex, pthread_self(), mutex->value};
+}
+static int crust_sync_guard_drop(CrustSyncGuard *guard) {
+    if (!guard->mutex) return EINVAL;
+    if (!pthread_equal(guard->owner, pthread_self())) return EPERM;
+    CrustSyncMutex *mutex = guard->mutex;
+    guard->mutex = NULL;
+    guard->value = NULL;
+    task_queue_unlock(&mutex->gate);
+    return 0;
+}
+/* Destruction is exclusive: no other call may start or wait concurrently. */
+static int crust_sync_mutex_destroy(CrustSyncMutex *mutex) {
+    int error = pthread_mutex_trylock(&mutex->gate);
+    if (error) return error;
+    if (mutex->destroy_value) mutex->destroy_value(mutex->value);
+    mutex->value = NULL;
+    task_queue_unlock(&mutex->gate);
+    return pthread_mutex_destroy(&mutex->gate);
+}
+
+typedef struct CrustAsyncMutex CrustAsyncMutex;
+typedef struct CrustMutexWait CrustMutexWait;
+typedef enum {
+    CRUST_MUTEX_IDLE, CRUST_MUTEX_WAITING, CRUST_MUTEX_RESERVED,
+    CRUST_MUTEX_TAKEN, CRUST_MUTEX_DISCARDED
+} CrustMutexWaitState;
+struct CrustMutexWait {
+    CrustAsyncMutex *mutex;
+    CrustMutexWait *previous, *next;
+    CrustWakeTicket wake;
+    CrustMutexWaitState state;
+};
+struct CrustAsyncMutex {
+    pthread_mutex_t gate; /* Short bookkeeping only; never held over a poll. */
+    void *value;
+    void (*destroy_value)(void *);
+    int locked;
+    CrustMutexWait *head, *tail, *reservation;
+};
+typedef struct {
+    CrustAsyncMutex *mutex;
+    void *value;
+} CrustAsyncGuard;
+
+static int crust_async_mutex_init(CrustAsyncMutex *mutex, void *value,
+                                   void (*destroy_value)(void *)) {
+    int error = pthread_mutex_init(&mutex->gate, NULL);
+    if (error) return error;
+    mutex->value = value;
+    mutex->destroy_value = destroy_value;
+    mutex->locked = 0;
+    mutex->head = mutex->tail = mutex->reservation = NULL;
+    return 0;
+}
+static void crust_mutex_wait_init(CrustMutexWait *wait) {
+    *wait = (CrustMutexWait){0};
+}
+/* All list and reservation operations hold mutex->gate. Wait nodes stay in
+   pinned frames until removed. Notifications use stable generation tickets,
+   never a wait node or frame pointer after releasing the gate. */
+static void crust_mutex_unlink(CrustAsyncMutex *mutex, CrustMutexWait *wait) {
+    if (wait->previous) wait->previous->next = wait->next;
+    else mutex->head = wait->next;
+    if (wait->next) wait->next->previous = wait->previous;
+    else mutex->tail = wait->previous;
+    wait->previous = wait->next = NULL;
+}
+static CrustWakeTicket crust_mutex_handoff(CrustAsyncMutex *mutex) {
+    mutex->reservation = NULL;
+    CrustMutexWait *next = mutex->head;
+    if (!next) {
+        mutex->locked = 0;
+        return (CrustWakeTicket){0};
+    }
+    crust_mutex_unlink(mutex, next);
+    next->state = CRUST_MUTEX_RESERVED;
+    mutex->reservation = next;
+    /* Keep locked: another arrival cannot steal this reservation. */
+    return next->wake;
+}
+static CrustTaskStep crust_async_mutex_poll(CrustAsyncMutex *mutex,
+        CrustMutexWait *wait, CrustTask *task, CrustAsyncGuard *guard) {
+    if (guard->mutex) abort();
+    task_queue_lock(&mutex->gate);
+    if (wait->state == CRUST_MUTEX_IDLE) {
+        wait->mutex = mutex;
+        wait->wake = task->wake_target;
+        if (!mutex->locked) {
+            mutex->locked = 1;
+            wait->state = CRUST_MUTEX_RESERVED;
+            mutex->reservation = wait;
+        } else {
+            wait->state = CRUST_MUTEX_WAITING;
+            wait->previous = mutex->tail;
+            if (mutex->tail) mutex->tail->next = wait;
+            else mutex->head = wait;
+            mutex->tail = wait;
+        }
+    }
+    if (wait->mutex != mutex || (wait->state != CRUST_MUTEX_WAITING
+                                && wait->state != CRUST_MUTEX_RESERVED)) abort();
+    CrustTaskStep step;
+    if (wait->state == CRUST_MUTEX_RESERVED) {
+        if (mutex->reservation != wait) abort();
+        mutex->reservation = NULL;
+        wait->state = CRUST_MUTEX_TAKEN;
+        wait->mutex = NULL; /* The guard now owns the only lifetime obligation. */
+        *guard = (CrustAsyncGuard){mutex, mutex->value};
+        step = TASK_STEP_RETURN;
+    } else {
+        /* Bare unscheduled probes have no ticket. Scheduled executions park
+           and rely on handoff waking their root poll (including direct await). */
+        wait->wake = task->wake_target;
+        step = wait->wake.entry ? TASK_STEP_PENDING : TASK_STEP_YIELD;
+    }
+    task_queue_unlock(&mutex->gate);
+    return step;
+}
+static int crust_async_guard_drop(CrustAsyncGuard *guard) {
+    CrustAsyncMutex *mutex = guard->mutex;
+    if (!mutex) return EINVAL;
+    task_queue_lock(&mutex->gate);
+    if (!mutex->locked || mutex->reservation) abort();
+    guard->mutex = NULL;
+    guard->value = NULL;
+    CrustWakeTicket wake = crust_mutex_handoff(mutex);
+    task_queue_unlock(&mutex->gate);
+    task_queue_wake(wake);
+    return 0;
+}
+/* SL1: discard removes an unacquired wait, or passes on its reservation.
+   Once acquired, only the guard owns the lock; discarding the wait cannot
+   release it. The state destructor must drop that guard separately. */
+static void crust_mutex_wait_discard(CrustMutexWait *wait) {
+    CrustAsyncMutex *mutex = wait->mutex;
+    if (!mutex) {
+        wait->state = CRUST_MUTEX_DISCARDED;
+        return;
+    }
+    task_queue_lock(&mutex->gate);
+    CrustWakeTicket wake = {0};
+    if (wait->state == CRUST_MUTEX_WAITING) crust_mutex_unlink(mutex, wait);
+    else if (wait->state == CRUST_MUTEX_RESERVED) {
+        if (mutex->reservation != wait) abort();
+        wake = crust_mutex_handoff(mutex);
+    }
+    wait->mutex = NULL;
+    wait->state = CRUST_MUTEX_DISCARDED;
+    task_queue_unlock(&mutex->gate);
+    task_queue_wake(wake);
+}
+static int crust_async_mutex_destroy(CrustAsyncMutex *mutex) {
+    task_queue_lock(&mutex->gate);
+    if (mutex->locked || mutex->head || mutex->reservation) {
+        task_queue_unlock(&mutex->gate);
+        return EBUSY;
+    }
+    if (mutex->destroy_value) mutex->destroy_value(mutex->value);
+    mutex->value = NULL;
+    task_queue_unlock(&mutex->gate);
+    return pthread_mutex_destroy(&mutex->gate);
+}
+'''

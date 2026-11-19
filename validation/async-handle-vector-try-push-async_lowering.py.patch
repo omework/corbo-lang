@@ -1,0 +1,244 @@
+--- /tmp/crust-before-async-handle-vector-try-push/async_lowering.py
++++ async_lowering.py
+@@ -37,9 +37,9 @@
+ JOIN_PAYLOADS = {'join_owned': 'allocation', 'join_nested': 'nested', 'join_option': 'optional_nested', 'handle_option': 'optional_allocation'}
+ JOIN_CELLS = {'join_owned': 'allocation', 'join_nested': 'value.allocation', 'join_option': 'value.value', 'handle_option': 'value'}
+ OWNED_WRAPPER_TYPES = {'join_owned': 'CrustJoinResult', 'join_nested': 'CrustNestedJoinResult', 'join_option': 'CrustOptionJoinResult',
+-                       'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult'}
++                       'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult', 'buffered_handle_try_push': 'VectorHandleResult'}
+ OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation',
+-                          'buffered_handle_exchange': 'exchange_allocation'}
++                          'buffered_handle_exchange': 'exchange_allocation', 'buffered_handle_try_push': 'rejected_allocation'}
+ ARRAY_BORROWS = {'array_ref': 'ref', 'array_mut': 'mut'}
+ SCALAR_TYPES = ChainMap(PLAIN_JOIN_TYPES, { **ERROR_VALUE_TYPES, 'runtime_error': 'runtime::Error', 'scalar': 'Int', 'bool': 'Bool', 'byte': 'u8', 'char': 'char', 'text': '&str', 'byte_ref': '&u8',
+                 **{mode: '&' + VALUE_MODES[mode] for mode in VECTOR_SLICE_ELEMENTS},
+@@ -1311,8 +1311,9 @@
+             mode, _ = sync_signature(expr)
+             value, _ = sync_call(expr, line, following=following, owned=True)
+             return value, OWNED_WRAPPER_PAYLOADS[mode], None
+-        if expr[0] == 'array_buffered_replace':
+-            return handle_replace_value(expr, line, following=following), 'exchange_allocation', None
++        if expr[0] in ('array_buffered_replace', 'array_buffered_try_push'):
++            payload = 'rejected_allocation' if expr[0] == 'array_buffered_try_push' else 'exchange_allocation'
++            return handle_replace_value(expr, line, following=following), payload, None
+         if expr[0] == 'array_handle_option_pop':
+             return handle_pop_value(expr, line, following=following), 'optional_allocation', None
+         if expr[0] == 'await':
+@@ -2872,7 +2873,7 @@
+         if name not in join_results:
+             return False
+         record = join_results[name]
+-        return record is None or record[1] in ('allocation', 'optional_allocation', 'exchange_allocation') or (nested and record[1] in ('nested', 'optional_nested'))
++        return record is None or record[1] in ('allocation', 'optional_allocation', 'exchange_allocation', 'rejected_allocation') or (nested and record[1] in ('nested', 'optional_nested'))
+ 
+     def consume_owned_join(name, line):
+         record = join_results[name]
+@@ -2885,8 +2886,9 @@
+     def discard_owned_join(name, line):
+         result, payload, _ = consume_owned_join(name, line)
+         clear_stored_fields(result)
+-        cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation') else f'{result}.allocation'
+-        success = '1' if payload == 'exchange_allocation' else f'{result}.status == 0'
++        cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation', 'rejected_allocation') else f'{result}.allocation'
++        success = ('1' if payload == 'exchange_allocation' else
++                       f'{result}.status != 0' if payload == 'rejected_allocation' else f'{result}.status == 0')
+         if payload in ('nested', 'optional_nested'):
+             cell = f'{result}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
+             success += f' && {result}.value.status == 0'
+@@ -3012,6 +3014,7 @@
+             expected = (public_execution_type(value, statement.annotation, statement.line) if kind == 'execution' else
+                         'Option<A<Int>>' if kind == 'handle_option' else
+                         'Result<A<Int>,A<Int>>' if kind == 'buffered_handle_exchange' else
++                        'Result<(),A<Int>>' if kind == 'buffered_handle_try_push' else
+                         (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
+                          f'A<{owned_result_types.get(value, "Int")}>') if kind == 'owned' else None)
+             if statement.annotation != expected:
+@@ -3276,7 +3279,7 @@
+             inner = initializer[1]
+             initializer = consumed_result_expression(inner, collection_types.get(inner[1][1]))
+         operator = initializer[0]
+-        if operator in ('array_handle_exchange', 'array_buffered_replace',
++        if operator in ('array_handle_exchange', 'array_buffered_replace', 'array_handle_try_push', 'array_buffered_try_push',
+                         'array_handle_exchange_value', 'array_buffered_exchange_take'):
+             check_new_name(name, statement.line)
+             require_owned_result_use(statement, body, position, export_name)
+@@ -3294,8 +3297,9 @@
+                 kind = 'owned'
+             else:
+                 value = handle_replace_value(initializer, statement.line, following=body[position + 1:])
+-                kind = 'buffered_handle_exchange'
+-                value = value, 'exchange_allocation', None
++                appending = operator in ('array_handle_try_push', 'array_buffered_try_push')
++                kind = 'buffered_handle_try_push' if appending else 'buffered_handle_exchange'
++                value = value, ('rejected_allocation' if appending else 'exchange_allocation'), None
+             bind_transferred_value(name, kind, value, statement)
+             return True
+         if operator in ('array_pop_handle', 'array_handle_option_pop', 'array_handle_option_value'):
+@@ -3622,8 +3626,9 @@
+                     result, payload, _ = record
+                     if payload not in OWNED_WRAPPER_PAYLOADS.values():
+                         continue
+-                    cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation') else f'{result}.allocation'
+-                    success = '1' if payload == 'exchange_allocation' else f'{result}.status == 0'
++                    cell = f'{result}.value' if payload in ('optional_allocation', 'exchange_allocation', 'rejected_allocation') else f'{result}.allocation'
++                    success = ('1' if payload == 'exchange_allocation' else
++                       f'{result}.status != 0' if payload == 'rejected_allocation' else f'{result}.status == 0')
+                     if payload in ('nested', 'optional_nested'):
+                         cell = f'{result}.value.' + ('value' if payload == 'optional_nested' else 'allocation')
+                         success += f' && {result}.value.status == 0'
+@@ -4362,13 +4367,15 @@
+         return result
+ 
+     def handle_exchange_record(name, line):
+-        if name not in join_results or join_results[name] is not None and join_results[name][1] != 'exchange_allocation':
+-            fail(line, 'match consommant : résultat de replace requis')
++        if name not in join_results or join_results[name] is not None and join_results[name][1] not in ('exchange_allocation', 'rejected_allocation'):
++            fail(line, 'match consommant : résultat de replace ou try_push requis')
+         if join_results[name] is None:
+             fail(line, f"résultat '{name}' déjà consommé")
+         return join_results[name]
+ 
+     def handle_replace_value(expr, line, *, following=None):
++        appending = expr[0] in ('array_handle_try_push', 'array_buffered_try_push')
++        method = 'try_push' if appending else 'replace'
+         receiver = expr[1][1]
+         if following is not None:
+             release_statement_loans(following, earlier=(expr,))
+@@ -4376,10 +4383,11 @@
+         preparation = [(receiver, 'mut')]
+         active_loans[id(preparation)] = preparation
+         try:
+-            index_value = expression(expr[2], line)
+-            index = temporary('int')
+-            steps.append(f'{index} = {index_value};')
+-            argument = expr[3]
++            if not appending:
++                index_value = expression(expr[2], line)
++                index = temporary('int')
++                steps.append(f'{index} = {index_value};')
++            argument = expr[-1]
+             if argument[0] == 'down':
+                 require_local_async_value(argument[1], line)
+                 kind, incoming = export_async_value(argument[1], (), line)
+@@ -4387,22 +4395,22 @@
+                 incoming = sync_owned_value(argument[1], line, following=following)
+                 kind = 'owned'
+             else:
+-                fail(line, 'replace de A<Int> exige un transfert explicite ->')
++                fail(line, f'{method} de A<Int> exige un transfert explicite ->')
+             if kind != 'owned' or owned_result_types.get(incoming, 'Int') != 'Int':
+-                fail(line, 'replace de Vector<A<Int>> exige une allocation Int')
++                fail(line, f'{method} de Vector<A<Int>> exige une allocation Int')
+             if storage_of(incoming) & implicit_stacks:
+                 fail(line, 'une case A<Int> exige une allocation de pool')
+             depth = next((index for index in reversed(range(len(scopes))) if receiver in scopes[index][0]), 0)
+             require_durable_storage(incoming, depth + 1 if references.get(receiver) == 'owned' else 0, line)
+             if references.get(receiver) != 'owned' and (node.field_effect_summary is None or not node.field_effect_summary.complete):
+-                fail(line, 'replace dans un vecteur injecté : contrat de terminaison incomplet')
++                fail(line, f'{method} dans un vecteur injecté : contrat de terminaison incomplet')
+         finally:
+             del active_loans[id(preparation)]
+         if following is not None:
+             release_statement_loans(following)
+         check_access(receiver, line, write=True)
+         result = temporary('VectorHandleResult')
+-        previous = storage_bindings.get(receiver, frozenset())
++        previous = frozenset() if appending else storage_bindings.get(receiver, frozenset())
+         added = storage_of(incoming)
+         keep_storage(result, previous | added)
+         active_loans[('owned_storage', result, ('ok',))] = [(origin, 'storage') for origin in previous]
+@@ -4410,9 +4418,12 @@
+         key = ('owned_storage', receiver, ('items',))
+         held = [*active_loans.get(key, ()), *((origin, 'storage') for origin in added)]
+         install_field_change(key, list(dict.fromkeys(held)))
++        arguments = f'&{result}.value' if appending else f'{index}, &{result}.value'
+         steps.extend((f'{result} = (VectorHandleResult){{0, {incoming}}};',
+                       f'{incoming} = NULL;',
+-                      f'{result}.status = vector_replace(frame->{fields[receiver]}, {index}, &{result}.value);'))
++                      f'{result}.status = vector_{method}(frame->{fields[receiver]}, {arguments});'))
++        if appending:
++            steps.append(f'if ({result}.status == 0) {result}.value = NULL;')
+         clear_stored_fields(incoming)
+         owned_result_types[result] = 'Int'
+         return result
+@@ -4841,10 +4852,19 @@
+             fail(line, 'comparaison async incompatible avec les types des opérandes')
+         return f'{saved_left} {operator} {right_value}'
+ 
++    def direct_exchange_success(condition):
++        if (condition[0] == 'compare' and condition[1] == '==' and condition[3] == ('int', 0)
++                and condition[2][0] == 'array_handle_exchange_status'):
++            name = condition[2][1][1]
++            record = join_results.get(name)
++            if record is not None and record[1] == 'rejected_allocation':
++                return name
++        return None
++
+     def conditional(condition, yes, no, line, *, valued, following=None, boolean=False):
+         test = condition_value(condition, line)
+         return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+-                             boolean=boolean)
++                             boolean=boolean, exchange_success=direct_exchange_success(condition))
+ 
+     def emit_transferred_control(expr, line, *, following=None):
+         place_local_result(expr)
+@@ -4855,7 +4875,7 @@
+         _, condition, yes, no = expr
+         test = condition_value(condition, line)
+         return emit_branches(test, yes, no, line, valued=True, construct='if',
+-                             transfer_result=True, following=following)
++                             transfer_result=True, following=following, exchange_success=direct_exchange_success(condition))
+ 
+     def emit_computed_transfer(expr, line, *, following=None):
+         place_local_result(expr)
+@@ -5298,7 +5318,7 @@
+ 
+     def emit_branches(test, yes, no, line, *, valued, construct, join_payload=None,
+                       export_name=None, transfer_result=False, following=None, boolean=False, reference_result=False,
+-                      enum_match=None):
++                      enum_match=None, exchange_success=None):
+         for branch in (yes, no):
+             if isinstance(branch, list):
+                 place_local_assignments(branch)
+@@ -5335,6 +5355,9 @@
+             imports, returned_imports = set(), set()
+             local_refs = {}
+             scopes.append(({}, imports, returned_imports, arm_entry, local_refs))
++            if exchange_success is not None and index == 0:
++                record = consume_owned_join(exchange_success, line)
++                clear_stored_fields(record[0])
+             if enum_match:
+                 holder = match.args[0]
+                 _, variant, pattern, _ = match.args[1][index]
+@@ -6787,9 +6810,11 @@
+         if expr[0] in ('array_handle_exchange_status', 'array_buffered_exchange_status'):
+             name = expr[1][1]
+             require_local_async_value(name, line)
+-            if expr[0] == 'array_buffered_exchange_status' and expr[2][1] == 1:
+-                fail(line, 'replace exige Ok(handle), pas Ok(())')
+-            return f'{handle_exchange_record(name, line)[0]}.status'
++            record = handle_exchange_record(name, line)
++            if expr[0] == 'array_buffered_exchange_status' and expr[2][1] >= 0:
++                if (expr[2][1] == 1) != (record[1] == 'rejected_allocation'):
++                    fail(line, 'try_push exige Ok(()), replace exige Ok(handle)')
++            return f'{record[0]}.status'
+         if expr[0] == 'array_handle_option_status':
+             name = expr[1][1]
+             require_local_async_value(name, line)
+@@ -7493,6 +7518,16 @@
+             return True
+         if statement.op in ('call', 'array_statement'):
+             expr = statement.args[0]
++            if expr[0] == 'array_buffered_exchange_take':
++                name = expr[1][1]
++                record = handle_exchange_record(name, statement.line)
++                arm = expr[2][1]
++                if record[1] != 'rejected_allocation' or not (arm == 1 or arm == -1 and expr[3] == ('int', 0)):
++                    fail(statement.line, 'un motif _ ne peut pas écarter une allocation possédée')
++                consume_owned_join(name, statement.line)
++                clear_stored_fields(record[0])
++                steps.append(f'{record[0]}.value = NULL;')
++                return True
+             if expr[0] == 'array_handle_option_empty':
+                 name = expr[1][1]
+                 record = handle_option_record(name, statement.line)

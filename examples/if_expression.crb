@@ -1,0 +1,24 @@
+fn choose(memory: &mut Pool<i32>, n: i32) -> A<i32> {
+    let mut result = if n == 1 {
+        let mut a = memory.new(10);
+        address(a);
+        a
+    } else {
+        let mut b = memory.new(20);
+        address(b);
+        b
+    };
+
+    print(*result); // Le résultat est encore dans la fonction.
+    return result;
+}
+
+fn main() {
+    let mut memory = pool<i32>(1);
+    let mut first = choose(&mut memory, 1);
+    address(first); // Même adresse que dans la branche choisie.
+    drop(first);
+
+    let mut second = choose(&mut memory, 0);
+    address(second); // Même slot réutilisé.
+}

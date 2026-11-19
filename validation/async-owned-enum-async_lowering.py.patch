@@ -1,0 +1,293 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -923,7 +923,7 @@
+ 
+ 
+ def lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type, frame_slots=None,
+-                         *, sync_contracts=None, sync_bridge=None, struct_layouts=None,
++                         *, sync_contracts=None, sync_bridge=None, struct_layouts=None, enum_layouts=None,
+                          local_parameters=frozenset(), variant_name=None, specialize=None):
+     # Each retry starts with fresh lowering state. Only finite sets of source
+     # names survive, so no emitted frame member or cleanup is duplicated.
+@@ -935,7 +935,7 @@
+         try:
+             result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                            enable_threads, result_parameters_cache, array_c_type, hints, slots,
+-                                           sync_contracts or {}, sync_bridge, struct_layouts or {},
++                                           sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                            local_parameters, variant_name, specialize)
+         except _WidenUtf8Loop as request:
+             entry = hints.setdefault(request.key, {})
+@@ -957,10 +957,11 @@
+ 
+ 
+ def _lower_async_function(node, error, functions, warn, enable_threads, result_parameters_cache, array_c_type,
+-                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts,
++                          utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts, enum_layouts,
+                           local_parameters, variant_name, specialize):
+     from handle_types import HandleDefinitions, public_signature
+-    functions = HandleDefinitions(functions, structures=struct_layouts)
++    aggregate_layouts = struct_layouts | enum_layouts
++    functions = HandleDefinitions(functions, structures=aggregate_layouts)
+     name, parameters, result, body = node.args
+     from async_result_storage import result_storage, pool_result_graph
+     output_plan = result_storage(node, local_parameters) if node.result_storage else None
+@@ -980,22 +981,27 @@
+     # Owned graphs retain their source pools. Direct borrowed fields additionally
+     # retain caller-side loans when the whole carrier moves into the task.
+     from structure_shapes import async_structure_shapes
+-    owned_structure_types, reference_structure_types = async_structure_shapes(struct_layouts)
+-    reference_structs = {typ: struct_layouts[typ] for typ in reference_structure_types}
+-    owned_structures = {typ: struct_layouts[typ] for typ in owned_structure_types}
++    shape_layouts = struct_layouts | {typ: tuple(field for fields in arms.values() for field in fields)
++                                    for typ, arms in enum_layouts.items()}
++    owned_structure_types, reference_structure_types = async_structure_shapes(shape_layouts)
++    reference_structs = {typ: struct_layouts[typ] for typ in reference_structure_types if typ in struct_layouts}
++    owned_structures = {typ: struct_layouts[typ] for typ in owned_structure_types if typ in struct_layouts}
++    owned_enums = {typ: enum_layouts[typ] for typ in owned_structure_types if typ in enum_layouts}
++    owned_aggregates = owned_structures.keys() | owned_enums.keys()
++    reference_aggregates = reference_structs.keys() | owned_enums.keys()
+     pool_structures = owned_structures | reference_structs
+-    reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_structs for mode in ('ref', 'mut')})
++    reference_sync_types.update({(mode, typ): 'Cell *' for typ in reference_aggregates for mode in ('ref', 'mut')})
+     view_sync_types = {(mode, VALUE_MODES[mode]): capture_ctype(mode) for mode in ASYNC_CAPTURE_VIEW_MODES}
+     owned_sync_types = {('owned', typ): 'Cell *' for typ in ('Int', 'String', 'Vector<Int>', 'Vector<u8>')}
+     owned_join_sync_types = {(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                             for mode in ('join_owned', 'join_nested') for _, typ in owned_sync_types}
+     pool_sync_types = {(mode, f'Pool<{typ}>'): 'Source *'
+                        for mode in ('ref', 'mut') for _, typ in owned_sync_types}
+-    owned_sync_types.update({('owned', typ): 'Cell *' for typ in owned_structures})
++    owned_sync_types.update({('owned', typ): 'Cell *' for typ in owned_aggregates})
+     owned_join_sync_types.update({(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+-                                 for mode in ('join_owned', 'join_nested') for typ in owned_structures})
++                                 for mode in ('join_owned', 'join_nested') for typ in owned_aggregates})
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+-                            for mode in ('ref', 'mut') for typ in pool_structures})
++                            for mode in ('ref', 'mut') for typ in (*pool_structures, *owned_enums)})
+     owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
+     output_join_types = owned_join_sync_types | {(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                                                for mode in ('join_owned', 'join_nested') for typ in reference_structs}
+@@ -1003,7 +1009,7 @@
+     output_types = sync_types | owned_output_types | output_join_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+-                         and (public_signature(contract.result_type[1], struct_layouts) is not None
++                         and (public_signature(contract.result_type[1], aggregate_layouts) is not None
+                               or contract.result_type[1] in functions)}
+     task_sync_types = {contract.result_type: 'CrustTask *' for contract in sync_contracts.values()
+                        if contract.result_type[0] == 'task' and contract.result_type[1] in functions}
+@@ -1012,7 +1018,7 @@
+     sync_types.update(task_argument_types)
+     execution_argument_types = {('execution', typ): 'CrustExecution' for contract in sync_contracts.values()
+         for _, mode, typ in contract.parameters if mode == 'execution'
+-        and (typ in functions or public_signature(typ, struct_layouts) is not None)}
++        and (typ in functions or public_signature(typ, aggregate_layouts) is not None)}
+     sync_types.update(execution_argument_types)
+ 
+     def pool_argument(argument, mode, typ, line):
+@@ -1043,7 +1049,7 @@
+ 
+     def owned_borrow_fields(typ):
+         from array_syntax import owned_reference_paths
+-        return tuple(owned_reference_paths({name: {'': layout} for name, layout in struct_layouts.items()}, typ))
++        return tuple(owned_reference_paths({name: {'': layout} for name, layout in struct_layouts.items()} | enum_layouts, typ))
+ 
+     def borrowed_field_type(typ, path):
+         return next(('&mut ' + target if access == 'mut' else '&' + target
+@@ -1162,7 +1168,7 @@
+                     or argument[0] != mode or actual_type != typ or mode == 'mut' and name not in mutable):
+                 fail(line, 'argument emprunté : type, mode ou mutabilité incompatible ; réemprunter une référence avec &* ou &mut *')
+             check_access(name, line, write=mode == 'mut')
+-            pointer = f'frame->{fields[name]}' if typ in struct_layouts else f'&({value_place(name)})'
++            pointer = f'frame->{fields[name]}' if typ in aggregate_layouts else f'&({value_place(name)})'
+             loans = [(name, mode)]
+         else:
+             pointer, loans, shape = reference_value(argument, line)
+@@ -1259,7 +1265,7 @@
+         pool_type = pool_types.get(expr[1])
+         if pool_type is None:
+             fail(line, 'prototype : création directe dans un état exige un pool injecté')
+-        if pool_type[5:-1] in pool_structures:
++        if pool_type[5:-1] in pool_structures or pool_type[5:-1] in owned_enums:
+             return pool_structure_value(expr, line, following=following, label=label)
+         typ = pool_type[5:-1] if expr[4:] == ('pool_default',) else expr[3]
+         if pool_type != f'Pool<{typ}>' or (typ != 'Int' and expr[4:] != ('pool_default',)):
+@@ -1294,9 +1300,18 @@
+         local = expr[0] == 'new_enum' and expr[1] is None
+         pool_type = None if local else pool_types[expr[1]]
+         typ = expr[2] if local else pool_type[5:-1]
+-        layout = pool_structures[typ]
++        variant = expr[3] if expr[0] == 'new_enum' else ''
++        if typ in owned_enums:
++            if local:
++                fail(line, 'prototype : construction locale d’enum non raccordée')
++            if variant not in owned_enums[typ]:
++                fail(line, 'construction enum : variante déclarée explicite requise')
++            layout = owned_enums[typ][variant]
++            arm_index = tuple(owned_enums[typ]).index(variant)
++        else:
++            layout, arm_index = pool_structures[typ], 0
+         if expr[0] == 'new_enum':
+-            if expr[2] not in (None, typ) or expr[3] != '':
++            if expr[2] not in (None, typ) or typ not in owned_enums and variant != '':
+                 fail(line, 'construction : type incompatible avec le pool de structures')
+             provided = expr[4]
+         elif expr[4:] == ('pool_default',):
+@@ -1309,6 +1324,8 @@
+             fail(line, 'champ initialisé plusieurs fois')
+         if set(names) - declared.keys():
+             fail(line, f'champ inconnu dans {typ}')
++        if typ in owned_enums and set(names) != declared.keys():
++            fail(line, f'champs incorrects pour {typ}.{variant} : fournir tous les champs déclarés')
+         values = {}
+         for field, field_type in layout:
+             if field not in names:
+@@ -1344,7 +1361,7 @@
+                     snapshot = temporary('Cell *')
+                     steps.append(f'{snapshot} = {descriptor};')
+                     loans.extend(held)
+-                    stored_fields[tuple(field.split('.'))] = list(held)
++                    stored_fields[(*((variant,) if variant else ()), *field.split('.'))] = list(held)
+                 else:
+                     if operand[0] not in ('move', 'new_transfer', 'array_transfer'):
+                         fail(line, f"champ '{field}' : transfert explicite <- requis")
+@@ -1358,7 +1375,7 @@
+                     owners.append(snapshot)
+                     storage.update(storage_of(value))
+                     for path, held in owned_capture_field_loans(value, field_type[2:-1]).items():
+-                        stored_fields[(*field.split('.'), *stored_field_path(path))] = held
++                        stored_fields[(*((variant,) if variant else ()), *field.split('.'), *stored_field_path(path))] = held
+                         loans.extend(held)
+                     clear_stored_fields(value)
+                 values[field] = snapshot
+@@ -1376,7 +1393,7 @@
+             steps.append(f'{cell} = local_cell_new({source}, &{layout_name}, '
+                          f'{structure_offset(layout, len(layout))}, "{label}");')
+         else:
+-            steps.append(f'{cell} = enum_new({source}, 0, "{label}");')
++            steps.append(f'{cell} = enum_new({source}, {arm_index}, "{label}");')
+         for index, (field, field_type) in enumerate(layout):
+             helper = 'cell_store_int' if field_type == 'Int' else 'cell_store_ref'
+             steps.append(f'{helper}({cell}, {structure_offset(layout, index)}, {values[field]});')
+@@ -1825,7 +1842,7 @@
+                     clear_stored_fields(record[0])
+             changes = (pending, *(change for record in forwarded for change in record[5]))
+             returns_int = (concrete_definition.args[2] if concrete_definition is not None
+-                           else public_signature(signature[1], struct_layouts)) == ('scalar', 'Int')
++                           else public_signature(signature[1], aggregate_layouts)) == ('scalar', 'Int')
+             return f'&{handle}', returns_int, retained, signature[1], returned, changes
+         if signature in owned_output_types | output_join_types:
+             owned_result_types[value] = signature[1]
+@@ -1879,14 +1896,14 @@
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+            and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>'))
+            and (mode, typ) not in pool_sync_types
+-           and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_structures)
+-           and not (mode in ('ref', 'mut') and typ in reference_structs)
++           and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_aggregates)
++           and not (mode in ('ref', 'mut') and typ in reference_aggregates)
+            and (typ != 'Int' or mode not in ('scalar', 'ref', 'mut', 'owned', *JOIN_PAYLOADS))
+            for _, mode, typ in parameters):
+         fail(node.line, 'prototype async : captures Int, &Int, &mut Int ou -> Int, emprunts ou transferts de String et Vector<Int/u8>, Bool, u8, char, &str statique, &u8 statique, emprunt de tableau Int ou Result compatible requis')
+     references = {name: mode for name, mode, _ in parameters if mode in ('ref', 'mut', 'owned')}
+     reference_types = {name: typ for name, mode, typ in parameters if mode in ('ref', 'mut')
+-                       or mode == 'owned' and typ in owned_structures}
++                       or mode == 'owned' and typ in owned_aggregates}
+     pool_types = {name: typ for name, mode, typ in parameters if (mode, typ) in pool_sync_types}
+     local_pools = {}
+     implicit_stacks = set()
+@@ -1900,7 +1917,7 @@
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
+             and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in ('String', 'Vector<Int>', 'Vector<u8>'))
+-            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in pool_structures)
++            and not (result[0] in ('owned', *JOIN_PAYLOADS) and result[1] in owned_aggregates)
+             and result not in (
+             ('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'), ('owned', 'Int'),
+             ('scalar', 'Void'), ('void', 'Void'), ('join_owned', 'Int'), ('join_nested', 'Int'))):
+@@ -1933,7 +1950,7 @@
+     parameter_modes = {name: mode for name, mode, _ in parameters}
+     collection_types = {name: typ for name, mode, typ in parameters
+                          if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>')
+-                         or mode == 'owned' and typ in owned_structures}
++                         or mode == 'owned' and typ in owned_aggregates}
+     boolean_bindings = {name for name, mode, typ in parameters if (mode, typ) == ('scalar', 'Bool')}
+     byte_bindings = {name for name, mode, _ in parameters if mode == 'byte'}
+     builtin_error_bindings = {name: mode for name, mode, _ in parameters if mode in ERROR_VALUE_TYPES}
+@@ -2563,6 +2580,8 @@
+         if statement.op != 'drop_value':
+             return False
+         name = statement.args[0]
++        if name in pool_types:
++            fail(statement.line, 'un pool reste dans son scope et ne peut être transféré à drop')
+         if name in wrapped_utf8_bindings or name in runtime_error_bindings or name in builtin_error_bindings or name in plain_join_bindings:
+             if inline_binding_scopes.get(name) != id(scopes[-1][0]):
+                 fail(statement.line, 'drop exige une liaison locale du scope courant')
+@@ -2725,7 +2744,7 @@
+     def public_execution_type(record, expected, line):
+         from handle_types import contextual_public_type, public_storage
+         actual = contextual_public_type(record[3], expected, functions)
+-        required = public_storage(expected, struct_layouts)
++        required = public_storage(expected, aggregate_layouts)
+         if required is not None:
+             local = any(target in implicit_stacks for target, access in record[4] if access == 'storage')
+             if local != (required == 'local'):
+@@ -2818,7 +2837,7 @@
+             return None
+         operand = subject[1]
+         if (signature := sync_signature(operand)) in handle_sync_types:
+-            payload = public_signature(signature[1], struct_layouts)
++            payload = public_signature(signature[1], aggregate_layouts)
+             return payload if payload[0] in ('ref', 'mut') else None
+         nominal = None
+         if operand[0] == 'name' and executions.get(operand[1]) is not None:
+@@ -3015,7 +3034,7 @@
+             steps.append(f'frame->{member} = frame->{fields[source_name]};')
+             return True
+         if operator == 'source':
+-            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *pool_structures):
++            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>', *pool_structures, *owned_enums):
+                 fail(statement.line, 'prototype async : type de pool local non pris en charge')
+             if statement.annotation is not None or statement.compact_transfer:
+                 fail(statement.line, 'un pool local ne peut être transféré ni annoté comme allocation')
+@@ -3023,18 +3042,19 @@
+             source = temporary('Source')
+             typ = initializer[3]
+             factory = f'source_pool({initializer[2]})'
+-            if typ in pool_structures:
+-                layout = pool_structures[typ]
+-                arm = temporary('Source', '[1]')
+-                offsets = temporary('size_t', f'[{max(1, len(layout))}]')
+-                kinds = temporary('unsigned char', f'[{max(1, len(layout))}]')
+-                steps.append(f'{arm}[0] = source_pool_layout({initializer[2]}, {structure_offset(layout, len(layout))});')
+-                for index, (_, field_type) in enumerate(layout):
+-                    steps.extend((f'{offsets}[{index}] = {structure_offset(layout, index)};',
+-                                  f'{kinds}[{index}] = {2 if field_type.startswith("A<") else 1 if field_type.startswith("&") else 0};'))
+-                steps.extend((f'{arm}[0].arm_name = "";', f'{arm}[0].field_count = {len(layout)};',
+-                              f'{arm}[0].field_offsets = {offsets};', f'{arm}[0].field_kinds = {kinds};'))
+-                factory = f'source_enum_pool({arm}, 1, "{typ}")'
++            if typ in pool_structures or typ in owned_enums:
++                variants = owned_enums[typ] if typ in owned_enums else {'': pool_structures[typ]}
++                arm = temporary('Source', f'[{len(variants)}]')
++                for tag, (variant, layout) in enumerate(variants.items()):
++                    offsets = temporary('size_t', f'[{max(1, len(layout))}]')
++                    kinds = temporary('unsigned char', f'[{max(1, len(layout))}]')
++                    steps.append(f'{arm}[{tag}] = source_pool_layout({initializer[2]}, {structure_offset(layout, len(layout))});')
++                    for index, (_, field_type) in enumerate(layout):
++                        steps.extend((f'{offsets}[{index}] = {structure_offset(layout, index)};',
++                                      f'{kinds}[{index}] = {2 if field_type.startswith("A<") else 1 if field_type.startswith("&") else 0};'))
++                    steps.extend((f'{arm}[{tag}].arm_name = "{variant}";', f'{arm}[{tag}].field_count = {len(layout)};',
++                                  f'{arm}[{tag}].field_offsets = {offsets};', f'{arm}[{tag}].field_kinds = {kinds};'))
++                factory = f'source_enum_pool({arm}, {len(variants)}, "{typ}")'
+             elif typ != 'Int':
+                 vectors = temporary('VectorStorage')
+                 steps.append(f'{vectors} = (VectorStorage){{0}};')
+@@ -5510,7 +5530,7 @@
+         if name in pool_types:
+             fail(node.line, 'un pool ne fournit pas de valeur scalaire ou de pointeur vers un élément')
+         typ = reference_types.get(name, collection_types.get(name))
+-        if typ in reference_structs or typ in owned_structures:
++        if typ in reference_aggregates or typ in owned_aggregates:
+             fail(node.line, 'une structure ne fournit pas une valeur Int ; sélectionner un champ')
+         member = f'frame->{fields[name]}'
+         mode = references.get(name)

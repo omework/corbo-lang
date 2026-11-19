@@ -1,0 +1,54 @@
+test_named_match_error_does_not_become_a_borrow_of_result (test_builtin_error_values.BuiltinErrorValueTests.test_named_match_error_does_not_become_a_borrow_of_result) ... ERROR
+test_async_capture_and_sync_contract_reject_type_erasure (test_builtin_error_values.BuiltinErrorValueTests.test_async_capture_and_sync_contract_reject_type_erasure) ... ok
+test_match_must_cover_exact_error_type (test_builtin_error_values.BuiltinErrorValueTests.test_match_must_cover_exact_error_type) ... ok
+
+======================================================================
+ERROR: test_named_match_error_does_not_become_a_borrow_of_result (test_builtin_error_values.BuiltinErrorValueTests.test_named_match_error_does_not_become_a_borrow_of_result)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_builtin_error_values.py", line 123, in test_named_match_error_does_not_become_a_borrow_of_result
+    self.assertEqual(self.run_native(source.replace('BODY',observe('SliceError'))).stdout,'2\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_results.py", line 62, in run_native
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14724, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14717, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13221, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13042, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 581, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4253, in _lower_async_function
+    returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2934, in match_statement
+    return match_async_result((statement, *tail), statement.line, valued=False, following=following)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1362, in match_async_result
+    return match_wrapped_utf8(nodes, line, valued=valued, transfer_result=transfer_result,
+                              following=following, boolean=boolean)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1855, in match_wrapped_utf8
+    return emit_branches(test, yes, no, line, valued=valued, construct='match',
+                         transfer_result=transfer_result, following=following, boolean=boolean)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2722, in emit_branches
+    elif drop_async_binding(statement):
+         ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1002, in drop_async_binding
+    fail(statement.line, 'drop exige une liaison locale du scope courant')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 606, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 3: drop exige une liaison locale du scope courant
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.008s
+
+FAILED (errors=1)

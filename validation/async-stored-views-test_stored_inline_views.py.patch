@@ -1,0 +1,15 @@
+--- before/tests/test_stored_inline_views.py
++++ after/tests/test_stored_inline_views.py
+@@ -66,10 +66,10 @@
+             let r=c.target;drop(->c);let other=reused.target;print(other.x);print(r.x);''')
+         self.assertEqual(self.run_source(source).stdout,'1\n7\n')
+ 
+-    def test_async_capture_of_stored_view_is_explicitly_pending(self):
++    def test_async_capture_of_stored_view_can_be_discarded_inactive(self):
+         source = self.program('''let v=View{target:&pair.b};let task=read(&v);drop(->task);''',
+             'async fn read(v:&View)->Int{yield;let p=v.target;return p.x;}')
+-        self.refused(source,'prototype.*capture')
++        self.assertEqual(self.run_source(source).stdout, '')
+ 
+     def test_stored_view_cannot_make_its_root_self_referential(self):
+         source = '''struct Point{x:Int}struct Root{point:Point,view:&Point}

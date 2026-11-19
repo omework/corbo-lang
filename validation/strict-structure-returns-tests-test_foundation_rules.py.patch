@@ -1,0 +1,355 @@
+--- tests/test_foundation_rules.py
++++ tests/test_foundation_rules.py
+@@ -1197,7 +1197,7 @@
+     def test_function_returns_fresh_aggregate_with_alternative_child_pools(self):
+         source = """
+             struct Root { item: A<Int> }
+-            fn make(side: Int, roots: &mut Pool<Root>, mem: &mut Pool<Int>, item: -> A<Int>) -> <- Root {
++            fn make(side: Int, roots: &mut Pool<Root>, mem: &mut Pool<Int>, item: -> A<Int>) -> <- A<Root> {
+                 if side == 0 {
+                     item ->;
+                     let root = roots.new(item: <- item);
+@@ -1207,7 +1207,7 @@
+                 let root = roots.new(item: <- mem.new(8));
+                 return <- root;
+             }
+-            fn relay(side: Int, roots: &mut Pool<Root>, mem: &mut Pool<Int>, item: -> A<Int>) -> <- Root {
++            fn relay(side: Int, roots: &mut Pool<Root>, mem: &mut Pool<Int>, item: -> A<Int>) -> <- A<Root> {
+                 let root = make(side, roots, mem, -> item);
+                 return <- root;
+             }
+@@ -1235,12 +1235,12 @@
+         source = """
+             struct Child { item: A<Int> }
+             struct Root { child: A<Child> }
+-            fn make(roots: &mut Pool<Root>, children: &mut Pool<Child>, values: &mut Pool<Int>) -> <- Root {
++            fn make(roots: &mut Pool<Root>, children: &mut Pool<Child>, values: &mut Pool<Int>) -> <- A<Root> {
+                 let child = children.new(item: <- values.new(7));
+                 let root = roots.new(child: <- child);
+                 return <- root;
+             }
+-            fn relay(roots: &mut Pool<Root>, children: &mut Pool<Child>, values: &mut Pool<Int>) -> <- Root {
++            fn relay(roots: &mut Pool<Root>, children: &mut Pool<Child>, values: &mut Pool<Int>) -> <- A<Root> {
+                 let root = make(roots, children, values);
+                 return <- root;
+             }
+@@ -1270,7 +1270,7 @@
+     def test_function_returns_finite_value_of_recursive_owned_type(self):
+         source = """
+             enum Node { End { value: Int }, Link { next: A<Node> } }
+-            fn make(side: Int, ends: &mut Pool<Node>, links: &mut Pool<Node>) -> <- Node {
++            fn make(side: Int, ends: &mut Pool<Node>, links: &mut Pool<Node>) -> <- A<Node> {
+                 if side == 0 {
+                     let single = new(ends) Node.End { value: 5 };
+                     return <- single;
+@@ -1280,7 +1280,7 @@
+                 let top = new(links) Node.Link { next: <- middle };
+                 return <- top;
+             }
+-            fn relay(side: Int, ends: &mut Pool<Node>, links: &mut Pool<Node>) -> <- Node {
++            fn relay(side: Int, ends: &mut Pool<Node>, links: &mut Pool<Node>) -> <- A<Node> {
+                 let root = make(side, ends, links);
+                 return <- root;
+             }
+@@ -1616,7 +1616,7 @@
+                 let result = match (-> value) { Wrapper.Item { node: child } => { <- child } };
+                 return <- result;
+             }
+-            fn repack(value: -> A<Wrapper>, p: &mut Pool<Package>) -> <- Package {
++            fn repack(value: -> A<Wrapper>, p: &mut Pool<Package>) -> <- A<Package> {
+                 let node = extract(-> value);
+                 let result = p.new(content: <- node);
+                 return <- result;
+@@ -1668,11 +1668,11 @@
+         source = """
+             struct Child { item: A<Int> }
+             struct Root { child: A<Child> }
+-            fn make(roots: &mut Pool<Root>, child: -> A<Child>) -> <- Root {
++            fn make(roots: &mut Pool<Root>, child: -> A<Child>) -> <- A<Root> {
+                 let root = roots.new(child: <- child);
+                 return <- root;
+             }
+-            fn relay(roots: &mut Pool<Root>, child: -> A<Child>) -> <- Root {
++            fn relay(roots: &mut Pool<Root>, child: -> A<Child>) -> <- A<Root> {
+                 let root = make(roots, -> child);
+                 return <- root;
+             }
+@@ -1712,7 +1712,7 @@
+             struct Child { item: A<Int> }
+             struct Root { child: A<Child> }
+             fn make(side: Int, roots: &mut Pool<Root>, children: &mut Pool<Child>,
+-                    values: &mut Pool<Int>, child: -> A<Child>) -> <- Root {
++                    values: &mut Pool<Int>, child: -> A<Child>) -> <- A<Root> {
+                 if side == 0 {
+                     child ->;
+                     let root = roots.new(child: <- child);
+@@ -1724,7 +1724,7 @@
+                 return <- root;
+             }
+             fn relay(side: Int, roots: &mut Pool<Root>, children: &mut Pool<Child>,
+-                     values: &mut Pool<Int>, child: -> A<Child>) -> <- Root {
++                     values: &mut Pool<Int>, child: -> A<Child>) -> <- A<Root> {
+                 let root = make(side, roots, children, values, -> child);
+                 return <- root;
+             }
+@@ -1757,11 +1757,11 @@
+     def test_function_restitutes_aggregate_and_owned_field_identity(self):
+         source = """
+             struct Root { item: A<Int>, mark: Int }
+-            fn update(mut root: -> Root) -> <- Root {
++            fn update(mut root: -> Root) -> <- A<Root> {
+                 root.mark = 9;
+                 return <- root;
+             }
+-            fn relay(root: -> Root) -> <- Root {
++            fn relay(root: -> Root) -> <- A<Root> {
+                 let received = update(-> root);
+                 return <- received;
+             }
+@@ -1785,14 +1785,32 @@
+         self.assertEqual(run.stderr.count('destroy item=7\n'), 1)
+         with self.assertRaisesRegex(Error, 'handles encore stockés'):
+             verify_program(source.replace('CHECK', 'items.reset();'))
+-        with self.assertRaisesRegex(Error, 'restitution avec remplacement de champ'):
+-            verify_program("""
++        # The later returned-field replacement rule preserves the root identity.
++        replacement = """
+                 struct Root { item: A<Int> }
+-                fn replace(mut root: -> Root, p: &mut Pool<Int>) -> <- Root {
++                fn replace(mut root: -> Root, p: &mut Pool<Int>) -> <- A<Root> {
+                     root.item = <- p.new(8);
+                     return <- root;
+                 }
+-            """)
++                let mut old = pool<Int>(1);
++                let mut next = pool<Int>(1);
++                let mut roots = pool<Root>(1);
++                let root = roots.new(item: <- old.new(7));
++                address(root);
++                let result = replace(-> root, &mut next);
++                address(result);
++                print(*result.item);
++                drop(-> result);
++                let reuse_old = old.new(9);
++                let reuse_next = next.new(10);
++                print(reuse_old); print(reuse_next);
++            """
++        run = self.native(replacement)
++        self.assertEqual(run.returncode, 0, run.stderr)
++        before, after, value, old, new = run.stdout.splitlines()
++        self.assertEqual((after, value, old, new), (before, '8', '9', '10'))
++        self.assertEqual(run.stderr.count('destroy item=7\n'), 1)
++        self.assertEqual(run.stderr.count('destroy champ=8\n'), 1)
+ 
+     def test_function_can_return_owned_field_extracted_from_local_enum(self):
+         source = """
+@@ -2414,11 +2432,11 @@
+             struct Link { leaf: &Leaf }
+         """
+         source = declarations + """
+-            fn make(links: &mut Pool<Link>, leaf: &Leaf) -> <- Link {
++            fn make(links: &mut Pool<Link>, leaf: &Leaf) -> <- A<Link> {
+                 let result = links.new(leaf: leaf);
+                 return <- result;
+             }
+-            fn relay(links: &mut Pool<Link>, leaf: &Leaf) -> <- Link {
++            fn relay(links: &mut Pool<Link>, leaf: &Leaf) -> <- A<Link> {
+                 let result = make(links, leaf);
+                 return <- result;
+             }
+@@ -2455,7 +2473,7 @@
+             """)
+         with self.assertRaisesRegex(Error, 'cible empruntée non durable'):
+             verify_program(declarations + """
+-                fn invalid(links: &mut Pool<Link>, data: &Int) -> <- Link {
++                fn invalid(links: &mut Pool<Link>, data: &Int) -> <- A<Link> {
+                     let mut leaves = pool<Leaf>(1);
+                     let local = leaves.new(data: data);
+                     let result = links.new(leaf: &local);
+@@ -2467,8 +2485,8 @@
+         source = """
+             struct Leaf { data: &Int }
+             enum Link { Node { leaf: &Leaf }, Empty }
+-            fn relay(value: -> Link) -> <- Link { return <- value; }
+-            fn make(links: &mut Pool<Link>, leaf: &Leaf, side: Int) -> <- Link {
++            fn relay(value: -> Link) -> <- A<Link> { return <- value; }
++            fn make(links: &mut Pool<Link>, leaf: &Leaf, side: Int) -> <- A<Link> {
+                 if side == 0 {
+                     let result = new(links) Link.Node { leaf: leaf };
+                     return <- result;
+@@ -2773,7 +2791,7 @@
+         source = """
+             struct View { data: &Int }
+             enum Link { A { data: &Int }, B { data: &Int } }
+-            fn wrap(link: &Link, out: &mut Pool<View>) -> <- View {
++            fn wrap(link: &Link, out: &mut Pool<View>) -> <- A<View> {
+                 match &link {
+                     Link.A { data: data } => {
+                         let view = out.new(data: data);
+@@ -2808,8 +2826,11 @@
+         for reset in ('first.reset();', 'second.reset();'):
+             with self.subTest(reset=reset), self.assertRaisesRegex(Error, 'reset interdit'):
+                 verify_program(source.replace('SIDE', '0') + reset + use)
++        # A copied shared field retains its target, not the old carrier.
++        run = self.native(source.replace('SIDE', '0') + 'drop(-> right);' + use)
++        self.assertEqual((run.returncode, run.stdout), (0, '7\n'), run.stderr)
+         with self.assertRaisesRegex(Error, 'emprunt encore utilisé'):
+-            verify_program(source.replace('SIDE', '0') + 'drop(-> right);' + use)
++            verify_program(source.replace('SIDE', '0') + 'drop(-> b);' + use)
+ 
+     def test_match_expression_returns_typed_shared_projection(self):
+         declarations = """
+@@ -3321,12 +3342,12 @@
+                 let middle = top.mid;
+                 return &*middle.leaf;
+             }
+-            fn wrap(top: &Top, saved: &mut Pool<Saved>) -> <- Saved {
++            fn wrap(top: &Top, saved: &mut Pool<Saved>) -> <- A<Saved> {
+                 let view = terminal(top);
+                 let result = saved.new(leaf: view);
+                 return <- result;
+             }
+-            fn relay(top: &Top, saved: &mut Pool<Saved>) -> <- Saved {
++            fn relay(top: &Top, saved: &mut Pool<Saved>) -> <- A<Saved> {
+                 let result = wrap(top, saved);
+                 return <- result;
+             }
+@@ -3399,12 +3420,12 @@
+                 let mut mid = &mut *top.mid;
+                 return &mut *mid.leaf;
+             }
+-            fn wrap(top: &mut Top, output: &mut Pool<Saved>) -> <- Saved {
++            fn wrap(top: &mut Top, output: &mut Pool<Saved>) -> <- A<Saved> {
+                 let mut view = terminal(top);
+                 let result = output.new(leaf: view);
+                 return <- result;
+             }
+-            fn relay(top: &mut Top, output: &mut Pool<Saved>) -> <- Saved {
++            fn relay(top: &mut Top, output: &mut Pool<Saved>) -> <- A<Saved> {
+                 let result = wrap(top, output);
+                 return <- result;
+             }
+@@ -5985,7 +6006,7 @@
+             fn choose(e: &E, fallback: &Int) -> &Int {
+                 return match &e { E.A { r: field } => { field }, E.B => { fallback } };
+             }
+-            fn empty(p: &mut Pool<E>) -> <- E {
++            fn empty(p: &mut Pool<E>) -> <- A<E> {
+                 let e = new(p) E.B;
+                 return <- e;
+             }
+@@ -6006,8 +6027,12 @@
+         run = self.native(declarations + body)
+         self.assertEqual(run.returncode, 0, run.stderr)
+         self.assertEqual(run.stdout, "7\n")
++        # Resetting the carrier's pool leaves the copied shared target alive.
++        copied = declarations + body.replace("empty(p)", "new(p) E.A { r: &n }")
++        run = self.native(copied)
++        self.assertEqual((run.returncode, run.stdout), (0, '7\n'), run.stderr)
+         with self.assertRaisesRegex(Error, "reset interdit"):
+-            compile_source(declarations + body.replace("empty(p)", "new(p) E.A { r: &n }"))
++            compile_source(copied.replace('p.reset();', 'ints.reset();'))
+ 
+     def test_constraints_keep_possible_match_field_at_conditional_join(self):
+         with self.assertRaisesRegex(Error, "reset interdit"):
+@@ -6545,7 +6570,7 @@
+     def test_structure_copy_reuses_injected_origin_and_returns_fresh_slot(self):
+         source = """
+             struct Point { x: Int }
+-            fn duplicate(points: &mut Pool<Point>) -> <- Point {
++            fn duplicate(points: &mut Pool<Point>) -> <- A<Point> {
+                 let mut original = points.new(x: 9);
+                 address(original);
+                 let duplicate = copy(original);
+@@ -6585,8 +6610,8 @@
+     def test_structure_copy_resolves_pool_from_borrowed_parameter(self):
+         source = """
+             struct View { target: &Int, code: Int }
+-            fn duplicate(x: &View) -> <- View { let y = copy(x); return <- y; }
+-            fn relay(x: &View) -> <- View { let y = duplicate(x); return <- y; }
++            fn duplicate(x: &View) -> <- A<View> { let y = copy(x); return <- y; }
++            fn relay(x: &View) -> <- A<View> { let y = duplicate(x); return <- y; }
+             fn consume(pool: &mut Pool<View>, value: -> View) { print(value); }
+             let mut views = pool<View>(2);
+             let mut targets = pool<Int>(1);
+@@ -6647,7 +6672,7 @@
+             struct Segment { start: Point, end: Int }
+             struct Point { x: Int, target: &Int }
+             fn mark(n: Int) -> Int { print(n); return n; }
+-            fn make(paths: &mut Pool<Path>, target: &Int) -> <- Path {
++            fn make(paths: &mut Pool<Path>, target: &Int) -> <- A<Path> {
+                 let path = paths.new(code: mark(1), segment.start.target: target,
+                                      segment.start.x: mark(2));
+                 return <- path;
+@@ -6998,7 +7023,7 @@
+                 if flag > 0 { return a; }
+                 return b;
+             }
+-            fn build(views: &mut Pool<View>, a: &Int, b: &Int, n: &Int, flag: Int) -> <- View {
++            fn build(views: &mut Pool<View>, a: &Int, b: &Int, n: &Int, flag: Int) -> <- A<View> {
+                 let mut left = views.new(target: a);
+                 let mut right = views.new(target: b);
+                 let selected = select(&mut left, &mut right, flag);
+@@ -7023,7 +7048,7 @@
+         source = """
+             struct View { target: &Int }
+             fn select(v: &mut View) -> &mut View { return v; }
+-            fn build(views: &mut Pool<View>, a: &Int, n: &Int, flag: Int) -> <- View {
++            fn build(views: &mut Pool<View>, a: &Int, n: &Int, flag: Int) -> <- A<View> {
+                 let mut item = views.new(target: a);
+                 let selected = select(&mut item);
+                 {
+@@ -7286,7 +7311,7 @@
+         source = """
+             struct View { target: &Int }
+             fn identity(x: &Int) -> &Int { return x; }
+-            fn make(views: &mut Pool<View>, a: &Int, b: &Int, c: &Int, side: Int) -> <- View {
++            fn make(views: &mut Pool<View>, a: &Int, b: &Int, c: &Int, side: Int) -> <- A<View> {
+                 let mut v = views.new(target: a);
+                 if side == 0 { v.target = identity(b); }
+                 else { v.target = identity(c); }
+@@ -7457,7 +7482,7 @@
+         source = """
+             struct View { target: &mut Int }
+             fn identity(n: &mut Int) -> &mut Int { return n; }
+-            fn make(p: &mut Pool<View>, a: &mut Int, b: &mut Int) -> <- View {
++            fn make(p: &mut Pool<View>, a: &mut Int, b: &mut Int) -> <- A<View> {
+                 let mut v = p.new(target: a);
+                 v.target = identity(b);
+                 return <- v;
+@@ -7480,7 +7505,7 @@
+         source = """
+             struct View { target: &mut Int }
+             fn identity(n: &mut Int) -> &mut Int { return n; }
+-            fn make(p: &mut Pool<View>, a: &mut Int, b: &mut Int, side: Int) -> <- View {
++            fn make(p: &mut Pool<View>, a: &mut Int, b: &mut Int, side: Int) -> <- A<View> {
+                 let mut v = p.new(target: a);
+                 {
+                     let view = &mut v;
+@@ -7549,7 +7574,7 @@
+         source = """
+             struct Point { x: Int }
+             struct View { target: &Int, inline: Point }
+-            fn clone(p: &mut Pool<View>, v: &View) -> <- View {
++            fn clone(p: &mut Pool<View>, v: &View) -> <- A<View> {
+                 let c = p.copy(v);
+                 return <- c;
+             }
+@@ -7586,7 +7611,7 @@
+     def test_implicit_structure_copy_uses_runtime_origin_pool(self):
+         source = """
+             struct Point { x: Int }
+-            fn choose(a: &mut Pool<Point>, b: &mut Pool<Point>, side: Int) -> <- Point {
++            fn choose(a: &mut Pool<Point>, b: &mut Pool<Point>, side: Int) -> <- A<Point> {
+                 if side == 0 { let x = a.new(x: 1); return <- x; }
+                 let x = b.new(x: 2);
+                 return <- x;
+@@ -7976,7 +8001,7 @@
+         source = """
+             struct View { target: &Int, tag: Int }
+             impl View { fn take(self: -> View) -> &Int { return self.target; } }
+-            fn repack(p: &mut Pool<View>, v: -> View) -> <- View {
++            fn repack(p: &mut Pool<View>, v: -> View) -> <- A<View> {
+                 let replacement = p.new(target: (-> v).take(), tag: 8);
+                 return <- replacement;
+             }

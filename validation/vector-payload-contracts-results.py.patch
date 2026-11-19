@@ -1,0 +1,145 @@
+--- before/results.py
++++ after/results.py
+@@ -176,6 +176,7 @@
+     structure_fields: tuple = ()
+     vector_slot: tuple[int, int | None] | None = None
+     vector_writes: tuple = ()
++    vector_write_payloads: tuple = field(default=(), kw_only=True)
+     handle_writes: tuple[tuple[int, tuple[ResultCandidate, ...]], ...] = ()
+     handle_write_fields: tuple = ()
+     exchange_payloads: tuple = ()
+@@ -299,6 +300,16 @@
+                                   for position, slot in replacements},
+                  'removals': list(removals)}
+                 for index, slots, exact, replacements, removals in self.vector_writes]
++        if self.vector_write_payloads:
++            def describe_payload(payload):
++                return {'type': payload.typ,
++                        'alternatives': [item.describe(params) for item in sorted(payload.candidates)],
++                        'borrowed_fields': {name: [target.describe(params) for target in sorted(targets)]
++                                            for name, targets in payload.fields},
++                        'owned_fields': {name: describe_payload(child) for name, child in payload.owned_fields}}
++            description['vector_write_payloads'] = [
++                {'parameter': params[index][0], 'payloads': [describe_payload(payload) for payload in payloads]}
++                for index, payloads in self.vector_write_payloads]
+         if self.vector_slot is not None:
+             parameter, index = self.vector_slot
+             description['vector_slot'] = {'parameter': params[parameter][0], 'index': index}
+@@ -531,6 +542,24 @@
+     copy_candidates: frozenset[ResultCandidate] = frozenset()
+     inline_path: str = ''
+ 
++    def __post_init__(self):
++        if not is_handle_vector(self.typ):
++            return
++        items = possible_handle_items(self.handle_items)
++        active = tuple(item for item in self.handle_payloads
++                       if items is None or item.candidates & items)
++        fields = {}
++        def collect(item, prefix):
++            for name, targets in item.fields:
++                fields[prefix + name] = fields.get(prefix + name, frozenset()) | targets
++            for name, child in item.owned_fields:
++                collect(child, prefix + name + '/')
++        for item in active:
++            collect(item, '[]/')
++        object.__setattr__(self, 'fields', tuple(sorted(fields.items())))
++        object.__setattr__(self, 'owned_fields', (('[]', merge_owned_values(active)),)
++                           if active and any(item.owned_fields for item in active) else ())
++
+ 
+ SCALAR = Value('scalar', 'Int')
+ VOID = Value('void', 'Void')
+@@ -547,7 +576,9 @@
+ def restore_handle_payload(value, carrier):
+     if not isinstance(carrier, Value):
+         return value
+-    payloads = tuple(item for item in carrier.handle_payloads if item.candidates & value.candidates)
++    payloads = tuple(item for item in carrier.handle_payloads if item.candidates & value.candidates or any(
++        left.kind == right.kind == 'vector_element' and left.parameter == right.parameter
++        for left in item.candidates for right in value.candidates))
+     if not payloads:
+         return value
+     merged = merge_owned_values(payloads)
+@@ -747,6 +778,7 @@
+         self.changed_shared_vectors = set()
+         self.reference_append_paths = {}
+         self.vector_write_paths = {}
++        self.vector_write_payloads = {}
+         self.updated_handles = {}
+         self.updated_handle_fields = {}
+         self.stored_reference_parameters = set()
+@@ -1069,6 +1101,25 @@
+                                           input_item_history=InputVectorHistory()
+                                           if (is_handle_vector(typ) and mode in ('owned', 'mut'))
+                                           or (typ in REFERENCE_VECTORS and mode == 'mut') else None)
++        def vector_payload(index, typ, path='[]', seen=frozenset()):
++            if typ in seen:
++                return Value('owned', typ)
++            fields = tuple((key, frozenset({BorrowTarget('field_parameter', index, path + '/' + key)}))
++                           for key, _ in aggregate_reference_paths(self.analyzer.enums, typ))
++            children = tuple((f'{arm}.{name}', vector_payload(index, declared[2:-1],
++                               path + '/' + f'{arm}.{name}', seen | {typ}))
++                             for arm, fields in self.analyzer.enums.get(typ, {}).items()
++                             for name, declared in fields if declared.startswith('A<'))
++            candidate = (ResultCandidate('vector_element', index) if path == '[]' else
++                         ResultCandidate('owned_projection', index, field_path=path))
++            return Value('owned', typ, frozenset({candidate}), fields,
++                         fresh_variants=frozenset(self.analyzer.enums.get(typ, {})), owned_fields=children)
++
++        for index, (name, mode, typ) in enumerate(self.params):
++            if is_handle_vector(typ):
++                environment[name] = replace(environment[name], handle_payloads=(
++                    vector_payload(index, handle_vector_element(typ)),))
++
+         for index, (name, mode, typ) in enumerate(self.params):
+             if mode in ('array_ref', 'array_mut') and reference_array_shape(typ):
+                 environment[name] = replace(environment[name], container_borrow=True, container_mode=mode[6:],
+@@ -1143,6 +1194,7 @@
+                               self.vector_write_summary(), handle_writes,
+                               tuple((index, tuple(sorted(self.updated_handle_fields[index].items())))
+                                     for index, _ in handle_writes if self.updated_handle_fields[index]),
++                              vector_write_payloads=tuple((index, tuple(payloads)) for index, payloads in sorted(self.vector_write_payloads.items())),
+                               exchange_payloads=self.returned_exchange_payloads, shared_vector_layout=layout,
+                               shared_vector_passthrough=next(iter(self.shared_vector_passthroughs))
+                               if len(self.shared_vector_passthroughs) == 1 else None,
+@@ -1205,6 +1257,16 @@
+                        for slot in (*slots, *(row for _, row in replacements)) for item in slot):
+                     self.fail(line, 'le pool de l’élément doit survivre au vecteur emprunté')
+             self.vector_write_paths.setdefault(index, []).append((slots, exact, replacements, removals))
++            added = frozenset(item for slot in (*slots, *(row for _, row in replacements)) for item in slot)
++            for payload in final.handle_payloads:
++                if payload.candidates & added and (payload.fields or payload.owned_fields):
++                    pending = [payload]
++                    while pending:
++                        part = pending.pop()
++                        if any(self.has_nondurable_array_target(targets) for _, targets in part.fields):
++                            self.fail(line, 'insertion refusée : cible empruntée non durable dans le vecteur injecté')
++                        pending.extend(child for _, child in part.owned_fields)
++                    self.vector_write_payloads.setdefault(index, {})[payload] = None
+ 
+     def vector_write_summary(self):
+         updates = []
+@@ -2921,6 +2983,9 @@
+                                                  input_items_changed=True)
+                     if owner != receiver:
+                         environment[receiver] = replace(environment[owner], mode=current.mode, storage_owner=owner)
++                for payload in dict(summary.vector_write_payloads).get(parameter, ()):
++                    incoming_payload = self.resolve_owned_child(payload, actuals, map_fields=True)
++                    self.remember_handle_payload(environment, receiver, incoming_payload)
+                 for index, slot in replacements:
+                     incoming = self.resolve_vector_slot(slot, actuals)
+                     self.publish_handle_exchange(environment, (receiver, index, incoming, False))
+@@ -4149,6 +4214,12 @@
+         alternatives = [actuals[item.parameter] for item in sorted(child.candidates) if item.kind == 'parameter']
+         alternatives.extend(self.project_owned_value(actuals[item.parameter], item.field_path, child.typ)
+                             for item in sorted(child.candidates) if item.kind == 'owned_projection')
++        for item in child.candidates:
++            if item.kind == 'vector_element':
++                vector = actuals[item.parameter]
++                candidates = vector_result_candidates(vector, item.item_index,
++                    last=item.item_index == VECTOR_LAST_ITEM, excluded=item.excluded_items, tail_offset=item.tail_offset)
++                alternatives.append(restore_handle_payload(extracted_handle(candidates, child.typ), vector))
+         if previous is not None and any(item.kind == 'owned_field_input' for item in child.candidates):
+             alternatives.append(previous)
+         fresh = set()

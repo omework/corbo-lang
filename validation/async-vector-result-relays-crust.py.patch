@@ -1,0 +1,58 @@
+--- before/crust.py
++++ crust.py
+@@ -3258,7 +3258,7 @@
+                             allocation.item_sources = check.owned_field_sources(merged.owned_fields)
+                     if mode in ('ref', 'mut', 'owned', 'handle_option', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
+                         add_owned_fields(allocation, index)
+-                    if is_handle_vector(typ) and mode in ('owned', 'mut'):
++                    if is_handle_vector(typ) and mode in ('owned', 'mut', *JOIN_RESULT_TYPES):
+                         add_vector_items(allocation, index)
+             for index, element in self.function_effects[name].pool_requirements:
+                 source = root.bindings[f'input_{index}'].source
+@@ -11872,7 +11872,8 @@
+                         'ref': ('ref', 'ref_expr', 'name', 'call', 'loop_expr', 'reborrow', 'array_index', 'field'),
+                         'mut': ('mut', 'mut_expr', 'name', 'call', 'loop_expr', 'reborrow')}
+             if mode in expected and argument_op not in expected[mode]:
+-                self.fail(f"argument '{pname}' : mode attendu {mode} ({typ})")
++                hint = ' ; transfert -> explicite requis' if expected[mode] == ('down', 'transfer') else ''
++                self.fail(f"argument '{pname}' : mode attendu {mode} ({typ}){hint}")
+             pc = f'p{self.uid()}'
+             actual = None
+             evaluated = None
+@@ -12601,17 +12602,20 @@
+             return utf8_result[0], c, utf8_result[1]
+         if result[0] in JOIN_RESULT_TYPES:
+             fields = self.owned_field_storage(result_contract['owned_fields'])
++            dependencies = result_contract['dependencies']
+             if is_handle_vector(declared[1]):
+                 prototype = Allocation(-1, caller.id, '', (), typ=declared[1],
+                     item_sources=result_contract['item_sources'], item_origins=result_contract['item_origins'],
+                     item_payloads=result_contract['returned_item_payloads'])
+                 fields = self.merge_async_result_fields(fields, self.allocation_field_storage(prototype))
++                dependencies = self.merge_dependencies(dependencies, tuple(
++                    (path, targets) for path, _, targets in self.owned_dependency_fields(prototype)))
+             return self.join_allocation_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins, nested=result[0] if result[0] in OWNED_JOIN_TYPES else False, optional=result[0] if result[0] in OPTION_JOIN_TYPES else False, exchange=result[0] if result[0] in EXCHANGE_JOIN_TYPES else None, typ=declared[1],
+                                                absent=all(candidate[2].absent_owned_payload for candidate in results),
+                                                storage=signature.join_storage_result,
+                                                owned_fields=fields,
+-                                               borrowed_fields=result_contract['dependencies'],
++                                               borrowed_fields=dependencies,
+                                                borrow_parents=result_contract['borrow_parents'], variants=result_contract['variants'])
+         if result[0] == 'handle_option':
+             prototype = Allocation(-1, caller.id, '', (), typ=declared[1],
+@@ -13084,7 +13088,13 @@
+             if is_handle_vector(result.typ):
+                 storage_fields = self.merge_async_result_fields(storage_fields, *(
+                     bindings[params[candidate.parameter][0]].alloc.task_result_fields
+-                    for candidate in result.candidates if candidate.kind == 'task_capture'))
++                    if candidate.kind == 'task_capture' else self.allocation_field_storage(
++                        bindings[params[candidate.parameter][0]].alloc)
++                    for candidate in result.candidates if candidate.kind in ('task_capture', 'parameter')))
++                prototype = Allocation(-1, caller.id, '', (), typ=result.typ,
++                    item_sources=item_sources, item_origins=item_origins, item_payloads=tuple(result_item_payloads))
++                dependencies = self.merge_dependencies(dependencies, tuple(
++                    (path, targets) for path, _, targets in self.owned_dependency_fields(prototype)))
+             return self.join_allocation_result(c, sources, caller, f'retour {name}',
+                                                frozenset(origins), nested=result.mode if result.mode in OWNED_JOIN_TYPES else False, optional=result.mode if result.mode in OPTION_JOIN_TYPES else False, exchange=result.mode if result.mode in EXCHANGE_JOIN_TYPES else None, typ=result.typ,
+                                                absent=result.absent_owned_payload or bool(result.candidates) and all(

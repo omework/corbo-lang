@@ -1,0 +1,107 @@
+test_alias_then_child_read_observes_new_target (test_nested_field_replacement.NestedFieldReplacementTests.test_alias_then_child_read_observes_new_target) ... ok
+test_async_changes_owned_graph_and_returns_it (test_nested_field_replacement.NestedFieldReplacementTests.test_async_changes_owned_graph_and_returns_it) ... FAIL
+test_conditional_replacement_retains_both_targets (test_nested_field_replacement.NestedFieldReplacementTests.test_conditional_replacement_retains_both_targets) ... ok
+test_launched_failure_cleans_new_target_capture (test_nested_field_replacement.NestedFieldReplacementTests.test_launched_failure_cleans_new_target_capture) ... FAIL
+test_mutable_field_replacement_keeps_exclusivity (test_nested_field_replacement.NestedFieldReplacementTests.test_mutable_field_replacement_keeps_exclusivity) ... ok
+test_recorded_transfer_releases_only_old_target (test_nested_field_replacement.NestedFieldReplacementTests.test_recorded_transfer_releases_only_old_target) ... ok
+test_short_new_target_cannot_escape (test_nested_field_replacement.NestedFieldReplacementTests.test_short_new_target_cannot_escape) ... ok
+test_two_children_do_not_share_field_metadata (test_nested_field_replacement.NestedFieldReplacementTests.test_two_children_do_not_share_field_metadata) ... ok
+test_two_owned_levels_through_aliases (test_nested_field_replacement.NestedFieldReplacementTests.test_two_owned_levels_through_aliases) ... ok
+test_whole_return_retains_new_target (test_nested_field_replacement.NestedFieldReplacementTests.test_whole_return_retains_new_target) ... ok
+
+======================================================================
+FAIL: test_async_changes_owned_graph_and_returns_it (test_nested_field_replacement.NestedFieldReplacementTests.test_async_changes_owned_graph_and_returns_it)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16092, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14231, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 934, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1907, in _lower_async_function
+    fail(node.line, 'résultat struct async : contrat des cibles empruntées incomplet')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 967, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: résultat struct async : contrat des cibles empruntées incomplet
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_field_replacement.py", line 88, in test_async_changes_owned_graph_and_returns_it
+    self.assertEqual(self.run_source(source).stdout,'1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: résultat struct async : contrat des cibles empruntées incomplet
+
+======================================================================
+FAIL: test_launched_failure_cleans_new_target_capture (test_nested_field_replacement.NestedFieldReplacementTests.test_launched_failure_cleans_new_target_capture)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16092, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14231, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 934, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6924, in _lower_async_function
+    elif set_reference(statement, body[index + 1:]):
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6758, in set_reference
+    sync_call(statement.args[0], statement.line, following=following)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1527, in sync_call
+    fail(line, 'prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 967, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 13: prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_nested_field_replacement.py", line 101, in test_launched_failure_cleans_new_target_capture
+    self.assertEqual(self.run_source(source).stdout,'1\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 13: prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé
+
+----------------------------------------------------------------------
+Ran 10 tests in 2.960s
+
+FAILED (failures=2)

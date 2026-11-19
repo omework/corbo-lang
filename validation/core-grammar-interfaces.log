@@ -1,0 +1,137 @@
+bloc et move nommé: attendu=True, obtenu=True
+  fn main() { let mut p=pool<i32>(1); let a=p.new(7); let b={ move a; a }; drop(b); }
+capture et retour par valeur: attendu=True, obtenu=True
+  fn relayer(n:A<i32>)->A<i32>{n} fn main(){let mut p=pool<i32>(1);let a=p.new(7);let b=move{relayer(a)};drop(b);}
+familles de types et opérateurs: attendu=True, obtenu=True
+  fn calcul(x:i64,y:u8,a:u16,b:u32,c:u64,d:f32,e:f64,f:bool)->i64{if f { x + (y as i64)*2 } else { x%3 }} fn main(){}
+structures, motifs et tableaux: attendu=True, obtenu=True
+  struct Point{x:i32,y:i32} enum Choix{Point{p:Point},Vide} fn main(){let p=Point{x:3,y:4};let tab:[i32;2]=[1,2];match &p { _=>{print(tab[0]);}, }}
+pool, méthodes et conversions: attendu=True, obtenu=True
+  struct Point{x:i32} impl Point{fn lire(self:&Point)->i32{self.x}} fn main(){let mut p=pool<Point>(1);let a=p.new(x:7);print(a.lire());match u8::try_from(a.lire()){Ok(n)=>{print(n);},Err(_)=>{},}}
+boucles et transfert de résultat: attendu=True, obtenu=True
+  fn main(){let mut p=pool<i32>(1);let r=loop{let a=p.new(7);if true{break a;}continue;};drop(r);while false{break;}}
+attente directe et attente de handle: attendu=True, obtenu=True
+  async fn lire()->i32{yield;7} async fn lancer()->Result<i32,runtime::Error>{let t=lire();let n=t.await;print(lire().await);let h=runtime::spawn_blocking(lire());h.await} fn main(){let h=runtime::spawn(lancer());match h.join(){Ok(r)=>{drop(r);},Err(runtime::Error::LaunchFailed)=>{},}}
+Select: attendu=True, obtenu=True
+  async fn gauche()->i32{yield;7} async fn droite()->i32{9} async fn choisir()->i32{let mut s=runtime::select(gauche(),droite());let r=s.await;drop(s);r} fn main(){let h=runtime::spawn(choisir());match h.join(){Ok(n)=>{print(n);},Err(_)=>{},}}
+thread natif sans capture: attendu=True, obtenu=True
+  async fn lire()->Result<i32,runtime::Error>{let h=runtime::thread({7});h.await} fn main(){let h=runtime::thread({return 9;});match h.join(){Ok(n)=>{print(n);},Err(_)=>{},}}
+directives: attendu=True, obtenu=True
+  #(directive,async_pool_sizes={lire:4,}) async fn lire()->i32{yield;7} fn main(){#(directive,stack_region_max_size=4M){print(7);}}
+flèche historique: attendu=False, obtenu=False
+  fn main(){let a=<-b;}
+move hors tête de bloc: attendu=False, obtenu=False
+  fn main(){print(7);move a;}
+yield sans point-virgule: attendu=False, obtenu=False
+  async fn f(){yield} fn main(){}
+await appelé comme un membre nommé: attendu=False, obtenu=False
+  async fn f(){let r=t.await();} fn main(){}
+spawn sans argument: attendu=False, obtenu=False
+  fn main(){let h=runtime::spawn();}
+else orphelin: attendu=False, obtenu=False
+  fn main(){else{print(7);}}
+continue avec résultat: attendu=False, obtenu=False
+  fn main(){loop{continue 7;}}
+yield en synchrone, rejet contextuel: attendu=True, obtenu=True
+  fn main(){yield;}
+flottant 1.5: attendu=True, obtenu=True
+  fn main(){let n=1.5;print(n);}
+flottant 1.: attendu=True, obtenu=True
+  fn main(){let n=1.;print(n);}
+flottant 1e3: attendu=False, obtenu=False
+  fn main(){let n=1e3;print(n);}
+flottant 1.4e-3: attendu=False, obtenu=False
+  fn main(){let n=1.4e-3;print(n);}
+flottant .5: attendu=True, obtenu=True
+  fn main(){let n=.5;print(n);}
+intervalle adjacent au point final: attendu=True, obtenu=True
+  fn main(){let t="abc";let s=&t[1..3];print(s);}
+littéral à exposant incomplet: attendu=False, obtenu=False
+  fn main(){let x=1.4e-;}
+littéral à suffixe: attendu=False, obtenu=False
+  fn main(){let x=1.5f32;}
+point seul: attendu=False, obtenu=False
+  fn main(){let x=.;}
+capture nommée de thread: attendu=True, obtenu=True
+  fn main(){let mut p=pool<i32>(1);let a=p.new(7);let h=runtime::thread({move a;*a});match h.join(){Ok(v)=>{print(v);},Err(_)=>{},}}
+capture déduite de thread: attendu=True, obtenu=True
+  fn main(){let mut p=pool<i32>(1);let a=p.new(7);let vue=&a;let h=runtime::thread(move{*vue});match h.join(){Ok(v)=>{print(v);},Err(_)=>{},}}
+capture nommée tardive dans un thread: attendu=False, obtenu=False
+  fn main(){let h=runtime::thread({print(0);move a;*a});}
+ancienne tête de captures de thread: attendu=False, obtenu=False
+  fn main(){let h=runtime::thread({-> (a);*a});}
+annotation f32, signe unaire: attendu=True, obtenu=True
+  fn main(){let n:f32=-.5;print(n);}
+exposant majuscule: attendu=False, obtenu=False
+  fn main(){let n=1.5E+2;}
+boolean 1: attendu=True, obtenu=True
+  fn main(){let pret=false;let compteur=7;if !pret && compteur != 0 {print("attente");}}
+boolean 2: attendu=True, obtenu=True
+  fn main(){let mut pret=true;while !!pret{pret=false;}}
+boolean 3: attendu=True, obtenu=True
+  fn main(){if 7 {}}
+boolean 4: attendu=False, obtenu=False
+  fn main(){if !=true {}}
+bitwise 1: attendu=True, obtenu=True
+  fn main(){let masque:u8=5;let actif=(masque & 1)!=0;let inv=~masque;if actif{print(inv as i64);}}
+bitwise 2: attendu=True, obtenu=True
+  fn main(){let a:u8=5;let b:u8=3;let r=~a & b ^ 4 | 8;print(r as i64);}
+bitwise 3: attendu=True, obtenu=True
+  fn main(){let a:u8=5;let vue=&a;let r=(*vue & 1)!=0;if r && true || false{}}
+bitwise 4: attendu=False, obtenu=False
+  fn main(){let r=~;}
+bitwise 5: attendu=False, obtenu=False
+  fn main(){let r=5 ^ | 2;}
+shifts 1: attendu=True, obtenu=True
+  fn main(){let a:u8=5;let b=a<<2;let c=a>>1;print(b as i64);print(c as i64);}
+shifts 2: attendu=True, obtenu=True
+  fn f(p:&mut Pool<Vector<u8>>){} fn main(){if (2 << 1 + 1) < 9 {}}
+shifts 3: attendu=True, obtenu=True
+  fn main(){let a:u8=5;let b=a<<8;}
+shifts 4: attendu=False, obtenu=False
+  fn main(){let x=5 < < 1;}
+shifts 5: attendu=False, obtenu=False
+  fn main(){let x=5 >>;}
+compound-assignment 1: attendu=True, obtenu=True
+  fn main(){let mut a:u8=10;a+=3;a-=2;a*=4;a/=2;a%=5;}
+compound-assignment 2: attendu=True, obtenu=True
+  fn index()->i32{0} fn main(){let mut t=[10,20];t[index()] += 1;}
+compound-assignment 3: attendu=True, obtenu=True
+  fn main(){let mut n=7;let r=&mut n;*r *= 2;}
+compound-assignment 4: attendu=True, obtenu=True
+  fn main(){let mut n=7;n=4;n -= -1;}
+compound-assignment 5: attendu=False, obtenu=False
+  fn main(){let mut n=7;n + = 1;}
+compound-assignment 6: attendu=False, obtenu=False
+  fn main(){1 += 2;}
+mutex sync: attendu=True, obtenu=True
+  fn main(){let m:Mutex<i64> = Mutex::new(0);let mut garde=m.lock();*garde=7;}
+mutex async: attendu=True, obtenu=True
+  async fn f(m:&AsyncMutex<i64>)->i64{let g=m.lock().await;yield;*g} fn main(){let m=AsyncMutex::new(0);let h=runtime::spawn(f(&m));match h.join(){Ok(n)=>{print(n);},Err(_)=>{},}}
+scheduler concret: attendu=True, obtenu=True
+  struct Scheduler{workers:u32} impl Scheduler{fn spawn(self:&mut Scheduler,f:runtime::Future){} fn spawn_blocking(self:&mut Scheduler,f:runtime::Future){} fn wake(self:&mut Scheduler,id:runtime::TaskId){}} fn main(){let s=Scheduler{workers:2};runtime::set_scheduler(s);}
+erreur numérique: attendu=True, obtenu=True
+  fn f(n:f64)->Result<i64,NumericConversionError>{i64::try_from(n)} fn main(){match f(3.5){Ok(n)=>{print(n);},Err(NumericConversionError::NotRepresentable)=>{print(0);},}}
+appel externe dans unsafe: attendu=True, obtenu=True
+  extern "C" fn identite(n:i32)->i32; fn main(){let n=unsafe{identite(7)};print(n);}
+appel externe void: attendu=True, obtenu=True
+  extern "C" fn log(n:u64); fn main(){unsafe{log(7);}}
+appel hors unsafe, rejet contextuel: attendu=True, obtenu=True
+  extern "C" fn identite(n:i32)->i32; fn main(){print(identite(7));}
+installation hors main, rejet contextuel: attendu=True, obtenu=True
+  fn installer(s:Scheduler){runtime::set_scheduler(s);} fn main(){}
+ABI inconnue: attendu=False, obtenu=False
+  extern "X" fn f(); fn main(){}
+déclaration externe avec corps: attendu=False, obtenu=False
+  extern "C" fn f(){} fn main(){}
+paramètre externe emprunté: attendu=False, obtenu=False
+  extern "C" fn f(n:&i32); fn main(){}
+résultat externe propriétaire: attendu=False, obtenu=False
+  extern "C" fn f()->A<i32>; fn main(){}
+unsafe sans bloc: attendu=False, obtenu=False
+  extern "C" fn f(); fn main(){unsafe f();}
+constructeur sans valeur: attendu=False, obtenu=False
+  fn main(){let m=AsyncMutex::new();}
+installation sans argument: attendu=False, obtenu=False
+  fn main(){runtime::set_scheduler();}
+53 cas rejoués, 15 nouveaux cas, 0 écarts

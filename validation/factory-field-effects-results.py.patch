@@ -1,0 +1,177 @@
+--- /tmp/crust-before-factory-field-effects/results.py	2026-11-08 03:53:09
++++ results.py	2026-11-08 03:54:02
+@@ -136,6 +136,7 @@
+     # The body checker separately enforces each launched handle's wait duty.
+     task_wait_parameters: frozenset[int] = frozenset()
+     task_forward_parameters: frozenset[int] = frozenset()
++    task_field_updates: tuple = ()
+ 
+     @property
+     def same_parameter(self):
+@@ -152,6 +153,11 @@
+                                     for name, targets in self.borrowed_fields],
+                 'fresh_variants': sorted(self.fresh_variants),
+                 'reference_targets': [t.describe(params) for t in sorted(self.reference_targets)]}
++        if self.task_field_updates:
++            description['task_field_updates'] = [
++                {'parameter': params[index][0], 'fields': [
++                    {'field': field, 'targets': [t.describe(params) for t in sorted(targets)]}
++                    for field, targets in fields]} for index, fields in self.task_field_updates]
+         if self.task_wait_parameters:
+             description['task_wait_parameters'] = [params[i][0] for i in sorted(self.task_wait_parameters)]
+         if self.task_forward_parameters:
+@@ -369,6 +375,7 @@
+     # This is separate from storage identities of ordinary structures.
+     pending_structure_calls: frozenset = frozenset()
+     task_parameters: frozenset[int] = frozenset()
++    deferred_field_updates: frozenset = frozenset()
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -517,6 +524,7 @@
+         self.returned_task_result_sources = set()
+         self.task_wait_parameters = set()
+         self.task_forward_parameters = set()
++        self.returned_task_field_updates = {}
+         self.returned_references = set()
+         self.returned_fields = {}
+         self.returned_owned_fields = {}
+@@ -761,6 +769,8 @@
+                               stored_reference_parameters=frozenset(self.stored_reference_parameters),
+                               task_wait_parameters=frozenset(self.task_wait_parameters),
+                               task_forward_parameters=frozenset(self.task_forward_parameters),
++                              task_field_updates=tuple((i, tuple(sorted(fields.items()))) for i, fields
++                                  in sorted(self.returned_task_field_updates.items())),
+                               owned_field_writes=tuple((index, name, child) for (index, name), child
+                                   in sorted(self.owned_field_writes.items())
+                                   if any(item.kind != 'owned_field_input' for item in child.candidates)))
+@@ -936,6 +946,15 @@
+             self.returned_task_sources.update(value.task_sources)
+             self.returned_task_result_sources.update(value.task_result_sources)
+             self.task_forward_parameters.update(value.task_parameters)
++            for carrier, fields in value.deferred_field_updates:
++                for target in borrowed_targets(carrier):
++                    if target.kind != 'parameter' or self.params[target.parameter][1] != 'mut':
++                        self.fail(line, 'retour de tâche : porteur de modification non durable')
++                    output = self.returned_task_field_updates.setdefault(target.parameter, {})
++                    for field, targets in fields:
++                        if any(t.kind not in ('parameter', 'field_parameter', 'detached_field_parameter') for t in targets):
++                            self.fail(line, 'retour de tâche : cible de modification non durable')
++                        output[field] = output.get(field, frozenset()) | targets
+             for key, targets in value.fields:
+                 if any(not (
+                         target.kind in ('parameter', 'exclusive_join_parameter', 'inline_field_parameter', 'indirect_field_parameter')
+@@ -1257,7 +1276,8 @@
+                     task_sources=frozenset(source for value in values for source in value.task_sources),
+                     task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+                     pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+-                    task_parameters=frozenset(index for value in values for index in value.task_parameters))
++                    task_parameters=frozenset(index for value in values for index in value.task_parameters),
++                    deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates))
+ 
+     def publish_handle_exchange(self, environment, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+@@ -1431,6 +1451,7 @@
+                 flow, execution = self.expression(expr[1], environment, line)
+             if isinstance(execution, Value) and execution.mode == 'execution':
+                 self.task_wait_parameters.update(execution.task_parameters)
++                self.apply_deferred_field_updates(execution, environment, line)
+                 declaration = self.analyzer.async_functions[execution.typ]
+                 mode, typ = declaration.args[2]
+                 if mode in ('ref', 'mut'):
+@@ -2080,7 +2101,8 @@
+                           task_sources=frozenset(source for value in returning for source in value.task_sources),
+                           task_result_sources=frozenset(source for value in returning for source in value.task_result_sources),
+                           pending_structure_calls=frozenset(call for value in returning for call in value.pending_structure_calls),
+-                    task_parameters=frozenset(index for value in returning for index in value.task_parameters)))
++                    task_parameters=frozenset(index for value in returning for index in value.task_parameters),
++                    deferred_field_updates=frozenset(update for value in returning for update in value.deferred_field_updates)))
+         if op == 'struct_copy':
+             source = self.lookup(expr[1], environment, line)
+             original = self.lookup(expr[2], environment, line)
+@@ -2143,12 +2165,14 @@
+                 task_result_sources = set()
+                 result_mode = declaration.args[2][0]
+                 targets, captures, task_sources = set(), [], set()
++                captured_actuals = []
+                 flow = {'next'}
+                 for index, arg in enumerate(args):
+                     if 'next' not in flow:
+                         break
+                     part, value = self.expression(arg, environment, line)
+                     flow = (flow - {'next'}) | part
++                    captured_actuals.append(value)
+                     if index in getattr(declaration, 'cell_reference_parameters', ()):
+                         self.record_stored_references(borrowed_targets(value))
+                     if index < len(declaration.args[1]) and isinstance(value, SourceOrigin):
+@@ -2192,7 +2216,11 @@
+                                     and self.params[origin.parameter][1] == 'mut'):
+                                 origin = replace(origin, kind='exclusive_join_parameter')
+                             targets.add(origin)
++                field_summary = getattr(declaration, 'field_effect_summary', None)
++                pending = self.instantiate_deferred_fields(field_summary.structure_fields, captured_actuals) if (
++                    field_summary and field_summary.complete) else frozenset()
+                 return flow, Value('task', name, fields=tuple(captures), reference_targets=frozenset(targets),
++                                   deferred_field_updates=pending,
+                                    task_sources=frozenset(task_sources), task_result_sources=frozenset(task_result_sources))
+             if name not in self.analyzer.functions:
+                 self.fail(line, f"fonction inconnue '{name}'")
+@@ -2227,6 +2255,7 @@
+             for index in summary.task_wait_parameters:
+                 if isinstance(actuals[index], Value):
+                     self.task_wait_parameters.update(actuals[index].task_parameters)
++                    self.apply_deferred_field_updates(actuals[index], environment, line)
+             for index, field, child in reversed(summary.owned_field_writes):
+                 if args[index][0] not in ('name', 'mut'):
+                     continue
+@@ -2409,6 +2438,9 @@
+                     return frozenset(sources)
+                 return flow, Value(summary.mode, summary.typ, fields=captures, reference_targets=reference_targets,
+                                    task_sources=resolve_sources(summary.task_sources),
++                                   deferred_field_updates=self.instantiate_deferred_fields(summary.task_field_updates, actuals)
++                                       | frozenset(update for index in summary.task_forward_parameters
++                                                   for update in actuals[index].deferred_field_updates),
+                                    task_parameters=frozenset(origin for index in summary.task_forward_parameters
+                                                              for origin in actuals[index].task_parameters),
+                                    task_result_sources=resolve_sources(summary.task_result_sources))
+@@ -2707,7 +2739,8 @@
+             task_sources=frozenset(source for value in values for source in value.task_sources),
+             task_result_sources=frozenset(source for value in values for source in value.task_result_sources),
+             pending_structure_calls=frozenset(call for value in values for call in value.pending_structure_calls),
+-                    task_parameters=frozenset(index for value in values for index in value.task_parameters))
++                    task_parameters=frozenset(index for value in values for index in value.task_parameters),
++                    deferred_field_updates=frozenset(update for value in values for update in value.deferred_field_updates))
+ 
+     def nodes(self, nodes, environment, valued=False, shadows=None, expected_array=None):
+         flow, tail = {'next'}, UNKNOWN
+@@ -3048,6 +3081,30 @@
+             return self.detached_field_targets(actual, target.field)
+         return borrowed_targets(actual)
+ 
++    def instantiate_deferred_fields(self, fields, actuals):
++        """Snapshot targets at creation; do not publish stores before completion."""
++        updates = set()
++        for index, changes in fields:
++            mapped = tuple((field, frozenset(origin for target in targets for origin in (
++                dict(actuals[target.parameter].fields).get(target.field, ())
++                if target.kind == 'field_parameter'
++                else self.array_update_targets(target, actuals[target.parameter]))))
++                for field, targets in changes)
++            updates.add((actuals[index], mapped))
++        return frozenset(updates)
++
++    def apply_deferred_field_updates(self, task, environment, line):
++        # A launched task can fail before its first poll. The old state must
++        # remain a possible state. Resolve all captured targets before stores.
++        for carrier, fields in task.deferred_field_updates:
++            name = '\0completed_task_carrier'
++            current = environment.get(carrier.storage_owner, carrier)
++            changes = {field: dict(current.fields).get(field, frozenset()) | targets
++                       for field, targets in fields}
++            environment[name] = carrier
++            self.update_structure(environment, name, carrier, changes, line)
++            environment.pop(name)
++
+     def apply_structure_updates(self, summary, actuals, args, environment, line):
+         """Instantiate a field-effect contract using input snapshots, not callee bodies."""
+         updated = {}

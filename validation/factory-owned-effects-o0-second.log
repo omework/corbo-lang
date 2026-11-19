@@ -1,0 +1,59 @@
+test_contracts_keep_suspended_and_final_pool_without_sync_bodies (test_factory_owned_effects.FactoryOwnedEffectTests.test_contracts_keep_suspended_and_final_pool_without_sync_bodies) ... ok
+test_final_pool_must_survive_receiver (test_factory_owned_effects.FactoryOwnedEffectTests.test_final_pool_must_survive_receiver) ... ok
+test_join_and_launch_failure_clean_original_and_reuse_slots (test_factory_owned_effects.FactoryOwnedEffectTests.test_join_and_launch_failure_clean_original_and_reuse_slots) ... ok
+test_relay_await_and_inactive_drop (test_factory_owned_effects.FactoryOwnedEffectTests.test_relay_await_and_inactive_drop) ... FAIL
+test_select_loser_keeps_intermediate_pool (test_factory_owned_effects.FactoryOwnedEffectTests.test_select_loser_keeps_intermediate_pool) ... ok
+
+======================================================================
+FAIL: test_relay_await_and_inactive_drop (test_factory_owned_effects.FactoryOwnedEffectTests.test_relay_await_and_inactive_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16278, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14414, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 936, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7234, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 3190, in bind_special
+    check_new_name(name, statement.line)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2102, in check_new_name
+    fail(line, f"variable '{variable}' déjà déclarée")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 970, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 12: variable 'n' déjà déclarée
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_factory_owned_effects.py", line 59, in test_relay_await_and_inactive_drop
+    self.assertEqual(self.run_source(self.program(body, HELPERS)).stdout, '1\n11\n40\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 12: variable 'n' déjà déclarée
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.249s
+
+FAILED (failures=1)

@@ -1,0 +1,6 @@
+struct Point{x:Int}
+fn duplicate(p:&Point)-><-Point{let q=copy(p);return <-q;}
+async fn leaf(p:&Point)-><-Point{let q=duplicate(p);yield;return <-q;}
+fn main(){let q={let mut points=pool<Point>(2);let p=points.new(x:7);
+    let h=runtime::spawn(->leaf(&p));let q=match h.join(){Ok(v)=>{<-v},Err(_)=>{return;}};<-q};
+    print(q.x);drop(->q);}

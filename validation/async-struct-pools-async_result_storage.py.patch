@@ -1,0 +1,40 @@
+--- before/async_result_storage.py
++++ after/async_result_storage.py
+@@ -80,3 +80,37 @@
+ def needs_task_output(symbols, local_parameter):
+     return any(symbol.kind == 'task_output' or symbol.kind == 'task_output_parameter'
+                and local_parameter(symbol.index) for symbol in symbols)
++
++
++def pool_result_graph(node):
++    """A fresh root in an injected pool, with separately tracked owned fields.
++
++    This is a contract projection, not a new lifetime or a placement decision.
++    Local descendant sources remain unsupported and must not be promoted.
++    """
++    effect = getattr(node, 'field_effect_summary', None)
++    if not effect or not effect.complete or node.args[2][0] != 'owned':
++        return None
++    summary = effect.completion_result
++    if not summary.owned_fields or not summary.candidates or any(
++            candidate.kind != 'fresh' or candidate.source.kind != 'source_parameter'
++            for candidate in summary.candidates):
++        return None
++    fields = []
++    def visit(children, prefix=''):
++        for key, child in children:
++            if any(candidate.kind not in ('parameter', 'fresh') for candidate in child.candidates):
++                return False
++            symbols = frozenset(candidate.storage() for candidate in child.candidates)
++            if not symbols or any(source.kind not in (
++                    'source_parameter', 'allocation_parameter', 'allocation_field_parameter')
++                    for source in symbols):
++                return False
++            path = prefix + key
++            fields.append((path, symbols))
++            if not visit(child.owned_fields, path + '/'):
++                return False
++        return True
++    if not visit(summary.owned_fields):
++        return None
++    return frozenset(candidate.source for candidate in summary.candidates), tuple(fields)

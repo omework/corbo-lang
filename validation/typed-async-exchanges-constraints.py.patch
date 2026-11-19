@@ -1,0 +1,21 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -7,7 +7,7 @@
+     OPTION_JOIN_TYPES, option_join_mode, option_inner_signature,
+ )
+ from exchange_join_types import (
+-    EXCHANGE_JOIN_TYPES, exchange_join_mode, exchange_inner_signature, exchange_is_try_push,
++    EXCHANGE_JOIN_TYPES, exchange_join_mode, exchange_payload_type, exchange_inner_signature, exchange_is_try_push,
+ )
+ from capture_paths import result_capture_selector, capture_index, capture_slots
+ from integer_syntax import exact_integer_conversion
+@@ -807,7 +807,8 @@
+                 if mode == 'buffered_handle_exchange' or mode in EXCHANGE_JOIN_TYPES:
+                     inner = definition.args[2][1] if mode == 'buffered_handle_exchange' else EXCHANGE_JOIN_TYPES[mode]
+                     fields = dict(execution.task_result_fields)
+-                    return paths, Value(exchange_join_mode(inner), 'Int', execution.task_result_assets,
++                    outer = exchange_join_mode(inner)
++                    return paths, Value(outer, exchange_payload_type(outer), execution.task_result_assets,
+                         exchange_payloads=tuple(fields.get(arm, execution.task_result_assets) for arm in ('ok', 'err')))
+                 if mode in ('owned', 'join_owned', *OWNED_JOIN_TYPES, 'handle_option', *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES):
+                     if mode in ('owned', *OWNED_JOIN_TYPES):

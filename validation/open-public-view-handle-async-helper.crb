@@ -1,0 +1,5 @@
+async fn leaf(v:&str)->&str{yield;return v;}
+fn launch(v:&str)-><-runtime::Handle<&str>{let h=runtime::spawn(->leaf(v));return <-h;}
+async fn parent(v:&str)->&str{let h=launch(v);match h.await{Ok(view)=>{return view;},Err(_)=>{return "backup";}}}
+fn main(){let mut p=pool<String>(1);let mut text=p.new();text.push_str("été");
+let h=runtime::spawn(->parent(&text[..]));match h.join(){Ok(view)=>{print(view);},Err(_)=>{}}}

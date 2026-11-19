@@ -1,0 +1,33 @@
+--- native_threads.py (before struct captures)
++++ native_threads.py
+@@ -20,6 +20,9 @@
+     def __init__(self, nodes, node_type, error):
+         self.nodes, self.Node, self.error = nodes, node_type, error
+         self.functions = {n.args[0]: n for n in nodes if n.op in ('fn', 'async_fn')}
++        self.structures = {n.args[0]: dict(n.args[1][0][1]) for n in nodes if n.op == 'struct'}
++        self.methods = {(n.args[0], method.args[0]): method for n in nodes if n.op == 'impl'
++                        for method in n.args[1]}
+         self.generated = []
+         self.serial = 0
+         self.native_depth = 0
+@@ -138,6 +141,20 @@
+             source = env.get(expr[1], Local(None)).signature
+             typ = source[1][5:-1] if source and source[1].startswith('Pool<') else expr[3]
+             return transformed, ('owned', typ)
++        if op == 'new_enum':
++            return transformed, ('owned', expr[2])
++        if op == 'field':
++            binding = env.get(expr[1], Local(None)).signature
++            typ = binding[1] if binding else None
++            for field in expr[2].split('.'):
++                typ = self.structures.get(typ, {}).get(field)
++            return transformed, self.declared(typ) if typ else None
++        if op == 'method_call' and expr[1][0] == 'name':
++            binding = env.get(expr[1][1], Local(None)).signature
++            method = self.methods.get((binding[1], expr[2])) if binding else None
++            if method is not None:
++                result = method.args[2]
++                return transformed, ('scalar', 'Bool') if result == ('bool', 'bool') else result
+         if op == 'array_index':
+             _, source = self.expression(expr[1], env, [])
+             shape = fixed_array_shape(source[1]) if source else None

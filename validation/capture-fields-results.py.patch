@@ -1,0 +1,88 @@
+--- before/results.py
++++ results.py
+@@ -1,5 +1,6 @@
+ """Symbolic owned-result origins, inferred without call-site allocations."""
+ from __future__ import annotations
++from capture_paths import result_capture_selector, capture_fields, capture_index
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+ from utf8_syntax import ASYNC_VALUE_RESULT_FAMILIES
+@@ -284,8 +285,6 @@
+         return result
+ 
+ 
+-def capture_fields(fields, index):
+-    return tuple((key, targets) for key, targets in fields if key.partition('.')[2] == str(index))
+ 
+ 
+ def capture_result_origins(fields, indexes, shared):
+@@ -710,12 +709,12 @@
+                                 frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
+                                for position, (_, capture, _) in enumerate(definition.args[1])
+                                if capture in ('ref', 'mut', 'array_ref', 'array_mut', *ASYNC_CAPTURE_VIEW_MODES))
+-                fields += tuple((f'{access}.{position}', frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
++                fields += tuple((f'{reference_type(declared)[0]}.{position}/{arm}.{field}',
++                                  frozenset({BorrowTarget('task_capture_parameter', index, f'{position}/{arm}.{field}')}))
+                     for position, (_, capture, capture_type) in enumerate(definition.args[1])
+                     if capture in ('owned', 'join_owned', 'join_nested')
+-                    for access in sorted({reference_type(declared)[0]
+-                        for members in self.analyzer.enums.get(capture_type, {}).values()
+-                        for _, declared in members if reference_type(declared)}))
++                    for arm, members in self.analyzer.enums.get(capture_type, {}).items()
++                    for field, declared in members if reference_type(declared))
+                 from handle_types import is_public_handle
+                 if is_public_handle(typ):
+                     fields = tuple(('mut.' + key[4:] if key in ('ref.3', 'ref.5') else key, targets)
+@@ -1573,12 +1572,12 @@
+                     for field, targets in borrowed_result_fields(declaration):
+                         origins = set()
+                         for target in targets:
+-                            if target.kind not in ('parameter', 'exclusive_join_parameter'):
++                            selector = result_capture_selector(target)
++                            if selector is None:
+                                 origins.add(BorrowTarget('local'))
+                             else:
+-                                for key, capture in execution.fields:
+-                                    if int(key.partition('.')[2]) == target.parameter:
+-                                        origins.update(capture)
++                                for _, capture in capture_fields(execution.fields, selector):
++                                    origins.update(capture)
+                         fields.append((field, frozenset(origins)))
+                     return flow, replace(result, fields=tuple(fields))
+                 if (plain := PLAIN_RETURN_JOINS.get((mode, typ))) is not None:
+@@ -2324,7 +2323,7 @@
+                                 for field, declared in fields if reference_type(declared))
+                             for field, access in borrowed_fields:
+                                 origins = self.owned_capture_field_targets(value, field)
+-                                captures.append((f'{access}.{index}', origins))
++                                captures.append((f'{access}.{index}/{field}', origins))
+                             sources = {candidate.storage() for candidate in value.candidates}
+                             task_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
+                             for field, _ in aggregate_owned_paths(self.analyzer.enums, value.typ):
+@@ -2521,7 +2520,7 @@
+                 row_result_targets = set()
+                 row_result_indexes = set()
+                 for key, targets in summary.borrowed_fields:
+-                    index = int(key.partition('.')[2])
++                    index = capture_index(key.partition('.')[2])
+                     _, capture_mode, capture_type = declaration.args[1][index]
+                     projects_row = index in result_paths and int_reference_row(capture_type, capture_mode)
+                     projects_structure = index in result_paths and '' in self.analyzer.enums.get(capture_type, {})
+@@ -2630,7 +2629,7 @@
+                         if isinstance(actual, Value) and actual.mode in ('task', 'execution'):
+                             from async_lowering import int_reference_row
+                             declaration = self.analyzer.async_functions[actual.typ]
+-                            _, capture_mode, capture_type = declaration.args[1][int(target.field)]
++                            _, capture_mode, capture_type = declaration.args[1][capture_index(target.field)]
+                             if (int_reference_row(capture_type, capture_mode)
+                                     or '' in self.analyzer.enums.get(capture_type, {})):
+                                 origins = actual.reference_targets
+@@ -2739,7 +2738,7 @@
+                     for target in summary.reference_targets:
+                         actual = actuals[target.parameter]
+                         if target.kind == 'task_capture_parameter' and isinstance(actual, Value):
+-                            capture_type = self.analyzer.async_functions[actual.typ].args[1][int(target.field)][2]
++                            capture_type = self.analyzer.async_functions[actual.typ].args[1][capture_index(target.field)][2]
+                             targets.update(replace(origin, kind='string_parameter')
+                                            if origin.kind == 'parameter' and capture_type == 'String' else origin
+                                            for _, origins in capture_fields(actual.fields, target.field)

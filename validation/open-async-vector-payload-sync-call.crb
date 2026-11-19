@@ -1,0 +1,9 @@
+struct Item{value:&Int}
+fn put(v:&mut Vector<A<Item>>,p:&mut Pool<Item>,n:&Int){v.push(->p.new(value:n));}
+async fn work()->Int{
+ let mut ns=pool<Int>(1);let n=ns.new(7);let mut p=pool<Item>(1);
+ let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();put(&mut v,&mut p,&n);
+ yield;let item=<-v.remove(0);drop(->v);yield;let result=*item.value;
+ drop(->item);drop(->n);return result;
+}
+fn main(){let execution=runtime::spawn(->work());match execution.join(){Ok(n)=>{print(n);},Err(_)=>{print(0);}}}

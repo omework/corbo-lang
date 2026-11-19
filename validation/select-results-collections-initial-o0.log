@@ -1,0 +1,61 @@
+test_fallible_text_result_and_last_use (test_select_results.SelectResultsTests.test_fallible_text_result_and_last_use) ... ok
+test_independent_owned_winner_and_reuse_model (test_select_results.SelectResultsTests.test_independent_owned_winner_and_reuse_model) ... ok
+test_mutable_slice_keeps_its_vector_after_selection_drop (test_select_results.SelectResultsTests.test_mutable_slice_keeps_its_vector_after_selection_drop) ... FAIL
+test_owned_child_handle_keeps_failure_separate_from_payload (test_select_results.SelectResultsTests.test_owned_child_handle_keeps_failure_separate_from_payload) ... ok
+test_owned_collections_keep_type_and_cleanup_across_return (test_select_results.SelectResultsTests.test_owned_collections_keep_type_and_cleanup_across_return) ... ok
+test_owned_result_return_and_pool_provenance (test_select_results.SelectResultsTests.test_owned_result_return_and_pool_provenance) ... ok
+test_plain_error_and_array_payloads_preserve_field_updates (test_select_results.SelectResultsTests.test_plain_error_and_array_payloads_preserve_field_updates) ... ok
+test_recorded_owned_result_preserves_loser_field (test_select_results.SelectResultsTests.test_recorded_owned_result_preserves_loser_field) ... ok
+test_returned_view_contract_through_direct_relay (test_select_results.SelectResultsTests.test_returned_view_contract_through_direct_relay) ... ok
+test_text_result_after_drop_retains_source_and_field (test_select_results.SelectResultsTests.test_text_result_after_drop_retains_source_and_field) ... ok
+
+======================================================================
+FAIL: test_mutable_slice_keeps_its_vector_after_selection_drop (test_select_results.SelectResultsTests.test_mutable_slice_keeps_its_vector_after_selection_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15425, in verify_program
+    compiler.verify(Parser(source).parse())
+                    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1592, in parse
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1580, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1425, in statement
+    return self.function(line, asynchronous=True)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 554, in function
+    body = self.block()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 368, in block
+    self.append_statement(nodes)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1580, in append_statement
+    node = self.statement()
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1441, in statement
+    expr = None if self.peek() == ';' else self.expr()
+                                           ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1072, in expr
+    left = self.postfix(self.primary())
+                        ~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1309, in primary
+    raise Error('une découpe &str est immuable')
+crust.Error: une découpe &str est immuable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_results.py", line 175, in test_mutable_slice_keeps_its_vector_after_selection_drop
+    self.assertEqual(self.run_source(source.replace('BEFORE','')).stdout,'30\n2\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : une découpe &str est immuable
+
+----------------------------------------------------------------------
+Ran 10 tests in 9.864s
+
+FAILED (failures=1)

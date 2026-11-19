@@ -1,0 +1,75 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2678,7 +2678,7 @@
+ 
+     def symbolic_task_input(self, pname, mode, typ, actual, index, root,
+                             sources, parents, find, add_field_dependencies, *,
+-                            storage_scope=None, local_storage=None):
++                            storage_scope=None, local_storage=None, result_storage_kind=None):
+         """Describe an opaque task input and its captures without executing it."""
+         check = self
+         storage_scope = storage_scope or root
+@@ -2689,6 +2689,10 @@
+         result_indexes = owned_result_parameters(definition,
+             {name: node for name, (node, _) in check.async_definitions.items()},
+             sync_result=self.function_results.get)
++        effect = getattr(definition, 'field_effect_summary', None)
++        completed = effect.completion_result if effect and effect.complete else None
++        from async_result_storage import root_result_parameters
++        result_indexes = root_result_parameters(definition, result_indexes)
+         captures = definition.args[1]
+         for position, (_, capture, capture_type) in enumerate(captures):
+             if capture in ASYNC_CAPTURE_VIEW_MODES or (capture, capture_type) == ('mut', 'u8'):
+@@ -2731,7 +2735,8 @@
+                 source.element_type = storage_type
+             else:
+                 sid = check.uid()
+-                source = MemorySource(sid, storage_scope.id, 'symbolic', pname, f'symbolic_source_{sid}', storage_type)
++                kind = 'local_stack' if position in result_indexes and result_storage_kind == 'local' else 'symbolic'
++                source = MemorySource(sid, storage_scope.id, kind, pname, f'symbolic_source_{sid}', storage_type)
+                 storage_scope.sources.append(source)
+                 if group is not None:
+                     sources[group] = source
+@@ -2757,6 +2762,13 @@
+                         check.allocations.append(borrowed_target)
+                         dependencies.append((f'{access}.{position}/{field}', (borrowed_target,)))
+                 continue
++            if position in result_indexes:
++                # A borrowed capture may be copied into the completed root.
++                # This root has its own identity, not that of the borrowed input.
++                result_sources.append(source)
++                origin = check.uid()
++                check.origin_sources[origin] = source
++                result_origins.add(origin)
+             target = Allocation(check.uid(), storage_scope.id, pname, (source,), typ=capture_type)
+             storage_scope.allocations.append(target)
+             check.allocations.append(target)
+@@ -2764,8 +2776,6 @@
+             add_field_dependencies(target, index, prefix=f'capture.{position}/')
+             capability = 'mut' if is_public_handle(typ) and position in (3, 5) else capture
+             dependencies.append((f'{capability}.{position}', (target,)))
+-        effect = getattr(definition, 'field_effect_summary', None)
+-        completed = effect.completion_result if effect and effect.complete else None
+         if completed and completed.candidates and all(
+                 candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
+                 for candidate in completed.candidates):
+@@ -2923,7 +2933,8 @@
+                 actual = f'input_{index}'
+                 if mode in ('task', 'execution'):
+                     allocation = check.symbolic_task_input(pname, mode, typ, actual, index, root,
+-                        sources, parents, find, add_field_dependencies)
++                        sources, parents, find, add_field_dependencies,
++                        result_storage_kind=dict(node.storage_requirements).get(index))
+                     root.bindings[actual] = Binding(actual, mode, actual, allocation)
+                     arguments.append(('down', actual))
+                     continue
+@@ -11114,7 +11125,8 @@
+         for index, required in signature.storage_requirements:
+             binding = bindings[params[index][0]]
+             targets = binding.referents or ((binding.alloc,) if binding.alloc else ())
+-            kinds = {source.kind == 'local_stack' for target in targets for source in target.sources}
++            kinds = {source.kind == 'local_stack' for target in targets for source in (
++                target.task_result_sources if binding.kind in ('task', 'execution') else target.sources)}
+             kinds.update(target.payload_storage == 'local' for target in targets
+                          if target.absent_owned_payload and target.payload_storage is not None)
+             if kinds != {required == 'local'}:

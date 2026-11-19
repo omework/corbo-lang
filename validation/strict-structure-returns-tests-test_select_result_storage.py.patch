@@ -1,0 +1,40 @@
+--- tests/test_select_result_storage.py
++++ tests/test_select_result_storage.py
+@@ -15,10 +15,13 @@
+ def program(first='Point{x:7}', second='Point{x:9}', selection=None, use=None):
+     selection = selection or 'let mut s=runtime::select(->left(->a),->right(->b));'
+     use = use or 'let result=s.await;drop(->s);print(result.x);drop(->result);'
++    helpers = HELPERS
++    if first.startswith('ps.new'): helpers = helpers.replace('left(v:->Point)-><-Point','left(v:->Point)-><-A<Point>')
++    if second.startswith('ps.new'): helpers = helpers.replace('right(v:->Point)-><-Point','right(v:->Point)-><-A<Point>')
+     return sources.SelectSourceTests.program('''let mut ps=pool<Point>(2);
+ let a=FIRST;let b=SECOND;SELECTION USE
+ let again=ps.new(x:20);print(again.x);drop(->again);return 1;'''.replace(
+-        'FIRST', first).replace('SECOND', second).replace('SELECTION', selection).replace('USE',use), HELPERS)
++        'FIRST', first).replace('SECOND', second).replace('SELECTION', selection).replace('USE',use), helpers)
+ 
+ 
+ class SelectResultStorageTests(unittest.TestCase):
+@@ -93,7 +96,7 @@
+                          'emprunt|réserv|référenc')
+ 
+     def test_submission_failure_keeps_cleanup_and_reuse(self):
+-        source=HELPERS+'''async fn work(a:->Point,b:->Point)->Int{
++        source=HELPERS.replace('-><-Point','-><-A<Point>')+'''async fn work(a:->Point,b:->Point)->Int{
+ let mut s=runtime::select(->left(->a),->right(->b));let r=s.await;
+ drop(->s);let x=r.x;drop(->r);return x;}
+ fn main(){let mut ps=pool<Point>(2);let a=ps.new(x:7);let b=ps.new(x:9);
+@@ -109,11 +112,11 @@
+             'async fn left(v:->Point)-><-Point{yield;return <-v;}',
+             'async fn left(v:->Point)-><-Point{yield;drop(->v);return <-Point{x:7};}').replace(
+             'async fn right(v:->Point)-><-Point{return <-v;}',
+-            'async fn right(v:->Point,p:&mut Pool<Point>)-><-Point{drop(->v);return <-p.new(x:9);}').replace(
++            'async fn right(v:->Point,p:&mut Pool<Point>)-><-A<Point>{drop(->v);return <-p.new(x:9);}').replace(
+             'right(->b)','right(->b,&mut ps)')
+         self.refused(source,'stockage|même type')
+         both_pool=source.replace('left(v:->Point)', 'left(v:->Point,p:&mut Pool<Point>)').replace(
+-            'return <-Point{x:7};','return <-p.new(x:7);').replace(
++            'return <-Point{x:7};','return <-p.new(x:7);').replace('left(v:->Point,p:&mut Pool<Point>)-><-Point','left(v:->Point,p:&mut Pool<Point>)-><-A<Point>').replace(
+             'left(->a)','left(->a,&mut other)').replace('let a=', 'let mut other=pool<Point>(1);let a=')
+         self.assertEqual(self.run_source(both_pool).stdout,'9\n20\n1\n')
+ 

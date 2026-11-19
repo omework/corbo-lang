@@ -1,0 +1,23 @@
+struct Inner { view: &Int }
+struct Outer { inner: A<Inner> }
+fn change(value: &mut Inner, target: &Int) { value.view = &*target; }
+async fn consume(value: -> Outer) -> Int { yield; drop(->value); return 1; }
+fn make(value: -> Outer) -> <-consume { return <-consume(->value); }
+async fn work() -> Int {
+    let mut numbers = pool<Int>(2);
+    let first = numbers.new(7);
+    let second = numbers.new(9);
+    let mut inners = pool<Inner>(1);
+    let inner = inners.new(view: &first);
+    let mut outer = Outer { inner: <-inner };
+    change(&mut *outer.inner, &second);
+    let task = make(->outer);
+    drop(->first);
+    let result = task.await;
+    drop(->second);
+    return result;
+}
+fn main() {
+    let handle = runtime::spawn(->work());
+    match handle.join() { Ok(n) => { print(n); }, Err(_) => { print(99); } }
+}

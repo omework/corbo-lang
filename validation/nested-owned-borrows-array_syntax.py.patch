@@ -1,0 +1,22 @@
+--- before/array_syntax.py
++++ after/array_syntax.py
+@@ -89,6 +89,19 @@
+                 path = f'{prefix}{arm}.{field}'
+                 yield path, pointee
+                 yield from aggregate_owned_paths(enums, pointee, path + '/', visited | {typ})
++
++
++def owned_reference_paths(enums, typ, prefix='', visited=frozenset()):
++    """Borrowed fields reachable through owned edges, preserving each path."""
++    if typ in visited:
++        return
++    for arm, fields in enums.get(typ, {}).items():
++        for field, declared in fields:
++            path = f'{prefix}{arm}.{field}'
++            if (capability := reference_type(declared)) is not None:
++                yield path, capability[0], capability[1]
++            elif declared.startswith('A<'):
++                yield from owned_reference_paths(enums, declared[2:-1], path + '/', visited | {typ})
+ 
+ 
+ def reference_type(typ):

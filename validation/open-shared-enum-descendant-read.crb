@@ -1,0 +1,11 @@
+struct Inner{view:&Int}
+enum Outer{Item{inner:A<Inner>}}
+fn read(o:&Outer)->Int{
+    return match &o{Outer.Item{inner:i}=>{*i.view}};
+}
+fn main(){
+    let mut ns=pool<Int>(1);let n=ns.new(7);
+    let mut ins=pool<Inner>(1);let inner=ins.new(view:&n);
+    let mut os=pool<Outer>(1);let o=new(os) Outer.Item{inner:<-inner};
+    print(read(&o));
+}

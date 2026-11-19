@@ -1,0 +1,67 @@
+--- /tmp/crust-before-borrowed-completion/crust.py	2026-11-08 03:59:27
++++ crust.py	2026-11-08 04:01:30
+@@ -10180,9 +10180,12 @@
+             self.allocations.append(handle)
+             return 'execution', c, handle
+         c = f'joined{uid}'
+-        self.apply_async_field_updates(allocation)
+         node, _ = self.async_definitions[task_name]
+         mode, typ = node.args[2]
++        # Project the input snapshot before publishing the completed stores.
++        reference_result = (self.project_task_result_captures(task_name, allocation.dependencies,
++                            allocation.borrow_parents) if mode in ('ref', 'mut') else None)
++        self.apply_async_field_updates(allocation)
+         if mode == 'array':
+             from async_lowering import scalar_array_layout
+             shape, element = scalar_array_layout(typ)
+@@ -10206,7 +10209,7 @@
+             self.lines.append(f'{c} = task_join_allocation(&{value});')
+             return self.join_allocation_result(c, allocation.task_result_sources, scope, label, allocation.task_result_origins, typ=typ)
+         if mode in ('ref', 'mut'):
+-            dependencies, parents = self.project_task_result_captures(task_name, allocation.dependencies, allocation.borrow_parents)
++            dependencies, parents = reference_result
+             kind = 'join_' + mode
+             payload = Allocation(uid, -1, label, (), typ=kind,
+                                  dependencies=dependencies, borrow_parents=parents,
+@@ -13663,27 +13666,31 @@
+                     continue
+                 self.line = self.functions[name].line
+                 self.fail('prototype : un agrégat propriétaire retourné doit restituer un paramètre transféré')
+-        self.function_constraints = ConstraintAnalyzer(self.functions, self.function_effects,
+-                                                      self.function_results, Error, self.enums, async_functions).infer_all()
+-        self.function_contracts = function_contracts(self.functions, self.function_effects,
+-                                                     self.function_results, self.function_constraints)
+-        from async_structure_effects import AsyncStructureEffectAnalyzer
++        from async_structure_effects import AsyncStructureEffectAnalyzer
++        # Source constraints must see completed result origins. Provisional
++        # interfaces have no constraints and are used only for effect inference;
++        # they are never exposed to call-site verification or lowering.
++        incomplete_constraints = {name: None for name in self.functions}
++        inference_contracts = function_contracts(self.functions, self.function_effects,
++                                                 self.function_results, incomplete_constraints)
+         # Fresh task factories depend on deferred async effects; async bodies
+         # in turn depend on synchronous contracts. Publish both to a fixed point.
+         while True:
+             previous_results = self.function_results
+             self.async_structure_effects = AsyncStructureEffectAnalyzer(
+-                async_functions, self.function_contracts, self.enums, Error).infer_all()
++                async_functions, inference_contracts, self.enums, Error).infer_all()
+             for name, node in async_functions.items():
+                 node.field_effect_summary = self.async_structure_effects[name]
+             self.function_results = ResultAnalyzer(self.functions, self.function_effects, Error, self.enums,
+                                                    async_functions).infer_all()
+-            self.function_constraints = ConstraintAnalyzer(self.functions, self.function_effects,
+-                self.function_results, Error, self.enums, async_functions).infer_all()
+-            self.function_contracts = function_contracts(self.functions, self.function_effects,
+-                self.function_results, self.function_constraints)
++            inference_contracts = function_contracts(self.functions, self.function_effects,
++                self.function_results, incomplete_constraints)
+             if self.function_results == previous_results:
+                 break
++        self.function_constraints = ConstraintAnalyzer(self.functions, self.function_effects,
++            self.function_results, Error, self.enums, async_functions).infer_all()
++        self.function_contracts = function_contracts(self.functions, self.function_effects,
++            self.function_results, self.function_constraints)
+         # Synchronous callers can join a borrowed result before frame C is
+         # emitted. Its provenance contract must already be available then.
+         from async_lowering import borrowed_result_paths

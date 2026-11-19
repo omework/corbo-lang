@@ -1,0 +1,18 @@
+struct Holder { value: A<Int> }
+async fn relay(h: -> A<Holder>) -> <-A<Holder> {
+    yield;
+    return <-h;
+}
+fn main() {
+    let mut values = pool<Int>(1);
+    let mut holders = pool<Holder>(1);
+    let value = values.new(7);
+    let holder = holders.new(value: <-value);
+    let execution = runtime::spawn(->relay(->holder));
+    match execution.join() {
+        Ok(received) => { print(*received.value); drop(->received); },
+        Err(_) => {}
+    }
+    let reused = values.new(30);
+    print(*reused);
+}

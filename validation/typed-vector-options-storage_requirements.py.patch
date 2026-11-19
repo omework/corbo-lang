@@ -1,0 +1,14 @@
+--- /tmp/crust-before-typed-vector-options/storage_requirements.py
++++ /Users/jabarkarim/sources/crust/storage_requirements.py
+@@ -78,7 +78,10 @@
+             demands[index] = required
+         for asset in value.assets:
+             source = asset.source
+-            if source.kind == 'allocation_parameter' and context.params[source.index][2] in structures:
++            if source.kind == 'allocation_parameter' and context.params[source.index][1] == 'handle_option':
++                if required != 'pool':
++                    context.fail(line, 'exigence de stockage local incompatible avec Option<A<T>>')
++            elif source.kind == 'allocation_parameter' and context.params[source.index][2] in structures:
+                 demand(source.index)
+             elif (source.kind == 'allocation_parameter'
+                   and exchange_element(context.params[source.index][2]) == value.typ):

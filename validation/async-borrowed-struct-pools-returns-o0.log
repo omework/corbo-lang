@@ -1,0 +1,93 @@
+test_branch_result_protects_both_targets (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_branch_result_protects_both_targets) ... ok
+test_constructor_arguments_keep_loans_across_suspend (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_constructor_arguments_keep_loans_across_suspend) ... ok
+test_direct_and_helper_field_replacement (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_direct_and_helper_field_replacement) ... ok
+test_injected_target_descriptor_and_borrowed_child (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_injected_target_descriptor_and_borrowed_child) ... ok
+test_loop_receivers_and_field_target_fixed_point (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_loop_receivers_and_field_target_fixed_point) ... ok
+test_mutable_fields_disjoint_and_shared_reborrow (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_mutable_fields_disjoint_and_shared_reborrow) ... ok
+test_mutable_reborrow_exclusivity_and_last_use (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_mutable_reborrow_exclusivity_and_last_use) ... ok
+test_parent_replacement_and_suspended_destruction (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_parent_replacement_and_suspended_destruction) ... ok
+test_receiver_transfer_and_short_target (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_receiver_transfer_and_short_target) ... ok
+test_recorded (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_recorded) ... ok
+test_returned_shared_reference_after_carrier_drop (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_returned_shared_reference_after_carrier_drop) ... FAIL
+test_saved_old_target_and_scope_restoration (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_saved_old_target_and_scope_restoration) ... ok
+test_shared_projection_detaches_but_target_remains (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_shared_projection_detaches_but_target_remains) ... ok
+test_shared_target_drop_and_last_use (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_shared_target_drop_and_last_use) ... ok
+
+======================================================================
+FAIL: test_returned_shared_reference_after_carrier_drop (test_async_borrowed_struct_pools.AsyncBorrowedStructPoolTests.test_returned_shared_reference_after_carrier_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15811, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13957, in verify
+    self.function_results, Error, self.enums, async_functions).infer_all()
+                                                               ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 208, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 220, in infer
+    result = context.infer()
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 447, in infer
+    self.nodes(self.node.args[3], initial,
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               valued=self.node.args[2][0] == 'owned')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 2105, in nodes
+    following, value = self.expression(args[1], current, line, expected)
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 744, in expression
+    paths, task = self.expression(expr[1], state, line)
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1354, in expression
+    paths, value = self.expression(expr[1], state, line, expected_array if op != 'new_transfer' else None)
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1439, in expression
+    return self.call(expr, state, line)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 1495, in call
+    reference_assets = self.async_reference_assets(catalog[name], actuals, line)
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 291, in async_reference_assets
+    paths = borrowed_result_paths(definition, self.analyzer.async_functions, self.fail, {},
+                                  sync_result_contract=self.analyzer.sync_result_contract)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 691, in borrowed_result_paths
+    cache[name] = frozenset(scan(body, {}, {}))
+                  ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 668, in scan
+    yield from scan(item, task_calls, awaited)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 686, in scan
+    mode, origins = reference_origin(expr, task_calls, awaited, value.line)
+                    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 651, in reference_origin
+    mode, origins = awaited_origin(*awaited[expr[1]], line)
+                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 518, in awaited_origin
+    return reference_origin(operand[1], tasks, awaited, line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 589, in reference_origin
+    _, inherited = reference_origin(expr[2][target.parameter], task_calls, awaited, line)
+                   ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 659, in reference_origin
+    fail(line, diagnostic)
+    ~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/constraints.py", line 315, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 3: retour async &Int : un paramètre partagé durable ou un réemprunt est requis
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_struct_pools.py", line 131, in test_returned_shared_reference_after_carrier_drop
+    self.assertEqual(self.run_source(source.replace('BEFORE','')).stdout,'7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 3: retour async &Int : un paramètre partagé durable ou un réemprunt est requis
+
+----------------------------------------------------------------------
+Ran 14 tests in 14.464s
+
+FAILED (failures=1)

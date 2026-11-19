@@ -1,0 +1,28 @@
+struct Holder { value: A<Int> }
+fn inspect(mut h:->Holder,p:&mut Pool<Int>)->Int{h.value=<-p.new(11);return *h.value;}
+async fn work(h: ->Holder,p:&mut Pool<Int>) -> Int {
+    yield;
+    return inspect(->h,p);
+}
+fn main() {
+    let mut values = pool<Int>(1);
+    let mut holders = pool<Holder>(1);
+    let value = values.new(7);
+    let holder = holders.new(value: <-value);
+    let mut other=pool<Int>(1);let execution = runtime::spawn(->work(->holder,&mut other));
+    match execution.join() { Ok(n) => { print(n); }, Err(_) => {} }
+    let reused = values.new(30);
+    print(*reused);
+}
+
+11
+30
+ destroy value=7
+reclaim value
+destroy champ=11
+reclaim champ
+destroy holder=Holder
+reclaim holder
+destroy reused=30
+reclaim reused
+

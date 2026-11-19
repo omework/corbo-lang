@@ -1,0 +1,67 @@
+bloc et move nommé: attendu=True, obtenu=True
+  fn main() { let mut p=pool<i32>(1); let a=p.new(7); let b={ move a; a }; drop(b); }
+capture et retour par valeur: attendu=True, obtenu=True
+  fn relayer(n:A<i32>)->A<i32>{n} fn main(){let mut p=pool<i32>(1);let a=p.new(7);let b=move{relayer(a)};drop(b);}
+familles de types et opérateurs: attendu=True, obtenu=True
+  fn calcul(x:i64,y:u8,a:u16,b:u32,c:u64,d:f32,e:f64,f:bool)->i64{if f { x + (y as i64)*2 } else { x%3 }} fn main(){}
+structures, motifs et tableaux: attendu=True, obtenu=True
+  struct Point{x:i32,y:i32} enum Choix{Point{p:Point},Vide} fn main(){let p=Point{x:3,y:4};let tab:[i32;2]=[1,2];match &p { _=>{print(tab[0]);}, }}
+pool, méthodes et conversions: attendu=True, obtenu=True
+  struct Point{x:i32} impl Point{fn lire(self:&Point)->i32{self.x}} fn main(){let mut p=pool<Point>(1);let a=p.new(x:7);print(a.lire());match u8::try_from(a.lire()){Ok(n)=>{print(n);},Err(_)=>{},}}
+boucles et transfert de résultat: attendu=True, obtenu=True
+  fn main(){let mut p=pool<i32>(1);let r=loop{let a=p.new(7);if true{break a;}continue;};drop(r);while false{break;}}
+attente directe et attente de handle: attendu=True, obtenu=True
+  async fn lire()->i32{yield;7} async fn lancer()->Result<i32,runtime::Error>{let t=lire();let n=t.await;print(lire().await);let h=runtime::spawn_blocking(lire());h.await} fn main(){let h=runtime::spawn(lancer());match h.join(){Ok(r)=>{drop(r);},Err(runtime::Error::LaunchFailed)=>{},}}
+Select: attendu=True, obtenu=True
+  async fn gauche()->i32{yield;7} async fn droite()->i32{9} async fn choisir()->i32{let mut s=runtime::select(gauche(),droite());let r=s.await;drop(s);r} fn main(){let h=runtime::spawn(choisir());match h.join(){Ok(n)=>{print(n);},Err(_)=>{},}}
+thread natif sans capture: attendu=True, obtenu=True
+  async fn lire()->Result<i32,runtime::Error>{let h=runtime::thread({7});h.await} fn main(){let h=runtime::thread({return 9;});match h.join(){Ok(n)=>{print(n);},Err(_)=>{},}}
+directives: attendu=True, obtenu=True
+  #(directive,async_pool_sizes={lire:4,}) async fn lire()->i32{yield;7} fn main(){#(directive,stack_region_max_size=4M){print(7);}}
+flèche historique: attendu=False, obtenu=False
+  fn main(){let a=<-b;}
+move hors tête de bloc: attendu=False, obtenu=False
+  fn main(){print(7);move a;}
+yield sans point-virgule: attendu=False, obtenu=False
+  async fn f(){yield} fn main(){}
+await appelé comme un membre nommé: attendu=False, obtenu=False
+  async fn f(){let r=t.await();} fn main(){}
+spawn sans argument: attendu=False, obtenu=False
+  fn main(){let h=runtime::spawn();}
+else orphelin: attendu=False, obtenu=False
+  fn main(){else{print(7);}}
+continue avec résultat: attendu=False, obtenu=False
+  fn main(){loop{continue 7;}}
+yield en synchrone, rejet contextuel: attendu=True, obtenu=True
+  fn main(){yield;}
+flottant 1.5: attendu=True, obtenu=True
+  fn main(){let n=1.5;print(n);}
+flottant 1.: attendu=True, obtenu=True
+  fn main(){let n=1.;print(n);}
+flottant 1e3: attendu=False, obtenu=False
+  fn main(){let n=1e3;print(n);}
+flottant 1.4e-3: attendu=False, obtenu=False
+  fn main(){let n=1.4e-3;print(n);}
+flottant .5: attendu=True, obtenu=True
+  fn main(){let n=.5;print(n);}
+intervalle adjacent au point final: attendu=True, obtenu=True
+  fn main(){let t="abc";let s=&t[1..3];print(s);}
+littéral à exposant incomplet: attendu=False, obtenu=False
+  fn main(){let x=1.4e-;}
+littéral à suffixe: attendu=False, obtenu=False
+  fn main(){let x=1.5f32;}
+point seul: attendu=False, obtenu=False
+  fn main(){let x=.;}
+capture nommée de thread: attendu=True, obtenu=True
+  fn main(){let mut p=pool<i32>(1);let a=p.new(7);let h=runtime::thread({move a;*a});match h.join(){Ok(v)=>{print(v);},Err(_)=>{},}}
+capture déduite de thread: attendu=True, obtenu=True
+  fn main(){let mut p=pool<i32>(1);let a=p.new(7);let vue=&a;let h=runtime::thread(move{*vue});match h.join(){Ok(v)=>{print(v);},Err(_)=>{},}}
+capture nommée tardive dans un thread: attendu=False, obtenu=False
+  fn main(){let h=runtime::thread({print(0);move a;*a});}
+ancienne tête de captures de thread: attendu=False, obtenu=False
+  fn main(){let h=runtime::thread({-> (a);*a});}
+annotation f32, signe unaire: attendu=True, obtenu=True
+  fn main(){let n:f32=-.5;print(n);}
+exposant majuscule: attendu=False, obtenu=False
+  fn main(){let n=1.5E+2;}
+33 cas, 0 écarts

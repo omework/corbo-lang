@@ -1,0 +1,53 @@
+use std::net::SocketError;
+use std::net::asyn::udp::{Connection, Listener, connect};
+use std::net::ipv4::{Addr, SocketAddr};
+
+async fn receive(listener: &mut Listener) -> Result<usize, SocketError> {
+    let mut one: [u8; 1] = [0];
+    match listener.recv(&mut one[..]).await {
+        Ok(value) => { drop(value); return Err(SocketError.Os { code: -1 }); },
+        Err(error) => {
+            match error {
+                SocketError.DatagramTooLarge => {},
+                SocketError.Os { code: code } => { return Err(SocketError.Os { code: code }); },
+                SocketError.AddressInUse => { return Err(SocketError.AddressInUse); },
+                SocketError.ConnectionRefused => { return Err(SocketError.ConnectionRefused); },
+            };
+        },
+    };
+    let mut empty: [u8; 0] = [];
+    let packet = listener.recv(&mut empty[..]).await?;
+    if packet.count() != 0 { return Err(SocketError.Os { code: -2 }); }
+    let reply: [u8; 1] = [42];
+    listener.send(&reply[..], packet.sender()).await
+}
+
+async fn transmit(connection: &mut Connection) -> Result<usize, SocketError> {
+    let large: [u8; 3] = [1, 2, 3];
+    if connection.send(&large[..]).await? != 3 { return Err(SocketError.Os { code: -3 }); }
+    let empty: [u8; 0] = [];
+    if connection.send(&empty[..]).await? != 0 { return Err(SocketError.Os { code: -4 }); }
+    let mut one: [u8; 1] = [0];
+    let count = connection.recv(&mut one[..]).await?;
+    if one[0] != 42 { return Err(SocketError.Os { code: -5 }); }
+    Ok(count)
+}
+
+fn main() {
+    let mut listener = match Listener::bind(SocketAddr::new(Addr::new(127, 0, 0, 1), 0)) {
+        Ok(value) => { value }, Err(error) => { drop(error); return; },
+    };
+    let mut connection = match connect(listener.addr()) {
+        Ok(value) => { value }, Err(error) => { drop(error); return; },
+    };
+    let server = runtime::spawn(receive(&mut listener));
+    let client = runtime::spawn(transmit(&mut connection));
+    match server.join() {
+        Ok(result) => { match result { Ok(n) => { print(n); }, Err(error) => { drop(error); print(701); } } },
+        Err(error) => { drop(error); print(702); },
+    };
+    match client.join() {
+        Ok(result) => { match result { Ok(n) => { print(n); }, Err(error) => { drop(error); print(703); } } },
+        Err(error) => { drop(error); print(704); },
+    };
+}

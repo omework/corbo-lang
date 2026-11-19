@@ -1,0 +1,140 @@
+--- before/tests/test_vector_payload_contracts.py
++++ after/tests/test_vector_payload_contracts.py
+@@ -0,0 +1,137 @@
++"""Opaque vector contracts carry payload graphs, not only pool identities."""
++from pathlib import Path
++import unittest
++import test_select_source as harness
++
++BASE=Path(__file__).resolve().parents[1].joinpath('validation/open-vector-payload-contract.crust').read_text()
++PUT='''fn put(v:&mut Vector<A<Item>>,p:&mut Pool<Item>,n:&Int){v.push(->p.new(value:n));}'''
++INSERT='v.push(->p.new(value:&n));'
++READ='print(*item.value);'
++
++
++class VectorPayloadContractTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    def test_recorded_return_and_relay(self):
++        helper='fn relay(v:&mut Vector<A<Item>>)-><-A<Item>{return <-take(v);}'
++        for name in ('take','relay'):
++            source=helper+BASE.replace('let item=take(&mut v);','let item='+name+'(&mut v);')
++            self.assertEqual(self.run_source(source).stdout,'7\n')
++            invalid=source.replace('drop(->n);','').replace(READ,'drop(->n);'+READ)
++            self.refused(invalid,'emprunt|réserv|référenc')
++            source=source.replace('drop(->v);','').replace(READ,'drop(->v);'+READ)
++            self.assertEqual(self.run_source(source).stdout,'7\n')
++
++    def test_fresh_insert_and_relay(self):
++        helper=PUT+'fn relay(v:&mut Vector<A<Item>>,p:&mut Pool<Item>,n:&Int){put(v,p,n);}'
++        for name in ('put','relay'):
++            source=helper+BASE.replace(INSERT,name+'(&mut v,&mut p,&n);')
++            self.assertEqual(self.run_source(source).stdout,'7\n')
++            for marker in ('let item=take',READ):
++                self.refused(source.replace('drop(->n);','').replace(marker,'drop(->n);'+marker),'emprunt|réserv|référenc')
++
++    def test_transferred_insert(self):
++        helper='fn insert(v:&mut Vector<A<Item>>,item:->A<Item>){v.push(->item);}'
++        source=helper+BASE.replace(INSERT,'let original=p.new(value:&n);insert(&mut v,->original);')
++        self.assertEqual(self.run_source(source).stdout,'7\n')
++        self.refused(source.replace('insert(&mut v,->original)','insert(&mut v,original)'),'mode attendu|transfert|->')
++        self.refused(source.replace('drop(->n);','').replace('let item=take','drop(->n);let item=take'),'emprunt|réserv|référenc')
++
++    def test_mutable_payload_and_cross_scope_insertion(self):
++        source=(PUT+BASE.replace(INSERT,'put(&mut v,&mut p,&n);')).replace(
++            'value:&Int','value:&mut Int').replace('n:&Int','n:&mut Int').replace('let n=','let mut n=').replace('&n);','&mut n);')
++        self.assertEqual(self.run_source(source).stdout,'7\n')
++        for op in ('print(*n);','n=21;'):
++            self.refused(source.replace('let item=take',op+'let item=take'),'emprunt|réserv|référenc')
++        source=PUT+'''struct Item{value:&Int}fn main(){let mut p=pool<Item>(1);let mut vp=pool<Vector<A<Item>>>(1);
++            let mut v=vp.new();{let mut ns=pool<Int>(1);let n=ns.new(7);put(&mut v,&mut p,&n);}drop(->v);}'''
++        self.refused(source,'scope|survi|emprunt|référenc|durable')
++
++    def test_nested_owned_fields_survive_return(self):
++        source='''struct Inner{value:&Int}struct Item{inner:A<Inner>}
++            fn read(i:&Inner)->Int{return *i.value;}
++            fn take(v:&mut Vector<A<Item>>)-><-A<Item>{return <-v.remove(0);}
++            fn relay(v:&mut Vector<A<Item>>)-><-A<Item>{return <-take(v);}
++            fn put(v:&mut Vector<A<Item>>,item:->A<Item>){v.push(->item);}
++            fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let mut ip=pool<Inner>(1);
++            let mut p=pool<Item>(1);let inner=ip.new(value:&n);let original=p.new(inner:<-inner);
++            let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();put(&mut v,->original);
++            let item=relay(&mut v);print(read(&*item.inner));drop(->item);drop(->v);
++            let next=ip.new(value:&n);drop(->next);drop(->n);}'''
++        run=self.run_source(source)
++        self.assertEqual(run.stdout,'7\n')
++        self.assertEqual(run.stderr.count('=Inner\n'),2)
++        self.assertEqual(run.stderr.count('=Item\n'),1)
++        for marker in ('let item=relay', 'print(read('):
++            self.refused(source.replace('drop(->n);','').replace(marker,'drop(->n);'+marker),'emprunt|réserv|référenc')
++
++    def test_replace_inside_function_keeps_new_payload(self):
++        helper='''fn replace_item(v:&mut Vector<A<Item>>,item:->A<Item>,i:Int){drop(->v.replace(i,->item));}'''
++        source=helper+BASE.replace('let mut ns=pool<Int>(1);','let mut ns=pool<Int>(2);').replace(
++            'let mut p=pool<Item>(1);','let b=ns.new(9);let mut p=pool<Item>(2);').replace(
++            'let item=take(&mut v);','let next=p.new(value:&b);replace_item(&mut v,->next,INDEX);let item=take(&mut v);').replace(
++            'drop(->n);','drop(->n);drop(->b);')
++        for index,expected in ((0,'9\n'),(4,'7\n')):
++            candidate=source.replace('INDEX',str(index))
++            self.assertEqual(self.run_source(candidate).stdout,expected)
++            target='b' if index==0 else 'n'
++            self.refused(candidate.replace('drop(->'+target+');','').replace('let item=take','drop(->'+target+');let item=take'),'emprunt|réserv|référenc')
++
++    def test_pop_locally_then_return_payload(self):
++        take='fn take(v:&mut Vector<A<Item>>)-><-A<Item>{return <-v.remove(0);}'
++        replacement='''fn take(v:&mut Vector<A<Item>>)-><-A<Item>{
++            match <-v.pop(){Some(item)=>{return <-item;},None=>{loop{}}}}'''
++        source=BASE.replace(take,replacement)
++        self.assertNotEqual(source,BASE)
++        self.assertEqual(self.run_source(source).stdout,'7\n')
++        self.refused(source.replace('drop(->n);','').replace(READ,'drop(->n);'+READ),'emprunt|réserv|référenc')
++
++    def test_fresh_nested_constructor(self):
++        source="""struct Inner{value:&Int}struct Item{inner:A<Inner>}
++            fn read(i:&Inner)->Int{return *i.value;}
++            fn put(v:&mut Vector<A<Item>>,p:&mut Pool<Item>,ip:&mut Pool<Inner>,n:&Int){
++                let inner=ip.new(value:n);v.push(->p.new(inner:<-inner));}
++            fn take(v:&mut Vector<A<Item>>)-><-A<Item>{return <-v.remove(0);}
++            fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let mut ip=pool<Inner>(1);
++                let mut p=pool<Item>(1);let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();
++                put(&mut v,&mut p,&mut ip,&n);let item=take(&mut v);print(read(&*item.inner));
++                drop(->item);drop(->v);let next=ip.new(value:&n);drop(->next);drop(->n);}"""
++        run=self.run_source(source)
++        self.assertEqual(run.stdout,'7\n')
++        self.assertEqual(run.stderr.count('=Inner\n'),2)
++        for marker in ('let item=take', 'print(read('):
++            self.refused(source.replace('drop(->n);','').replace(marker,'drop(->n);'+marker),'emprunt|réserv|référenc')
++
++    def test_conditional_insert_keeps_both_possible_targets(self):
++        helper="""fn put(v:&mut Vector<A<Item>>,p:&mut Pool<Item>,a:&Int,b:&Int,flag:bool){
++            if flag{v.push(->p.new(value:a));}else{v.push(->p.new(value:b));}}"""
++        source=helper+BASE.replace('let mut ns=pool<Int>(1);','let mut ns=pool<Int>(2);').replace(
++            'let mut p=pool<Item>(1);','let b=ns.new(9);let mut p=pool<Item>(1);').replace(
++            INSERT,'put(&mut v,&mut p,&n,&b,FLAG);').replace('drop(->n);','drop(->n);drop(->b);')
++        for flag,expected in (('true','7\n'),('false','9\n')):
++            candidate=source.replace('FLAG',flag)
++            self.assertEqual(self.run_source(candidate).stdout,expected)
++            for target in ('n','b'):
++                self.refused(candidate.replace('drop(->'+target+');','').replace('let item=take','drop(->'+target+');let item=take'),'emprunt|réserv|référenc')
++
++    def test_opaque_contracts_need_no_function_bodies(self):
++        from crust import Compiler,Parser,verify_program,Error
++        interface=verify_program(PUT+BASE.split('fn main(){')[0])
++        body=BASE.split('fn main(){')[1].rstrip().removesuffix('}').replace(INSERT,'put(&mut v,&mut p,&n);')
++        for invalid in (False,True):
++            checker=Compiler();checker.contract_calls=True
++            for name in ('enums','struct_fields','inline_structures','function_contracts'):
++                setattr(checker,name,getattr(interface,name))
++            source=body.replace('drop(->n);','').replace(READ,'drop(->n);'+READ) if invalid else body
++            nodes=Parser(source).parse();checker.index(nodes)
++            if invalid:
++                with self.assertRaisesRegex(Error,'emprunt|réserv|référenc'):checker.block('root',nodes)
++            else:checker.block('root',nodes)
++            self.assertEqual(checker.functions,{})
++            self.assertEqual(checker.function_results,{})
++            self.assertEqual(checker.contract_call_log,['put','take'])
++
++
++if __name__=='__main__':unittest.main()

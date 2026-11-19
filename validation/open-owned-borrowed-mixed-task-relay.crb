@@ -1,0 +1,6 @@
+struct Pair{read:&Int,write:&mut Int}
+async fn compute(mut v:->Pair)->Int{yield;let mut out=&mut *v.write;out.set(*v.read);return *out;}
+fn relay(t:->compute)-><-compute{return <-t;}
+fn main(){let mut ns=pool<Int>(2);let a=ns.new(7);let mut b=ns.new(9);
+let v=Pair{read:&a,write:&mut b};let task=compute(->v);let forwarded=relay(->task);print(*a);
+let h=runtime::spawn(->forwarded);match h.join(){Ok(x)=>{print(x);},Err(_)=>{}}print(*b);}

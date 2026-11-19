@@ -1,0 +1,28 @@
+--- tests/test_async_result_storage.py
++++ tests/test_async_result_storage.py
+@@ -74,7 +74,7 @@
+             drop(->row);drop(->a);drop(->b);drop(->p);print(q.x);drop(->q);}'''
+         for creation in ('let p=make(7);', 'let mut points=pool<Point>(2);let p=points.new(x:7);'):
+             with self.subTest(creation=creation):
+-                self.assertEqual(self.run_source(source.replace('POINT',creation)).stdout,'3\n7\n')
++                self.assertEqual(self.run_source((source if 'make(7)' in creation else source.replace('leaf(p:&Point,row:&[&Int;2])-><-Point','leaf(p:&Point,row:&[&Int;2])-><-A<Point>').replace('duplicate(p:&Point)-><-Point','duplicate(p:&Point)-><-A<Point>')).replace('POINT',creation)).stdout,'3\n7\n')
+ 
+     def test_two_concurrent_fresh_results(self):
+         source=PREFIX+'''async fn leaf(n:Int)-><-Point{let p=make(n);yield;return <-p;}
+@@ -94,14 +94,14 @@
+ 
+     def test_pool_copy_keeps_pool_but_not_original(self):
+         helpers=DUPLICATE+'async fn leaf(p:&Point)-><-Point{let q=duplicate(p);yield;return <-q;}'
+-        source=PREFIX+helpers+'''fn main(){let mut points=pool<Point>(2);let p=points.new(x:7);
++        source=PREFIX+helpers.replace('-><-Point','-><-A<Point>')+'''fn main(){let mut points=pool<Point>(2);let p=points.new(x:7);
+             let h=runtime::spawn(->leaf(&p));let q=match h.join(){Ok(q)=>{<-q},Err(_)=>{return;}};
+             drop(->p);print(q.x);drop(->q);}'''
+         self.assertEqual(self.run_source(source).stdout,'7\n')
+ 
+     def test_pool_copy_cannot_escape_pool(self):
+         source=(ROOT/'validation/open-async-copy-result-short-pool.crust').read_text()
+-        self.refused(source,'pool|source|survi')
++        self.refused(source.replace('-><-Point','-><-A<Point>'),'pool|source|survi')
+ 
+     def test_launch_failure_and_inactive_drop(self):
+         source=PREFIX+'''async fn leaf(n:Int)-><-Point{let p=make(n);yield;return <-p;}

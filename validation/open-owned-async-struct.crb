@@ -1,0 +1,7 @@
+struct Holder{value:A<Int>}
+async fn consume(h:->Holder)->Int{yield;drop(->h);return 9;}
+fn main(){let mut values=pool<Int>(1);let mut holders=pool<Holder>(1);
+    let value=values.new(7);let holder=holders.new(value:<-value);
+    let h=runtime::spawn(->consume(->holder));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(20);}}
+    let reused=values.new(30);print(*reused);}

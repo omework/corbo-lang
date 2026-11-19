@@ -1,0 +1,14 @@
+--- /tmp/crust-before-factory-field-effects/async_lowering.py	2026-11-08 03:55:15
++++ async_lowering.py	2026-11-08 03:55:15
+@@ -1294,7 +1294,10 @@
+             enable_threads()
+             handle = temporary('CrustAsyncExecution')
+             steps.append(f'task_async_adopt(&{handle}, &{value});')
+-            return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, ((),)
++            pending = prepare_field_changes(
++                replace(contract.result, structure_fields=contract.result.task_field_updates),
++                contract.parameters, argument_loans, line)
++            return f'&{handle}', public_signature(signature[1]) == ('scalar', 'Int'), retained, signature[1], returned, (pending,)
+         if signature in owned_sync_types:
+             owned_result_types[value] = signature[1]
+             for candidate in contract.result.candidates:

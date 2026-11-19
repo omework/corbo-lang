@@ -1,0 +1,11 @@
+--- tests/test_async_execution_arguments.py
++++ tests/test_async_execution_arguments.py
+@@ -113,7 +113,7 @@
+ 
+     def test_pool_result_and_repeated_state_slot_reuse(self):
+         source='''#(directive, async_pool_sizes={own:1,work:1})
+-struct Point{x:Int}async fn own(p:->Point)-><-Point{yield;return <-p;}
++struct Point{x:Int}async fn own(p:->Point)-><-A<Point>{yield;return <-p;}
+ fn relay(h:->runtime::Handle<A<Point>>)-><-runtime::Handle<A<Point>>{return <-h;}
+ async fn work()->Int{let mut ps=pool<Point>(1);let mut i=0;while i<3{let p=ps.new(x:i);
+ let h=runtime::spawn(->own(->p));let next=relay(->h);

@@ -1,0 +1,47 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -3034,8 +3034,9 @@
+                 local = bindings.copy()
+                 for field, alias in pattern:
+                     declared = dict(enum_layouts.get(typ, {}).get(variant, ())).get(field)
+-                    if declared in ('&Int', '&mut Int'):
+-                        local[alias] = ('mut' if (match.mutable or match.consuming) and declared == '&mut Int' else 'ref', 'Int')
++                    if declared and declared.startswith('&'):
++                        local[alias] = ('mut' if (match.mutable or match.consuming) and declared.startswith('&mut ') else 'ref',
++                                        declared.removeprefix('&').removeprefix('mut '))
+                     elif declared and declared.startswith('A<'):
+                         local[alias] = None if match.consuming else ('mut' if match.mutable else 'ref', declared[2:-1])
+                     else:
+@@ -5090,7 +5091,9 @@
+                         steps.append(f'frame->{member} = cell_load_int({enum_cell}, {offset});')
+                         continue
+                     owned = declared.startswith('A<')
+-                    if declared not in ('&Int', '&mut Int') and not owned:
++                    pointee = declared.removeprefix('&').removeprefix('mut ')
++                    typed_reference = declared.startswith('&') and pointee in reference_structs
++                    if declared not in ('&Int', '&mut Int') and not owned and not typed_reference:
+                         fail(line, 'match async : type de champ non représentable')
+                     if owned and match.consuming:
+                         target_type = declared[2:-1]
+@@ -5110,8 +5113,8 @@
+                         steps.extend((f'frame->{member} = cell_load_ref({enum_cell}, {offset});',
+                                       f'cell_store_ref({enum_cell}, {offset}, NULL);'))
+                         continue
+-                    mode = 'mut' if (match.mutable or match.consuming) and (declared == '&mut Int' or owned) else 'ref'
+-                    target_type = declared[2:-1] if owned else 'Int'
++                    mode = 'mut' if (match.mutable or match.consuming) and (declared.startswith('&mut ') or owned) else 'ref'
++                    target_type = declared[2:-1] if owned else pointee
+                     references[alias] = mode
+                     reference_types[alias] = target_type
+                     if mode == 'mut':
+@@ -5125,7 +5128,9 @@
+                     active_loans[id(loans)] = loans
+                     track_result(alias, loans, body, -1)
+                     pointer = f'cell_load_ref({enum_cell}, {offset})'
+-                    if target_type in struct_layouts:
++                    if typed_reference:
++                        pointer = f'cell_load_view({enum_cell}, {offset})'
++                    elif target_type in struct_layouts:
+                         pointer = f'structure_whole_view({pointer})'
+                     steps.append(f'frame->{member} = ' +
+                                  (f'&{pointer}->value' if target_type == 'Int' else pointer) + ';')

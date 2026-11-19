@@ -1,0 +1,17 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -1521,9 +1521,13 @@
+                 self.invalidate_handle_items(current)
+             summary = self.analyzer.infer(name)
+             def sources(symbol):
+-                if symbol.kind == 'local_value':
++                if symbol.kind in ('local_value', 'task_output'):
+                     return (Source('local', id(expr), 'data stack implicite', symbol.element),)
+                 actual = actuals[symbol.index]
++                if symbol.kind == 'task_output_parameter':
++                    return tuple(Source('local', id(expr), 'data stack implicite', symbol.element)
++                                 if a.source.kind == 'local' and a.source.name == 'data stack implicite'
++                                 else a.source for a in actual.assets)
+                 if symbol.kind == 'task_result_field_parameter':
+                     return tuple(asset.source for asset in dict(actual.task_result_fields).get(symbol.name, ()))
+                 if symbol.kind == 'task_result_parameter':

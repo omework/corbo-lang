@@ -1,0 +1,44 @@
+enum Message {
+    Small { value: Int },
+    Large { a: Int, b: Int, c: Int, d: Int },
+    Empty,
+}
+
+fn create(memory: &mut Pool<Message>, value: Int) -> <- A<Message> {
+    let mut message = new(memory) Message.Small { value: value };
+    return <- message;
+}
+
+fn inspect(message: &Message) {
+    match &message {
+        Message.Small { value: n } => { print(n); },
+        Message.Large { a: x, b: y, c: _, d: _ } => { print(x); print(y); },
+        Message.Empty => { let mut zero = 0; print(zero); },
+    }
+}
+
+fn consume(memory: &mut Pool<Message>, mut message: -> A<Message>) {
+    inspect(&message);
+    memory.drop(-> message);
+}
+
+// Un pool public, trois data stacks internes ; deux slots par variante.
+let mut memory = pool<Message>(2);
+let mut first = create(&mut memory, 10);
+let mut second = create(&mut memory, 20);
+let mut large = new(memory) Message.Large { a: 1, b: 2, c: 3, d: 4 };
+let mut empty = new(memory) Message.Empty;
+
+print(large);
+inspect(&empty);
+
+address(first);
+memory.drop(-> first); // Trou dans la stack Small, son sommet reste occupé.
+let mut reused = create(&mut memory, 30);
+address(reused); // Même adresse que first ; les autres variantes ne bougent pas.
+
+consume(&mut memory, -> reused);
+consume(&mut memory, -> second);
+consume(&mut memory, -> large);
+consume(&mut memory, -> empty);
+memory.reset(); // Réinitialise toutes les stacks internes.

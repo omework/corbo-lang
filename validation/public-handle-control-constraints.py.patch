@@ -1,0 +1,44 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -208,6 +208,14 @@
+ 
+ 
+ class Context:
++    def unify_handle_values(self, values):
++        from handle_types import common_public_handle
++        if values and all(isinstance(value, Value) and value.mode == 'execution' for value in values):
++            public = common_public_handle((value.typ for value in values), self.analyzer.async_functions)
++            if public is not None:
++                return [replace(value, typ=public) for value in values]
++        return values
++
+     def __init__(self, analyzer, node):
+         self.analyzer, self.node = analyzer, node
+         self.params = node.args[1]
+@@ -1246,7 +1254,7 @@
+                         else self.block(no, no_entry, valued=True, expected_array=expected_array))
+             values = [value for branch, value in ((left, a), (right, b))
+                       if 'next' in branch and isinstance(value, Value)]
+-            value = join_values(values) if values else UNKNOWN
++            value = join_values(self.unify_handle_values(values)) if values else UNKNOWN
+             return merge_paths(paths, left, right), value
+         if op == 'struct_copy':
+             source = self.source(expr[1], state, line)
+@@ -1876,7 +1884,7 @@
+                     signatures = {(value.mode, value.typ) for value in values}
+                     if len(signatures) != 1:
+                         self.fail(node.line, 'break : même type et même mode requis sur toutes les sorties')
+-                value = join_values(values)
++                value = join_values(self.unify_handle_values(values))
+             exit_state.break_values = frozenset()
+             paths['next'] = exit_state
+         return paths, value
+@@ -2080,7 +2088,7 @@
+                         values.append(value)
+                     following = merge_paths(following, arm)
+                 if values:
+-                    tail = join_values(values)
++                    tail = join_values(self.unify_handle_values(values))
+             paths = merge_paths(paths, following)
+         return paths, tail
+ 

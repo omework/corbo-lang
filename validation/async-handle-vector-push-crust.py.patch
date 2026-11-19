@@ -1,0 +1,124 @@
+--- before/crust.py
++++ after/crust.py
+@@ -10440,7 +10440,7 @@
+             if parent.read_parent is not None:
+                 pending.append(parent.read_parent)
+         parents = tuple(ancestry.values())
+-        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', *self.enums)
++        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', HANDLE_VECTOR, *self.enums)
+                or parent.array_root or parent.match_reservation and parent.reserved_field is None
+                for parent in parents):
+             self.fail('prototype : réemprunt async Int avec parent projeté non pris en charge')
+@@ -10722,7 +10722,8 @@
+         parameters = node.args[1]
+         field_summary = node.field_effect_summary
+         field_updates = bool(field_summary and field_summary.complete and (
+-            field_summary.structure_fields or field_summary.completion_result.owned_field_writes))
++            field_summary.structure_fields or field_summary.completion_result.owned_field_writes
++            or field_summary.completion_result.vector_writes))
+         if len(args) != len(parameters):
+             self.fail(f"'{name}' attend {len(parameters)} argument(s), reçu {len(args)}")
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+@@ -11042,6 +11043,7 @@
+                 proposed = replace(proposed, owned_fields=tuple((dict(proposed.owned_fields) | fields).items()))
+                 updates[holder.id] = holder, proposed
+             allocation.async_field_updates = tuple(updates.values())
++            allocation.async_field_updates += tuple(self.prepare_vector_writes(completed, parameters, field_bindings))
+         self.check_borrow_destination(allocation, scope)
+         scope.allocations.append(allocation)
+         self.allocations.append(allocation)
+@@ -11186,6 +11188,15 @@
+         updates = {}
+         for holder, incoming in task.async_field_updates:
+             previous = updates.get(holder.id, (holder, holder))[1]
++            if holder.typ == HANDLE_VECTOR:
++                proposed = replace(previous,
++                    item_sources=source_union(previous.item_sources, incoming.item_sources),
++                    item_origins=previous.item_origins | incoming.item_origins,
++                    item_positions=previous.item_positions if previous.item_positions == incoming.item_positions else None,
++                    item_position_origins=previous.item_position_origins if previous.item_position_origins == incoming.item_position_origins else None,
++                    item_removal_epoch=max(previous.item_removal_epoch, incoming.item_removal_epoch))
++                updates[holder.id] = holder, proposed
++                continue
+             proposed = self.propose_field_update(previous, incoming.dependencies,
+                                                  incoming.borrow_parents, True)
+             proposed.owned_fields = self.merge_dependencies(previous.owned_fields, incoming.owned_fields)
+@@ -11199,6 +11210,11 @@
+             holder.borrow_parents = proposed.borrow_parents
+             holder.owned_fields = proposed.owned_fields
+             holder.item_sources = proposed.item_sources
++            if holder.typ == HANDLE_VECTOR:
++                holder.item_origins = proposed.item_origins
++                holder.item_positions = proposed.item_positions
++                holder.item_position_origins = proposed.item_position_origins
++                holder.item_removal_epoch = proposed.item_removal_epoch
+ 
+     def utf8_task_capture_paths(self, allocation, position=None):
+         groups = allocation.dependencies if position is None else capture_fields(allocation.dependencies, position)
+@@ -11372,7 +11388,9 @@
+                                                                      fresh_origins)
+         kind = summary.mode
+         deferred = replace(summary, structure_fields=summary.task_field_updates,
+-                           owned_field_writes=summary.task_owned_updates)
++                           owned_field_writes=summary.task_owned_updates,
++                           vector_writes=tuple((index, (items,), False, (), ())
++                                               for index, items in summary.task_vector_updates))
+         owned_updates = self.prepare_owned_field_writes(deferred, params, bindings)
+         field_updates = self.prepare_structure_updates(deferred, params, bindings, owned_updates=owned_updates)
+         for holder, fields in owned_updates:
+@@ -11388,7 +11406,8 @@
+                                 task_result_variants=self.resolve_task_variants(summary, params, bindings),
+                                 async_field_updates=tuple(update for index in summary.task_forward_parameters
+                                     for update in bindings[params[index][0]].alloc.async_field_updates)
+-                                    + tuple(field_updates.values()))
++                                    + tuple(field_updates.values())
++                                    + tuple(self.prepare_vector_writes(deferred, params, bindings)))
+         self.check_borrow_destination(allocation, caller)
+         caller.allocations.append(allocation)
+         self.allocations.append(allocation)
+@@ -12486,7 +12505,7 @@
+                        for origin in state['item_origins'] - allowed):
+                     self.fail('invariant interne : ajout absent du contrat du vecteur emprunté')
+ 
+-    def apply_vector_writes(self, result, params, bindings):
++    def prepare_vector_writes(self, result, params, bindings):
+         updates = []
+         for parameter, slots, exact, replacements, removals in result.vector_writes:
+             binding = bindings[params[parameter][0]]
+@@ -12519,7 +12538,10 @@
+                 proposed.item_removal_epoch += 1
+             self.check_borrow_destination(proposed, owner)
+             updates.append((vector, proposed))
+-        for vector, proposed in updates:
++        return updates
++
++    def apply_vector_writes(self, result, params, bindings):
++        for vector, proposed in self.prepare_vector_writes(result, params, bindings):
+             vector.item_sources = proposed.item_sources
+             vector.item_origins = proposed.item_origins
+             vector.item_positions = proposed.item_positions
+@@ -15275,7 +15297,7 @@
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 ctype = 'Cell *'
+-            elif mode in ('ref', 'mut') and typ in self.enums:
++            elif mode in ('ref', 'mut') and typ in (*self.enums, HANDLE_VECTOR):
+                 source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)
+@@ -15283,6 +15305,15 @@
+                 check.allocations.append(allocation)
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
++                if typ == HANDLE_VECTOR:
++                    item_source = MemorySource(check.uid(), external.id, 'symbolic', parameter + '_items',
++                                               'NULL', element_type='Int')
++                    external.sources.append(item_source)
++                    origin = check.uid()
++                    check.origin_sources[origin] = item_source
++                    allocation.item_sources = (item_source,)
++                    allocation.item_origins = frozenset({origin})
++                    allocation.item_positions = allocation.item_position_origins = None
+                 if typ in self.struct_fields:
+                     # The async ABI carries an interior descriptor even when
+                     # the actual target happens to be an entire structure.

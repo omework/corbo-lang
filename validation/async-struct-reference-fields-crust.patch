@@ -1,0 +1,47 @@
+--- crust.py.before
++++ crust.py
+@@ -4788,7 +4788,7 @@
+                 continue
+             if (allocation.typ.startswith(('Task<', 'Execution<'))
+                     and any(source.id in reset_ids for source in source_union(
+-                        allocation.item_sources, *(target.sources for target in self.dependency_targets(allocation))))):
++                        allocation.item_sources, *(target.sources for target in self.retained_dependencies(allocation))))):
+                 self.fail('reset interdit : une allocation est capturée par une tâche')
+             sources = self.owned_sources(allocation) if allocation.owned_fields else allocation.item_sources
+             if any(source.id in reset_ids for source in sources):
+@@ -9822,8 +9822,9 @@
+                 elif mode in ('array_ref', 'array_mut'):
+                     self.fail('capture async : emprunt de tableau explicite requis')
+                 elif mode in ('ref', 'mut'):
+-                    if kind != mode or target is None or target.typ != typ or self.dependency_targets(target):
+-                        self.fail('une capture async exige un emprunt Int du mode déclaré')
++                    if (kind != mode or target is None or target.typ != typ
++                            or self.dependency_targets(target) and typ not in self.struct_fields):
++                        self.fail('une capture async exige un emprunt du type et du mode déclarés')
+                     roots = target.reference_targets or (target,)
+                     if typ in VECTOR_SLICE_MODES:
+                         parent = (self.lookup(argument[1]) if named_reference else
+@@ -13451,6 +13452,23 @@
+                 check.allocations.append(allocation)
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
++                links = []
++                layout = self.enums[typ]['']
++                for field_index, (field, field_type) in enumerate(layout):
++                    if field_type not in ('&Int', '&mut Int'):
++                        continue
++                    pointer = f'bridge_field_{check.uid()}'
++                    check.lines.append(f'Cell *{pointer} = cell_load_ref({parameter}, {check.field_offset(layout, field_index)});')
++                    check.lines.append(f'(void){pointer};')
++                    field_source = MemorySource(check.uid(), external.id, 'symbolic', field,
++                                                f'{pointer}->source', element_type='Int')
++                    external.sources.append(field_source)
++                    target = Allocation(check.uid(), external.id, field, (field_source,), c=pointer, typ='Int')
++                    check.allocations.append(target)
++                    external.allocations.append(target)
++                    check.origin_sources[target.id] = field_source
++                    links.append(('.' + field, (target,)))
++                allocation.dependencies = tuple(links)
+                 ctype = 'Cell *'
+             elif mode in ('ref', 'mut'):
+                 element = check.borrowed_element_type(typ)

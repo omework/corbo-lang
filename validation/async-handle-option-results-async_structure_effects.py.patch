@@ -1,0 +1,38 @@
+--- /tmp/crust-before-async-handle-option-results/async_structure_effects.py
++++ async_structure_effects.py
+@@ -16,7 +16,7 @@
+ 
+ 
+ FIELD_RESULT_MODES = ChainMap(dict.fromkeys(('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut',
+-                                           'owned', 'join_owned', 'join_nested', 'array')), VALUE_MODES)
++                                           'owned', 'join_owned', 'join_nested', 'handle_option', 'array')), VALUE_MODES)
+ 
+ 
+ class IncompleteStructureEffects(Exception):
+@@ -96,7 +96,7 @@
+         parameters = tuple(node.args[1])
+         for _, mode, typ in parameters:
+             layout = self.results.enums.get(typ, {}).get('')
+-            owned_graph = mode in ('owned', 'join_owned', 'join_nested') and typ in self.owned_structures
++            owned_graph = mode in ('owned', 'join_owned', 'join_nested', 'handle_option') and typ in self.owned_structures
+             if layout is not None and not owned_graph and (
+                     mode not in ('ref', 'mut') or typ not in self.reference_structures):
+                 summary = AsyncStructureEffects(parameters, None,
+@@ -140,7 +140,7 @@
+         # Result checking belongs to the existing checker. This pass collects
+         # the states of injected structures at each continuing/returning exit.
+         declared = node.args[2] if node.args[2][0] in (
+-            'ref', 'mut', 'owned', 'join_owned', 'join_nested', *UTF8_BORROW_MODES) else ('void', 'Void')
++            'ref', 'mut', 'owned', 'join_owned', 'join_nested', 'handle_option', *UTF8_BORROW_MODES) else ('void', 'Void')
+         super().__init__(effects.results, replace(node, args=(
+             node.args[0], node.args[1], declared, node.args[3])))
+         self.effects = effects
+@@ -315,7 +315,7 @@
+             value = Value(mode, typ,
+                 reference_targets=frozenset(target for value in values for target in value.reference_targets),
+                 payload_reference=any(value.payload_reference for value in values))
+-        elif mode in ('owned', 'join_owned', 'join_nested', *UTF8_BORROW_MODES):
++        elif mode in ('owned', 'join_owned', 'join_nested', 'handle_option', *UTF8_BORROW_MODES):
+             if (not values and not joined) or any((value.mode, value.typ) != (mode, typ) for value in values):
+                 raise IncompleteStructureEffects('résultat async sans contrat de provenance compatible')
+             # All complete child summaries can prove that no successful poll

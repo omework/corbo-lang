@@ -1,0 +1,29 @@
+use std::io::{File, FileMode, FilePerm};
+use std::io::buffered::BufWriter;
+
+fn main() {
+    let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
+    let mut file = match File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode) {
+        Ok(file) => { file },
+        Err(error) => { drop(error); return; },
+    };
+    let mut scratch: [u8; 4] = [0; 4];
+    {
+        let mut writer = BufWriter::new(&mut file, &mut scratch[..]);
+        let bytes: [u8; 2] = [111, 107];
+        match writer.write(&bytes[..]) {
+            Ok(count) => { print(count); },
+            Err(error) => { drop(error); return; },
+        }
+        match writer.flush() {
+            Ok(()) => {},
+            Err(error) => { drop(error); return; },
+        }
+    }
+    match file.stats() {
+        Ok(stats) => { print(stats.size()); },
+        Err(error) => { drop(error); return; },
+    };
+    drop(file);
+    drop(File::delete(&path[..]));
+}

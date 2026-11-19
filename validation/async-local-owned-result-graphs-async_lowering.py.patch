@@ -1,0 +1,20 @@
+--- /tmp/crust-before-async-local-owned-result-graphs/async_lowering.py
++++ async_lowering.py
+@@ -958,7 +958,7 @@
+     from handle_types import HandleDefinitions, public_signature
+     functions = HandleDefinitions(functions)
+     name, parameters, result, body = node.args
+-    from async_result_storage import result_storage
++    from async_result_storage import result_storage, pool_result_graph
+     output_plan = result_storage(node, local_parameters) if node.result_storage else None
+ 
+     def fail(line, message):
+@@ -966,7 +966,7 @@
+ 
+     if output_plan and output_plan.mixed:
+         fail(node.line, 'retours incompatibles : valeur locale T et allocation A<T>')
+-    if output_plan and output_plan.destination and output_plan.owned_fields:
++    if output_plan and output_plan.destination and output_plan.owned_fields and pool_result_graph(node) is None:
+         fail(node.line, 'prototype : destination du résultat local async avec champs propriétaires non raccordée')
+ 
+     scalar_sync_types = {('scalar', 'Int'): 'int', ('bool', 'bool'): 'int', ('byte', 'u8'): 'uint8_t',

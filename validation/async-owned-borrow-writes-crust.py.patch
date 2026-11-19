@@ -1,0 +1,16 @@
+--- before/crust.py
++++ after/crust.py
+@@ -9926,9 +9926,12 @@
+                         origins.add(origin)
+             if sources:
+                 nested = self.resolve_owned_fields(child.owned_fields, params, bindings, scope)
++                dependencies, _, parents = self.resolve_borrowed_result(
++                    FunctionResult('owned', child.typ, borrowed_fields=child.fields), params, bindings)
+                 alternatives.append(Allocation(
+                     self.uid(), scope.id, name, sources, typ=child.typ, origins=frozenset(origins),
+-                    variants=child.fresh_variants, owned_fields=nested, item_sources=self.owned_field_sources(nested)))
++                    variants=child.fresh_variants, owned_fields=nested, item_sources=self.owned_field_sources(nested),
++                    dependencies=dependencies, borrow_parents=parents))
+             fields.append((name, tuple(alternatives)))
+         return tuple(fields)
+ 

@@ -1,0 +1,6 @@
+struct View{data:&Int}fn change(v:&mut View,n:&Int){v.data=&*n;}
+async fn update(v:&mut View,n:&Int)->Int{change(v,n);yield;return *v.data;}
+fn wait(h:->runtime::Handle<Int>)->Int{return match h.join(){Ok(n)=>{n},Err(_)=>{99}};}
+fn main(){let outer=runtime::thread({let mut ns=pool<Int>(2);let a=ns.new(7);let b=ns.new(9);let mut v=View{data:&a};
+let h=runtime::spawn(->update(&mut v,&b));let n=wait(->h);print(n); print(*v.data);drop(->v);drop(->a);drop(->b);1});
+match outer.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

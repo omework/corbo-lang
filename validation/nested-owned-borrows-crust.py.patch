@@ -1,0 +1,88 @@
+--- before/crust.py
++++ after/crust.py
+@@ -1977,6 +1977,17 @@
+                 for arm, fields in self.enums.get(typ, {}).items()
+                 for name, field_type in fields if reference_type(field_type)}
+ 
++    def owned_dependency_fields(self, allocation, prefix='', visited=frozenset()):
++        if id(allocation) in visited:
++            return
++        from array_syntax import owned_reference_paths
++        modes = {path: access for path, access, _ in owned_reference_paths(self.enums, allocation.typ)}
++        for field, targets in allocation.dependencies:
++            yield prefix + field, modes.get(field, 'ref'), targets
++        for field, children in allocation.owned_fields:
++            for child in children:
++                yield from self.owned_dependency_fields(child, prefix + field + '/', visited | {id(allocation)})
++
+     def dependency_carriers(self, allocation, updates=None, *, ownership_only=False):
+         updates = updates or {}
+         seen, pending = set(), [allocation]
+@@ -2768,6 +2779,7 @@
+                     parent, _, key = path.rpartition('/')
+                     holders[parent].owned_fields += ((key, (child,)),)
+                     holders[path] = child
++                    add_field_dependencies(child, index, prefix=path + '/')
+                 if not self.supports_owned_signature(allocation.typ):
+                     opaque_sources = []
+                     for typ in sorted({holder.typ for holder in holders.values()}):
+@@ -2847,7 +2859,8 @@
+                             if is_pool_capture:
+                                 dependencies.append((f'{capture}.{position}', (check.pool_capture_target(source),)))
+                             if capture in ('owned', *JOIN_RESULT_TYPES):
+-                                for field, access in check.field_modes(capture_type).items():
++                                from array_syntax import owned_reference_paths
++                                for field, access, _ in owned_reference_paths(check.enums, capture_type):
+                                     borrowed_source = MemorySource(check.uid(), root.id, 'symbolic', pname + field,
+                                                                   f'symbolic_borrow_{check.uid()}', element_type='Int')
+                                     root.sources.append(borrowed_source)
+@@ -7830,7 +7843,16 @@
+             payload.sources = payload.item_sources = ()
+             borrowed_fields, borrow_parents = (), ()
+         self.restore_async_owned_fields(payload, owned_fields)
+-        payload.dependencies = borrowed_fields
++        def restore_borrowed_fields(holder, fields):
++            owned_prefixes = tuple(key + '/' for key, _ in holder.owned_fields)
++            holder.dependencies = tuple((path, targets) for path, targets in fields
++                                        if not path.startswith(owned_prefixes))
++            for key, children in holder.owned_fields:
++                descendants = tuple((path[len(key) + 1:], targets) for path, targets in fields
++                                    if path.startswith(key + '/'))
++                for child in children:
++                    restore_borrowed_fields(child, descendants)
++        restore_borrowed_fields(payload, borrowed_fields)
+         payload.borrow_parents = borrow_parents
+         self.check_borrow_destination(payload, scope)
+         payload_status = f'{name}.value.status == CRUST_CHAR_OK' if nested else None
+@@ -10220,10 +10242,8 @@
+                     if kind != mode or target.typ != typ or target.scope != scope.id:
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
+-                    for carrier in self.dependency_carriers(target, ownership_only=True):
+-                        for field, borrowed in carrier.dependencies:
+-                            access = self.field_modes(carrier.typ).get(field, 'ref')
+-                            dependencies.append((f'{access}.{index}/{field}', borrowed))
++                    for field, access, borrowed in self.owned_dependency_fields(target):
++                        dependencies.append((f'{access}.{index}/{field}', borrowed))
+                     field_bindings[parameters[index][0]] = Binding(parameters[index][0], 'owned', value, target)
+                     if index in result_indexes:
+                         result_targets.append(target)
+@@ -10657,7 +10677,8 @@
+                                      or any(self.retains_exclusive_field(parent, root, join_only=True)
+                                             for root in captured) for parent in chain)
+                 elif origin.kind == 'owned_capture_field':
+-                    captured = dict(binding.alloc.dependencies).get(origin.field, ())
++                    captured = tuple(target for field, _, targets in self.owned_dependency_fields(binding.alloc)
++                                     if field == origin.field for target in targets)
+                     if not captured:
+                         self.fail('contrat de capture propriétaire : cible de champ absente')
+                     roots.update((root.id, root) for root in captured)
+@@ -13835,7 +13856,7 @@
+             return allow_cycles
+         if typ not in self.enums:
+             return False
+-        return all(declared == 'Int' or not visited and declared in ('&Int', '&mut Int') or declared.startswith('A<') and
++        return all(declared in ('Int', '&Int', '&mut Int') or declared.startswith('A<') and
+                    self.supports_owned_signature(declared[2:-1], visited | {typ}, allow_cycles=allow_cycles)
+                    for fields in self.enums[typ].values() for _, declared in fields)
+ 

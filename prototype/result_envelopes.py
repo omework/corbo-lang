@@ -1,0 +1,85 @@
+"""Structural descriptions of runtime Result envelopes with a handle leaf."""
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ResultLeaf:
+    family: str
+    ctype: str
+    payload: str
+    mode: str
+    typ: str
+    # None: either leaf arm owns a handle. Otherwise compare its status to zero.
+    present: str | None = None
+
+
+class RuntimeResultEnvelopes:
+    def __init__(self, leaves):
+        self.leaves = leaves
+        self.inners = {}
+        self.types = {}
+        self.modes_by_type = {}
+        self.ctypes = {}
+        self.cells = {}
+        self.payloads = {}
+        self.payload_modes = {}
+        self.depths = {}
+        self.roots = {}
+        for leaf in leaves:
+            self.wrap(leaf)
+
+    def type_mode(self, typ):
+        if typ in self.modes_by_type:
+            return self.modes_by_type[typ]
+        if not (typ.startswith('Result<') and typ.endswith(',runtime::Error>')):
+            return None
+        inner = typ[len('Result<'):-len(',runtime::Error>')]
+        if inner not in self.leaves and self.type_mode(inner) is None:
+            return None
+        return self.wrap(inner)
+
+    def wrap(self, inner):
+        outer = f'Result<{inner},runtime::Error>'
+        if outer in self.modes_by_type:
+            return self.modes_by_type[outer]
+        if inner in self.leaves:
+            leaf, depth = self.leaves[inner], 1
+        else:
+            previous = self.type_mode(inner)
+            if previous is None:
+                raise ValueError(f'unsupported result leaf: {inner}')
+            leaf, depth = self.roots[previous], self.depths[previous] + 1
+        mode = leaf.family if depth == 1 else f'{leaf.family}_{depth}'
+        self.inners[mode] = inner
+        self.types[mode] = outer
+        self.modes_by_type[outer] = mode
+        self.depths[mode] = depth
+        self.roots[mode] = leaf
+        self.ctypes[mode] = leaf.ctype + (str(depth) if depth > 1 else '')
+        self.cells[mode] = '.'.join(['value'] * (depth + 1))
+        payload = leaf.payload + (str(depth) if depth > 1 else '')
+        self.payloads[mode] = payload
+        self.payload_modes[payload] = mode
+        return mode
+
+    def inner_signature(self, mode):
+        inner = self.inners[mode]
+        if inner in self.leaves:
+            leaf = self.leaves[inner]
+            return leaf.mode, leaf.typ
+        return self.type_mode(inner), 'Int'
+
+    def cleanup(self, value, mode):
+        depth = self.depths[mode]
+        conditions = [f'{value}.' + 'value.' * level + 'status == 0' for level in range(depth)]
+        if self.roots[mode].present is not None:
+            conditions.append(f'{value}.' + 'value.' * depth + f'status {self.roots[mode].present} 0')
+        return f'{value}.{self.cells[mode]}', ' && '.join(conditions)
+
+    def layouts(self, depth):
+        # The first envelope's ABI is defined alongside the leaf runtime type.
+        return '\n'.join('typedef struct { int status; ' +
+            (base if level == 2 else f'{base}{level - 1}') +
+            f' value; }} {base}{level};'
+            for base in sorted({leaf.ctype for leaf in self.leaves.values()})
+            for level in range(2, depth + 1))

@@ -1,0 +1,76 @@
+--- /tmp/crust-before-async-handle-exchange-calls/crust.py
++++ crust.py
+@@ -458,6 +458,13 @@
+             if self.peek() == '->':
+                 self.take()
+                 value = self.expr()
++                if (value[0] == 'array_replace' and value[1][0] == 'name'
++                        and value[3][0] in ('down', 'transfer')):
++                    value = ('array_buffered_replace', *value[1:])
++                elif (value[0] == 'method_call' and value[1][0] == 'name'
++                      and value[2] == 'try_push' and len(value[3]) == 1
++                      and value[3][0][0] in ('down', 'transfer')):
++                    value = ('array_buffered_try_push', value[1], *value[3])
+                 args.append(('down', value[1]) if value[0] == 'name' else ('transfer', value))
+             else:
+                 args.append(self.expr())
+@@ -15285,6 +15292,23 @@
+                 owned_bridge_fields(allocation, parameter)
+                 root.bindings[parameter] = Binding(parameter, 'owned', parameter, allocation, mutable=True)
+                 ctype = 'Cell *'
++            elif mode == 'buffered_handle_exchange':
++                pointer = f'{parameter}.value'
++                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                                      f'({pointer} ? {pointer}->source : NULL)', element_type='Int')
++                external.sources.append(source)
++                origin = check.uid()
++                check.origin_sources[origin] = source
++                _, _, allocation = check.receive_extracted_handle(pointer, (source,), root, parameter,
++                                                                  origins=frozenset({origin}))
++                optional = typ == 'Result<(),A<Int>>'
++                allocation.exchange_payloads = (((), frozenset()) if optional else ((source,), frozenset({origin})),
++                                                ((source,), frozenset({origin})))
++                if optional:
++                    check.guard_buffered_handle(parameter, allocation, '!=')
++                    check.lines.append(f'(void)*({allocation.guard});')
++                root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
++                ctype = 'VectorHandleResult'
+             elif mode == 'handle_option':
+                 pointer = f'{parameter}.value'
+                 source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
+@@ -15391,7 +15415,7 @@
+                 root.bindings[parameter] = Binding(parameter, mode, parameter)
+                 ctype = COPY_VALUE_TYPES[mode]
+             parameters.append(f'{ctype} {parameter}')
+-            arguments.append(('down' if mode in ('owned', 'task', 'execution', 'handle_option') or mode in JOIN_RESULT_TYPES else 'name', parameter))
++            arguments.append(('down' if mode in ('owned', 'task', 'execution', 'handle_option', 'buffered_handle_exchange') or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
+         from async_result_storage import needs_task_output
+         if needs_task_output(contract.result.task_result_sources, lambda index: index in local_parameters):
+@@ -15418,7 +15442,7 @@
+         result = None
+         try:
+             result = check.invoke(call, root)
+-            if result is not None and result[2] is not None and result[0] in ('owned', 'task', 'execution', 'handle_option', *JOIN_RESULT_TYPES):
++            if result is not None and result[2] is not None and result[0] in ('owned', 'task', 'execution', 'handle_option', 'buffered_handle_exchange', *JOIN_RESULT_TYPES):
+                 root.exports.append(result[2])
+             check.finish_scope(root)
+         except PathsReturned:
+@@ -15426,7 +15450,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[key]
+         mode = contract.result_type[0]
+-        ctype = ('VectorHandleResult' if mode == 'handle_option' else JOIN_RESULT_C_TYPES[mode] if mode in JOIN_RESULT_TYPES else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('VectorHandleResult' if mode in ('handle_option', 'buffered_handle_exchange') else JOIN_RESULT_C_TYPES[mode] if mode in JOIN_RESULT_TYPES else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'CrustStructureView' if mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         qualifier = '_Noreturn ' if not contract.effects.may_return else ''
+         signature = f'static {qualifier}{ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+@@ -15435,7 +15459,7 @@
+             lines.append('fail("non-returning synchronous bridge returned");')
+         if result is not None and mode != 'void':
+             value = result[1]
+-            if mode in (*JOIN_RESULT_TYPES, 'handle_option') and result[2] is not None and result[2].guard is not None:
++            if mode in (*JOIN_RESULT_TYPES, 'handle_option', 'buffered_handle_exchange') and result[2] is not None and result[2].guard is not None:
+                 lines.append(f'(void)*({result[2].guard});')
+             if result[0] in ('ref', 'mut') and contract.result_type[1] == 'Int':
+                 value = f'&({value})->value'

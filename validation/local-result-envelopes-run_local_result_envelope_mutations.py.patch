@@ -1,0 +1,85 @@
+--- before/tests/run_local_result_envelope_mutations.py
++++ after/tests/run_local_result_envelope_mutations.py
+@@ -0,0 +1,82 @@
++"""Fault injection for Result payload storage and borrowed-target contracts."""
++from pathlib import Path
++import shutil
++import sys
++import tempfile
++from run_suspended_cleanup_mutations import run
++
++ROOT=Path(__file__).resolve().parents[1]
++MUTATIONS=(
++ ('invent_absent_payload_identity','crust.py',
++  '            payload.origins = frozenset()',
++  '            payload.origins = frozenset({payload.id})',
++  'test_proven_absent_local_payload_through_contracts'),
++ ('forget_absence_constraint_contract','constraints.py',
++  'absent_owned_payload=not assets and (result.absent_owned_payload or',
++  'absent_owned_payload=False and (result.absent_owned_payload or',
++  'test_proven_absent_local_payload_through_contracts'),
++ ('forget_absence_loop_result','crust.py',
++  'absent=all(a.absent_owned_payload for a in values)', 'absent=False',
++  'test_proven_absent_local_payload_through_contracts'),
++ ('erase_possible_completion','results.py',
++  'effects.may_complete is False or\n                            effects.completion_result.absent_owned_payload',
++  'True or\n                            effects.completion_result.absent_owned_payload',
++  'test_possible_completion_preserves_local_payload'),
++ # Removing only the early return check survives because result construction
++ # checks the declared storage again. That historical mutant and its fallback
++ # diagnostic are retained in validation/local-result-envelopes-*-audit.log.
++ ('omit_join_storage_compatibility','crust.py',
++  '        if len(kinds) > 1:', '        if False:',
++  'test_control_results_preserve_loans_and_storage_type'),
++ ('omit_annotation_storage_check','crust.py',
++  "if any((source.kind == 'local_stack') != (expected[2] == 'local') for source in allocation.sources):",
++  'if False:', 'test_loop_envelope_reuse_and_annotations'),
++ ('omit_parameter_storage_requirements','storage_requirements.py',
++  "joined = dict(getattr(node, 'join_storage_parameters', ()))", 'joined = {}',
++  'test_two_storage_kind_model'),
++ ('omit_contract_result_storage','contracts.py',
++  "join_storage_result=getattr(node, 'join_storage_result', None)", 'join_storage_result=None',
++  'test_modular_bridge_and_declared_storage'),
++ ('omit_modular_borrowed_fields','crust.py',
++  "dependencies, variants, parents = self.resolve_borrowed_result(result, params, bindings) if result.mode in ('owned', *JOIN_RESULT_TYPES) else ((), frozenset(), ())",
++  "dependencies, variants, parents = self.resolve_borrowed_result(result, params, bindings) if result.mode == 'owned' else ((), frozenset(), ())",
++  'test_named_envelope_and_relay'),
++ ('omit_join_payload_borrows','crust.py',
++  '        payload.dependencies = borrowed_fields', '        payload.dependencies = ()',
++  'test_recorded_and_target_lifetime'),
++ ('omit_future_result_identity','crust.py',
++  "state['origins'] | state['item_origins'] | state['task_result_origins']",
++  "state['origins'] | state['item_origins']", 'test_recorded_and_target_lifetime'),
++ ('omit_nested_output_destination','async_result_storage.py',
++  "if node.args[2][0] not in ('owned', 'join_owned', 'join_nested') or node.args[2][1] not in structures",
++  "if node.args[2][0] != 'owned' or node.args[2][1] not in structures",
++  'test_direct_await_envelope_preserves_loans'),
++ ('forget_constraint_result_asset','constraints.py',
++  "if plan.destination:\n                    output = self.born(('task_output', id(expr)),",
++  "if False:\n                    output = self.born(('task_output', id(expr)),",
++  'test_named_envelope_and_relay'),
++ ('erase_feature_payload_storage','type_features.py',
++  "return (tuple(normalized(mode, concrete if index == 0 and concrete is not None else typ,\n                                 name in node.handle_parameters or joined.get(name) == 'pool')\n                      for index, (name, mode, typ) in enumerate(params)),\n                normalized(*result, node.handle_result or getattr(node, 'join_storage_result', None) == 'pool', result=True))",
++  "return (tuple(normalized(mode, concrete if index == 0 and concrete is not None else typ,\n                                 name in node.handle_parameters)\n                      for index, (name, mode, typ) in enumerate(params)),\n                normalized(*result, node.handle_result, result=True))",
++  'test_feature_signatures_keep_payload_storage'),
++)
++
++def main():
++ suite='test_local_result_envelopes.LocalResultEnvelopeTests'
++ baseline=run(ROOT,suite)
++ print('BASELINE',baseline.returncode,baseline.stdout+baseline.stderr,flush=True)
++ if baseline.returncode:return 1
++ success=True
++ for name,filename,before,after,method in MUTATIONS:
++  with tempfile.TemporaryDirectory(prefix='crust-local-envelope-mutant-') as directory:
++   target=Path(directory)
++   for path in ROOT.glob('*.py'):shutil.copy2(path,target/path.name)
++   path=target/filename;source=path.read_text()
++   assert source.count(before)==1,(name,source.count(before))
++   path.write_text(source.replace(before,after));result=run(target,suite+'.'+method)
++  detected=result.returncode==1 and ('AssertionError' in result.stderr or 'crust.Error:' in result.stderr)
++  print(name,'DETECTED' if detected else 'SURVIVED' if not result.returncode else 'INCONCLUSIVE',flush=True)
++  print(result.stdout+result.stderr,flush=True);success &= detected
++ return int(not success)
++
++if __name__=='__main__':sys.exit(main())

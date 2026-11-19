@@ -1,0 +1,128 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1016,8 +1016,10 @@
+     owned_output_types = owned_sync_types | {('owned', typ): 'Cell *' for typ in reference_structs}
+     output_join_types = owned_join_sync_types | {(mode, typ): 'CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult'
+                                                for mode in ('join_owned', 'join_nested') for typ in reference_structs}
++    collection_sync_types = {(mode, HANDLE_VECTOR): 'Cell *' for mode in ('ref', 'mut')}
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | owned_join_sync_types | pool_sync_types
+     output_types = sync_types | owned_output_types | output_join_types
++    sync_types |= collection_sync_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+                          and (public_signature(contract.result_type[1], aggregate_layouts) is not None
+@@ -1201,6 +1203,21 @@
+         return None
+ 
+     def sync_borrow_argument(argument, mode, typ, line):
++        if typ == HANDLE_VECTOR:
++            if argument[0] not in ('ref', 'mut', 'name', 'reborrow'):
++                fail(line, 'argument Vector<A<Int>> : emprunt explicite requis')
++            name = argument[1]
++            actual = references.get(name)
++            if collection_types.get(name) != typ:
++                fail(line, 'argument Vector<A<Int>> : type incompatible')
++            compatible = (actual == 'owned' and argument[0] == mode and (mode == 'ref' or name in mutable)
++                          or actual in ('ref', 'mut') and (mode == 'ref' or actual == 'mut')
++                          and (argument[0] == 'name' or argument[0] == 'reborrow' and argument[2] == mode))
++            if not compatible:
++                fail(line, 'argument Vector<A<Int>> : mode ou mutabilité incompatible')
++            reservation = 'mut' if actual == 'mut' else mode
++            check_access(name, line, write=reservation == 'mut')
++            return f'frame->{fields[name]}', [(name, reservation), *received_refs.get(name, ())]
+         if argument[0] in ('ref', 'mut'):
+             name = argument[1]
+             actual = references.get(name, 'scalar')
+@@ -1694,6 +1711,21 @@
+                 if len(holders) > 1:
+                     origins |= previous
+                 field_changes.append((key, [(origin, 'storage') for origin in origins]))
++        for index, slots, _, replacements, _ in summary.vector_writes:
++            from results import Value
++            items = frozenset(item for slot in (*slots, *(slot for _, slot in replacements)) for item in slot)
++            if not items:
++                continue
++            for holder, prefix in holders_for(index):
++                key = ('owned_storage', holder, (*prefix, 'items'))
++                previous = frozenset(origin for origin, _ in active_loans.get(key, ()))
++                origins = replacement_storage(Value('owned', 'Int', candidates=items), previous) | previous
++                depth = next((position for position in reversed(range(len(scopes))) if holder in scopes[position][0]), 0)
++                leaving = {name for scope in scopes[depth + 1 if references.get(holder) == 'owned' else 0:]
++                           for name in scope[0] if name in local_pools}
++                if origins & leaving:
++                    fail(line, 'transfert refusé : le pool de l’élément ne survit pas au vecteur')
++                field_changes.append((key, [(origin, 'storage') for origin in origins]))
+         return tuple((key, tuple(held)) for key, held in field_changes)
+ 
+     def install_field_change(key, held):
+@@ -1834,7 +1866,7 @@
+                         argument_ctype = 'Cell *'
+                     else:
+                         value = (f'structure_reference_for((CrustStructureView){{0}}, {value})' if typ in struct_layouts
+-                                 else f'({reference_sync_types[(mode, typ)]})({value})')
++                                 else f'({sync_types[(mode, typ)]})({value})')
+                 else:
+                     # A literal receives u8 context; a named Int never narrows.
+                     if mode == 'byte' and argument[0] == 'int' and 0 <= argument[1] <= 255:
+@@ -1998,7 +2030,9 @@
+             active_loans[id(retained)] = retained
+             pending = prepare_field_changes(
+                 replace(contract.result, structure_fields=contract.result.task_field_updates,
+-                        owned_field_writes=contract.result.task_owned_updates),
++                        owned_field_writes=contract.result.task_owned_updates,
++                        vector_writes=tuple((index, (items,), False, (), ())
++                                            for index, items in contract.result.task_vector_updates)),
+                 contract.parameters, argument_loans, line)
+             if signature in task_sync_types:
+                 definition = functions[signature[1]]
+@@ -7276,7 +7310,7 @@
+             return False
+         _, (_, receiver), method, arguments = call
+         collection = collection_types.get(receiver)
+-        if collection in ('String', 'Vector<Int>', 'Vector<u8>') and following is not None:
++        if collection in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR) and following is not None:
+             # A parent-scope view can end in the preceding nested statement.
+             # Keep uses in this call alive while expiring those earlier loans
+             # before reserving the receiver for its arguments.
+@@ -7316,6 +7350,41 @@
+             check_access(receiver, line, write=True)
+             steps.extend((f'string_push_str(frame->{fields[receiver]}, string_view({value}));',
+                           f'cell_drop({value});', f'{value} = NULL;'))
++            return True
++        if collection == HANDLE_VECTOR and method == 'push':
++            line = statement.line
++            if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable) or len(arguments) != 1:
++                fail(line, 'push exige un Vector mutable et un argument')
++            check_access(receiver, line, write=True)
++            preparation = [(receiver, 'mut')]
++            active_loans[id(preparation)] = preparation
++            try:
++                argument = arguments[0]
++                if argument[0] == 'down':
++                    require_local_async_value(argument[1], line)
++                    kind, incoming = export_async_value(argument[1], (), line)
++                elif argument[0] == 'transfer':
++                    incoming = sync_owned_value(argument[1], line, following=following)
++                    kind = 'owned'
++                else:
++                    fail(line, 'push de A<Int> exige un transfert explicite ->')
++                if kind != 'owned' or owned_result_types.get(incoming, 'Int') != 'Int':
++                    fail(line, 'push de Vector<A<Int>> exige une allocation Int')
++                if storage_of(incoming) & implicit_stacks:
++                    fail(line, 'une case A<Int> exige une allocation de pool')
++                depth = next((index for index in reversed(range(len(scopes))) if receiver in scopes[index][0]), 0)
++                require_durable_storage(incoming, depth + 1 if references.get(receiver) == 'owned' else 0, line)
++                if references.get(receiver) != 'owned' and (node.field_effect_summary is None or not node.field_effect_summary.complete):
++                    fail(line, 'push dans un vecteur injecté : contrat de terminaison incomplet')
++            finally:
++                del active_loans[id(preparation)]
++            release_statement_loans(following)
++            check_access(receiver, line, write=True)
++            key = ('owned_storage', receiver, ('items',))
++            held = [*active_loans.get(key, ()), *((origin, 'storage') for origin in storage_of(incoming))]
++            install_field_change(key, list(dict.fromkeys(held)))
++            steps.extend((f'vector_push(frame->{fields[receiver]}, &{incoming});', f'{incoming} = NULL;'))
++            clear_stored_fields(incoming)
+             return True
+         if collection in ('Vector<Int>', 'Vector<u8>') and method == 'push':
+             line = statement.line

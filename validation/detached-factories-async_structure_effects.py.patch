@@ -1,0 +1,48 @@
+--- before/async_structure_effects.py
++++ async_structure_effects.py
+@@ -21,6 +21,20 @@
+ 
+ class IncompleteStructureEffects(Exception):
+     """An unsupported analysis must never masquerade as an empty effect."""
++
++
++class ContractResultAnalyzer(ResultAnalyzer):
++    """Demand synchronous summaries through their inference provider."""
++    resolver = None
++
++    def infer(self, name):
++        if name in self.summaries or self.resolver is None:
++            return super().infer(name)
++        summary = self.resolver(name)
++        if summary is None:
++            raise IncompleteStructureEffects('contrat synchrone encore en cours d’inférence')
++        self.summaries[name] = summary
++        return summary
+ 
+ 
+ @dataclass(frozen=True)
+@@ -46,7 +60,7 @@
+ 
+ 
+ class AsyncStructureEffectAnalyzer:
+-    def __init__(self, definitions, sync_contracts, enums, error):
++    def __init__(self, definitions, sync_contracts, enums, error, *, sync_resolver=None):
+         self.definitions = definitions
+         self.error = error
+         self.summaries = {}
+@@ -69,10 +83,13 @@
+         functions = {name: SimpleNamespace(
+             args=(name, contract.parameters, contract.result_type, ()), line=0)
+             for name, contract in sync_contracts.items()}
+-        self.results = ResultAnalyzer(functions,
++        self.results = ContractResultAnalyzer(functions,
+             {name: contract.effects for name, contract in sync_contracts.items()},
+             error, enums, definitions)
+-        self.results.summaries = {name: contract.result for name, contract in sync_contracts.items()}
++        self.results.summaries = {name: contract.result for name, contract in sync_contracts.items()
++                                 if contract.result is not None}
++        self.results.resolver = sync_resolver
++        self.results.async_summary_resolver = self.infer
+ 
+     def infer_all(self):
+         for name in self.definitions:

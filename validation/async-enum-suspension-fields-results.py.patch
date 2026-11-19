@@ -1,0 +1,31 @@
+--- before/results.py
++++ after/results.py
+@@ -817,7 +817,7 @@
+                     fields = (('.items', frozenset({BorrowTarget('detached_field_parameter', index, '.items')})),)
+                 origins = (frozenset({('vector_parameter', index)}) if typ == HANDLE_VECTOR
+                            else frozenset({('owned_parameter', index)})
+-                           if tracks_reference_items or (mode == 'owned' and '' in self.analyzer.enums.get(typ, {}))
++                           if tracks_reference_items or (mode == 'owned' and typ in self.analyzer.enums)
+                            else frozenset())
+                 environment[name] = Value(mode, typ, frozenset({ResultCandidate('parameter', index)}), fields,
+                                           structure_origins=origins,
+@@ -2143,8 +2143,8 @@
+                 value = Value(op, value.typ, value.candidates, value.fields, value.fresh_variants,
+                               borrowed_targets(value) or (frozenset({BorrowTarget('local')}) if fixed_array_shape(value.typ) else frozenset()),
+                               fixed_array_shape(value.typ) is not None,
+-                              storage_owner=expr[1] if op == 'mut' and '' in self.analyzer.enums.get(value.typ, {}) else None,
+-                              structure_origins=value.structure_origins)
++                              storage_owner=expr[1] if op == 'mut' and value.typ in self.analyzer.enums else None,
++                              structure_origins=value.structure_origins, owned_fields=value.owned_fields)
+             return {'next'}, value
+         if op in ('ref_expr', 'mut_expr') and expr[1][0] == 'array_deref_slot':
+             flow, value = self.expression(expr[1][1], environment, line)
+@@ -2352,7 +2352,7 @@
+             return flow, Value('owned', typ, frozenset({ResultCandidate('fresh', source=source)}),
+                                tuple(fields), frozenset({arm}) if arm is not None else frozenset(),
+                                owned_fields=tuple(owned_fields),
+-                               structure_origins=frozenset({id(expr)}) if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) or '' in self.analyzer.enums.get(typ, {}) else frozenset(),
++                               structure_origins=frozenset({id(expr)}) if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) or typ in self.analyzer.enums else frozenset(),
+                                handle_items=() if typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) else None)
+         if op == 'call':
+             name, args = expr[1:]

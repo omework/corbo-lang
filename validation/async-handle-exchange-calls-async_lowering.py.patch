@@ -1,0 +1,132 @@
+--- /tmp/crust-before-async-handle-exchange-calls/async_lowering.py
++++ async_lowering.py
+@@ -40,6 +40,15 @@
+                        'handle_option': 'VectorHandleResult', 'buffered_handle_exchange': 'VectorHandleResult', 'buffered_handle_try_push': 'VectorHandleResult'}
+ OWNED_WRAPPER_PAYLOADS = {**JOIN_PAYLOADS, 'handle_option': 'optional_allocation',
+                           'buffered_handle_exchange': 'exchange_allocation', 'buffered_handle_try_push': 'rejected_allocation'}
++def owned_wrapper_kind(mode, typ):
++    return ('buffered_handle_try_push' if mode == 'buffered_handle_exchange'
++            and typ == 'Result<(),A<Int>>' else mode)
++
++
++def owned_wrapper_payload(mode, typ):
++    return OWNED_WRAPPER_PAYLOADS[owned_wrapper_kind(mode, typ)]
++
++
+ ARRAY_BORROWS = {'array_ref': 'ref', 'array_mut': 'mut'}
+ SCALAR_TYPES = ChainMap(PLAIN_JOIN_TYPES, { **ERROR_VALUE_TYPES, 'runtime_error': 'runtime::Error', 'scalar': 'Int', 'bool': 'Bool', 'byte': 'u8', 'char': 'char', 'text': '&str', 'byte_ref': '&u8',
+                 **{mode: '&' + VALUE_MODES[mode] for mode in VECTOR_SLICE_ELEMENTS},
+@@ -1021,6 +1030,8 @@
+     owned_join_sync_types.update({(mode, typ): OWNED_WRAPPER_TYPES[mode]
+                                  for mode in ('join_owned', 'join_nested') for typ in owned_aggregates})
+     owned_join_sync_types[('handle_option', 'Int')] = 'VectorHandleResult'
++    owned_join_sync_types.update({('buffered_handle_exchange', typ): 'VectorHandleResult'
++        for typ in ('Result<A<Int>,A<Int>>', 'Result<(),A<Int>>')})
+     owned_join_sync_types[('join_option', 'Int')] = 'CrustOptionJoinResult'
+     pool_sync_types.update({(mode, f'Pool<{typ}>'): 'Source *'
+                             for mode in ('ref', 'mut') for typ in (*pool_structures, *owned_enums)})
+@@ -1310,7 +1321,7 @@
+         if sync_signature(expr) in output_join_types:
+             mode, _ = sync_signature(expr)
+             value, _ = sync_call(expr, line, following=following, owned=True)
+-            return value, OWNED_WRAPPER_PAYLOADS[mode], None
++            return value, owned_wrapper_payload(mode, sync_signature(expr)[1]), None
+         if expr[0] in ('array_buffered_replace', 'array_buffered_try_push'):
+             payload = 'rejected_allocation' if expr[0] == 'array_buffered_try_push' else 'exchange_allocation'
+             return handle_replace_value(expr, line, following=following), payload, None
+@@ -1800,6 +1811,7 @@
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+         prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
+         argument_fields = {}
++        argument_payload_storage = {}
+         argument_tasks = {}
+         local_parameters = set()
+         active_loans[id(loans)] = loans
+@@ -1854,8 +1866,14 @@
+                         fail(line, 'argument Result propriétaire : transfert -> explicite requis')
+                     value, payload, _ = owned_join_value(
+                         argument if argument[0] == 'down' else argument[1], line)
+-                    if payload != OWNED_WRAPPER_PAYLOADS[mode] or owned_result_types.get(value, 'Int') != typ:
++                    content = 'Int' if mode == 'buffered_handle_exchange' else typ
++                    if payload != owned_wrapper_payload(mode, typ) or owned_result_types.get(value, 'Int') != content:
+                         fail(line, 'argument de résultat propriétaire : type incompatible')
++                    if mode == 'buffered_handle_exchange':
++                        for arm in ('ok', 'err'):
++                            origins = active_loans.get(('owned_storage', value, (arm,)))
++                            argument_payload_storage[index, arm] = (frozenset(origin for origin, _ in origins)
++                                if origins is not None else storage_of(value))
+                 elif (mode, typ) in pool_sync_types:
+                     value, held = pool_argument(argument, mode, typ, line)
+                     loans.extend(held)
+@@ -1910,8 +1928,10 @@
+                     steps.append(f'{value} = NULL;')
+                     clear_stored_fields(value)
+                 elif (mode, typ) in owned_join_sync_types:
+-                    field = JOIN_CELLS[mode]
++                    field = 'value' if mode == 'buffered_handle_exchange' else JOIN_CELLS[mode]
+                     success = f'{snapshot}.status == 0' + (f' && {snapshot}.value.status == 0' if mode in ('join_nested', 'join_option') else '')
++                    if mode == 'buffered_handle_exchange':
++                        success = f'{snapshot}.status != 0' if typ == 'Result<(),A<Int>>' else '1'
+                     pending = temporary('Cell *')
+                     steps.extend((f'{pending} = ({success}) ? {snapshot}.{field} : NULL;',
+                                   f'{value}.{field} = NULL;'))
+@@ -2092,26 +2112,31 @@
+                            else public_signature(signature[1], aggregate_layouts)) == ('scalar', 'Int')
+             return f'&{handle}', returns_int, retained, signature[1], returned, changes
+         if signature in owned_output_types | output_join_types:
+-            owned_result_types[value] = signature[1]
++            owned_result_types[value] = 'Int' if signature[0] == 'buffered_handle_exchange' else signature[1]
+             if local_source is not None:
+                 keep_storage(value, (local_source,))
+             def storage_candidates(summary):
+                 yield from summary.candidates
+                 for _, child in summary.owned_fields:
+                     yield from storage_candidates(child)
+-            for candidate in storage_candidates(contract.result):
++            def candidate_storage(candidate):
++                if candidate.kind == 'exchange_parameter':
++                    return argument_payload_storage.get((candidate.parameter, 'ok' if candidate.item_index == 0 else 'err'),
++                                                        argument_storage[candidate.parameter])
+                 if candidate.kind == 'fresh' and (candidate.source.kind == 'local_value'
+                         or candidate.source.kind == 'allocation_parameter'
+                         and candidate.source.index in local_parameters):
+-                    # A fresh local root uses its destination stack, not the
+-                    # source of the copied/consumed input. Owned fields below
+-                    # are visited separately and retain their actual pools.
+-                    continue
++                    return frozenset()
+                 index = (candidate.parameter if candidate.kind in ('parameter', 'vector_element') else
+                          candidate.source.index if candidate.kind == 'fresh'
+                          and candidate.source.kind == 'source_parameter' else None)
+-                keep_storage(value, argument_storage[index] if index is not None else
+-                             frozenset().union(*argument_storage))
++                return argument_storage[index] if index is not None else frozenset().union(*argument_storage)
++            for candidate in storage_candidates(contract.result):
++                keep_storage(value, candidate_storage(candidate))
++            if signature[0] == 'buffered_handle_exchange':
++                for arm, candidates in zip(('ok', 'err'), contract.result.exchange_payloads):
++                    origins = frozenset().union(*(candidate_storage(candidate) for candidate in candidates))
++                    active_loans[('owned_storage', value, (arm,))] = [(origin, 'storage') for origin in origins]
+             retain_result_fields(value, contract.result.borrowed_fields, argument_loans, line, argument_fields)
+             return value, signature[1]
+         if signature in view_sync_types:
+@@ -3418,7 +3443,7 @@
+             require_owned_result_use(statement, body, position, export_name)
+             mode, typ = sync_signature(owned_initializer)
+             value, _ = sync_call(owned_initializer, statement.line, following=body[position + 1:], owned=True)
+-            bind_transferred_value(name, mode, (value, OWNED_WRAPPER_PAYLOADS[mode], None), statement)
++            bind_transferred_value(name, owned_wrapper_kind(mode, typ), (value, owned_wrapper_payload(mode, typ), None), statement)
+             return True
+         if (sync_signature(owned_initializer) in owned_output_types or owned_initializer[0] in ('new', 'new_enum')
+                 or structure_copy_source(owned_initializer) is not None):
+@@ -3811,8 +3836,8 @@
+             result, payload, loans = execution_await(subject, line, prepared=prepared_execution)
+         elif sync_signature(subject) in output_join_types:
+             mode, _ = sync_signature(subject)
+-            if mode == 'handle_option':
+-                fail(line, 'Option<A<Int>> : recevoir puis consommer avec match (-> résultat)')
++            if mode in ('handle_option', 'buffered_handle_exchange'):
++                fail(line, 'résultat propriétaire : recevoir puis consommer avec match (-> résultat)')
+             result, _ = sync_call(subject, line, following=following, owned=True)
+             payload, loans, direct = JOIN_PAYLOADS[mode], None, True
+         elif subject[0] == 'name' and subject[1] in join_results:

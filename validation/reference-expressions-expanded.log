@@ -1,0 +1,54 @@
+test_condition_and_selected_arm_evaluate_once_in_order (test_reference_expressions.ReferenceExpressionTests.test_condition_and_selected_arm_evaluate_once_in_order) ... ERROR
+test_join_expression_keeps_ancestor_and_fallback (test_reference_expressions.ReferenceExpressionTests.test_join_expression_keeps_ancestor_and_fallback) ... ok
+test_local_bindings_reborrows_and_iteration_exits (test_reference_expressions.ReferenceExpressionTests.test_local_bindings_reborrows_and_iteration_exits) ... ok
+test_local_sources_and_wrong_modes_rejected (test_reference_expressions.ReferenceExpressionTests.test_local_sources_and_wrong_modes_rejected) ... ok
+test_mixed_inline_and_pool_pointer_layout (test_reference_expressions.ReferenceExpressionTests.test_mixed_inline_and_pool_pointer_layout) ... ok
+test_model_selects_target_and_rejects_every_possible_source_release (test_reference_expressions.ReferenceExpressionTests.test_model_selects_target_and_rejects_every_possible_source_release) ... ok
+test_nested_conditions_and_early_returns (test_reference_expressions.ReferenceExpressionTests.test_nested_conditions_and_early_returns) ... ok
+test_pool_targets_and_shared_or_mutable_modes (test_reference_expressions.ReferenceExpressionTests.test_pool_targets_and_shared_or_mutable_modes) ... ok
+test_recorded_join_match (test_reference_expressions.ReferenceExpressionTests.test_recorded_join_match) ... ok
+test_reset_default_and_historical_borrow_check (test_reference_expressions.ReferenceExpressionTests.test_reset_default_and_historical_borrow_check) ... ok
+test_scope_boundary_before_array_source_cleanup (test_reference_expressions.ReferenceExpressionTests.test_scope_boundary_before_array_source_cleanup) ... ok
+test_shared_structure_reference_keeps_selected_target (test_reference_expressions.ReferenceExpressionTests.test_shared_structure_reference_keeps_selected_target) ... ok
+test_vector_cases_from_two_pools_and_last_use (test_reference_expressions.ReferenceExpressionTests.test_vector_cases_from_two_pools_and_last_use) ... ok
+
+======================================================================
+ERROR: test_condition_and_selected_arm_evaluate_once_in_order (test_reference_expressions.ReferenceExpressionTests.test_condition_and_selected_arm_evaluate_once_in_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reference_expressions.py", line 135, in test_condition_and_selected_arm_evaluate_once_in_order
+    self.assertEqual(self.run_native(source).stdout,'1\n10\n1\n99\n42\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_results.py", line 62, in run_native
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14778, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14771, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13275, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13216, in verify
+    self.function_effects = EffectAnalyzer(self.functions, self.enums, Error, async_functions).infer_all()
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 144, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 170, in infer
+    outcomes = self.nodes(body, environment, resets, allocations, pools)
+  File "/Users/jabarkarim/sources/crust/effects.py", line 560, in nodes
+    builtin = builtin_method_statement(expr, structure, lambda message: self.fail(line, message))
+  File "/Users/jabarkarim/sources/crust/effects.py", line 83, in builtin_method_statement
+    fail('set exige un entier Int32')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 560, in <lambda>
+    builtin = builtin_method_statement(expr, structure, lambda message: self.fail(line, message))
+                                                                        ~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/effects.py", line 140, in fail
+    raise self.error(f'ligne {line}: {message}')
+crust.Error: ligne 1: set exige un entier Int32
+
+----------------------------------------------------------------------
+Ran 13 tests in 11.368s
+
+FAILED (errors=1)

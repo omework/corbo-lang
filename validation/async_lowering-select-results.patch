@@ -1,0 +1,32 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1191,11 +1191,14 @@
+         return tuple((key, tuple(held)) for key, held in field_changes)
+ 
+     def apply_child_field_changes(alternatives, line, *, launched):
++        from async_structure_effects import FIELD_RESULT_MODES
+         if not any(alternatives):
+             return
+         if (node.field_effect_summary is None or not node.field_effect_summary.complete
+-                or result[0] not in ('scalar', 'bool', 'byte', 'char', 'void', 'ref', 'mut')):
+-            fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
++                or result[0] not in FIELD_RESULT_MODES):
++            reason = getattr(node.field_effect_summary, 'reason', '')
++            fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée'
++                 + (': ' + reason if reason else ''))
+         alternatives = [dict(changes) for changes in alternatives]
+         for key in set().union(*(changes.keys() for changes in alternatives)):
+             _, holder, path = key
+@@ -1206,10 +1209,11 @@
+             active_loans[key] = list(dict.fromkeys(held))
+ 
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False):
++        from async_structure_effects import FIELD_RESULT_MODES
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+         if contract.result.structure_fields and (node.field_effect_summary is None
+-                or not node.field_effect_summary.complete or result[0] not in ('scalar','bool','byte','char','void','ref','mut')):
++                or not node.field_effect_summary.complete or result[0] not in FIELD_RESULT_MODES):
+             fail(line, 'prototype : remplacement des dépendances de champs par un appel depuis un état non raccordé')
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')

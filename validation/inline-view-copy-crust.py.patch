@@ -1,0 +1,97 @@
+--- before/crust.py
++++ after/crust.py
+@@ -4038,7 +4038,8 @@
+             self.check_array_paths_destination(allocation[1], destination)
+         if kind in ('array', 'array_refs') and expr[0] not in ('move', 'array_transfer'):
+             self.fail('break : transfert de tableau par <- requis')
+-        if (kind == 'void' or (kind == 'owned' and expr[0] != 'move')
++        copied_result = expr[0] == 'array_transfer' and expr[1][0] == 'array_copy'
++        if (kind == 'void' or (kind == 'owned' and expr[0] != 'move' and not copied_result)
+                 or (kind in ('join_owned', 'join_nested', 'task', 'execution') and expr[0] != 'move')
+                 or (kind in ('handle_option', 'buffered_handle_exchange') and expr[0] not in (
+                     'move', 'array_handle_option_pop', 'array_buffered_replace', 'array_buffered_try_push'))):
+@@ -5672,8 +5673,7 @@
+         return tuple(paths)
+ 
+     def copy_structure(self, binding, scope, label, source=None, source_c=None, expr=None):
+-        if self.is_structure_view(binding.alloc):
+-            self.fail('prototype : copie de sous-structure empruntée non encore raccordée')
++        interior = self.is_structure_view(binding.alloc)
+         original = binding.alloc
+         if original is None or original.typ not in self.struct_fields:
+             self.fail('pool.copy exige une structure allouée')
+@@ -5689,6 +5689,8 @@
+         alternatives = binding.referents or (original,)
+         sources = (source,) if source is not None else source_union(*(item.sources for item in alternatives))
+         local = source is None and any(item.kind == 'local_stack' for item in sources)
++        if interior and source is None and not local:
++            self.fail('copie de sous-structure : fournir un Pool du type de la sous-structure avec pool.copy')
+         reservation = None
+         if local:
+             if not all(item.kind == 'local_stack' for item in sources):
+@@ -5721,7 +5723,8 @@
+         else:
+             self.lines.append(f'Cell *{allocation.c} = cell_new({binding.c}->source, 0, "{label}");')
+         size = self.field_offset(fields, len(fields))
+-        self.lines.append(f'memcpy({allocation.c}->fields, {binding.c}->fields, {size});')
++        data = (f'structure_view_address({binding.c}, 0, {size})' if interior else f'{binding.c}->fields')
++        self.lines.append(f'memcpy({allocation.c}->fields, {data}, {size});')
+         self.allocations.append(allocation)
+         scope.allocations.append(allocation)
+         origins = {allocation.id: sources[0]} if len(sources) == 1 else {self.uid(): item for item in sources}
+@@ -8740,8 +8743,18 @@
+         visited = visited | {id(expr)}
+         if expr[0] == 'new_enum' and expr[1] is None:
+             return expr[2]
++        if expr[0] == 'field':
++            parent = self.local_copy_type(('name', expr[1]), producers, visited)
++            from structure_views import contained_field
++            projection = contained_field(self.enums, parent, expr[2]) if parent is not None else None
++            return projection.typ if projection is not None else None
+         if expr[0] == 'call':
+             summary = self.function_results.get(expr[1])
++            if summary and summary.mode in ('ref', 'mut') and summary.reference_targets and all(
++                    target.kind in ('parameter', 'inline_field_parameter') and not target.carrier_kind
++                    and self.local_copy_type(expr[2][target.parameter], producers, visited) is not None
++                    for target in summary.reference_targets):
++                return summary.typ
+             if summary and summary.candidates and all(item.kind == 'fresh' and (
+                     item.source.kind == 'local_value' or
+                     item.source.kind == 'allocation_parameter' and
+@@ -8768,6 +8781,8 @@
+ 
+     def local_result_constructors(self, expr, producers=None):
+         producers = dict(producers or {})
++        if expr[0] in ('array_transfer', 'new_transfer', 'transfer'):
++            return self.local_result_constructors(expr[1], producers)
+         if expr[0] == 'value_match':
+             from async_local_placement import result_constructors
+             known = {}
+@@ -8791,7 +8806,8 @@
+         if expr[0] == 'new_enum' and expr[1] is None:
+             return (expr,)
+         if expr[0] == 'call':
+-            if self.local_copy_type(expr, producers) is not None:
++            summary = self.function_results.get(expr[1])
++            if summary and summary.mode == 'owned' and self.local_copy_type(expr, producers) is not None:
+                 return (expr,)
+             return ()
+         if expr[0] == 'if_expr':
+@@ -8805,7 +8821,7 @@
+         if expr[0] != 'scope':
+             return ()
+         body = expr[2]
+-        if not body or body[-1].op != '<-' or body[-1].terminated:
++        if not body or body[-1].op not in ('<-', 'if_yield') or body[-1].terminated:
+             return ()
+         if any(node.op not in ('var', 'print', 'print_expr', 'address', 'drop') for node in body[:-1]):
+             return ()
+@@ -8813,6 +8829,8 @@
+             return ()
+         name = body[-1].args[0]
+         producers.update((node.args[0], node.args[1]) for node in body[:-1] if node.op == 'var')
++        if body[-1].op == 'if_yield':
++            return self.local_result_constructors(body[-1].args[0], producers)
+         producer = next((node.args[1] for node in reversed(body[:-1])
+                          if node.op == 'var' and node.args[0] == name), None)
+         return self.local_result_constructors(producer, producers) if producer is not None else ()

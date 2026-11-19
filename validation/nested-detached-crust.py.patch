@@ -1,0 +1,47 @@
+--- before/crust.py
++++ after/crust.py
+@@ -5319,8 +5319,17 @@
+         if separator:
+             # Intermediate links only locate the carrier of the final shared
+             # field. Its own ancestry determines what the detached result holds.
+-            targets, _ = self.struct_shared_reference(binding, head, skip_unreachable=skip_unreachable,
+-                                                      traverse=True)
++            targets = {}
++            for carrier in binding.referents or (binding.alloc,):
++                children = dict(carrier.owned_fields).get(head)
++                if children is None:
++                    children, _ = self.struct_shared_reference(
++                        Binding(binding.name, binding.kind, binding.c, carrier), head,
++                        skip_unreachable=skip_unreachable, traverse=True)
++                if any(not child.alive or not child.definite for child in children):
++                    self.fail('champ emprunté : porteur non disponible')
++                targets.update((child.id, child) for child in children)
++            targets = tuple(targets.values())
+             if not targets:
+                 return (), ()
+             return self.struct_shared_reference(
+@@ -14390,23 +14399,7 @@
+                 check.allocations.append(allocation)
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+-                links = []
+-                layout = self.enums[typ]['']
+-                for field_index, (field, field_type) in enumerate(layout):
+-                    if field_type not in ('&Int', '&mut Int'):
+-                        continue
+-                    pointer = f'bridge_field_{check.uid()}'
+-                    check.lines.append(f'Cell *{pointer} = cell_load_ref({parameter}, {check.field_offset(layout, field_index)});')
+-                    check.lines.append(f'(void){pointer};')
+-                    field_source = MemorySource(check.uid(), external.id, 'symbolic', field,
+-                                                f'{pointer}->source', element_type='Int')
+-                    external.sources.append(field_source)
+-                    target = Allocation(check.uid(), external.id, field, (field_source,), c=pointer, typ='Int')
+-                    check.allocations.append(target)
+-                    external.allocations.append(target)
+-                    check.origin_sources[target.id] = field_source
+-                    links.append(('.' + field, (target,)))
+-                allocation.dependencies = tuple(links)
++                owned_bridge_fields(allocation, parameter)
+                 ctype = 'Cell *'
+             elif mode in ('ref', 'mut'):
+                 element = check.borrowed_element_type(typ)

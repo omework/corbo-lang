@@ -1,0 +1,69 @@
+BASELINE 1 test_detached_view_releases_owned_child_and_root (test_async_mixed_structures.AsyncMixedStructureTests.test_detached_view_releases_owned_child_and_root) ... ok
+test_each_owned_source_and_borrow_target_must_survive (test_async_mixed_structures.AsyncMixedStructureTests.test_each_owned_source_and_borrow_target_must_survive) ... ok
+test_launch_failure_inactive_and_native_cleanup (test_async_mixed_structures.AsyncMixedStructureTests.test_launch_failure_inactive_and_native_cleanup) ... ok
+test_mutable_target_reserved_through_return (test_async_mixed_structures.AsyncMixedStructureTests.test_mutable_target_reserved_through_return) ... ok
+test_owner_is_not_structurally_copyable (test_async_mixed_structures.AsyncMixedStructureTests.test_owner_is_not_structurally_copyable) ... ok
+test_prepared_mixed_owner_cleanup_on_early_return (test_async_mixed_structures.AsyncMixedStructureTests.test_prepared_mixed_owner_cleanup_on_early_return) ... ok
+test_recorded_capture (test_async_mixed_structures.AsyncMixedStructureTests.test_recorded_capture) ... ok
+test_replacement_and_reuse_across_iterations (test_async_mixed_structures.AsyncMixedStructureTests.test_replacement_and_reuse_across_iterations) ... FAIL
+test_return_from_direct_and_factory_tasks (test_async_mixed_structures.AsyncMixedStructureTests.test_return_from_direct_and_factory_tasks) ... ok
+test_select_losing_owner_retains_borrow_until_cleanup (test_async_mixed_structures.AsyncMixedStructureTests.test_select_losing_owner_retains_borrow_until_cleanup) ... ok
+
+======================================================================
+FAIL: test_replacement_and_reuse_across_iterations (test_async_mixed_structures.AsyncMixedStructureTests.test_replacement_and_reuse_across_iterations)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16011, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14164, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 934, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6792, in _lower_async_function
+    returned = emit_loop(args[0], line, following=body[index + 1:])
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4359, in emit_loop
+    emit_branches('1', body, [], line, valued=False, construct='boucle')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4967, in emit_branches
+    cleanup_scope(len(scopes) - 1, line)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4444, in cleanup_scope
+    cleanup_async_values(names, returned, line)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4404, in cleanup_async_values
+    fail(line, 'transfert refusé : une allocation survit à son pool local')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 967, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 5: transfert refusé : une allocation survit à son pool local
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_mixed_structures.py", line 169, in test_replacement_and_reuse_across_iterations
+    run = self.run_source(self.program(body))
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: transfert refusé : une allocation survit à son pool local
+
+----------------------------------------------------------------------
+Ran 10 tests in 10.081s
+
+FAILED (failures=1)
+

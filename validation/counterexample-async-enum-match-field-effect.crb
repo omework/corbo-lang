@@ -1,0 +1,9 @@
+struct View{data:&Int}
+  fn change(v:&mut View,n:&Int){v.data=&*n;}
+  fn read(n:&Int)->Int{let local=View{data:&*n};return *local.data;}
+  async fn update(v:&mut View,n:&Int)->Int{change(v,n);yield;return *v.data;}
+enum Choice{Left{},Right{}}fn main(){let mut p=pool<Int>(3);
+          let mut a=p.new(7);let mut b=p.new(9);let mut c=p.new(11);
+          print(c);let mut v=View{data:&a};let mut choices=pool<Choice>(1);let choice=new(choices) Choice.Left{};
+let h=match &choice{Choice.Left{}=>{let h=runtime::spawn(->update(&mut v,&b));<-h},Choice.Right{}=>{let h=runtime::spawn(->update(&mut v,&c));<-h}};
+match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}drop(->b);print(*v.data);}

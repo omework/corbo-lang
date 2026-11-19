@@ -1,0 +1,72 @@
+test_detached_shared_field_outlives_carrier (test_sync_handle_fields.SyncHandleFieldTests.test_detached_shared_field_outlives_carrier) ... 
+  test_detached_shared_field_outlives_carrier (test_sync_handle_fields.SyncHandleFieldTests.test_detached_shared_field_outlives_carrier) (stage='verify_program') ... FAIL
+  test_detached_shared_field_outlives_carrier (test_sync_handle_fields.SyncHandleFieldTests.test_detached_shared_field_outlives_carrier) (stage='compile_source') ... FAIL
+test_indirect_mutable_field_keeps_capability (test_sync_handle_fields.SyncHandleFieldTests.test_indirect_mutable_field_keeps_capability) ... ERROR
+test_inline_fields_and_named_or_direct_wait (test_sync_handle_fields.SyncHandleFieldTests.test_inline_fields_and_named_or_direct_wait) ... ok
+test_recorded_field_return (test_sync_handle_fields.SyncHandleFieldTests.test_recorded_field_return) ... ok
+
+======================================================================
+ERROR: test_indirect_mutable_field_keeps_capability (test_sync_handle_fields.SyncHandleFieldTests.test_indirect_mutable_field_keeps_capability)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_fields.py", line 59, in test_indirect_mutable_field_keeps_capability
+    self.assertEqual(self.run_c_oracle(compile_source(valid)).stdout,'9\n8\n9\n')
+                                       ~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15254, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15247, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13748, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13546, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 440, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 480, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 688, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2766, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 919, in collect
+    self.fail(line, 'retour de tâche refusé : cible empruntée non durable dans le scope parent')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 520, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 3: retour de tâche refusé : cible empruntée non durable dans le scope parent
+
+======================================================================
+FAIL: test_detached_shared_field_outlives_carrier (test_sync_handle_fields.SyncHandleFieldTests.test_detached_shared_field_outlives_carrier) (stage='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 7: -> est autorisé uniquement à l’entrée d’un scope enfant
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_fields.py", line 14, in rejected
+    with self.subTest(stage=check.__name__),self.assertRaisesRegex(Error,pattern):check(source)
+                                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: "emprunt|capture|durable|surviv|source|réserv|durée" does not match "ligne 7: -> est autorisé uniquement à l’entrée d’un scope enfant"
+
+======================================================================
+FAIL: test_detached_shared_field_outlives_carrier (test_sync_handle_fields.SyncHandleFieldTests.test_detached_shared_field_outlives_carrier) (stage='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 7: -> est autorisé uniquement à l’entrée d’un scope enfant
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_handle_fields.py", line 14, in rejected
+    with self.subTest(stage=check.__name__),self.assertRaisesRegex(Error,pattern):check(source)
+                                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: "emprunt|capture|durable|surviv|source|réserv|durée" does not match "ligne 7: -> est autorisé uniquement à l’entrée d’un scope enfant"
+
+----------------------------------------------------------------------
+Ran 4 tests in 3.131s
+
+FAILED (failures=2, errors=1)

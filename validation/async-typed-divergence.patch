@@ -1,0 +1,40 @@
+--- /tmp/crust-async-before-typed-divergence.py	2026-11-07 20:59:27
++++ async_lowering.py	2026-11-07 21:00:35
+@@ -3224,6 +3224,7 @@
+                         returned_in_branch = match_statement(statement, (item for _, item in statements),
+                                                              following=body[position + 3:])
+                     elif statement.op == 'var':
++                        check_noncontinuing_initializer(statement, body[position + 1:])
+                         if bind_array(statement, following=body[position + 1:]):
+                             locals_in_arm.append(statement.args[0])
+                             continue
+@@ -4310,6 +4311,21 @@
+             if statement.mutable:
+                 scopes[-1][4][name] = loans, float('inf')
+ 
++    def check_noncontinuing_initializer(statement, following):
++        _, initializer = statement.args
++        annotation = statement.annotation
++        if (annotation is not None and expression_control_exit(initializer)
++                and initializer[0] in ('if_expr', 'scope', 'value_match', 'loop_expr')):
++            known_type = (annotation in SCALAR_MODES
++                          or bool(scalar_array_layout(annotation)[0])
++                          or bool(int_reference_layout(annotation, 'array_ref')))
++            if known_type:
++                # Only continuing paths have to supply the annotated value.
++                # Still lower/check every actual exit: this is not a license
++                # to skip lifetime, transfer, or cleanup verification.
++                infer_scalar_value(initializer, statement.line, following=following)
++                fail(statement.line, 'initialisation attendue sans continuation')
++
+     def bind_scalar(statement, following, body, index):
+         name, initializer = statement.args
+         annotation = statement.annotation
+@@ -4813,6 +4829,7 @@
+             elif op == 'var' and statement.utf8_match_subject:
+                 returned = match_statement(statement, (item for _, item in statements), following=body[index + 3:])
+             elif op == 'var':
++                check_noncontinuing_initializer(statement, body[index + 1:])
+                 if bind_array(statement, following=body[index + 1:]):
+                     continue
+                 if receive_await_result(statement, body, index):

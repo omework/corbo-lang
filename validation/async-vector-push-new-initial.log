@@ -1,0 +1,112 @@
+test_local_reference_return_and_owned_escape (test_async_vector_push_new.AsyncVectorPushNewTests.test_local_reference_return_and_owned_escape) ... ok
+test_nested_reborrow_keeps_parent_reserved (test_async_vector_push_new.AsyncVectorPushNewTests.test_nested_reborrow_keeps_parent_reserved) ... ok
+test_nominal_types_mutability_and_arity (test_async_vector_push_new.AsyncVectorPushNewTests.test_nominal_types_mutability_and_arity) ... ok
+test_receiver_reserved_until_last_use (test_async_vector_push_new.AsyncVectorPushNewTests.test_receiver_reserved_until_last_use) ... ok
+test_recorded_case (test_async_vector_push_new.AsyncVectorPushNewTests.test_recorded_case) ... ok
+test_returned_borrow_through_two_tasks (test_async_vector_push_new.AsyncVectorPushNewTests.test_returned_borrow_through_two_tasks) ... 
+  test_returned_borrow_through_two_tasks (test_async_vector_push_new.AsyncVectorPushNewTests.test_returned_borrow_through_two_tasks) (element='Int') ... ERROR
+  test_returned_borrow_through_two_tasks (test_async_vector_push_new.AsyncVectorPushNewTests.test_returned_borrow_through_two_tasks) (element='u8') ... ERROR
+test_types_and_fronts (test_async_vector_push_new.AsyncVectorPushNewTests.test_types_and_fronts) ... 
+  test_types_and_fronts (test_async_vector_push_new.AsyncVectorPushNewTests.test_types_and_fronts) (element='Int', reverse=True) ... FAIL
+  test_types_and_fronts (test_async_vector_push_new.AsyncVectorPushNewTests.test_types_and_fronts) (element='u8', reverse=True) ... FAIL
+
+======================================================================
+ERROR: test_returned_borrow_through_two_tasks (test_async_vector_push_new.AsyncVectorPushNewTests.test_returned_borrow_through_two_tasks) (element='Int')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_push_new.py", line 57, in test_returned_borrow_through_two_tasks
+    self.assertEqual(self.run_native(launch(body,element=element,helpers=helpers)).stdout,'0\n255\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_results.py", line 62, in run_native
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14733, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14726, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13230, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13051, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 600, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4385, in _lower_async_function
+    elif set_reference(statement, body[index + 1:]):
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4340, in set_reference
+    fail(line, 'écriture par emprunt mutable : let mut requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 625, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: écriture par emprunt mutable : let mut requis
+
+======================================================================
+ERROR: test_returned_borrow_through_two_tasks (test_async_vector_push_new.AsyncVectorPushNewTests.test_returned_borrow_through_two_tasks) (element='u8')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_push_new.py", line 57, in test_returned_borrow_through_two_tasks
+    self.assertEqual(self.run_native(launch(body,element=element,helpers=helpers)).stdout,'0\n255\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_results.py", line 62, in run_native
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14733, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14726, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13230, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13051, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 600, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4385, in _lower_async_function
+    elif set_reference(statement, body[index + 1:]):
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4340, in set_reference
+    fail(line, 'écriture par emprunt mutable : let mut requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 625, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: écriture par emprunt mutable : let mut requis
+
+======================================================================
+FAIL: test_types_and_fronts (test_async_vector_push_new.AsyncVectorPushNewTests.test_types_and_fronts) (element='Int', reverse=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_push_new.py", line 32, in test_types_and_fronts
+    self.assertEqual(self.run_c_oracle(code).stdout,'0\n255\n17\n255\n42\n')
+                     ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12482, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : 
+
+======================================================================
+FAIL: test_types_and_fronts (test_async_vector_push_new.AsyncVectorPushNewTests.test_types_and_fronts) (element='u8', reverse=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_push_new.py", line 32, in test_types_and_fronts
+    self.assertEqual(self.run_c_oracle(code).stdout,'0\n255\n17\n255\n42\n')
+                     ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12482, in run_c_oracle
+    self.assertEqual(run.returncode, 0, run.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: -6 != 0 : 
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.562s
+
+FAILED (failures=2, errors=2)

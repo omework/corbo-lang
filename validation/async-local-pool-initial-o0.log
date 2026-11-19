@@ -1,0 +1,150 @@
+test_child_pool_injection_and_owned_return (test_async_local_pools.AsyncLocalPoolTests.test_child_pool_injection_and_owned_return) ... ok
+test_inactive_and_failed_start_do_not_construct_local_pool (test_async_local_pools.AsyncLocalPoolTests.test_inactive_and_failed_start_do_not_construct_local_pool) ... ERROR
+test_inner_scope_task_and_join_cannot_escape_pool (test_async_local_pools.AsyncLocalPoolTests.test_inner_scope_task_and_join_cannot_escape_pool) ... ok
+test_local_collections_cleanup_and_state_reuse (test_async_local_pools.AsyncLocalPoolTests.test_local_collections_cleanup_and_state_reuse) ... ok
+test_local_pool_survives_suspend_drop_and_reuse (test_async_local_pools.AsyncLocalPoolTests.test_local_pool_survives_suspend_drop_and_reuse) ... ok
+test_loop_pool_reinitialization_on_continue_and_break (test_async_local_pools.AsyncLocalPoolTests.test_loop_pool_reinitialization_on_continue_and_break) ... ok
+test_owned_child_roundtrip_and_join_result (test_async_local_pools.AsyncLocalPoolTests.test_owned_child_roundtrip_and_join_result) ... 
+  test_owned_child_roundtrip_and_join_result (test_async_local_pools.AsyncLocalPoolTests.test_owned_child_roundtrip_and_join_result) (wait='let a=relay(->first).await;') ... ERROR
+  test_owned_child_roundtrip_and_join_result (test_async_local_pools.AsyncLocalPoolTests.test_owned_child_roundtrip_and_join_result) (wait='let h=runtime::spawn(->relay(->first));let result=h.await;let a=match result{Ok(v)=>{<-v},Err(_)=>{return 99;}};') ... ERROR
+test_parent_pool_allows_transfer_and_inner_pool_does_not (test_async_local_pools.AsyncLocalPoolTests.test_parent_pool_allows_transfer_and_inner_pool_does_not) ... ok
+test_pool_does_not_escape_with_returned_allocation (test_async_local_pools.AsyncLocalPoolTests.test_pool_does_not_escape_with_returned_allocation) ... ok
+test_pool_mutability_transfer_and_capacity (test_async_local_pools.AsyncLocalPoolTests.test_pool_mutability_transfer_and_capacity) ... ok
+test_recorded_native_child (test_async_local_pools.AsyncLocalPoolTests.test_recorded_native_child) ... ok
+
+======================================================================
+ERROR: test_inactive_and_failed_start_do_not_construct_local_pool (test_async_local_pools.AsyncLocalPoolTests.test_inactive_and_failed_start_do_not_construct_local_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_pools.py", line 106, in test_inactive_and_failed_start_do_not_construct_local_pool
+    run=self.run_native(source,fail_at=1);self.assertEqual(run.stdout,'99\n');self.assert_destroyed(run,[])
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15014, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15007, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13508, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13378, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 831, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5341, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4769, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4764, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4628, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 857, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_owned_child_roundtrip_and_join_result (test_async_local_pools.AsyncLocalPoolTests.test_owned_child_roundtrip_and_join_result) (wait='let a=relay(->first).await;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_pools.py", line 58, in test_owned_child_roundtrip_and_join_result
+    run=self.run_native(self.wrap(body,helper));self.assertEqual(run.stdout,'7\n9\n');self.assert_destroyed(run,[7,9])
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15014, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15007, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13508, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13378, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 831, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5341, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4769, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4764, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4628, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 857, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+======================================================================
+ERROR: test_owned_child_roundtrip_and_join_result (test_async_local_pools.AsyncLocalPoolTests.test_owned_child_roundtrip_and_join_result) (wait='let h=runtime::spawn(->relay(->first));let result=h.await;let a=match result{Ok(v)=>{<-v},Err(_)=>{return 99;}};')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_pools.py", line 58, in test_owned_child_roundtrip_and_join_result
+    run=self.run_native(self.wrap(body,helper));self.assertEqual(run.stdout,'7\n9\n');self.assert_destroyed(run,[7,9])
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15014, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15007, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13508, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13378, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 831, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5341, in _lower_async_function
+    emit_print(statement, body[index + 1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4769, in emit_print
+    value, typ = infer_scalar_value(expr, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4764, in infer_scalar_value
+    return expression(expr, line, following=following), 'Int'
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4628, in expression
+    fail(line, 'lecture d’un emprunt Int : utiliser le déréférencement explicite *')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 857, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 1: lecture d’un emprunt Int : utiliser le déréférencement explicite *
+
+----------------------------------------------------------------------
+Ran 11 tests in 3.224s
+
+FAILED (errors=3)

@@ -1,0 +1,270 @@
+--- async_lowering.py.before
+
++++ async_lowering.py
+
+@@ -342,8 +342,14 @@
+
+         else:
+             tasks.pop(variable, None)
+             awaited.pop(variable, None)
++        if expr[0] != 'await' and push_new_receiver(expr) is None:
++            prior = awaited.copy()
++            prior.pop(variable, None)
++            awaited[variable] = ('reference_value', expr), tasks.copy(), prior
+ 
+     def awaited_origin(operand, tasks, awaited, line):
++        if operand[0] == 'reference_value':
++            return reference_origin(operand[1], tasks, awaited, line)
+         if (receiver := push_new_receiver(operand)) is not None:
+             if receiver not in inputs or inputs[receiver][1] != 'mut':
+                 fail(line, diagnostic)
+@@ -389,6 +395,53 @@
+
+                 fail(line, diagnostic)
+         return mode, origins
+ 
++    def reference_origin(expr, task_calls, awaited, line):
++        if expr[0] in ('if_expr', 'scope'):
++            def branch(body):
++                if isinstance(body, tuple):
++                    return reference_origin(body, task_calls, awaited, line)
++                local_tasks, local_awaited = task_calls.copy(), awaited.copy()
++                for statement in body:
++                    if statement.op == 'var':
++                        record_binding(*statement.args, local_tasks, local_awaited)
++                    elif statement.op == 'return':
++                        return None
++                    elif statement.op == 'if_yield':
++                        return reference_origin(statement.args[0], local_tasks, local_awaited, statement.line)
++                return None
++            arms = expr[2:] if expr[0] == 'if_expr' else (expr[2],)
++            possibilities = [origin for body in arms if (origin := branch(body)) is not None]
++            if not possibilities:
++                fail(line, diagnostic)
++            mode = possibilities[0][0]
++            if any(other != mode for other, _ in possibilities):
++                fail(line, diagnostic)
++            return mode, set().union(*(origins for _, origins in possibilities))
++        if expr[0] == 'await' or push_new_receiver(expr) is not None:
++            mode, origins = awaited_origin(expr if push_new_receiver(expr) is not None else expr[1], task_calls, awaited, line)
++        elif expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('array_index', 'array_deref_slot'):
++            source, path = projected_origin(expr[1], line)
++            index, mode = inputs[source]
++            if expr[0] == 'mut_expr' and mode != 'array_mut':
++                fail(line, diagnostic)
++            mode = 'mut' if expr[0] == 'mut_expr' else 'ref'
++            origins = ((index, path),)
++        elif expr[0] in ('name', 'reborrow'):
++            if expr[1] in inputs:
++                index, mode = inputs[expr[1]]
++                origins = ((index, ()),)
++            elif expr[1] in awaited:
++                mode, origins = awaited_origin(*awaited[expr[1]], line)
++            else:
++                fail(line, diagnostic)
++            if mode not in ('ref', 'mut') or expr[0] == 'reborrow' and expr[2] == 'mut' and mode != 'mut':
++                fail(line, diagnostic)
++            if expr[0] == 'reborrow':
++                mode = expr[2]
++        else:
++            fail(line, diagnostic)
++        return mode, origins
++
+     def scan(value, task_calls, awaited):
+         if isinstance(value, list):
+             task_calls, awaited = task_calls.copy(), awaited.copy()
+@@ -406,31 +459,8 @@
+
+             expr = value.args[0]
+             if not expr:
+                 fail(value.line, diagnostic)
+-            if expr[0] == 'await' or push_new_receiver(expr) is not None:
+-                mode, origins = awaited_origin(expr if push_new_receiver(expr) is not None else expr[1], task_calls, awaited, value.line)
+-                if mode != result_mode:
+-                    fail(value.line, diagnostic)
+-            elif expr[0] == result_mode + '_expr' and expr[1][0] in ('array_index', 'array_deref_slot'):
+-                source, path = projected_origin(expr[1], value.line)
+-                index, mode = inputs[source]
+-                if result_mode == 'mut' and mode != 'array_mut':
+-                    fail(value.line, diagnostic)
+-                origins = ((index, path),)
+-            elif expr[0] in ('name', 'reborrow'):
+-                if expr[1] in inputs:
+-                    index, mode = inputs[expr[1]]
+-                    origins = ((index, ()),)
+-                elif expr[1] in awaited:
+-                    mode, origins = awaited_origin(*awaited[expr[1]], value.line)
+-                else:
+-                    fail(value.line, diagnostic)
+-                if expr[0] == 'name':
+-                    valid = mode == result_mode
+-                else:
+-                    valid = expr[2] == result_mode and (mode == 'mut' or result_mode == 'ref')
+-                if not valid or mode in ARRAY_BORROWS:
+-                    fail(value.line, diagnostic)
+-            else:
++            mode, origins = reference_origin(expr, task_calls, awaited, value.line)
++            if mode != result_mode:
+                 fail(value.line, diagnostic)
+             yield from origins
+ 
+@@ -1256,9 +1286,110 @@
+
+         active_loans[id(loans)] = loans
+         return pointer, loans, element
+ 
++    def reference_shape(expr, bindings=None):
++        # Probe without evaluating; reference_value checks every continuing arm.
++        if bindings is None:
++            bindings = {name: (mode, reference_types.get(name, 'Int'))
++                        for name, mode in references.items()
++                        if mode in ('ref', 'mut') and name not in collection_types}
++        if expr[0] in ('name', 'reborrow'):
++            shape = bindings.get(expr[1])
++            return (expr[2], shape[1]) if shape and expr[0] == 'reborrow' else shape
++        if expr[0] == 'await':
++            shape = await_signature(expr)
++            return shape if shape and shape[0] in ('ref', 'mut') else None
++        if (receiver := push_new_receiver(expr)) is not None:
++            typ = collection_types.get(receiver)
++            return ('mut', 'Int' if typ == 'Vector<Int>' else 'u8') if typ in VECTOR_SLICE_MODES else None
++        if expr[0] in ('ref_expr', 'mut_expr') and expr[1][0] in ('array_index', 'array_deref_slot'):
++            projection = expr[1][1] if expr[1][0] == 'array_deref_slot' else expr[1]
++            root, _ = reference_array_path(projection)
++            if root in arrays:
++                return ('mut' if expr[0] == 'mut_expr' else 'ref', 'u8' if array_elements.get(root) == 'uint8_t' else 'Int')
++        if expr[0] in ('if_expr', 'scope'):
++            for arm in (expr[2:] if expr[0] == 'if_expr' else (expr[2],)):
++                if isinstance(arm, tuple):
++                    shape = reference_shape(arm, bindings)
++                else:
++                    local, shape = bindings.copy(), None
++                    for statement in arm:
++                        if statement.op == 'var':
++                            local[statement.args[0]] = reference_shape(statement.args[1], local)
++                        elif statement.op == 'if_yield':
++                            shape = reference_shape(statement.args[0], local)
++                if shape:
++                    return shape
++        return None
++
++    def surviving_reference_loans(loans, depth, line):
++        departing = {id(scope[0]) for scope in scopes[depth:]}
++        retained = []
++        for target, mode in loans:
++            root = loan_root(target)
++            if inline_binding_scopes.get(root) in departing:
++                if root in received_refs:
++                    continue  # Its underlying targets are independently checked.
++                fail(line, 'emprunt de cible locale non durable dans le scope parent')
++            retained.append((target, mode))
++        return retained
++
++    def reference_value(expr, line, *, following=None):
++        if expr[0] == 'if_expr':
++            test = condition_value(expr[1], line)
++            return emit_branches(test, expr[2], expr[3], line, valued=True, construct='if',
++                                 following=following, boolean=None, reference_result=True)
++        if expr[0] == 'scope':
++            if len(expr) > 3 and expr[3] is not None:
++                fail(line, 'annotation de région non prise en charge dans ce bloc async')
++            return emit_branches(None, expr[2], None, line, valued=True, construct='bloc',
++                                 following=following, boolean=None, reference_result=True)
++        if push_new_receiver(expr) is not None:
++            pointer, loans, typ = vector_push_new_value(expr, line, following=following)
++            return pointer, loans, ('mut', typ)
++        if expr[0] == 'await':
++            pointer, loans, mode = await_task(expr, line, returns_value=True, borrow=True)
++            return pointer, loans, (mode, awaited_reference_types[pointer])
++        shape = reference_shape(expr)
++        if shape is None or shape not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
++            fail(line, 'expression empruntée Int ou mutable u8 requise')
++        mode, typ = shape
++        if expr[0] in ('ref_expr', 'mut_expr'):
++            pointer, loan = capture_array_place(expr[1], mode, line, expected_element='uint8_t' if typ == 'u8' else 'int')
++            loans = [loan]
++        elif expr[0] in ('name', 'reborrow'):
++            name = expr[1]
++            original = references.get(name)
++            if original not in ('ref', 'mut') or mode == 'mut' and original != 'mut':
++                fail(line, 'mode incompatible avec la référence source')
++            reservation = 'mut' if original == 'mut' else mode
++            check_access(name, line, write=reservation == 'mut')
++            pointer = f'frame->{fields[name]}'
++            loans = [(name, reservation), *received_refs.get(name, ())]
++        else:
++            fail(line, 'expression empruntée non prise en charge')
++        active_loans[id(loans)] = loans
++        return pointer, loans, shape
++
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
+         operator = initializer[0]
++        if (operator != 'name' and push_new_receiver(initializer) is None
++                and reference_shape(initializer) in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8'))):
++            if statement.compact_transfer:
++                fail(statement.line, 'une référence ne transfère pas une allocation')
++            check_new_name(name, statement.line)
++            pointer, loans, (mode, typ) = reference_value(initializer, statement.line, following=body[position + 1:])
++            annotation = '&' + ('mut ' if mode == 'mut' else '') + typ
++            if statement.annotation not in (None, annotation):
++                fail(statement.line, 'annotation incompatible avec le type emprunté')
++            member = declare(name, statement.line)
++            references[name], reference_types[name] = mode, typ
++            if statement.mutable:
++                mutable.add(name)
++            received_refs[name] = loans
++            track_result(name, loans, body, position)
++            steps.append(f'frame->{member} = {pointer};')
++            return True
+         if push_new_receiver(initializer) is not None:
+             if statement.compact_transfer:
+                 fail(statement.line, 'push_new renvoie un emprunt, pas une allocation transférée')
+@@ -2687,12 +2818,14 @@
+
+                              valued=False, construct='bloc', following=following)
+ 
+     def emit_branches(test, yes, no, line, *, valued, construct, join_payload=None,
+-                      export_name=None, transfer_result=False, following=None, boolean=False):
++                      export_name=None, transfer_result=False, following=None, boolean=False, reference_result=False):
+         target = temporary('int') if valued and not transfer_result and boolean is not None else None
+         scalar_type = None
+         selected_signature = None
+         selected_loans, selected_returned_loans = [], []
+         selected_utf8_loans = []
++        selected_reference_loans = []
++        reference_signature = None
+         before = control_state()
+         had_result_loan = join_payload is not None and id(join_payload[3]) in active_loans
+         continuing = []
+@@ -2938,7 +3071,16 @@
+
+                 elif valued:
+                     item = terminal.args[0] if arm_value is None else arm_value
+                     item_line = terminal.line if arm_value is None else line
+-                    if boolean is None:
++                    if reference_result:
++                        value, loans, signature = reference_value(item, item_line, following=())
++                        selected_reference_loans.extend(surviving_reference_loans(loans, len(scopes) - 1, item_line))
++                        active_loans.pop(id(loans), None)
++                        if reference_signature is not None and signature != reference_signature:
++                            fail(item_line, 'branches empruntées : même type et même mode requis')
++                        if reference_signature is None:
++                            target = temporary(capture_ctype(*signature))
++                        reference_signature = signature
++                    elif boolean is None:
+                         value, typ = infer_scalar_value(item, item_line, following=())
+                         if typ in ASYNC_VIEW_TYPES:
+                             loans = local_utf8_loans(item, value)
+@@ -3031,6 +3173,10 @@
+
+             loans = list(dict.fromkeys(selected_loans))
+             active_loans[id(loans)] = loans
+             return kind, (target, child_returns_int, loans, nominal, list(dict.fromkeys(selected_returned_loans)))
++        if reference_result:
++            loans = list(dict.fromkeys(selected_reference_loans))
++            active_loans[id(loans)] = loans
++            return target, loans, reference_signature
+         if valued and boolean is None:
+             if scalar_type in ASYNC_VIEW_TYPES:
+                 utf8_result_loans[target] = tuple(dict.fromkeys(selected_utf8_loans))

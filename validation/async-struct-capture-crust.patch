@@ -1,0 +1,46 @@
+--- crust.py (before struct captures)
++++ crust.py
+@@ -9561,7 +9561,7 @@
+             if parent.read_parent is not None:
+                 pending.append(parent.read_parent)
+         parents = tuple(ancestry.values())
+-        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String')
++        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', *self.struct_fields)
+                or parent.array_root or parent.match_reservation for parent in parents):
+             self.fail('prototype : réemprunt async Int avec parent projeté non pris en charge')
+         return parents
+@@ -13378,7 +13378,8 @@
+             self.async_definitions[name] = node, lower_async_function(
+                 node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+                 self.declared_array_type, self.async_frame_slots,
+-                sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
++                sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
++                struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+         self.verify_function_bodies()
+         for parent, callees in self.async_sync_calls.items():
+             self.async_frame_slots[parent] += sum(
+@@ -13442,6 +13443,15 @@
+                 root.bindings[parameter] = Binding(parameter, 'source', parameter, source=source,
+                     source_mut=mode == 'mut', source_borrowed=True)
+                 ctype = 'Source *'
++            elif mode in ('ref', 'mut') and typ in self.struct_fields:
++                source = MemorySource(check.uid(), external.id, 'symbolic', parameter,
++                                      f'{parameter}->source', element_type=typ)
++                external.sources.append(source)
++                allocation = Allocation(check.uid(), external.id, parameter, (source,), c=parameter, typ=typ)
++                check.allocations.append(allocation)
++                external.allocations.append(allocation)
++                root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
++                ctype = 'Cell *'
+             elif mode in ('ref', 'mut'):
+                 element = check.borrowed_element_type(typ)
+                 storage = Binding(parameter + '_storage', 'array', '', static_type=element,
+@@ -13468,7 +13478,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[name]
+         mode = contract.result_type[0]
+-        ctype = ('Cell *' if mode == 'owned' else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+         lines = check.flag_declarations + check.lines

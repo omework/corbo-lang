@@ -1,0 +1,318 @@
+(* Corbo — noyau cible, synchrone et async.
+   [] option, {} répétition, () groupement, | alternative.
+   La virgule sépare les éléments d'une suite. Les terminaux sont entre ".
+   Les formes historiques de transfert et le mode script du prototype
+   sont documentés dans docs/LANGUAGE_RULES.md.
+*)
+
+programme           = [ annotation_datastack ], { directive_async | element_module } ;
+element_module      = importation | declaration | selection_cible ;
+selection_cible     = "#", "(", "if", ":", condition_cible, ")",
+                      { element_module }, "#", "(", "endif", ")" ;
+condition_cible     = conjonction_cible, { "||", conjonction_cible } ;
+conjonction_cible   = test_cible, { "&&", test_cible } ;
+test_cible          = "target", ".", ( "os" | "family" | "arch" | "pointer_width" ), "==", texte ;
+declaration         = [ "pub" ], ( fonction | fonction_externe | structure | enumeration | constante )
+                    | contrat_type, { contrat_type }, "pub", ( corps_structure | corps_enumeration )
+                    | implementation ;
+importation         = "use", chemin, "::",
+                      ( import_element | "{", import_element, { ",", import_element }, [ "," ], "}" ),
+                      ";" ;
+import_element      = nom, [ "as", identifiant ] ;
+
+fonction            = { contrat_type }, [ contrat_branche ], [ "async" ], signature, bloc ;
+signature           = "fn", identifiant, "(", [ parametres ], ")",
+                      [ "->", type ] ;
+contrat_type        = "#", "(", "type", ":", identifiant,
+                      [ [ "<", parametre_type, ">" ], [ "with" ], "{",
+                        exigence_methode, { exigence_methode }, "}" ], ")" ;
+parametre_type      = identifiant, [ ":", type, { ",", type } ] ;
+contrat_branche     = "#", "(", "branch",
+                      [ ":", "join", "=", "result", ".",
+                        ( identifiant, "(", ")" | "await" ) ], ")" ;
+parametres          = parametre, { ",", parametre }, [ "," ] ;
+parametre           = [ "mut" ], identifiant, ":", type ;
+fonction_externe    = "extern", abi_c, "fn", identifiant, "(",
+                      [ parametres_externes ], ")", [ "->", resultat_externe ], ";" ;
+parametres_externes = parametre_externe, { ",", parametre_externe }, [ "," ] ;
+parametre_externe   = identifiant, ":", primitif ;
+resultat_externe    = primitif | "Void" | "(", ")" ;
+
+structure           = { contrat_type }, corps_structure ;
+corps_structure     = "struct", identifiant, [ parametres_generiques ],
+                      "{", [ champs_types ], "}" ;
+parametres_generiques = "<", identifiant, { ",", identifiant }, [ "," ], ">" ;
+enumeration         = { contrat_type }, corps_enumeration ;
+corps_enumeration    = "enum", identifiant, [ parametres_generiques ], "{",
+                      variante, { ",", variante }, [ "," ], "}" ;
+variante            = identifiant, [ "{", [ champs_types ], "}"
+                                    | "(", type, { ",", type }, [ "," ], ")" ] ;
+champs_types        = champ_type, { ",", champ_type }, [ "," ] ;
+champ_type          = identifiant, ":", type ;
+implementation      = "impl", chemin, [ parametres_generiques ],
+                      "{", { methode | constante }, "}" ;
+constante           = "const", identifiant, ":", primitif, "=",
+                      ( [ "-" ], ( entier | flottant ) | "true" | "false" ), ";" ;
+methode             = [ contrat_lock ], [ "async" ], signature_methode, bloc ;
+exigence_methode    = [ "async" ], signature_methode, ";" ;
+signature_methode   = "fn", ( identifiant | "addr" ), "(",
+                      [ receveur, [ ",", [ parametres ] ] | parametres ], ")",
+                      [ "->", type ] ;
+receveur            = "&", [ "mut" ], "self"
+                    | [ "mut" ], "self", ":", type ;
+contrat_lock        = "#", "(", "lock", ":", "on", "=", "self",
+                      [ ",", "through_result", "=", "true" ], ")" ;
+
+type                = "&", [ "mut" ], ( type | type_tranche ) | type_base ;
+type_base           = "(", ")" | type_tuple | type_tableau | type_appelable | type_nomme ;
+type_tuple          = "(", type, ",", type, { ",", type }, [ "," ], ")" ;
+type_nomme          = chemin, [ arguments_type ] ;
+arguments_type      = "<", type, { ",", type }, ">" ;
+type_appelable      = "fn", "(", [ type, { ",", type } ], ")", "->", type ;
+primitif            = "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
+                    | "bool" | "f32" | "f64" | "usize" ;
+type_tableau        = "[", type, ";", entier, "]" ;
+type_tranche        = "[", type, "]" ;
+chemin              = nom, { "::", nom } ;
+chemin_valeur       = chemin ;
+appel_type          = chemin, arguments_type, "::", nom, "(", [ arguments ], ")" ;
+
+annotation_datastack = "#", "(", "datastack", ":",
+                       [ propriete_datastack, { ",", propriete_datastack } ], ")" ;
+propriete_datastack = ( "size" | "region_stack_size" | "region_size"
+                      | "reclaim_threshold" | "region_reclaim_threshold" ),
+                      "=", decimal_positif, unite_region ;
+
+directive_async     = "#", "(", "directive", ":", "async_pool_sizes", "=",
+                      "{", capacites, "}", ")" ;
+capacites           = capacite, { ",", capacite }, [ "," ] ;
+capacite            = chemin, ":", entier ;
+annotation_region   = "#", "(", "stack_region", ":", "max_size", "=",
+                      decimal_positif, unite_region,
+                      [ ",", "count", "=", decimal_positif ], ")" ;
+unite_region        = "K" | "M" | "G" ;
+annotation_free_pages = "#", "(", "free_pages", ")" ;
+
+bloc                = [ annotation_region ], [ annotation_free_pages ], bloc_delimite ;
+bloc_delimite       = "{", { entree_move },
+                      { instruction }, [ expression ], "}" ;
+entree_move         = "move", identifiant, ";" ;
+bloc_capture        = "move", bloc ;
+bloc_unsafe         = "unsafe", bloc ;
+bloc_unchecked      = "@", "unchecked", "{", { instruction | bloc_asm | bloc_c }, "}" ;
+bloc_asm            = "@asm", "{", { texte_assembleur | operande_asm }, "}" ;
+bloc_c              = "@c", [ "(", "includes", "=", "{",
+                      [ chemin_entete, { ",", chemin_entete }, [ "," ] ], "}", ")" ],
+                      "{", { texte_c | operande_asm }, "}" ;
+chemin_entete       = texte ;
+(* Header paths contain ASCII letters, digits, _, ., /, - or :.
+   Both foreign blocks require lexical enclosure in @unchecked.
+   ${name} binds a typed Corbo operand, including aggregates;
+   includes are emitted once per unit after generated type declarations. *)
+operande_asm        = "${", identifiant, "}" ;
+(* texte_assembleur est le texte de la cible, conservé par le lexeur.
+   Un bloc asm doit être lexicalement sous @unchecked. addr(reference)
+   est un appel de primitive qui produit un usize. *)
+
+instruction         = liaison | affectation | retour | rupture | reprise | suspension
+                    | boucle_while | expression, ";" | forme_bloc | bloc_unchecked ;
+liaison             = "let", ( liaison_nommee | motif_tuple ), [ ":", type ], "=",
+                      expression, ";" ;
+liaison_nommee      = [ "mut" ], identifiant ;
+motif_tuple         = "(", liaison_nommee, ",", liaison_nommee,
+                      { ",", liaison_nommee }, [ "," ], ")" ;
+affectation         = place, operateur_affectation, expression, ";" ;
+operateur_affectation = "=" | "+=" | "-=" | "*=" | "/=" | "%="
+                       | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+place               = [ "*", [ "*" ] ], ( identifiant | "self" ),
+                      { ".", identifiant | "[", expression, "]" } ;
+retour              = "return", [ expression ], ";" ;
+rupture             = "break", [ expression ], ";" ;
+reprise             = "continue", ";" ;
+suspension          = "yield", ";" ;
+boucle_while        = "while", expression, bloc ;
+forme_bloc          = bloc | bloc_capture | bloc_unsafe | conditionnelle | match | boucle ;
+
+expression          = disjonction ;
+disjonction         = conjonction, { "||", conjonction } ;
+conjonction         = ou_bits, { "&&", ou_bits } ;
+ou_bits             = xor_bits, { "|", xor_bits } ;
+xor_bits            = et_bits, { "^", et_bits } ;
+et_bits             = comparaison, { "&", comparaison } ;
+comparaison         = decalage, [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), decalage ] ;
+decalage            = somme, { ( "<<" | ">>" ), somme } ;
+somme               = produit, { ( "+" | "-" ), produit } ;
+produit             = conversion, { ( "*" | "/" | "%" ), conversion } ;
+conversion          = unaire, { "as", type } ;
+unaire              = ( "-" | "!" | "~" | "*" | ( "&", [ "mut" ] ) ), unaire | postfixee ;
+postfixee           = primaire, { suffixe } ;
+(* En position d'appel, new sélectionne la production initialisation_pool.
+   Dans new, {} et { champ: expression, ... } sont des initialiseurs
+   de structure dont le type est fourni par le pool. Les autres blocs
+   restent des expressions.
+   try_slice avec un séparateur .. sélectionne la production plage. *)
+suffixe             = ".", identifiant, [ "(", [ arguments ], ")" ]
+                    | ".", "new", "(", [ initialisation_pool ], ")"
+                    | ".", "try_slice", "(", plage, ")"
+                    | ".", "await" | "[", indice, "]" | "?" ;
+indice              = expression | plage ;
+plage               = [ expression ], "..", [ expression ] ;
+arguments           = expression, { ",", expression }, [ "," ] ;
+
+(* En l'absence d'une annotation de retour,
+   le type de retour est inféré. Tous les chemins de retour doivent
+   produire le même type, conformément à l'annotation si elle est présente.
+   "||" ouvre une closure sans paramètre en début d'expression et reste
+   l'opérateur OU entre deux opérandes. move placé devant la closure
+   indique une capture par valeur à sa déclaration. La notation des captures
+   sans move reste à préciser. Pour emprunter
+   une valeur extérieure, une référence explicite est créée avant la
+   closure, qui capture la liaison de référence. L'appel via une liaison
+   suit la forme chemin_valeur avec arguments. *)
+expression_closure  = [ "move" ], parametres_closure, [ "->", type ], bloc_delimite ;
+parametres_closure  = "||" | "|", parametres, "|" ;
+appel_closure       = "(", expression_closure, ")", "(", [ arguments ], ")" ;
+primaire            = litteral | chemin_valeur, [ "(", [ arguments ], ")" ] | "self"
+                    | "(" , [ expression ], ")" | tableau | tuple
+                    | expression_closure | appel_closure
+                    | construction | pool | lancement | groupe_selection | thread_natif
+                    | appel_type
+                    | forme_bloc ;
+tuple               = "(", expression, ",", expression, { ",", expression }, [ "," ], ")" ;
+litteral            = entier | flottant | texte | "true" | "false" ;
+tableau             = "[", [ expression, ( ";", entier
+                             | { ",", expression }, [ "," ] ) ], "]" ;
+construction        = nom_structure, "{", [ valeurs_champs ], "}"
+                    | nom_enum, ".", identifiant, [ "{", [ valeurs_champs ], "}"
+                                                  | "(", arguments, ")" ] ;
+valeurs_champs      = valeur_champ, { ",", valeur_champ }, [ "," ] ;
+valeur_champ        = identifiant, ":", expression ;
+(* pool est un nom contextuel. La forme pool<type>(...) a priorité
+   lorsqu’une liste d’arguments suit la fermeture du type. *)
+pool                = "pool", "<", type, ">", "(", entier, ")" ;
+initialisation_pool = initialiseur_structure_pool | valeurs_champs | expression ;
+initialiseur_structure_pool = "{", [ valeurs_champs ], "}" ;
+
+conditionnelle      = "if", expression, bloc, [ "else", ( bloc | conditionnelle ) ] ;
+boucle              = "loop", bloc ;
+match               = "match", expression, "{", bras, { ",", bras }, [ "," ], "}" ;
+bras                = motif, "=>", bloc ;
+motif               = "_" | "(" , ")" | chemin_valeur, [ "(", motif, ")" ]
+                    | nom_enum, ".", identifiant, [ "{", [ motifs_champs ], "}"
+                                                  | "(", motif_positionnel, { ",", motif_positionnel }, [ "," ], ")" ] ;
+motif_positionnel   = identifiant | "_" ;
+motifs_champs       = motif_champ, { ",", motif_champ }, [ "," ] ;
+motif_champ         = identifiant, ":", ( identifiant | "_" ) ;
+
+lancement           = "runtime", "::", ( "spawn" | "spawn_blocking" ),
+                      "(", expression, ")" ;
+thread_natif        = "runtime", "::", "thread", "(", ( bloc | bloc_capture ), ")" ;
+
+(* Production cible de SL1. Son intégration est reportée. *)
+groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
+
+(* Terminaux lexicaux.
+   nom          = [A-Za-z_][A-Za-z_0-9]*, hors mots-clés et "_".
+   Les noms de types builtin et l’espace de noms runtime sont admis dans
+   les chemins. Ils restent réservés dans les déclarations.
+   identifiant  = nom autorisé dans une déclaration.
+   nom_structure et nom_enum sont des noms déclarés avec struct et enum.
+   self est le nom réservé du receveur dans une signature de méthode.
+   Le corps de la méthode peut l'utiliser comme valeur ou comme base de place.
+   Le vérificateur contrôle que le receveur est disponible à cet emplacement.
+   entier       = [0-9]+ ou 0[xX][0-9A-Fa-f]+. Le signe est un opérateur.
+   decimal_positif = 0*[1-9][0-9]*.
+   flottant     = [0-9]+\.[0-9]* ou \.[0-9]+.
+   Un flottant ne peut pas absorber le premier point de "..". Dans "1..3",
+   le lexeur reconnaît donc l'entier 1, le séparateur .. et l'entier 3.
+   texte        = chaîne entre guillemets doubles, décodée en UTF-8 (TX1).
+   Les échappements JSON et leurs conditions de validité sont fixés par TX1.
+   abi_c        = lexème exact "C", guillemets compris.
+   Les espaces et commentaires // sont ignorés hors littéraux.
+   Les suites ->, ::, =>, .., <=, >=, ==, !=, &&, ||, <<, >>, +=, -=, *=,
+   /=, %=, &=, |=, ^=, <<= et >>= sont des terminaux. Dans un type, chaque > ferme un niveau
+   générique. Un opérateur qui suit peut toucher le dernier >.
+*)
+
+(* Conventions et contraintes contextuelles.
+   use et pub sont contextuels en tête de déclaration.
+   La résolution détermine le type désigné par chaque chemin.
+   Le vérificateur contrôle le nombre et les contraintes des arguments de type.
+   Les annotations avec propriétés suivent la forme #(nom: propriétés).
+   Chaque nom définit les propriétés admises et l'emplacement de l'annotation.
+   Les directives d'analyse du compilateur sont définies dans docs/LANGUAGE_RULES.md.
+   Elles s'appliquent pendant la vérification après l'analyse syntaxique.
+   L'annotation type porte un contrat statique de fonction ou de structure.
+   Sur une structure, les paramètres s'appliquent aux champs et aux méthodes
+   des blocs impl correspondants. Le compilateur spécialise un type concret
+   par liste d'arguments de type. Il déduit les arguments depuis les paramètres
+   du constructeur et les signatures des méthodes exigées. Les méthodes async
+   exigent une implémentation async. Les obligations de possession et d'emprunt
+   sont vérifiées sur les champs et les méthodes ainsi spécialisés. Dans T<R>,
+   T est le type à contraindre et R un paramètre de type. Dans
+   T<R: T1, T2>, R doit être l'un des types énumérés.
+
+   La forme bloc finale sans ";" fournit la valeur finale. Une forme bloc
+   qui précède une autre instruction peut servir d'instruction sans ";".
+   Les suffixes d'appel, d'accès, d'attente et de propagation s'appliquent
+   dans l'ordre d'écriture, avant les infixes.
+   Les répétitions d'infixes à un même niveau s'associent à gauche.
+   Une construction de structure est reconnue par son nom déclaré, y compris
+   devant un "{" qui pourrait sinon ouvrir un corps de if ou while.
+
+   Le programme exige un main synchrone. yield et .await exigent un contexte
+   async. Handle<T> expose join() en contexte synchrone. AsyncHandle<T>
+   expose .await en contexte async, où spawn_blocking est appelable.
+   Le bloc reçu par runtime::thread est synchrone même dans un appelant async.
+   Les imports nommés move a; et la capture de bloc move { ... } s'y appliquent
+   lors de l'appel. Les contrôles de capture relèvent du vérificateur.
+   Seul un bloc passé directement à runtime::thread reçoit le type concret
+   d'un bloc synchrone à exécuter plus tard. En position ordinaire, le bloc
+   s'évalue immédiatement et l'expression a le type de son résultat.
+
+   En position de type, le nom qualifié ou relatif d'une définition async
+   désigne son type de tâche inactive. AS3 exige un chemin relatif qui
+   identifie une seule définition en cas de conflit de noms.
+
+   Un littéral flottant est f64 par défaut. Une annotation de let fixe le type
+   du littéral qu'il reçoit, par exemple let x: f32 = .5;.
+   Un littéral entier sans type imposé est i64. La valeur doit tenir dans
+   le type retenu. Un dépassement d'i64 ne sélectionne pas un autre type.
+
+   Le typage décide si une expression if exige else et si un break porte
+   une valeur. Il vérifie l'exhaustivité des match, les types des opérandes,
+   les modes d'emprunt et la consommation par valeur. Les durées de vie,
+   la compatibilité des accès et les restrictions de Select relèvent aussi du
+   vérificateur.
+
+   Les méthodes ordinaires suivent la syntaxe des appels. ME1 et ME2
+   définissent les modes du receveur et son emprunt à l'appel. Selon ME4,
+   c.terminer() passe c par valeur si le receveur est déclaré self: T.
+   Ce passage déplace c, y compris pour un receveur de type primitif.
+   V3 réserve copy aux arguments de type primitif.
+   RT3 définit le contrat de spawn. Les annotations de type introduisent leurs
+   noms dans l'ordre. T<R> réutilise le R introduit par une annotation antérieure
+   dans la forme retenue pour spawn. With exige au moins les méthodes déclarées.
+   Son omission exige exactement ces méthodes.
+   Dans un contrat branch, l'instance lancée et ses dépendances sont déduites
+   du corps de la fonction. result désigne la valeur retournée et join
+   désigne l'attente dont le retour
+   établit la fin des usages de la branche. L'absence de join ne fournit
+   aucun fait de fin de branche. N4 s'applique sur chaque chemin.
+   RT8 applique le même contrat branch au bloc lancé par runtime::thread.
+   RT5 définit les attentes des handles et RT7 leur nettoyage après abandon.
+   MT9 fixe les règles de garde des mutex et
+   MT10 les contraintes des contrats lock.
+   SL1 définit group.add(tache) et group.select().await. Les méthodes
+   add et select utilisent la syntaxe des appels ordinaires.
+   Chaque chemin qui atteint group.select() doit avoir exécuté au moins
+   un add sur ce groupe. select() ferme le groupe aux ajouts. .await
+   déclenche le premier poll des branches.
+
+   Les appels externes utilisent la syntaxe d'appel ordinaire. Le vérificateur
+   exige un bloc unsafe à l'emplacement de chaque appel C et y applique les
+   règles ordinaires de Corbo. L'option de build --c-source relève de la CLI.
+
+   Les traits, les déclarations de modules et les interfaces détaillées des
+   collections sont hors de cette grammaire.
+*)

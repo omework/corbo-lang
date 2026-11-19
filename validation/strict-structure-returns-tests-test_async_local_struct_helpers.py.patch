@@ -1,0 +1,18 @@
+--- tests/test_async_local_struct_helpers.py
++++ tests/test_async_local_struct_helpers.py
+@@ -42,11 +42,12 @@
+                 self.assertEqual(run.stderr.count('destroy q=Point\n'),1)
+                 self.assertNotIn('destroy q=0',run.stderr)
+ 
+-    def test_same_helper_has_pool_and_local_variants(self):
++    def test_copy_helpers_declare_pool_and_local_returns(self):
+         source=self.program('''let p=make(7);let a=duplicate(->p);print(a.x);
+-            let b=duplicate(->q);
++            let b=duplicate_pool(->q);
+             print(b.x);drop(->a);drop(->b);return 11;''',
+-            'fn duplicate(p:->Point)-><-Point{let q=copy(p);return <-q;}')
++            'fn duplicate(p:->Point)-><-Point{let q=copy(p);return <-q;}'
++            'fn duplicate_pool(p:->A<Point>)-><-A<Point>{let q=copy(p);return <-q;}')
+         # The pool input and its copy coexist during RHS evaluation.
+         source=source.replace('work()->Int','work(q:->Point)->Int').replace(
+             'let h=runtime::spawn(->work());',

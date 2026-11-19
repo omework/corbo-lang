@@ -1,0 +1,17 @@
+async fn append(v:&mut Vector<A<Int>>,p:&mut Pool<Int>)->Int {
+    v.push(->p.new(7));yield;return 1;
+}
+async fn ready()->Int { return 9; }
+async fn choose(v:&mut Vector<A<Int>>,p:&mut Pool<Int>)->Int {
+    let mut s=runtime::select(->append(v,p),->ready());
+    let r=s.await;drop(->s);return r;
+}
+fn main() {
+    let mut vectors=pool<Vector<A<Int>>>(1);
+    let mut values=vectors.new();
+    { let mut numbers=pool<Int>(1);
+      let h=runtime::spawn(->choose(&mut values,&mut numbers));
+      match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}
+    }
+    drop(->values);
+}

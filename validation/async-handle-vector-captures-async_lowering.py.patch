@@ -1,0 +1,47 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -5,7 +5,7 @@
+ 
+ from collections import ChainMap
+ from dataclasses import dataclass, replace
+-from array_syntax import consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
++from array_syntax import HANDLE_VECTOR, consumed_result_expression, fixed_array_shape, reference_array_path, reference_type
+ from integer_syntax import exact_integer_conversion
+ from utf8_syntax import ERROR_VALUE_TYPES, ERROR_VALUE_MODES, ERROR_VALUE_TAGS, RESULT_ERROR_MODES
+ from utf8_syntax import (
+@@ -2081,7 +2081,7 @@
+            if mode in ('array', *ARRAY_BORROWS) else
+            (mode, typ) not in (('mut', 'u8'), ('runtime_error', 'runtime::Error'), ('scalar', 'Bool'), ('byte', 'u8'), ('char', 'char'), ('text', 'str'), ('byte_ref', 'u8'))
+            and not (mode in (*ERROR_VALUE_TYPES, *ASYNC_CAPTURE_VIEW_MODES, *UTF8_VALUE_RESULT_FAMILIES, *PLAIN_JOIN_TYPES) and typ == VALUE_MODES[mode])
+-           and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>'))
++           and not (mode in ('ref', 'mut', 'owned', *JOIN_PAYLOADS) and typ in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR))
+            and (mode, typ) not in pool_sync_types
+            and not (mode in ('owned', *JOIN_PAYLOADS) and typ in owned_aggregates)
+            and not (mode in ('ref', 'mut') and typ in reference_aggregates)
+@@ -2137,7 +2137,7 @@
+     result_ctype = array_result_ctype or (capture_type(*result) if returns_value else 'int')
+     parameter_modes = {name: mode for name, mode, _ in parameters}
+     collection_types = {name: typ for name, mode, typ in parameters
+-                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>')
++                         if mode in ('ref', 'mut', 'owned') and typ in ('String', 'Vector<Int>', 'Vector<u8>', HANDLE_VECTOR)
+                          or mode == 'owned' and typ in owned_aggregates}
+     boolean_bindings = {name for name, mode, typ in parameters if (mode, typ) == ('scalar', 'Bool')}
+     byte_bindings = {name for name, mode, _ in parameters if mode == 'byte'}
+@@ -6601,7 +6601,7 @@
+             return f'text_byte_len({static_text_value(receiver, line, following=following)})'
+         if op == 'method_call' and expr[2] == 'len' and expr[1][0] == 'name':
+             receiver = expr[1][1]
+-            if collection_types.get(receiver) not in ('Vector<Int>', 'Vector<u8>') or expr[3]:
++            if collection_types.get(receiver) not in ('Vector<Int>', 'Vector<u8>', HANDLE_VECTOR) or expr[3]:
+                 fail(line, 'len exige un Vector sans argument')
+             check_access(receiver, line)
+             return f'vector_len(frame->{fields[receiver]})'
+@@ -6626,7 +6626,7 @@
+             return store_array(('array_index', expr[1], expr[2]), expr[3], line,
+                                following=following, returns_old=True)
+         if op == 'array_len':
+-            if expr[1][0] == 'name' and collection_types.get(expr[1][1]) in ('Vector<Int>', 'Vector<u8>'):
++            if expr[1][0] == 'name' and collection_types.get(expr[1][1]) in ('Vector<Int>', 'Vector<u8>', HANDLE_VECTOR):
+                 receiver = expr[1][1]
+                 check_access(receiver, line)
+                 return f'vector_len(frame->{fields[receiver]})'

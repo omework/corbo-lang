@@ -1,0 +1,7 @@
+enum Choice{Left{x:Int},Right{x:Int}}
+async fn own(v:->Choice)-><-Choice{yield;return <-v;}
+fn main(){
+ let mut p=pool<Choice>(1);let v=new(p) Choice.Left{x:7};
+ let h=runtime::spawn(->own(->v));
+ match h.join(){Ok(r)=>{print(r);drop(->r);},Err(_)=>{print(99);}}
+}

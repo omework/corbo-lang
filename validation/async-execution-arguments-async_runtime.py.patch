@@ -1,0 +1,22 @@
+--- before/async_runtime.py
++++ after/async_runtime.py
+@@ -947,6 +947,19 @@
+     int error;
+ } CrustAsyncExecution;
+ 
++/* Transfer the wait obligation to a synchronous ABI without waiting or
++   submitting the task again. Async-native workers are already detached;
++   all workers publish worker_done through the shared completion protocol. */
++static void task_sync_adopt(CrustExecution *target, CrustAsyncExecution *source) {
++    *target = (CrustExecution){0};
++    target->task = source->task;
++    target->error = source->error;
++    target->pooled = 1;
++    atomic_init(&target->joined, 0);
++    source->task = NULL;
++    source->error = 0;
++}
++
+ /* Consume a synchronous handle without waiting for its worker. The worker
+    publishes completion through the task slot, so the async waiter uses the
+    same notification protocol as a handle created directly in an async body. */

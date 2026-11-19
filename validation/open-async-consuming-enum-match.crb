@@ -1,0 +1,8 @@
+enum Item { Value { data:A<Int> }, Empty {} }
+async fn take(item:->Item)->Int {
+    let result=match (->item){Item.Value{data:value}=>{yield;let n=*value;drop(->value);n},Item.Empty{}=>{0}};
+    return result;
+}
+fn main(){let mut ns=pool<Int>(1);let n=ns.new(7);let mut items=pool<Item>(1);
+let item=new(items) Item.Value{data:<-n};let h=runtime::spawn(->take(->item));
+match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}}

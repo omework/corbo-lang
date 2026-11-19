@@ -1,0 +1,476 @@
+ignore_void_await_statement DETECTED
+test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample) ... 
+  test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample) (stage='verify_program') ... FAIL
+  test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample) (stage='compile_source') ... FAIL
+test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample) ... FAIL
+
+======================================================================
+FAIL: test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample) (stage='verify_program')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample) (stage='compile_source')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_field_application.py", line 23, in refused
+    with self.assertRaisesRegex(Error,pattern) as caught:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: Error not raised
+
+======================================================================
+FAIL: test_recorded_void_child_counterexample (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_recorded_void_child_counterexample)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 128, in test_recorded_void_child_counterexample
+    self.assertTrue(compiler.async_structure_effects['work'].structure_fields)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: () is not true
+
+----------------------------------------------------------------------
+Ran 1 test in 1.212s
+
+FAILED (failures=3)
+
+erase_scalar_execution_envelope DETECTED
+test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) ... 
+  test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='work') ... ERROR
+  test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='native') ... ERROR
+
+======================================================================
+ERROR: test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='work')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 113, in test_void_completion_and_native_child
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 15387, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 15380, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 13881, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 13689, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 5820, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 4365, in emit_return
+    steps.append(f'frame->result = {expression(value, line, following=())};')
+                                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 5130, in expression
+    return match_async_result(expr[1], line, following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 2515, in match_async_result
+    scalar_result = infer_scalar_value(subject, line, following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 5214, in infer_scalar_value
+    return plain_join_value(expr, mode, line, following=following), PLAIN_JOIN_TYPES[mode]
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 3165, in plain_join_value
+    return execution_await(expr, line)[0]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 1913, in execution_await
+    apply_child_field_changes(field_changes, line, launched=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 1160, in apply_child_field_changes
+    fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 9: prototype : terminaison des dépendances de champs enfant non raccordée
+
+======================================================================
+ERROR: test_void_completion_and_native_child (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_void_completion_and_native_child) (name='native')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 113, in test_void_completion_and_native_child
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 15387, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 15380, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 13881, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/crust.py", line 13689, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 5820, in _lower_async_function
+    emit_return(args[0] if op == 'return' else ('move', args[0]), line)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 4365, in emit_return
+    steps.append(f'frame->result = {expression(value, line, following=())};')
+                                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 5130, in expression
+    return match_async_result(expr[1], line, following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 2515, in match_async_result
+    scalar_result = infer_scalar_value(subject, line, following=following)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 5214, in infer_scalar_value
+    return plain_join_value(expr, mode, line, following=following), PLAIN_JOIN_TYPES[mode]
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 3165, in plain_join_value
+    return execution_await(expr, line)[0]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 1913, in execution_await
+    apply_child_field_changes(field_changes, line, launched=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 1160, in apply_child_field_changes
+    fail(line, 'prototype : terminaison des dépendances de champs enfant non raccordée')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-0mt9pglk/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 9: prototype : terminaison des dépendances de champs enfant non raccordée
+
+----------------------------------------------------------------------
+Ran 1 test in 0.076s
+
+FAILED (errors=2)
+
+forget_direct_completion DETECTED
+test_completed_child_keeps_target_reserved_in_parent (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_completed_child_keeps_target_reserved_in_parent) ... FAIL
+
+======================================================================
+FAIL: test_completed_child_keeps_target_reserved_in_parent (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_completed_child_keeps_target_reserved_in_parent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 41, in test_completed_child_keeps_target_reserved_in_parent
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n9\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n9\n7\n9\n' != '11\n9\n9\n9\n'
+  11
+  9
+- 7
+  9
++ 9
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.056s
+
+FAILED (failures=1)
+
+forget_handle_completion DETECTED
+test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure) ... FAIL
+
+======================================================================
+FAIL: test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 51, in test_spawned_child_success_and_submission_failure
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,'11\n9\n9\n9\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n9\n7\n9\n' != '11\n9\n9\n9\n'
+  11
+  9
+- 7
+  9
++ 9
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.157s
+
+FAILED (failures=1)
+
+publish_at_creation DETECTED
+test_inactive_child_does_not_publish_effects (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_inactive_child_does_not_publish_effects) ... ERROR
+
+======================================================================
+ERROR: test_inactive_child_does_not_publish_effects (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_inactive_child_does_not_publish_effects)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 34, in test_inactive_child_does_not_publish_effects
+    self.assertEqual(self.run_native(source).stdout,'11\n7\n7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/crust.py", line 15387, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/crust.py", line 15380, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/crust.py", line 13881, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/crust.py", line 13689, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/async_lowering.py", line 5796, in _lower_async_function
+    elif set_reference(statement, body[index + 1:]):
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/async_lowering.py", line 5751, in set_reference
+    check_access(receiver, line, write=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/async_lowering.py", line 4416, in check_access
+    fail(line, f"accès à '{name}' incompatible avec un emprunt actif")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-child-fields-03ekcrx6/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 6: accès à 'n' incompatible avec un emprunt actif
+
+----------------------------------------------------------------------
+Ran 1 test in 0.067s
+
+FAILED (errors=1)
+
+forget_launch_failure_state DETECTED
+test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure) ... FAIL
+
+======================================================================
+FAIL: test_spawned_child_success_and_submission_failure (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_spawned_child_success_and_submission_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 52, in test_spawned_child_success_and_submission_failure
+    self.assertEqual(self.run_native(source.replace('BEFORE',''),fail_submission_at=2).stdout,'11\n99\n7\n7\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n99\n9\n7\n' != '11\n99\n7\n7\n'
+  11
+  99
+- 9
+  7
++ 7
+
+
+----------------------------------------------------------------------
+Ran 1 test in 2.251s
+
+FAILED (failures=1)
+
+forget_branch_effects DETECTED
+test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) ... 
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='true') ... FAIL
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='false') ... FAIL
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='true') ... FAIL
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='false') ... FAIL
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='true')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n9\n7\n9\n' != '11\n11\n9\n9\n9\n'
+  11
+  11
+  9
+- 7
+  9
++ 9
+
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='false')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n11\n7\n11\n' != '11\n11\n11\n11\n11\n'
+  11
+  11
+  11
+- 7
+  11
++ 11
+
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='true')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n9\n7\n9\n' != '11\n11\n9\n9\n9\n'
+  11
+  11
+  9
+- 7
+  9
++ 9
+
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='if flag{let t=update(v,a);<-t}else{let t=update(v,b);<-t}', flag='false')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n11\n7\n11\n' != '11\n11\n11\n11\n11\n'
+  11
+  11
+  11
+- 7
+  11
++ 11
+
+
+----------------------------------------------------------------------
+Ran 1 test in 14.016s
+
+FAILED (failures=4)
+
+forget_break_effects DETECTED
+test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) ... 
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='loop{let t=update(v,a);break <-t;}', flag='true') ... FAIL
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='loop{let t=update(v,a);break <-t;}', flag='false') ... FAIL
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='loop{let t=update(v,a);break <-t;}', flag='true') ... FAIL
+  test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='loop{let t=update(v,a);break <-t;}', flag='false') ... FAIL
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='loop{let t=update(v,a);break <-t;}', flag='true')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n9\n7\n9\n' != '11\n11\n9\n9\n9\n'
+  11
+  11
+  9
+- 7
+  9
++ 9
+
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=False, choice='loop{let t=update(v,a);break <-t;}', flag='false')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n9\n7\n9\n' != '11\n11\n9\n9\n9\n'
+  11
+  11
+  9
+- 7
+  9
++ 9
+
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='loop{let t=update(v,a);break <-t;}', flag='true')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n9\n7\n9\n' != '11\n11\n9\n9\n9\n'
+  11
+  11
+  9
+- 7
+  9
++ 9
+
+
+======================================================================
+FAIL: test_task_and_handle_choices_and_loop_exports (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_task_and_handle_choices_and_loop_exports) (launched=True, choice='loop{let t=update(v,a);break <-t;}', flag='false')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 72, in test_task_and_handle_choices_and_loop_exports
+    self.assertEqual(self.run_native(source.replace('BEFORE','')).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n11\n'+(expected+'\n')*3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n11\n9\n7\n9\n' != '11\n11\n9\n9\n9\n'
+  11
+  11
+  9
+- 7
+  9
++ 9
+
+
+----------------------------------------------------------------------
+Ran 1 test in 10.490s
+
+FAILED (failures=4)
+
+old_borrow_reads_updated_field DETECTED
+test_conditional_child_store_and_snapshot_before_wait (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_conditional_child_store_and_snapshot_before_wait) ... FAIL
+
+======================================================================
+FAIL: test_conditional_child_store_and_snapshot_before_wait (test_async_child_field_effects.AsyncChildFieldEffectsTests.test_conditional_child_store_and_snapshot_before_wait)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_child_field_effects.py", line 87, in test_conditional_child_store_and_snapshot_before_wait
+    self.assertEqual(self.run_native(source).stdout,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     '11\n'+('9\n16\n9\n' if flag=='true' else '7\n14\n7\n'))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '11\n9\n18\n9\n' != '11\n9\n16\n9\n'
+  11
+  9
+- 18
++ 16
+  9
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.846s
+
+FAILED (failures=1)
+

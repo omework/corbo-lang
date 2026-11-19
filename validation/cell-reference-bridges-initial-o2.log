@@ -1,0 +1,62 @@
+test_contract_requirement_crosses_relays_without_final_field_changes (test_cell_reference_bridges.CellReferenceBridgeTests.test_contract_requirement_crosses_relays_without_final_field_changes) ... ok
+test_generated_bridge_can_replace_an_external_field_with_cell_input (test_cell_reference_bridges.CellReferenceBridgeTests.test_generated_bridge_can_replace_an_external_field_with_cell_input) ... ERROR
+test_later_argument_cannot_invalidate_prepared_reference (test_cell_reference_bridges.CellReferenceBridgeTests.test_later_argument_cannot_invalidate_prepared_reference) ... ok
+test_local_pool_cell_is_not_copied_or_destroyed_by_bridge (test_cell_reference_bridges.CellReferenceBridgeTests.test_local_pool_cell_is_not_copied_or_destroyed_by_bridge) ... ERROR
+test_named_reborrow_and_conditional_cell_selection (test_cell_reference_bridges.CellReferenceBridgeTests.test_named_reborrow_and_conditional_cell_selection) ... ok
+test_raw_inline_and_untracked_captured_pointer_are_not_fabricated (test_cell_reference_bridges.CellReferenceBridgeTests.test_raw_inline_and_untracked_captured_pointer_are_not_fabricated) ... ok
+test_returned_reference_keeps_target_and_excludes_future_mutation (test_cell_reference_bridges.CellReferenceBridgeTests.test_returned_reference_keeps_target_and_excludes_future_mutation) ... ok
+test_slot_reuse_after_helper_scope_and_target_drop (test_cell_reference_bridges.CellReferenceBridgeTests.test_slot_reuse_after_helper_scope_and_target_drop) ... ok
+test_stored_field_and_mutable_field_targets (test_cell_reference_bridges.CellReferenceBridgeTests.test_stored_field_and_mutable_field_targets) ... ok
+test_transferred_capture_and_launch_failure (test_cell_reference_bridges.CellReferenceBridgeTests.test_transferred_capture_and_launch_failure) ... ok
+
+======================================================================
+ERROR: test_generated_bridge_can_replace_an_external_field_with_cell_input (test_cell_reference_bridges.CellReferenceBridgeTests.test_generated_bridge_can_replace_an_external_field_with_cell_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_cell_reference_bridges.py", line 131, in test_generated_bridge_can_replace_an_external_field_with_cell_input
+    code=compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13813, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13427, in verify
+    self.fail(f"nom d'enum déjà utilisé ou réservé : '{name}'")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: nom d'enum déjà utilisé ou réservé : 'View'
+
+======================================================================
+ERROR: test_local_pool_cell_is_not_copied_or_destroyed_by_bridge (test_cell_reference_bridges.CellReferenceBridgeTests.test_local_pool_cell_is_not_copied_or_destroyed_by_bridge)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_cell_reference_bridges.py", line 52, in test_local_pool_cell_is_not_copied_or_destroyed_by_bridge
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15326, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13635, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        struct_layouts={typ: self.enums[typ][''] for typ in self.struct_fields})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 888, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5713, in _lower_async_function
+    fail(line, f'prototype async : instruction {op} non prise en charge')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 916, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 12: prototype async : instruction address non prise en charge
+
+----------------------------------------------------------------------
+Ran 10 tests in 4.902s
+
+FAILED (errors=2)

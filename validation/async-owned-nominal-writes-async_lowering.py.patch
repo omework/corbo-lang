@@ -1,0 +1,20 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1601,10 +1601,15 @@
+                         root, source_path = origin if isinstance(origin,tuple) else (origin,())
+                         if root in received_refs:
+                             continue
+-                        source_type = reference_types.get(root)
++                        source_type = reference_types.get(root, collection_types.get(root))
++                        contained_type = next((layout.typ for layout in inline_layouts.get(source_type, ())
++                                               if layout.path == '.'.join(source_path)), None)
+                         durable_type = (source_type == field_reference[1] if not source_path else
++                                        contained_type == field_reference[1] or
+                                         reference_type(borrowed_field_type(source_type, source_path) or '') is not None)
+-                        local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == field_reference[1]
++                        local_target = references.get(root) == 'owned' and (
++                            contained_type == field_reference[1] if source_path else
++                            collection_types.get(root, 'Int') == field_reference[1])
+                         local_holder = all(references.get(holder) == 'owned' for holder, _ in holders)
+                         captured_reference = parameter_modes.get(root) == 'owned' and source_path and durable_type
+                         own_capability = field_reference[0] == 'mut' and any(

@@ -1,0 +1,470 @@
+BASELINE /tmp/crust-set-baseline/crust.py
+test_replacement_still_destroys_after_rhs_and_requires_mut (test_let_mutability.LetMutabilityTests.test_replacement_still_destroys_after_rhs_and_requires_mut) ... 
+  test_replacement_still_destroys_after_rhs_and_requires_mut (test_let_mutability.LetMutabilityTests.test_replacement_still_destroys_after_rhs_and_requires_mut) (stage='verify_program') ... FAIL
+  test_replacement_still_destroys_after_rhs_and_requires_mut (test_let_mutability.LetMutabilityTests.test_replacement_still_destroys_after_rhs_and_requires_mut) (stage='compile_source') ... FAIL
+test_generated_c_materializes_rhs_before_dropping_old_value (test_reassignment.ReassignmentTests.test_generated_c_materializes_rhs_before_dropping_old_value) ... ERROR
+test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) ... 
+  test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) (factory='allocator()') ... ERROR
+  test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) (factory='stack(65536)') ... ERROR
+  test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) (factory='pool<Int>(4)') ... ERROR
+test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) ... FAIL
+test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) ... 
+  test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) (factory='allocator()') ... ERROR
+  test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) (factory='stack(65536)') ... ERROR
+  test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) (factory='pool<Int>(4)') ... ERROR
+test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) ... 
+  test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) (factory='allocator()') ... ERROR
+  test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) (factory='stack(65536)') ... ERROR
+  test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) (factory='pool<Int>(4)') ... ERROR
+test_single_slot_pool_cannot_allocate_replacement_before_old_destruction (test_reassignment.ReassignmentTests.test_single_slot_pool_cannot_allocate_replacement_before_old_destruction) ... 
+  test_single_slot_pool_cannot_allocate_replacement_before_old_destruction (test_reassignment.ReassignmentTests.test_single_slot_pool_cannot_allocate_replacement_before_old_destruction) (expression='new(memory) Int(20)') ... ERROR
+  test_single_slot_pool_cannot_allocate_replacement_before_old_destruction (test_reassignment.ReassignmentTests.test_single_slot_pool_cannot_allocate_replacement_before_old_destruction) (expression='make(&mut memory)') ... ERROR
+
+======================================================================
+ERROR: test_generated_c_materializes_rhs_before_dropping_old_value (test_reassignment.ReassignmentTests.test_generated_c_materializes_rhs_before_dropping_old_value)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 160, in test_generated_c_materializes_rhs_before_dropping_old_value
+    code = compile_source('let mut memory = allocator(); let mut data = new(memory) Int(10); '
+                          'data = new(memory) Int(20); print(data);')
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) (factory='allocator()')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) (factory='stack(65536)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle) (factory='pool<Int>(4)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) (factory='allocator()')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) (factory='stack(65536)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_replacement_from_another_source_retains_its_provenance (test_reassignment.ReassignmentTests.test_replacement_from_another_source_retains_its_provenance) (factory='pool<Int>(4)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) (factory='allocator()')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) (factory='stack(65536)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_rhs_can_reset_old_source_before_returning_replacement (test_reassignment.ReassignmentTests.test_rhs_can_reset_old_source_before_returning_replacement) (factory='pool<Int>(4)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 24, in check_sources
+    result = self.execute('let mut memory = ' + factory + '; ' + program)
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_single_slot_pool_cannot_allocate_replacement_before_old_destruction (test_reassignment.ReassignmentTests.test_single_slot_pool_cannot_allocate_replacement_before_old_destruction) (expression='new(memory) Int(20)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 125, in test_single_slot_pool_cannot_allocate_replacement_before_old_destruction
+    self.execute(
+    ~~~~~~~~~~~~^
+        'fn make(mem: &mut Pool<Int>) -> <- Int { '
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'let mut fresh = new(mem) Int(20); return <- fresh; } '
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'let mut memory = pool<Int>(1); let mut data = new(memory) Int(10); '
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'data = ' + expression + '; print(data);')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+ERROR: test_single_slot_pool_cannot_allocate_replacement_before_old_destruction (test_reassignment.ReassignmentTests.test_single_slot_pool_cannot_allocate_replacement_before_old_destruction) (expression='make(&mut memory)')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 125, in test_single_slot_pool_cannot_allocate_replacement_before_old_destruction
+    self.execute(
+    ~~~~~~~~~~~~^
+        'fn make(mem: &mut Pool<Int>) -> <- Int { '
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'let mut fresh = new(mem) Int(20); return <- fresh; } '
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'let mut memory = pool<Int>(1); let mut data = new(memory) Int(10); '
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'data = ' + expression + '; print(data);')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 38, in execute
+    source_path.write_text(compile_source(self.with_source(source) if add_source else source))
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15215, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 15208, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/tmp/crust-set-baseline/crust.py", line 13709, in compile
+    main = self.verify(nodes)
+  File "/tmp/crust-set-baseline/crust.py", line 13559, in verify
+    self.verify_top_level(main)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 3005, in verify_top_level
+    check.block('root', nodes)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 12127, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/tmp/crust-set-baseline/crust.py", line 13000, in statements
+    self.fail(f"résultat reçu '{name}' sans usage explicite")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/crust-set-baseline/crust.py", line 1930, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 1: résultat reçu 'data' sans usage explicite
+
+======================================================================
+FAIL: test_replacement_still_destroys_after_rhs_and_requires_mut (test_let_mutability.LetMutabilityTests.test_replacement_still_destroys_after_rhs_and_requires_mut) (stage='verify_program')
+----------------------------------------------------------------------
+crust.Error: ligne 1: résultat reçu 'd' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_let_mutability.py", line 27, in reject
+    with self.assertRaisesRegex(Error,pattern):stage(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: "immuable" does not match "ligne 1: résultat reçu 'd' sans usage explicite"
+
+======================================================================
+FAIL: test_replacement_still_destroys_after_rhs_and_requires_mut (test_let_mutability.LetMutabilityTests.test_replacement_still_destroys_after_rhs_and_requires_mut) (stage='compile_source')
+----------------------------------------------------------------------
+crust.Error: ligne 1: résultat reçu 'd' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_let_mutability.py", line 27, in reject
+    with self.assertRaisesRegex(Error,pattern):stage(source)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: "immuable" does not match "ligne 1: résultat reçu 'd' sans usage explicite"
+
+======================================================================
+FAIL: test_move_replacement_consumes_rhs_handle (test_reassignment.ReassignmentTests.test_move_replacement_consumes_rhs_handle)
+----------------------------------------------------------------------
+crust.Error: ligne 2: résultat reçu 'data' sans usage explicite
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_reassignment.py", line 100, in test_move_replacement_consumes_rhs_handle
+    self.rejected('let mut data = new(memory) Int(10); let mut next = new(memory) Int(20); '
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                  'data = <- next; print(next);', 'plus utilisable')
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_crust.py", line 28, in rejected
+    with self.assertRaisesRegex(Error, message):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: "plus utilisable" does not match "ligne 2: résultat reçu 'data' sans usage explicite"
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.256s
+
+FAILED (failures=3, errors=12)

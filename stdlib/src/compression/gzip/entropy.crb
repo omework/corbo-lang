@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Bounded native Huffman construction and entropy encoding.
+
+/// Builds bounded Huffman code lengths from frequencies; returns false when a depth limit would be exceeded.
+fn entropy_lengths(frequencies: &[u64], lengths: &mut [u64], maximum: u64) -> bool {
+    let count = frequencies.len() as u64;
+    if count > 288 || (lengths.len() as u64) < count { return false; }
+    let mut weights: [u64;576] = [0;576]; let mut parents: [u64;576] = [0;576];
+    let mut used: u64 = 0; let mut i: u64 = 0;
+    while i < count { weights[i] = frequencies[i]; if weights[i] != 0 { used = used + 1; } i = i + 1; }
+    if used == 0 { return false; }
+    if used == 1 {
+        i = 0; while i < count && weights[i] != 0 { i = i + 1; }
+        if i == count { return false; } weights[i] = 1; used = 2;
+    }
+    let mut next = copy(count); let mut merged: u64 = 1;
+    while merged < used {
+        let mut first: u64 = 576; let mut second: u64 = 576; i = 0;
+        while i < next {
+            if weights[i] != 0 && parents[i] == 0 {
+                if first == 576 || weights[i] < weights[first] { second = first; first = copy(i); }
+                else if second == 576 || weights[i] < weights[second] { second = copy(i); }
+            }
+            i = i + 1;
+        }
+        if first == 576 || second == 576 { return false; }
+        weights[next] = weights[first] + weights[second]; parents[first] = next + 1; parents[second] = next + 1;
+        next = next + 1; merged = merged + 1;
+    }
+    i = 0;
+    while i < count {
+        lengths[i] = 0;
+        if weights[i] != 0 {
+            let mut node = copy(i); let mut depth: u64 = 0;
+            while parents[node] != 0 { node = parents[node] - 1; depth = depth + 1; }
+            if depth == 0 || depth > maximum { return false; } lengths[i] = depth;
+        }
+        i = i + 1;
+    }
+    true
+}
+
+/// Replaces a fixed/stored candidate with a smaller dynamic-Huffman literal block when beneficial.
+fn entropy_deflate(input: &[u8], output: &mut [u8], bits: &mut Bits) {
+    if input.len() < 256 { return; }
+    let mut frequencies: [u64;257] = [0;257]; let mut lengths: [u64;257] = [0;257];
+    let mut i: u64 = 0;
+    while i < input.len() as u64 { let symbol = input[i] as u64; frequencies[symbol] = frequencies[symbol] + 1; i = i + 1; }
+    frequencies[256] = 1;
+    if !entropy_lengths(&frequencies[..], &mut lengths[..], 15) { return; }
+    let mut cost: u64 = 3 + 5 + 5 + 4 + 19 * 3 + 258 * 4;
+    i = 0; while i < 257 { cost = cost + frequencies[i] * lengths[i]; i = i + 1; }
+    if (*bits).error == 0 && cost >= (*bits).bit - 80 { return; }
+    if (output.len() as u64) < 18 || cost > (output.len() as u64 - 18) * 8 { return; }
+    let mut counts: [u64;16] = [0;16]; let mut codes: [u64;257] = [0;257];
+    i = 0; while i < 257 { if lengths[i] != 0 { counts[lengths[i]] = counts[lengths[i]] + 1; } i = i + 1; }
+    let mut next: [u64;16] = [0;16]; let mut value: u64 = 0; i = 1;
+    while i < 16 { value = (value + counts[i - 1]) << 1; next[i] = copy(value); i = i + 1; }
+    i = 0;
+    while i < 257 { let length = lengths[i]; if length != 0 { codes[i] = next[length]; next[length] = next[length] + 1; } i = i + 1; }
+    set_bits(&mut *bits, 80, 0);
+    write_bits(&mut output[0..output.len()], &mut *bits, 5, 3);
+    write_bits(&mut output[0..output.len()], &mut *bits, 0, 5);
+    write_bits(&mut output[0..output.len()], &mut *bits, 0, 5);
+    write_bits(&mut output[0..output.len()], &mut *bits, 15, 4);
+    let order: [u64;19] = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+    i = 0;
+    while i < 19 { let width: u64 = if order[i] < 16 { 4 } else { 0 }; write_bits(&mut output[0..output.len()], &mut *bits, width, 3); i = i + 1; }
+    i = 0;
+    while i < 257 { let code = reverse(lengths[i], 4); write_bits(&mut output[0..output.len()], &mut *bits, code, 4); i = i + 1; }
+    // The unused distance tree has one symbol with a one-bit code.
+    write_bits(&mut output[0..output.len()], &mut *bits, 8, 4);
+    i = 0;
+    while i < input.len() as u64 {
+        let symbol = input[i] as u64; let width = lengths[symbol]; let code = reverse(codes[symbol], copy(width));
+        write_bits(&mut output[0..output.len()], &mut *bits, code, width); i = i + 1;
+    }
+    let width = lengths[256]; let code = reverse(codes[256], copy(width));
+    write_bits(&mut output[0..output.len()], &mut *bits, code, width);
+}

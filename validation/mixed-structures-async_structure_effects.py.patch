@@ -1,0 +1,38 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -65,19 +65,11 @@
+         self.error = error
+         self.summaries = {}
+         self.visiting = set()
+-        # Owned finite graphs cannot write injected reference fields. Their
+-        # result contracts still need the ordinary ownership/provenance pass.
+-        self.owned_structures = set()
+-        while True:
+-            available = {'Int', 'String', 'Vector<Int>', 'Vector<u8>'} | self.owned_structures
+-            additions = {typ for typ, variants in enums.items() if '' in variants and all(
+-                field == 'Int' or field.startswith('A<') and field[2:-1] in available
+-                for _, field in variants[''])}
+-            if additions <= self.owned_structures:
+-                break
+-            self.owned_structures.update(additions)
+-        self.owned_structures.update(typ for typ, variants in enums.items() if '' in variants and all(
+-            field in ('Int', '&Int', '&mut Int') for _, field in variants['']))
++        # Keep the admissible layouts shared with lowering: direct borrowed
++        # fields and separately owned descendants have distinct obligations.
++        from structure_shapes import async_structure_shapes
++        self.owned_structures, self.reference_structures = async_structure_shapes(
++            {typ: variants[''] for typ, variants in enums.items() if '' in variants})
+         # Only the published synchronous contracts cross this boundary. The
+         # function bodies are deliberately absent from the symbolic adapter.
+         functions = {name: SimpleNamespace(
+@@ -104,8 +96,8 @@
+         for _, mode, typ in parameters:
+             layout = self.results.enums.get(typ, {}).get('')
+             owned_graph = mode in ('owned', 'join_owned', 'join_nested') and typ in self.owned_structures
+-            if layout is not None and not owned_graph and (mode not in ('ref', 'mut') or any(
+-                    field_type not in ('Int', '&Int', '&mut Int') for _, field_type in layout)):
++            if layout is not None and not owned_graph and (
++                    mode not in ('ref', 'mut') or typ not in self.reference_structures):
+                 summary = AsyncStructureEffects(parameters, None,
+                     'effets de champs des agrégats généraux non raccordés')
+                 self.summaries[name] = summary

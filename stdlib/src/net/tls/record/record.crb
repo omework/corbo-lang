@@ -1,0 +1,429 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! TLS 1.3 record framing, authenticated encryption and blocking TCP transport.
+
+use std::crypto::aes::AES128GCM;
+
+/// TLS handshake content type.
+pub const HANDSHAKE: u8 = 22;
+/// TLS application data content type.
+pub const APPLICATION_DATA: u8 = 23;
+/// TLS alert content type.
+pub const ALERT: u8 = 21;
+/// TLS compatibility ChangeCipherSpec content type.
+pub const CHANGE_CIPHER_SPEC: u8 = 20;
+
+/// Length of the TLS record header in bytes.
+const HEADER_SIZE: usize = 5;
+/// Length of the AES-GCM authentication tag in bytes.
+const TAG_SIZE: usize = 16;
+/// Maximum number of plaintext content bytes per TLS record.
+const CONTENT_LIMIT: usize = 16384;
+/// Maximum size of the protected inner plaintext.
+const INNER_LIMIT: usize = 16385;
+/// Limits the number of records written under a single AES-GCM key.
+const GCM_RECORD_LIMIT: u64 = 16777216; // Conservative write limit per key: 2^24.
+/// Marks a record cipher direction as usable.
+const ACTIVE: u8 = 0;
+/// Marks a direction closed following close_notify.
+const CLOSED: u8 = 1;
+/// Marks a direction unusable after a record failure.
+const FAILED: u8 = 2;
+
+/// Reports TLS framing, size, authentication, cipher state or transport failures.
+pub enum Error {
+    /// The caller-provided output buffer cannot hold the result.
+    BufferTooSmall,
+    /// The record exceeds the supported TLS size limit.
+    RecordOverflow,
+    /// The TLS record encoding or content type is invalid.
+    InvalidRecord,
+    /// Authentication failed; the operation must not expose unauthenticated plaintext.
+    AuthenticationFailed,
+    /// The cipher was used for the opposite traffic direction.
+    WrongDirection,
+    /// The traffic key's record sequence limit has been reached.
+    KeyLimit,
+    /// This traffic direction is already closed.
+    Closed,
+    /// The cipher is in a sticky failed state.
+    Failed,
+    /// The underlying TCP transport operation failed.
+    Transport,
+    /// The transport closed before the complete record arrived.
+    Truncated,
+}
+
+/// Describes authenticated content and closure status after opening a record.
+pub struct Record {
+    /// Authenticated inner TLS content type.
+    content_type: u8,
+    /// Number of authenticated plaintext bytes.
+    length: u64,
+    /// Whether this record contains authenticated close_notify.
+    closing: bool,
+}
+
+impl Record {
+    /// Returns the authenticated inner content type.
+    fn kind(&self) -> u8 { (*self).content_type }
+    /// Returns the number of content bytes in the plaintext buffer.
+    fn len(&self) -> u64 { (*self).length }
+    /// Reports whether the authenticated record closes the receive direction.
+    fn is_close_notify(&self) -> bool { (*self).closing }
+}
+
+/// Holds the key, IV, sequence and state for one record direction.
+pub struct RecordCipher {
+    /// Owned AES-GCM key schedule for this traffic direction.
+    aes: AES128GCM,
+    /// Per-direction IV used with the record sequence number.
+    iv: [u8; 12],
+    /// Next record sequence number; key limits are checked before further use.
+    sequence: u64,
+    /// True for a writer, false for a reader; direction-specific operations validate it.
+    sending: bool,
+    /// Internal cipher state encoding active, closed or failed operation.
+    status: u8,
+}
+
+/// Initializes one direction with sequence number zero.
+fn make_cipher(key: &[u8; 16], iv: &[u8; 12], sending: bool) -> RecordCipher {
+    let aes = AES128GCM::new(&*key);
+    let mut cipher = RecordCipher { aes: aes, iv: [0; 12], sequence: 0, sending: sending, status: ACTIVE };
+    let mut i: usize = 0;
+    while i < 12 {
+        let destination = &mut cipher.iv[i];
+        *destination = (*iv)[i];
+        i = i + 1;
+    }
+    cipher
+}
+
+/// Extracts one byte for record length or nonce serialization.
+fn octet(value: u64) -> u8 {
+    let mut word = value;
+    let mut byte: u8 = 0;
+    let mut bit: u64 = 0;
+    while bit < 8 {
+        let low: u8 = if (word & 1) == 0 { 0 } else { 1 };
+        byte = byte | (low << bit);
+        word = word >> 1;
+        bit = bit + 1;
+    }
+    byte
+}
+
+/// Combines the static IV with the record sequence number.
+fn nonce(cipher: &RecordCipher) -> [u8; 12] {
+    let sequence = (*cipher).sequence;
+    let mut bytes: [u8; 12] = [0; 12];
+    let mut i: usize = 0;
+    while i < 12 {
+        bytes[i] = (*cipher).iv[i];
+        if i >= 4 {
+            let shift = ((11 - i) as u64) * 8;
+            bytes[i] = bytes[i] ^ octet(sequence >> shift);
+        }
+        i = i + 1;
+    }
+    bytes
+}
+
+/// Writes the five-byte TLS record header.
+fn header(kind: u8, version: u8, body: usize, output: &mut [u8]) {
+    output[0] = kind;
+    output[1] = 3;
+    output[2] = version;
+    output[3] = octet((body as u64) >> 8);
+    output[4] = octet(body as u64);
+}
+
+/// Validates the record header and reads the wire payload length.
+fn body_len(input: &[u8]) -> usize {
+    (input[3] as usize) * 256 + (input[4] as usize)
+}
+
+/// Checks the supported inner TLS content types and alert form.
+fn valid_content(kind: u8, size: usize) -> bool {
+    if kind == APPLICATION_DATA { return true; }
+    if kind == HANDSHAKE { return size != 0; }
+    kind == ALERT && size == 2
+}
+
+/// Checks cipher direction, active state and record usage limits.
+fn may_use(cipher: &RecordCipher, sending: bool) -> Result<(), Error> {
+    if (*cipher).sending != sending { return Err(Error.WrongDirection); }
+    if (*cipher).status == CLOSED { return Err(Error.Closed); }
+    if (*cipher).status == FAILED { return Err(Error.Failed); }
+    let sequence = (*cipher).sequence;
+    if sending && sequence >= GCM_RECORD_LIMIT { return Err(Error.KeyLimit); }
+    if sequence == 0xffffffffffffffff { return Err(Error.KeyLimit); }
+    Ok(())
+}
+
+/// Advances the sequence after a record is successfully processed.
+fn accept(cipher: &mut RecordCipher, closing: bool) {
+    let sequence = &mut (*cipher).sequence;
+    *sequence = *sequence + 1;
+    if closing {
+        let status = &mut (*cipher).status;
+        *status = CLOSED;
+    }
+}
+
+/// Marks the direction failed before returning the supplied error.
+fn fail(cipher: &mut RecordCipher) {
+    let status = &mut (*cipher).status;
+    *status = FAILED;
+}
+
+impl RecordCipher {
+    /// Creates an outbound record cipher from a traffic key and static IV.
+    fn writer(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher { make_cipher(&*key, &*iv, true) }
+    /// Creates an inbound record cipher from a traffic key and static IV.
+    fn reader(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher { make_cipher(&*key, &*iv, false) }
+
+    // Record output and scratch are separate, caller-owned slices.
+    /// Encrypts one TLS record into caller-owned wire storage with optional padding.
+    fn seal(&mut self, kind: u8, content: &[u8], padding: usize,
+            scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error> {
+        match may_use(&*self, true) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        };
+        let size = content.len();
+        if size > CONTENT_LIMIT || padding > CONTENT_LIMIT - size { return Err(Error.RecordOverflow); }
+        if !valid_content(copy(kind), copy(size)) { return Err(Error.InvalidRecord); }
+        let closing = kind == ALERT && content[1] == 0;
+        if closing && content[0] != 1 { return Err(Error.InvalidRecord); }
+        let inner = size + 1 + padding;
+        let total = HEADER_SIZE + inner + TAG_SIZE;
+        if scratch.len() < inner || wire.len() < total { return Err(Error.BufferTooSmall); }
+        let mut aad: [u8; 5] = [0; 5];
+        header(APPLICATION_DATA, 3, inner + TAG_SIZE, &mut aad[..]);
+        let mut i: usize = 0;
+        while i < size { scratch[i] = content[i]; i = i + 1; }
+        scratch[size] = copy(kind);
+        i = size + 1;
+        while i < inner { scratch[i] = 0; i = i + 1; }
+        let iv = nonce(&*self);
+        let aes = &(*self).aes;
+        let tag = match aes.seal(&iv, &aad[..], &scratch[0..inner], &mut wire[5..5 + inner]) {
+            Ok(value) => { value },
+            Err(error) => { drop(error); fail(&mut *self); return Err(Error.Failed); },
+        };
+        i = 0;
+        while i < HEADER_SIZE { wire[i] = aad[i]; i = i + 1; }
+        i = 0;
+        while i < TAG_SIZE { wire[HEADER_SIZE + inner + i] = tag[i]; i = i + 1; }
+        accept(&mut *self, copy(closing));
+        if kind == ALERT && !closing && content[1] != 90 { fail(&mut *self); }
+        Ok(total)
+    }
+
+    /// Authenticates and decrypts a complete TLS record into caller-owned storage.
+    fn open(&mut self, wire: &[u8], plaintext: &mut [u8]) -> Result<Record, Error> {
+        match may_use(&*self, false) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        };
+        let total = wire.len();
+        if total < HEADER_SIZE || wire[0] != APPLICATION_DATA {
+            fail(&mut *self);
+            return Err(Error.InvalidRecord);
+        }
+        let body = body_len(&wire[0..HEADER_SIZE]);
+        if body > INNER_LIMIT + TAG_SIZE {
+            fail(&mut *self);
+            return Err(Error.RecordOverflow);
+        }
+        if body <= TAG_SIZE || total != HEADER_SIZE + body {
+            fail(&mut *self);
+            return Err(Error.InvalidRecord);
+        }
+        let inner = body - TAG_SIZE;
+        if plaintext.len() < inner { return Err(Error.BufferTooSmall); }
+        let mut tag: [u8; 16] = [0; 16];
+        let mut i: usize = 0;
+        while i < TAG_SIZE { tag[i] = wire[HEADER_SIZE + inner + i]; i = i + 1; }
+        let iv = nonce(&*self);
+        let aes = &(*self).aes;
+        match aes.open(&iv, &wire[0..HEADER_SIZE], &wire[5..5 + inner], &tag, &mut plaintext[0..inner]) {
+            Ok(()) => {},
+            Err(error) => { drop(error); fail(&mut *self); return Err(Error.AuthenticationFailed); },
+        };
+        let mut end = copy(inner);
+        while end > 0 && plaintext[end - 1] == 0 { end = end - 1; }
+        if end == 0 {
+            fail(&mut *self);
+            return Err(Error.InvalidRecord);
+        }
+        let size = end - 1;
+        let kind = plaintext[size];
+        if !valid_content(copy(kind), copy(size)) {
+            fail(&mut *self);
+            return Err(Error.InvalidRecord);
+        }
+        // Incoming alert level is ignored. The description closes this direction.
+        let closing = kind == ALERT && plaintext[1] == 0;
+        accept(&mut *self, copy(closing));
+        if kind == ALERT && !closing && plaintext[1] != 90 { fail(&mut *self); }
+        Ok(Record { content_type: kind, length: size as u64, closing: closing })
+    }
+
+    /// Builds a protected close_notify record and closes the write direction.
+    fn seal_close_notify(&mut self, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error> {
+        let alert: [u8; 2] = [1, 0];
+        let capacity = scratch.len();
+        let wire_size = wire.len();
+        self.seal(ALERT, &alert[..], 0, &mut scratch[0..capacity], &mut wire[0..wire_size])
+    }
+}
+
+/// Checks the framing and type of a cleartext record.
+fn valid_plaintext(kind: u8, input: &[u8]) -> bool {
+    let size = input.len();
+    if kind == CHANGE_CIPHER_SPEC { return size == 1 && input[0] == 1; }
+    if kind == HANDSHAKE { return size != 0; }
+    kind == ALERT && size == 2
+}
+
+/// Writes a cleartext TLS record for a supported handshake message.
+pub fn encode_plaintext(kind: u8, initial_client_hello: bool, content: &[u8],
+                        wire: &mut [u8]) -> Result<usize, Error> {
+    let size = content.len();
+    if size > CONTENT_LIMIT { return Err(Error.RecordOverflow); }
+    if !valid_plaintext(copy(kind), &content[0..size]) { return Err(Error.InvalidRecord); }
+    if initial_client_hello && (kind != HANDSHAKE || content[0] != 1) { return Err(Error.InvalidRecord); }
+    let version: u8 = if initial_client_hello { 1 } else { 3 };
+    let total = HEADER_SIZE + size;
+    if wire.len() < total { return Err(Error.BufferTooSmall); }
+    header(kind, version, copy(size), &mut wire[0..HEADER_SIZE]);
+    let mut i: usize = 0;
+    while i < size { wire[HEADER_SIZE + i] = content[i]; i = i + 1; }
+    Ok(total)
+}
+
+/// Validates the supplied cleartext record and returns its metadata.
+pub fn decode_plaintext(wire: &[u8]) -> Result<Record, Error> {
+    let total = wire.len();
+    if total < HEADER_SIZE { return Err(Error.InvalidRecord); }
+    let size = body_len(&wire[0..HEADER_SIZE]);
+    if size > CONTENT_LIMIT { return Err(Error.RecordOverflow); }
+    let kind = wire[0];
+    if total != HEADER_SIZE + size || !valid_plaintext(copy(kind), &wire[HEADER_SIZE..total]) {
+        return Err(Error.InvalidRecord);
+    }
+    let closing = kind == ALERT && wire[6] == 0;
+    Ok(Record { content_type: kind, length: size as u64, closing: closing })
+}
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    use std::net::tcp::Connection;
+
+    /// Returns a record payload limit based on the outer content type.
+    fn max_body(kind: u8) -> usize {
+        if kind == APPLICATION_DATA { return INNER_LIMIT + TAG_SIZE; }
+        CONTENT_LIMIT
+    }
+
+    /// Reads a complete span over TCP and detects premature EOF.
+    fn read_exact(socket: &mut Connection, wire: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
+        let mut at = start;
+        while at < end {
+            match socket.read(&mut wire[at..end]) {
+                Ok(count) => {
+                    if count == 0 { return Err(Error.Truncated); }
+                    if count > end - at { return Err(Error.Transport); }
+                    at = at + count;
+                },
+                Err(error) => { drop(error); return Err(Error.Transport); },
+            };
+        }
+        Ok(())
+    }
+
+    /// Reads one full framed record, handling partial TCP reads.
+    pub fn read_record(socket: &mut Connection, wire: &mut [u8]) -> Result<usize, Error> {
+        let capacity = wire.len();
+        if capacity < HEADER_SIZE { return Err(Error.BufferTooSmall); }
+        match read_exact(&mut *socket, &mut wire[0..capacity], 0, HEADER_SIZE) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        };
+        let body = body_len(&wire[0..HEADER_SIZE]);
+        if body > max_body(wire[0]) { return Err(Error.RecordOverflow); }
+        let total = HEADER_SIZE + body;
+        if capacity < total { return Err(Error.BufferTooSmall); }
+        match read_exact(&mut *socket, &mut wire[0..capacity], HEADER_SIZE, copy(total)) {
+            Ok(()) => { Ok(total) },
+            Err(error) => { Err(error) },
+        }
+    }
+
+    /// Writes all record bytes, handling short TCP writes.
+    pub fn write_record(socket: &mut Connection, wire: &[u8]) -> Result<(), Error> {
+        let size = wire.len();
+        if size < HEADER_SIZE { return Err(Error.InvalidRecord); }
+        let body = body_len(&wire[0..HEADER_SIZE]);
+        if body > max_body(wire[0]) { return Err(Error.RecordOverflow); }
+        if size != HEADER_SIZE + body { return Err(Error.InvalidRecord); }
+        let mut at: usize = 0;
+        while at < size {
+            match socket.write(&wire[at..size]) {
+                Ok(count) => {
+                    if count == 0 || count > size - at { return Err(Error.Transport); }
+                    at = at + count;
+                },
+                Err(error) => { drop(error); return Err(Error.Transport); },
+            };
+        }
+        Ok(())
+    }
+
+    impl RecordCipher {
+        /// Protects and sends one record using the caller's wire and scratch buffers.
+        fn send_record(&mut self, socket: &mut Connection, kind: u8, content: &[u8], padding: usize,
+                scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error> {
+            let size = content.len();
+            let workspace = scratch.len();
+            let capacity = wire.len();
+            let total = match self.seal(kind, &content[0..size], padding,
+                                        &mut scratch[0..workspace], &mut wire[0..capacity]) {
+                Ok(value) => { value },
+                Err(error) => { return Err(error); },
+            };
+            match write_record(&mut *socket, &wire[0..total]) {
+                Ok(()) => { Ok(()) },
+                Err(error) => { fail(&mut *self); Err(error) },
+            }
+        }
+
+        /// Reads and authenticates one TLS record using caller-owned buffers.
+        fn receive_record(&mut self, socket: &mut Connection, wire: &mut [u8], plaintext: &mut [u8]) -> Result<Record, Error> {
+            match may_use(&*self, false) {
+                Ok(()) => {},
+                Err(error) => { return Err(error); },
+            };
+            let capacity = wire.len();
+            if capacity < HEADER_SIZE { return Err(Error.BufferTooSmall); }
+            let total = match read_record(&mut *socket, &mut wire[0..capacity]) {
+                Ok(value) => { value },
+                Err(error) => { fail(&mut *self); return Err(error); },
+            };
+            let space = plaintext.len();
+            match self.open(&wire[0..total], &mut plaintext[0..space]) {
+                Ok(record) => { Ok(record) },
+                Err(error) => { fail(&mut *self); Err(error) },
+            }
+        }
+
+        /// Sends a protected closure alert over TCP and marks the write direction closed.
+        fn close_notify(&mut self, socket: &mut Connection, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error> {
+            let alert: [u8; 2] = [1, 0];
+            let workspace = scratch.len();
+            let capacity = wire.len();
+            self.send_record(&mut *socket, ALERT, &alert[..], 0, &mut scratch[0..workspace], &mut wire[0..capacity])
+        }
+    }
+#(endif)

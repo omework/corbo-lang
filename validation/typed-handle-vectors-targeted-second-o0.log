@@ -1,0 +1,53 @@
+test_explicit_transfer_type_and_borrow_checks (test_typed_handle_vectors.TypedHandleVectorTests.test_explicit_transfer_type_and_borrow_checks) ... ok
+test_function_inputs_and_returned_handle (test_typed_handle_vectors.TypedHandleVectorTests.test_function_inputs_and_returned_handle) ... FAIL
+test_local_pop_remove_and_remaining_cleanup (test_typed_handle_vectors.TypedHandleVectorTests.test_local_pop_remove_and_remaining_cleanup) ... ok
+test_short_pool_and_noncopy_contents_are_not_promoted (test_typed_handle_vectors.TypedHandleVectorTests.test_short_pool_and_noncopy_contents_are_not_promoted) ... ok
+test_string_and_numeric_vector_payloads (test_typed_handle_vectors.TypedHandleVectorTests.test_string_and_numeric_vector_payloads) ... ok
+test_two_pools_remove_order_and_scope_transfer (test_typed_handle_vectors.TypedHandleVectorTests.test_two_pools_remove_order_and_scope_transfer) ... ok
+
+======================================================================
+FAIL: test_function_inputs_and_returned_handle (test_typed_handle_vectors.TypedHandleVectorTests.test_function_inputs_and_returned_handle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17135, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15073, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 645, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 688, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 1103, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 3529, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 1498, in collect
+    self.fail(line, f"transfert refusé : la source '{candidate.source.name}' ne survit pas à ce bloc")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 743, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 4: transfert refusé : la source 'élément de vecteur' ne survit pas à ce bloc
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_typed_handle_vectors.py", line 43, in test_function_inputs_and_returned_handle
+    self.assertEqual(self.run_source(source).stdout,'1\n7\n8\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 4: transfert refusé : la source 'élément de vecteur' ne survit pas à ce bloc
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.148s
+
+FAILED (failures=1)

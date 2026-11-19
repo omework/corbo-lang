@@ -1,0 +1,29 @@
+fn create(memory: &mut Pool<i32>, n: i32) -> A<i32> {
+    if n == 1 {
+        let a = memory.new(10);
+        address(a);
+        return a;
+    } else {
+        let b = memory.new(20);
+        address(b);
+        return b;
+    }
+}
+
+fn forward(memory: &mut Pool<i32>, n: i32) -> A<i32> {
+    create(memory, n)
+}
+
+fn main() {
+    let mut memory = pool<i32>(1); // Une seule branche alloue pendant chaque appel.
+
+    let first = forward(&mut memory, 1);
+    address(first); // Même adresse que dans create.
+    print(*first);
+    drop(first);
+
+    let second = forward(&mut memory, 0);
+    address(second); // Le slot libéré est réutilisé, sans réactiver first.
+    print(*second);
+    drop(second);
+}

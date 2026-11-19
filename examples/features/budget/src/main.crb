@@ -1,0 +1,16 @@
+use std::Vector;
+
+fn main() {
+    let count: i64 = 1000;
+    let mut vectors = pool<Vector<i64>>(1);
+
+    #(stack_region: max_size=64K, count=1) {
+        let mut numbers = vectors.new();
+        let mut number: i64 = 0;
+        while number < count {
+            numbers.push(copy(number));
+            number += 1;
+        }
+        print(numbers.len());
+    }
+}

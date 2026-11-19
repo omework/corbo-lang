@@ -1,0 +1,25 @@
+--- before/results.py
++++ after/results.py
+@@ -718,7 +718,7 @@
+                                                      sync_result_contract=self.analyzer.sync_result_contract)
+                 targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')
+                 result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if (
+-                    getattr(definition, 'result_storage', False) or owned_result_parameters(
++                    definition.args[2][0] in ('owned', 'join_owned', 'join_nested') or owned_result_parameters(
+                     definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary)) else frozenset()
+                 if getattr(definition, 'result_storage', False):
+                     sources |= frozenset({SourceOrigin('task_parameter', index)})
+@@ -1552,6 +1552,13 @@
+                                        payload_reference=row_payload)
+                 if mode in ('owned', 'join_owned'):
+                     kind = 'join_owned' if mode == 'owned' else 'join_nested'
++                    effects = getattr(declaration, 'field_effect_summary', None)
++                    if effects is not None and effects.complete and (
++                            effects.may_complete is False or
++                            effects.completion_result.absent_owned_payload):
++                        # Only a completed analysis proves that Ok carries no
++                        # allocation. An empty/unknown source set is not proof.
++                        return flow, Value(kind, typ, absent_owned_payload=True)
+                     result = self.async_owned_result_value(kind, typ, execution.task_result_sources, execution.task_result_fields)
+                     from async_result_storage import borrowed_result_fields
+                     fields = []

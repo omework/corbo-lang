@@ -1,0 +1,16 @@
+--- /tmp/crust-before-select-contracts/crust.py	2026-11-08 04:52:31
++++ crust.py	2026-11-08 04:52:31
+@@ -1160,6 +1160,13 @@
+                 raise Error('u8::try_from exige un argument entier')
+             return ('array_integer_try_from', arguments[0])
+         if (word == 'runtime' and (self.peek(1), self.peek(2)) == (':', ':')
++                and self.peek(3) == 'select'):
++            self.take('runtime'); self.take(':'); self.take(':'); self.take('select')
++            _, _, arguments = self.call('select')
++            if not arguments or any(argument[0] not in ('down', 'transfer') for argument in arguments):
++                raise Error('runtime::select exige au moins une tâche et un transfert -> pour chaque branche')
++            return ('task_select', tuple(arguments))
++        if (word == 'runtime' and (self.peek(1), self.peek(2)) == (':', ':')
+                 and self.peek(3) in ('spawn', 'spawn_blocking')):
+             self.take('runtime')
+             self.take(':')

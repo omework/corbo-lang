@@ -1,0 +1,68 @@
+--- before/storage_requirements.py
++++ after/storage_requirements.py
+@@ -27,12 +27,7 @@
+     def expression(self, expr, state, line, expected_array=None):
+         if expr and expr[0] == 'array_copy' and expr[1][0] == 'name':
+             value = self.lookup(expr[1][1], state, line)
+-            if isinstance(value, Value) and (value.inline_path or any(
+-                    choice.inline_path for choice in value.structure_choices)):
+-                # An interior value has no pool of its own nominal type.
+-                # The implicit copy therefore requires a local root; an
+-                # explicit destination pool uses the separate struct_copy op.
+-                self.analyzer.storage_annotation_hook(self, value, value.typ, line)
++            self.analyzer.copy_storage_hook(self, value, line)
+         if expr and expr[0] == 'task_select':
+             current, values = state, []
+             for branch in expr[1]:
+@@ -133,13 +128,27 @@
+         elif typ.startswith('A<') and typ[2:-1] in structures:
+             require(context, value, 'pool', line)
+ 
++    def copy_requirement(context, value, line):
++        if not isinstance(value, Value) or value.typ not in structures:
++            return
++        if value.inline_path or any(choice.inline_path for choice in value.structure_choices):
++            # Interior values have no pool of their own nominal type.
++            require(context, value, 'local', line)
++        indexes = {asset.source.index for asset in value.assets
++                   if asset.source.kind == 'allocation_parameter'}
++        context.node.copied_structure_parameters |= frozenset(indexes)
++
+     def call(context, callee, actuals, line):
+         for index, required in getattr(callee, 'storage_requirements', ()):
+             require(context, actuals[index], required, line)
++        for index in callee.copied_structure_parameters:
++            copy_requirement(context, actuals[index], line)
+ 
++    analyzer.copy_storage_hook = copy_requirement
+     analyzer.storage_annotation_hook = annotation
+     analyzer.storage_call_hook = call
+     for node in catalog.values():
++        node.copied_structure_parameters = frozenset()
+         joined = dict(getattr(node, 'join_storage_parameters', ()))
+         node.storage_requirements = tuple((i, joined.get(name, 'pool'))
+                                           for i, (name, _, typ) in enumerate(node.args[1])
+@@ -158,19 +167,19 @@
+             if value and value[0] == 'array_copy':
+                 return True
+             if len(value) == 3 and value[0] == 'call' and isinstance(value[1], str) and value[1] in catalog:
+-                if catalog[value[1]].storage_requirements:
++                if catalog[value[1]].storage_requirements or catalog[value[1]].copied_structure_parameters:
+                     return True
+             if len(value) == 4 and value[0] == 'method_call' and isinstance(value[2], str):
+-                if any(name.endswith('.' + value[2]) and node.storage_requirements
++                if any(name.endswith('.' + value[2]) and (node.storage_requirements or node.copied_structure_parameters)
+                        for name, node in catalog.items()):
+                     return True
+             return any(relevant(item) for item in value)
+         return False
+ 
+     while True:
+-        previous = {name: node.storage_requirements for name, node in catalog.items()}
++        previous = {name: (node.storage_requirements, node.copied_structure_parameters) for name, node in catalog.items()}
+         for node in catalog.values():
+             if (node.handle_result and node.args[2][1] in structures) or public_storage(node.args[2][1], structures) or relevant(node.args[3]):
+                 StorageContext(analyzer, node).infer()
+-        if all(node.storage_requirements == previous[name] for name, node in catalog.items()):
++        if all((node.storage_requirements, node.copied_structure_parameters) == previous[name] for name, node in catalog.items()):
+             return

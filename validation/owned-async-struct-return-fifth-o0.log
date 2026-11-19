@@ -1,0 +1,51 @@
+test_async_chain_and_field_usage_after_wait (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_async_chain_and_field_usage_after_wait) ... ok
+test_conditional_tasks_keep_graph (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_conditional_tasks_keep_graph) ... ok
+test_factories_and_task_forwarding (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_factories_and_task_forwarding) ... ok
+test_recorded_return_and_failure (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_recorded_return_and_failure) ... ok
+test_result_through_sync_helper (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_result_through_sync_helper) ... FAIL
+test_returned_graph_cannot_outlive_child_pool (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_returned_graph_cannot_outlive_child_pool) ... ok
+
+======================================================================
+FAIL: test_result_through_sync_helper (test_async_owned_struct_returns.AsyncOwnedStructReturnTests.test_result_through_sync_helper)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15563, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13858, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3014, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9790, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11170, in invoke_arguments
+    self.check_result_contract(result_contract, allocation, checked)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9734, in check_result_contract
+    self.fail('invariant interne : variante absente du contrat de résultat')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1944, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 7: invariant interne : variante absente du contrat de résultat
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_owned_struct_returns.py", line 69, in test_result_through_sync_helper
+    self.assertEqual(self.run_source(source).stdout,'7\n30\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 7: invariant interne : variante absente du contrat de résultat
+
+----------------------------------------------------------------------
+Ran 6 tests in 4.429s
+
+FAILED (failures=1)

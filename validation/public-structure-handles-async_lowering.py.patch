@@ -1,0 +1,158 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -52,15 +52,15 @@
+ WRAPPED_UTF8_MODES = {family: mode for mode, family in UTF8_VALUE_RESULT_FAMILIES.items()}
+ 
+ 
+-def public_handle_type(signature):
++def public_handle_type(signature, *, storage='pool'):
+     """Expose the result type; keep the concrete task and its loans internally."""
+     mode, typ = signature
+     if mode == 'owned':
+-        payload = f'A<{typ}>'
++        payload = typ if storage == 'local' else f'A<{typ}>'
+     elif mode in ('ref', 'mut'):
+         payload = ('&mut ' if mode == 'mut' else '&') + typ
+     elif mode in JOIN_PAYLOADS:
+-        payload = f'Result<A<{typ}>,runtime::Error>'
++        payload = f'Result<{typ if storage == "local" else "A<" + typ + ">"},runtime::Error>'
+         if mode == 'join_nested':
+             payload = f'Result<{payload},runtime::Error>'
+     else:
+@@ -958,7 +958,7 @@
+                           utf8_loop_hints, frame_slots, sync_contracts, sync_bridge, struct_layouts,
+                           local_parameters, variant_name, specialize):
+     from handle_types import HandleDefinitions, public_signature
+-    functions = HandleDefinitions(functions)
++    functions = HandleDefinitions(functions, structures=struct_layouts)
+     name, parameters, result, body = node.args
+     from async_result_storage import result_storage, pool_result_graph
+     output_plan = result_storage(node, local_parameters) if node.result_storage else None
+@@ -1001,7 +1001,7 @@
+     output_types = sync_types | owned_output_types | output_join_types
+     handle_sync_types = {contract.result_type: 'CrustExecution' for contract in sync_contracts.values()
+                          if contract.result_type[0] == 'execution'
+-                         and (public_signature(contract.result_type[1]) is not None
++                         and (public_signature(contract.result_type[1], struct_layouts) is not None
+                               or contract.result_type[1] in functions)}
+     task_sync_types = {contract.result_type: 'CrustTask *' for contract in sync_contracts.values()
+                        if contract.result_type[0] == 'task' and contract.result_type[1] in functions}
+@@ -1563,6 +1563,8 @@
+                     if record[3] != typ:
+                         fail(line, f'argument de tâche : type {typ} attendu')
+                     argument_tasks[index] = record
++                    if any(target in implicit_stacks for target, access in record[4] if access == 'storage'):
++                        local_parameters.add(index)
+                     value, held = record[0], list(record[2])
+                     active_loans.pop(id(record[2]), None)
+                     loans.extend(held)
+@@ -1705,6 +1707,11 @@
+             capture_loans = {}
+             capture_field_loans = {}
+             concrete_definition = functions.get(signature[1])
++            result_definition = concrete_definition or functions[signature[1]]
++            from async_result_storage import borrowed_result_fields
++            from capture_paths import result_capture_selector
++            result_field_selectors = {result_capture_selector(target)
++                for _, targets in borrowed_result_fields(result_definition) for target in targets}
+             result_capture_paths = (borrowed_result_paths(concrete_definition, functions, fail, {},
+                                     sync_contracts=sync_contracts) if concrete_definition is not None else ())
+             result_captures = (borrowed_result_parameters(functions[signature[1]], functions, fail, {},
+@@ -1739,7 +1746,8 @@
+                 selected_field = field.partition('/')[2]
+                 if position in result_captures and (not selected_field or any(
+                         index == position and selected_field == '.' + '.'.join(path)
+-                        for index, path in result_capture_paths)):
++                        for index, path in result_capture_paths)
++                        or f'{position}/{selected_field}' in result_field_selectors):
+                     returned.extend(held)
+             for sources, output in ((contract.result.task_sources, retained),
+                                     (contract.result.task_result_sources, returned)):
+@@ -1784,9 +1792,9 @@
+             enable_threads()
+             handle = temporary('CrustAsyncExecution')
+             steps.append(f'task_async_adopt(&{handle}, &{value});')
+-            if concrete_definition is not None and (capture_loans or not forwarded):
++            if capture_loans or not forwarded:
+                 from async_result_storage import borrowed_result_fields
+-                retain_result_fields(value, borrowed_result_fields(concrete_definition), capture_loans, line, capture_field_loans)
++                retain_result_fields(value, borrowed_result_fields(result_definition), capture_loans, line, capture_field_loans)
+                 move_stored_fields(value, f'&{handle}')
+             for index, record in argument_tasks.items():
+                 if index in contract.result.task_forward_parameters:
+@@ -1795,7 +1803,7 @@
+                     clear_stored_fields(record[0])
+             changes = (pending, *(change for record in forwarded for change in record[5]))
+             returns_int = (concrete_definition.args[2] if concrete_definition is not None
+-                           else public_signature(signature[1])) == ('scalar', 'Int')
++                           else public_signature(signature[1], struct_layouts)) == ('scalar', 'Int')
+             return f'&{handle}', returns_int, retained, signature[1], returned, changes
+         if signature in owned_output_types | output_join_types:
+             owned_result_types[value] = signature[1]
+@@ -2681,9 +2689,19 @@
+         if name != export_name and not utf8_value_live(body[position + 1:], name, owned=True):
+             fail(statement.line, f"résultat propriétaire '{name}' sans usage explicite")
+ 
++    def public_execution_type(record, expected, line):
++        from handle_types import contextual_public_type, public_storage
++        actual = contextual_public_type(record[3], expected, functions)
++        required = public_storage(expected, struct_layouts)
++        if required is not None:
++            local = any(target in implicit_stacks for target, access in record[4] if access == 'storage')
++            if local != (required == 'local'):
++                fail(line, f'handle {expected} : exigence de stockage {required} non satisfaite')
++        return actual
++
+     def bind_transferred_value(name, kind, value, statement):
+         if statement.annotation is not None and kind != 'array':
+-            expected = (public_handle_type(functions[value[3]].args[2]) if kind == 'execution' else
++            expected = (public_execution_type(value, statement.annotation, statement.line) if kind == 'execution' else
+                         (owned_result_types.get(value, 'Int') if storage_of(value) & implicit_stacks else
+                          f'A<{owned_result_types.get(value, "Int")}>') if kind == 'owned' else None)
+             if statement.annotation != expected:
+@@ -2767,7 +2785,7 @@
+             return None
+         operand = subject[1]
+         if (signature := sync_signature(operand)) in handle_sync_types:
+-            payload = public_signature(signature[1])
++            payload = public_signature(signature[1], struct_layouts)
+             return payload if payload[0] in ('ref', 'mut') else None
+         nominal = None
+         if operand[0] == 'name' and executions.get(operand[1]) is not None:
+@@ -3139,7 +3157,7 @@
+         if handle_annotation:
+             if name not in executions or executions[name] is None:
+                 fail(statement.line, 'annotation de handle : un handle lancé est requis')
+-            actual_type = public_handle_type(functions[executions[name][3]].args[2])
++            actual_type = public_execution_type(executions[name], statement.annotation, statement.line)
+             if statement.annotation != actual_type:
+                 fail(statement.line, f'annotation de handle : attendu {statement.annotation}, reçu {actual_type}')
+         if references.get(name) == 'owned' or is_owned_join(name, nested=True):
+@@ -4728,6 +4746,7 @@
+         scalar_type = None
+         selected_signature = None
+         selected_loans, selected_returned_loans, selected_field_changes = [], [], []
++        selected_execution_storage = set()
+         selected_branches, selected_paths, selected_task_prefixes = [], [], []
+         selected_utf8_loans = []
+         selected_reference_loans = []
+@@ -5000,12 +5019,18 @@
+                             selected_loans.extend(loans)
+                             selected_returned_loans.extend(returned_loans)
+                             selected_field_changes.extend(field_changes)
++                            if kind == 'execution' and functions[nominal].args[2][1] in struct_layouts:
++                                local = any(origin in implicit_stacks for origin, access in returned_loans if access == 'storage')
++                                selected_execution_storage.add(local)
++                                if len(selected_execution_storage) > 1:
++                                    fail(terminal.line, 'branches de handles : stockage incompatible (T local / allocation A<T>)')
+                         if selected_signature is None:
+                             selected_signature = signature
+                             target = temporary(ctype, array_dimensions(shape) if kind == 'array' else '')
+                         elif signature != selected_signature:
+                             from handle_types import common_public_handle
+-                            common = (common_public_handle((selected_signature[2], signature[2]), functions)
++                            common = (common_public_handle((selected_signature[2], signature[2]), functions,
++                                      storage='local' if selected_execution_storage == {True} else 'pool')
+                                       if kind == selected_signature[0] == 'execution'
+                                       and signature[1] == selected_signature[1] else None)
+                             if common is None:

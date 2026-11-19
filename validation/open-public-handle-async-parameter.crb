@@ -1,0 +1,4 @@
+async fn work()->Int{yield;return 7;}
+async fn finish(h:->runtime::Handle<Int>)->Int{match h.await{Ok(n)=>{return n;},Err(_)=>{return 99;}}}
+fn main(){let h=runtime::spawn(->work());let parent=runtime::spawn(->finish(->h));
+match parent.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}}

@@ -1,0 +1,31 @@
+async fn worker(data: &Int) -> Int {
+    yield;
+    return *data;
+}
+
+async fn left() -> Int {
+    let mut memory = pool<Int>(1);
+    let data = memory.new(7);
+    let execution = runtime::spawn(-> worker(&data));
+    match execution.await {
+        Ok(value) => { return value; },
+        Err(_) => { return 0; },
+    }
+}
+
+async fn right() -> Int { return 9; }
+
+async fn choose() -> Int {
+    let mut selection = runtime::select(-> left(), -> right());
+    let result = selection.await;
+    drop(-> selection);
+    return result;
+}
+
+fn main() {
+    let execution = runtime::spawn(-> choose());
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(0); },
+    }
+}

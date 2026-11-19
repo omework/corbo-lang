@@ -1,0 +1,6 @@
+struct Point{x:Int,y:Int}async fn make(p:&mut Pool<Vector<Point>>)-><-A<Vector<Point>>{
+            let mut v=p.new();v.push(->Point{x:7,y:70});yield;return <-v;}
+            fn wait(h:->runtime::Handle<A<Vector<Point>>>)-><-Result<A<Vector<Point>>,runtime::Error>{return <-h.join();}
+            fn relay(r:->Result<A<Vector<Point>>,runtime::Error>)-><-Result<A<Vector<Point>>,runtime::Error>{return <-r;}fn main(){let mut p=pool<Vector<Point>>(1);let h=runtime::spawn(->make(&mut p));
+            let result=wait(->h);let next=relay(->result);match (->next){Ok(v)=>{let mut received=<-v;let r=<-received.remove(0);
+                print(r.x);drop(->received);},Err(_)=>{print(99);}}let fresh=p.new();print(fresh.len());}

@@ -1,0 +1,11 @@
+--- before/tests/test_let_mutability.py
++++ after/tests/test_let_mutability.py
+@@ -117,7 +117,7 @@
+     def test_replacement_still_destroys_after_rhs_and_requires_mut(self):
+         result=self.execute(DATA+'d=20;d=new(p)Int(30);print(d);',add_source=False)
+         self.assertEqual([r for r in result.stderr.splitlines() if r.startswith('destroy ')],['destroy d=20','destroy d=30'])
+-        self.reject(POOL+'let d=new(p)Int(10);d=new(p)Int(30);print(d);','immuable')
++        self.reject(POOL+'let d=new(p)Int(10);if *d!=10{print(999);}d=new(p)Int(30);print(d);','immuable')
+ 
+     def test_immutable_owner_can_be_consumed_without_mut(self):
+         result=self.execute(POOL+'let d=new(p)Int(10);drop(->d);p.reset();',add_source=False)

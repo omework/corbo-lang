@@ -1,0 +1,115 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -86,6 +86,7 @@
+     storage_owner: str | None = None
+     projection_assets: frozenset[Asset] = frozenset()
+     handle_items: tuple[frozenset[Asset], ...] | frozenset[Asset] | None = None
++    handle_payloads: tuple = ()
+     handle_exchange: tuple | None = None
+     exchange_payloads: tuple = ()
+     handle_slot: tuple[frozenset[Asset], int | None] | None = None
+@@ -100,8 +101,21 @@
+ 
+     @property
+     def all_assets(self):
+-        return self.assets | self.reservations | self.task_result_assets | self.task_reference_assets | frozenset(
++        items = possible_handle_items(self.handle_items) if is_handle_vector(self.typ) else self.assets
++        retained = frozenset(asset for item in self.handle_payloads
++                             if items is None or item.assets & items for asset in item.all_assets)
++        return self.assets | self.reservations | self.task_result_assets | self.task_reference_assets | retained | frozenset(
+             a for _, assets in (*self.fields, *self.task_result_fields) for a in assets)
++
++
++def restore_handle_payload(value, carrier):
++    if not isinstance(carrier, Value):
++        return value
++    payloads = tuple(item for item in carrier.handle_payloads if item.assets & value.assets)
++    if not payloads:
++        return value
++    merged = join_values(payloads)
++    return replace(merged, mode=value.mode, typ=value.typ, assets=value.assets)
+ 
+ 
+ def merge_fields(values, attribute='fields'):
+@@ -150,6 +164,7 @@
+                      first.storage_owner if all(value.storage_owner == first.storage_owner for value in values) else None,
+                      inline_path=first.inline_path if all(value.inline_path == first.inline_path for value in values) else '',
+                      handle_items=merge_handle_items(values),
++                    handle_payloads=tuple(dict.fromkeys(item for value in values for item in value.handle_payloads)),
+                      exchange_payloads=merge_exchange_payloads(values),
+                      handle_exchange=first.handle_exchange if all(value.handle_exchange == first.handle_exchange for value in values) else None,
+                      handle_slot=first.handle_slot if all(value.handle_slot == first.handle_slot for value in values) else None,
+@@ -647,6 +662,16 @@
+             path.vector_sources = {asset: sources for asset, sources in path.vector_sources.items() if asset in keep}
+         return paths, value
+ 
++    def remember_handle_payload(self, environment, receiver, item):
++        vector = environment.get(receiver)
++        if not isinstance(vector, Value) or not is_handle_vector(vector.typ):
++            return
++        owner = vector.storage_owner or receiver
++        for name in (owner, receiver):
++            root = environment.get(name)
++            if isinstance(root, Value):
++                environment[name] = replace(root, handle_payloads=tuple(dict.fromkeys((*root.handle_payloads, item))))
++
+     def publish_handle_exchange(self, state, exchange, *, exact=True):
+         receiver, index, incoming, append = exchange
+         vector = state.environment.get(receiver)
+@@ -678,7 +703,7 @@
+                 return Value('owned', 'Int')
+         items = vector.handle_items if isinstance(vector, Value) else None
+         typ = handle_vector_element(vector.typ) if isinstance(vector, Value) else 'Int'
+-        result = Value('owned', typ, handle_items_at(items, index) or frozenset())
++        result = restore_handle_payload(Value('owned', typ, handle_items_at(items, index) or frozenset()), vector)
+         self.touch(result, state, line)
+         if isinstance(items, tuple) and items:
+             items = handle_items_after_removal(items, index)
+@@ -736,7 +761,7 @@
+         for name, root in roots:
+             exact = len(roots) == len(origins) == 1 and root.assets == origins
+             items = handle_items_after_exchange(root.handle_items, index, incoming.assets, weak=not exact)
+-            state.environment[name] = replace(root, handle_items=items)
++            state.environment[name] = replace(root, handle_items=items, handle_payloads=tuple(dict.fromkeys((*root.handle_payloads, incoming))))
+ 
+     def reference_value_fields(self, value, typ, line):
+         shape = reference_array_shape(typ)
+@@ -990,6 +1015,8 @@
+                 item = values[-1]
+                 receiver = expr[1][1] if expr[1][0] == 'name' else None
+                 vector = current.environment.get(receiver)
++                self.remember_handle_payload(current.environment, receiver, item)
++                vector = current.environment.get(receiver)
+                 incoming = item.assets if isinstance(item, Value) else frozenset()
+                 append = op not in ('array_handle_exchange', 'array_buffered_replace')
+                 index = expr[2][1] if not append and expr[2][0] == 'int' else None
+@@ -1005,9 +1032,9 @@
+                     old = frozenset() if append else handle_items_at(items, index) or frozenset()
+                     typ = exchange_type(handle_vector_element(vector.typ), append)
+                     return paths, Value('buffered_handle_exchange', typ, incoming | old,
+-                                       exchange_payloads=(old, incoming))
++                                       exchange_payloads=(old, incoming), handle_payloads=vector.handle_payloads)
+                 return paths, Value('handle_exchange', handle_vector_element(vector.typ), incoming,
+-                                    handle_items=handle_items_at(items, index), handle_exchange=exchange)
++                                    handle_items=handle_items_at(items, index), handle_exchange=exchange, handle_payloads=vector.handle_payloads)
+             if op == 'array_handle_exchange_status':
+                 return paths, SCALAR
+             if op == 'array_handle_exchange_value':
+@@ -1018,7 +1045,7 @@
+                                           if exchange.mode == 'mutable_ref_replace' and expr[2][1] == 0
+                                           else frozenset())
+                 assets = exchange.assets if expr[2][1] != 0 else exchange.handle_items or frozenset()
+-                result = Value('owned', exchange.typ, assets)
++                result = restore_handle_payload(Value('owned', exchange.typ, assets), exchange)
+                 self.touch(result, paths['next'], line)
+                 return paths, result
+             if op == 'array_handle_len':
+@@ -1038,7 +1065,7 @@
+                 if not isinstance(exchange, Value) or len(exchange.exchange_payloads) != 2:
+                     self.fail(line, 'match (-> résultat) exige un résultat de replace ou try_push')
+                 assets = exchange.exchange_payloads[arm == 5]
+-                result = Value('owned', exchange_element(exchange.typ), assets)
++                result = restore_handle_payload(Value('owned', exchange_element(exchange.typ), assets), exchange)
+                 self.touch(result, paths['next'], line)
+                 return paths, result
+             if op == 'array_handle_option_status':

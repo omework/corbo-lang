@@ -1,0 +1,13 @@
+Example output: 9
+10
+ trace: destroy a=9
+reclaim a
+destroy b=10
+reclaim b
+
+OPEN valid program: fn consume(a:->Int)->Int{return *a;}fn main(){let mut p=pool<Int>(1);let a=p.new(7);let h=runtime::thread({->(a);return consume(->a);});match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}} 
+DIAGNOSTIC: ligne 1: prototype : appel synchrone depuis un état : signature scalaire ou emprunt Int/u8 requis
+OPEN valid program: fn read(a:&u8)->u8{return *a;}async fn run()->u8{let mut b:[u8;1]=[7];return read(&b[0]);} 
+DIAGNOSTIC: ligne 1: prototype : appel synchrone depuis un état : signature scalaire ou emprunt Int/u8 requis
+OPEN valid program: fn same(a:&mut Int)->&mut Int{return a;}async fn read(a:&Int)->Int{return *a;}async fn run()->Int{let mut a=7;return read(same(&mut a)).await;} 
+DIAGNOSTIC: ligne 1: capture async : emprunt explicite ou référence nommée requis

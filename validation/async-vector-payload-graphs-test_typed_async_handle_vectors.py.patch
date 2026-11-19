@@ -1,0 +1,25 @@
+--- tests/test_typed_async_handle_vectors.py (before)
++++ tests/test_typed_async_handle_vectors.py
+@@ -116,14 +116,17 @@
+                 fn main(){{let h=runtime::spawn(->work());match h.join(){{Ok(n)=>{{print(n);}},Err(_)=>{{print(99);}}}}}}'''
+             self.assertEqual(self.run_source(source).stdout, expected)
+ 
+-    def test_unwired_nested_dependencies_are_explicitly_rejected(self):
++    def test_nested_payload_types_are_supported_in_empty_vectors(self):
+         for field in ('&Int','A<Int>'):
+             helper = 'struct Item{value:'+field+'}'
+-            for declaration in (
+-                'async fn work(v:->Vector<A<Item>>)->Int{yield;return v.len();}',
+-                'async fn work()->Int{let mut p=pool<Vector<A<Item>>>(1);let v=p.new();yield;return v.len();}',
++            for declaration,argument,setup in (
++                ('async fn work(v:->Vector<A<Item>>)->Int{yield;return v.len();}',
++                 '->v','let mut p=pool<Vector<A<Item>>>(1);let v=p.new();'),
++                ('async fn work()->Int{let mut p=pool<Vector<A<Item>>>(1);let v=p.new();yield;return v.len();}',
++                 '', ''),
+             ):
+-                self.refused(helper+declaration, 'métadonnées.*non raccordées')
++                source=helper+declaration+'fn main(){'+setup+'let h=runtime::spawn(->work('+argument+'));match h.join(){Ok(n)=>{print(n);},Err(_)=>{print(99);}}}'
++                self.assertEqual(self.run_source(source).stdout,'0\n')
+ 
+ 
+ if __name__ == '__main__':

@@ -1,0 +1,439 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Native RFC 1952 Gzip with RFC 1951 DEFLATE and caller-owned buffers.
+
+/// Reports invalid parameters, bounded storage exhaustion, malformed input or checksum failure.
+pub enum Error {
+    /// A parameter is outside this algorithm's supported bounds.
+    InvalidParams,
+    /// The caller-provided scratch buffer cannot hold the required working state.
+    WorkspaceTooSmall,
+    /// The caller-provided output buffer cannot hold the result.
+    BufferTooSmall,
+    /// The encoded input violates the format or a supported codec constraint.
+    InvalidData,
+    /// The encoded input ends before a required field or frame is complete.
+    TruncatedInput,
+    /// The computed checksum differs from the encoded checksum.
+    ChecksumMismatch,
+    /// The operation is incompatible with the current streaming state.
+    InvalidState,
+    /// The frame exceeds the caller's explicit storage budget.
+    FrameTooLarge
+}
+
+/// Controls match-search effort. Level zero stores bytes; levels one through nine compress.
+pub struct Params {
+    /// Requested compression effort level; constructors validate the supported range.
+    level: u32
+}
+
+impl Params {
+    /// Uses level six. Levels express this encoder's search effort, not another library's byte output.
+    fn new() -> Params { Params { level: 6 } }
+}
+
+/// Tracks a forward bit offset and a sticky error code.
+struct Bits {
+    /// Current bit offset in the encoded input/output.
+    bit: u64,
+    /// Sticky codec status used to stop after a malformed range or exhausted output.
+    error: i64
+}
+
+/// Holds canonical DEFLATE symbol counts and symbols ordered by code length.
+struct Tree {
+    /// Huffman symbol counts indexed by code length.
+    counts: [u64; 16],
+    /// Huffman symbols ordered by code length.
+    symbols: [u64; 288]
+}
+
+/// Updates bit-reader state through explicit mutable field borrows.
+fn set_bits(bits: &mut Bits, position: u64, error: i64) {
+    let cursor = &mut (*bits).bit; *cursor = position;
+    let status = &mut (*bits).error; *status = error;
+}
+
+/// Extracts a byte using representable nibble values without a narrowing cast.
+fn octet(value: u64) -> u8 {
+    let digits: [u8; 16] = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    digits[value & 15] | (digits[(value >> 4) & 15] << 4)
+}
+
+/// Reads at most sixteen little-endian bits, recording truncated input without indexing it.
+fn read_bits(input: &[u8], bits: &mut Bits, count: u64) -> u64 {
+    let start = (*bits).bit;
+    if (*bits).error != 0 { return 0; }
+    if count > 16 || start / 8 > input.len() as u64
+        || count > (input.len() as u64 - start / 8) * 8 - start % 8 {
+        set_bits(&mut *bits, start, 1); return 0;
+    }
+    let mut value: u64 = 0;
+    let mut i: u64 = 0;
+    while i < count {
+        let at = start + i;
+        value = value | (((input[at / 8] as u64 >> (at % 8)) & 1) << i);
+        i = i + 1;
+    }
+    set_bits(&mut *bits, start + count, 0);
+    value
+}
+
+/// Writes little-endian bits into a bounded output, recording capacity exhaustion.
+fn write_bits(output: &mut [u8], bits: &mut Bits, value: u64, count: u64) {
+    let start = (*bits).bit;
+    if (*bits).error != 0 { return; }
+    if start / 8 > output.len() as u64
+        || count > (output.len() as u64 - start / 8) * 8 - start % 8 {
+        set_bits(&mut *bits, start, 2); return;
+    }
+    let mut i: u64 = 0;
+    while i < count {
+        let at = start + i;
+        if at % 8 == 0 { output[at / 8] = 0; }
+        let bit = ((value >> i) & 1) as u64;
+        let current = output[at / 8] as u64;
+        output[at / 8] = octet(current | (bit << (at % 8)));
+        i = i + 1;
+    }
+    set_bits(&mut *bits, start + count, 0);
+}
+
+/// Reverses the low count bits for canonical Huffman code emission.
+fn reverse(value: u64, count: u64) -> u64 {
+    let mut result: u64 = 0; let mut i: u64 = 0;
+    while i < count { result = (result << 1) | ((value >> i) & 1); i = i + 1; }
+    result
+}
+
+/// Computes the RFC 1952 CRC-32 without an allocation or target dependency.
+fn crc32(input: &[u8]) -> u64 {
+    let mut crc: u64 = 0xffffffff;
+    let mut i: u64 = 0;
+    while i < input.len() as u64 {
+        crc = crc ^ input[i] as u64;
+        let mut b: u64 = 0;
+        while b < 8 {
+            crc = if (crc & 1) != 0 { (crc >> 1) ^ 0xedb88320 } else { crc >> 1 };
+            b = b + 1;
+        }
+        i = i + 1;
+    }
+    crc ^ 0xffffffff
+}
+
+/// Reads a little-endian four-byte trailer field from a checked range.
+fn le32(input: &[u8], at: u64) -> u64 {
+    (input[at] as u64) | ((input[at + 1] as u64) << 8)
+        | ((input[at + 2] as u64) << 16) | ((input[at + 3] as u64) << 24)
+}
+
+/// Builds a canonical DEFLATE tree; rejects oversubscribed or invalid incomplete trees.
+fn tree(lengths: &[u64], output: &mut Tree, code_lengths: bool) -> bool {
+    let mut counts: [u64; 16] = [0; 16];
+    let mut symbols: [u64; 288] = [0; 288];
+    let mut i: u64 = 0;
+    while i < lengths.len() as u64 {
+        let length = lengths[i]; if length > 15 { return false; }
+        counts[length] = counts[length] + 1; i = i + 1;
+    }
+    let used = lengths.len() as u64 - counts[0];
+    let mut left: u64 = 1; let mut width: u64 = 1;
+    while width <= 15 {
+        left = left * 2;
+        if counts[width] > left { return false; }
+        left = left - counts[width]; width = width + 1;
+    }
+    if left != 0 && (code_lengths || used != 1 || counts[1] != 1) { return false; }
+    let mut offsets: [u64; 16] = [0; 16];
+    width = 1;
+    while width < 15 { offsets[width + 1] = offsets[width] + counts[width]; width = width + 1; }
+    i = 0;
+    while i < lengths.len() as u64 {
+        let length = lengths[i];
+        if length != 0 { symbols[offsets[length]] = copy(i); offsets[length] = offsets[length] + 1; }
+        i = i + 1;
+    }
+    i = 0; while i < 16 { let slot = &mut (*output).counts[i]; *slot = counts[i]; i = i + 1; }
+    i = 0; while i < 288 { let slot = &mut (*output).symbols[i]; *slot = symbols[i]; i = i + 1; }
+    true
+}
+
+/// Decodes a canonical Huffman symbol one bit at a time from checked input.
+fn symbol(input: &[u8], bits: &mut Bits, codes: &Tree) -> u64 {
+    let mut code: u64 = 0; let mut first: u64 = 0; let mut index: u64 = 0; let mut length: u64 = 1;
+    while length <= 15 {
+        code = (code << 1) | read_bits(&input[0..input.len()], &mut *bits, 1);
+        if (*bits).error != 0 { return 0; }
+        let count = (*codes).counts[length];
+        if code >= first && code - first < count { return (*codes).symbols[index + code - first]; }
+        index = index + count; first = (first + count) << 1; length = length + 1;
+    }
+    let at = (*bits).bit; set_bits(&mut *bits, at, 3); 0
+}
+
+/// Resolves a DEFLATE length code to its baseline and extra-bit count.
+fn length_info(code: u64) -> (u64, u64) {
+    let bases: [u64; 29] = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+    let extra: [u64; 29] = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+    (bases[code], extra[code])
+}
+
+/// Resolves a DEFLATE distance code to its baseline and extra-bit count.
+fn distance_info(code: u64) -> (u64, u64) {
+    let bases: [u64; 30] = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+    let extra: [u64; 30] = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+    (bases[code], extra[code])
+}
+
+/// Emits one fixed-tree DEFLATE symbol.
+fn fixed(output: &mut [u8], bits: &mut Bits, value: u64) {
+    let mut width: u64 = 8; let mut code: u64 = 0;
+    if value < 144 { code = value + 48; }
+    else if value < 256 { width = 9; code = value - 144 + 400; }
+    else if value < 280 { width = 7; code = value - 256; }
+    else { code = value - 280 + 192; }
+    let encoded = reverse(code, copy(width));
+    write_bits(&mut output[0..output.len()], &mut *bits, encoded, width);
+}
+
+/// Compresses one complete Gzip member. The workspace requires 36864 u64 words for levels 1–9.
+/// Output may contain a partial member on an error; input and workspace are never retained.
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error> {
+    let level = (*params).level;
+    if level > 9 { return Err(Error.InvalidParams); }
+    if level != 0 && workspace.len() < 36864 { return Err(Error.WorkspaceTooSmall); }
+    if output.len() < 18 { return Err(Error.BufferTooSmall); }
+    let header: [u8; 10] = [31,139,8,0,0,0,0,0,0,255];
+    let mut i: u64 = 0; while i < 10 { output[i] = header[i]; i = i + 1; }
+    let mut bits = Bits { bit: 80, error: 0 };
+    let size = input.len() as u64;
+    if level == 0 {
+        let mut at: u64 = 0;
+        loop {
+            let left = size - at; let count: u64 = if left > 65535 { 65535 } else { left };
+            let last: u64 = if at + count == size { 1 } else { 0 };
+            write_bits(&mut output[0..output.len()], &mut bits, last, 3);
+            let pad: u64 = (8 - bits.bit % 8) % 8;
+            write_bits(&mut output[0..output.len()], &mut bits, 0, pad);
+            write_bits(&mut output[0..output.len()], &mut bits, copy(count), 16);
+            write_bits(&mut output[0..output.len()], &mut bits, 65535 - count, 16);
+            i = 0;
+            while i < count { write_bits(&mut output[0..output.len()], &mut bits, input[at + i] as u64, 8); i = i + 1; }
+            at = at + count; if at == size { break; }
+        }
+    } else {
+        i = 0; while i < 36864 { workspace[i] = 0; i = i + 1; }
+        write_bits(&mut output[0..output.len()], &mut bits, 3, 3);
+        let mut at: u64 = 0;
+        while at < size {
+            let mut best: u64 = 0; let mut distance: u64 = 0;
+            if size - at >= 3 {
+                let key = ((input[at] as u64 * 251 + input[at + 1] as u64) * 251 + input[at + 2] as u64) % 4096;
+                let mut previous = workspace[key];
+                workspace[4096 + at % 32768] = copy(previous); workspace[key] = at + 1;
+                let mut steps: u64 = 0;
+                while previous != 0 && previous <= at && at - (previous - 1) <= 32768 && steps < (level as u64) * 8 {
+                    let candidate = previous - 1; let mut count: u64 = 0;
+                    while count < 258 && count < size - at && input[candidate + count] == input[at + count] { count = count + 1; }
+                    if count > best { best = count; distance = at - candidate; }
+                    let next = workspace[4096 + candidate % 32768];
+                    if next >= previous { break; } previous = next; steps = steps + 1;
+                }
+            }
+            if best >= 3 {
+                let mut code: u64 = if best == 258 { 28 } else { 0 };
+                while code < 28 { let (base, extra) = length_info(copy(code)); if best < base + (1 << extra) { break; } code = code + 1; }
+                let (base, extra) = length_info(copy(code));
+                fixed(&mut output[0..output.len()], &mut bits, code + 257);
+                write_bits(&mut output[0..output.len()], &mut bits, best - base, extra);
+                code = 0;
+                while code < 29 { let (base, extra) = distance_info(copy(code)); if distance < base + (1 << extra) { break; } code = code + 1; }
+                let (base, extra) = distance_info(copy(code));
+                write_bits(&mut output[0..output.len()], &mut bits, reverse(code, 5), 5);
+                write_bits(&mut output[0..output.len()], &mut bits, distance - base, extra);
+                i = 1;
+                while i < best && size - (at + i) >= 3 {
+                    let pos = at + i;
+                    let key = ((input[pos] as u64 * 251 + input[pos + 1] as u64) * 251 + input[pos + 2] as u64) % 4096;
+                    workspace[4096 + pos % 32768] = workspace[key]; workspace[key] = pos + 1; i = i + 1;
+                }
+                at = at + best;
+            } else { fixed(&mut output[0..output.len()], &mut bits, input[at] as u64); at = at + 1; }
+        }
+        fixed(&mut output[0..output.len()], &mut bits, 256);
+    }
+    if level >= 4 { entropy_deflate(&input[0..input.len()], &mut output[0..output.len()], &mut bits); }
+    let pad: u64 = (8 - bits.bit % 8) % 8;
+    write_bits(&mut output[0..output.len()], &mut bits, 0, pad);
+    let crc = crc32(&input[0..input.len()]);
+    i = 0; while i < 4 { write_bits(&mut output[0..output.len()], &mut bits, (crc >> (i * 8)) & 255, 8); i = i + 1; }
+    i = 0; while i < 4 { write_bits(&mut output[0..output.len()], &mut bits, (size >> (i * 8)) & 255, 8); i = i + 1; }
+    if bits.error != 0 { return Err(Error.BufferTooSmall); }
+    Ok((bits.bit / 8) as usize)
+}
+
+/// Inflates one DEFLATE stream without allowing references before this Gzip member.
+fn inflate(input: &[u8], bits: &mut Bits, output: &mut [u8], start: u64) -> Result<u64, Error> {
+    let mut written = copy(start);
+    loop {
+        let last = read_bits(&input[0..input.len()], &mut *bits, 1);
+        let kind = read_bits(&input[0..input.len()], &mut *bits, 2);
+        if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+        if kind == 0 {
+            let pad: u64 = (8 - (*bits).bit % 8) % 8; drop(read_bits(&input[0..input.len()], &mut *bits, pad));
+            let count = read_bits(&input[0..input.len()], &mut *bits, 16);
+            let complement = read_bits(&input[0..input.len()], &mut *bits, 16);
+            if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+            if (count ^ complement) != 65535 { return Err(Error.InvalidData); }
+            if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+            let mut i: u64 = 0;
+            while i < count {
+                let byte = read_bits(&input[0..input.len()], &mut *bits, 8);
+                if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+                output[written] = octet(byte);
+                written = written + 1; i = i + 1;
+            }
+        } else if kind == 1 || kind == 2 {
+            let mut lengths: [u64; 320] = [0; 320];
+            let mut literal_count: u64 = 288; let mut distance_count: u64 = 32;
+            if kind == 1 {
+                let mut i: u64 = 0;
+                while i < 288 {
+                    lengths[i] = if i < 144 { 8 } else if i < 256 { 9 } else if i < 280 { 7 } else { 8 };
+                    i = i + 1;
+                }
+                while i < 320 { lengths[i] = 5; i = i + 1; }
+            } else {
+                literal_count = read_bits(&input[0..input.len()], &mut *bits, 5) + 257;
+                distance_count = read_bits(&input[0..input.len()], &mut *bits, 5) + 1;
+                let count = read_bits(&input[0..input.len()], &mut *bits, 4) + 4;
+                if literal_count > 286 { return Err(Error.InvalidData); }
+                let alphabet: [u64; 19] = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+                let mut code_lengths: [u64; 19] = [0; 19]; let mut i: u64 = 0;
+                while i < count { code_lengths[alphabet[i]] = read_bits(&input[0..input.len()], &mut *bits, 3); i = i + 1; }
+                if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+                let mut codes = Tree { counts: [0; 16], symbols: [0; 288] };
+                if !tree(&code_lengths[..], &mut codes, true) { return Err(Error.InvalidData); }
+                i = 0;
+                while i < literal_count + distance_count {
+                    let code = symbol(&input[0..input.len()], &mut *bits, &codes);
+                    if (*bits).error == 1 { return Err(Error.TruncatedInput); }
+                    if (*bits).error != 0 { return Err(Error.InvalidData); }
+                    if code < 16 { lengths[i] = code; i = i + 1; }
+                    else {
+                        let mut value: u64 = 0; let mut repeats: u64 = 0;
+                        if code == 16 {
+                            if i == 0 { return Err(Error.InvalidData); }
+                            value = lengths[i - 1]; repeats = read_bits(&input[0..input.len()], &mut *bits, 2) + 3;
+                        } else if code == 17 { repeats = read_bits(&input[0..input.len()], &mut *bits, 3) + 3; }
+                        else if code == 18 { repeats = read_bits(&input[0..input.len()], &mut *bits, 7) + 11; }
+                        else { return Err(Error.InvalidData); }
+                        if (*bits).error == 1 { return Err(Error.TruncatedInput); }
+                        if repeats > literal_count + distance_count - i { return Err(Error.InvalidData); }
+                        let end = i + repeats;
+                        while i < end { lengths[i] = copy(value); i = i + 1; }
+                    }
+                }
+                if lengths[256] == 0 { return Err(Error.InvalidData); }
+            }
+            let mut literals = Tree { counts: [0; 16], symbols: [0; 288] };
+            let mut distances = Tree { counts: [0; 16], symbols: [0; 288] };
+            if !tree(&lengths[0..literal_count], &mut literals, false) { return Err(Error.InvalidData); }
+            let mut nonzero = false; let mut i: u64 = 0;
+            while i < distance_count { if lengths[literal_count + i] != 0 { nonzero = true; } i = i + 1; }
+            if nonzero && !tree(&lengths[literal_count..literal_count + distance_count], &mut distances, false) { return Err(Error.InvalidData); }
+            loop {
+                let code = symbol(&input[0..input.len()], &mut *bits, &literals);
+                if (*bits).error == 1 { return Err(Error.TruncatedInput); }
+                if (*bits).error != 0 { return Err(Error.InvalidData); }
+                if code < 256 {
+                    if written == output.len() as u64 { return Err(Error.BufferTooSmall); }
+                    output[written] = octet(code);
+                    written = written + 1;
+                } else if code == 256 { break; }
+                else {
+                    if code > 285 { return Err(Error.InvalidData); }
+                    let (base, extra) = length_info(code - 257);
+                    let count = base + read_bits(&input[0..input.len()], &mut *bits, extra);
+                    let distance_code = symbol(&input[0..input.len()], &mut *bits, &distances);
+                    if distance_code > 29 { return Err(Error.InvalidData); }
+                    let (distance_base, distance_bits) = distance_info(distance_code);
+                    let distance = distance_base + read_bits(&input[0..input.len()], &mut *bits, distance_bits);
+                    if (*bits).error == 1 { return Err(Error.TruncatedInput); }
+                    if (*bits).error != 0 || distance > written - start { return Err(Error.InvalidData); }
+                    if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+                    i = 0;
+                    while i < count { output[written] = output[written - distance]; written = written + 1; i = i + 1; }
+                }
+            }
+        } else { return Err(Error.InvalidData); }
+        if last != 0 { break; }
+    }
+    Ok(written)
+}
+
+/// Describes the consumed and produced bytes of a complete member.
+struct Frame {
+    /// Number of encoded bytes consumed.
+    read: u64,
+    /// Number of output bytes produced.
+    written: u64
+}
+
+/// Decodes one complete member and returns its compressed and decoded sizes.
+fn decode_member(input: &[u8], output: &mut [u8]) -> Result<Frame, Error> {
+    let size = input.len() as u64;
+    if size == 0 { return Err(Error.TruncatedInput); }
+    let mut at: u64 = 0; let mut written: u64 = 0;
+    while at < size {
+        let member = copy(at);
+        if size - at < 10 { return Err(Error.TruncatedInput); }
+        if input[at] != 31 || input[at + 1] != 139 || input[at + 2] != 8 || (input[at + 3] & 224) != 0 { return Err(Error.InvalidData); }
+        let flags = input[at + 3]; at = at + 10;
+        if (flags & 4) != 0 {
+            if size - at < 2 { return Err(Error.TruncatedInput); }
+            let length = input[at] as u64 | ((input[at + 1] as u64) << 8); at = at + 2;
+            if length > size - at { return Err(Error.TruncatedInput); } at = at + length;
+        }
+        if (flags & 8) != 0 {
+            while at < size && input[at] != 0 { at = at + 1; }
+            if at == size { return Err(Error.TruncatedInput); } at = at + 1;
+        }
+        if (flags & 16) != 0 {
+            while at < size && input[at] != 0 { at = at + 1; }
+            if at == size { return Err(Error.TruncatedInput); } at = at + 1;
+        }
+        if (flags & 2) != 0 {
+            if size - at < 2 { return Err(Error.TruncatedInput); }
+            let expected = input[at] as u64 | ((input[at + 1] as u64) << 8);
+            if (crc32(&input[member..at]) & 65535) != expected { return Err(Error.ChecksumMismatch); } at = at + 2;
+        }
+        let mut bits = Bits { bit: at * 8, error: 0 };
+        let start = copy(written);
+        let decoded = match inflate(&input[0..input.len()], &mut bits, &mut output[0..output.len()], copy(start)) {
+            Ok(value) => { value }, Err(error) => { return Err(error); },
+        };
+        written = decoded;
+        at = (bits.bit + 7) / 8;
+        if size - at < 8 { return Err(Error.TruncatedInput); }
+        if le32(&input[0..input.len()], copy(at)) != crc32(&output[start..written])
+            || le32(&input[0..input.len()], at + 4) != ((written - start) & 0xffffffff) { return Err(Error.ChecksumMismatch); }
+        at = at + 8;
+        return Ok(Frame { read: at, written: written });
+    }
+    Err(Error.TruncatedInput)
+}
+
+/// Decompresses concatenated members. Errors may leave a partial output prefix.
+pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    if input.len() == 0 { return Err(Error.TruncatedInput); }
+    let mut at: u64 = 0; let mut written: u64 = 0;
+    while at < input.len() as u64 {
+        let frame = match decode_member(&input[at..input.len()], &mut output[written..output.len()]) {
+            Ok(value) => { value }, Err(error) => { return Err(error); },
+        };
+        at = at + frame.read; written = written + frame.written;
+    }
+    Ok(written as usize)
+}

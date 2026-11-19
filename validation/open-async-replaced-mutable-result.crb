@@ -1,0 +1,10 @@
+struct Leaf{view:&mut Int} struct Root{item:A<Leaf>}
+fn replace(root:&mut Root,p:&mut Pool<Leaf>,n:&mut Int){root.item=<-p.new(view:n);}
+fn borrow(root:&mut Root)->&mut Int{let mut leaf=&mut *root.item;return &mut *leaf.view;}
+async fn modify(root:&mut Root,p:&mut Pool<Leaf>,n:&mut Int)->&mut Int{
+replace(root,p,n);yield;return borrow(root);}
+fn main(){let mut values=pool<Int>(2);let mut old=values.new(7);let mut next=values.new(9);
+let mut leaves=pool<Leaf>(2);let leaf=leaves.new(view:&mut old);let mut roots=pool<Root>(1);
+let mut root=roots.new(item:<-leaf);let h=runtime::spawn(->modify(&mut root,&mut leaves,&mut next));
+match h.join(){Ok(view)=>{view.set(20);print(*view);},Err(_)=>{}}
+drop(->root);next=30;print(*next);}

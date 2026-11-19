@@ -1,0 +1,127 @@
+--- before/crust.py
++++ crust.py
+@@ -1,6 +1,7 @@
+ #!/usr/bin/env python3
+ """Experimental scope checker and C emitter. No unchecked C input is accepted."""
+ from __future__ import annotations
++from capture_paths import result_capture_selector, capture_index
+ 
+ import argparse
+ import copy
+@@ -2264,7 +2265,7 @@
+                 if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter') and '/' not in target.field:
+                     binding = bindings[params[target.parameter][0]]
+                     if id(binding) in parents:
+-                        positions.add(int(target.field))
++                        positions.add(capture_index(target.field))
+             groups.append(tuple(sorted(positions)) or (slot,))
+         view.array_container_parents = tuple(parents.values())
+         view.array_container_indices = tuple(groups)
+@@ -2343,7 +2344,7 @@
+             if target.kind == 'task_capture_parameter':
+                 if summary.mode in UTF8_BORROW_MODES:
+                     paths.update(((id(root), id(parent)), (root, parent))
+-                                 for root, parent in self.utf8_task_capture_paths(binding.alloc, int(target.field)))
++                                 for root, parent in self.utf8_task_capture_paths(binding.alloc, capture_index(target.field)))
+                     continue
+                 nominal = params[target.parameter][2]
+                 dependencies, ancestry = self.project_task_result_captures(
+@@ -2854,7 +2855,7 @@
+                                     check.origin_sources[borrowed_target.id] = borrowed_source
+                                     root.allocations.append(borrowed_target)
+                                     check.allocations.append(borrowed_target)
+-                                    dependencies.append((f'{access}.{position}', (borrowed_target,)))
++                                    dependencies.append((f'{access}.{position}/{field}', (borrowed_target,)))
+                             continue
+                         target = Allocation(check.uid(), root.id, pname, (source,), typ=capture_type)
+                         root.allocations.append(target)
+@@ -3373,7 +3374,7 @@
+                             nominal = carrier.typ.split('<', 1)[1][:-1]
+                             parameters = self.async_definitions[nominal][0].args[1]
+                             shared_async_barrier = all(
+-                                parameters[int(key.split('.')[1])][1] == 'ref'
++                                parameters[capture_index(key.partition('.')[2])][1] == 'ref'
+                                 for key, targets in carrier.dependencies if any(a is allocation for a in targets)
+                             )
+                         # A shared capture still blocks the original mutable access.
+@@ -9975,11 +9976,14 @@
+             result_paths.setdefault(index, []).append(path)
+         inline_result = any(target.array_capture is not None or any(
+             dict(self.enums.get(target.typ, {}).get('', ())).get('.'.join(path)) == 'Int'
+-            for path in result_paths.get(int(key.split('.')[1]), ()))
++            for path in result_paths.get(capture_index(key.partition('.')[2]), ()))
+             for key, candidates in captures for target in candidates)
+         dependencies, cell_dependencies, cell_parents = [], [], {}
+         for key, candidates in captures:
+-            paths = result_paths.get(int(key.split('.')[1]), ())
++            paths = result_paths.get(capture_index(key.partition('.')[2]), ())
++            field = key.partition('/')[2]
++            if field:
++                paths = tuple(path for path in paths if not path or '.' + '.'.join(path) == field)
+             if not paths:
+                 continue
+             projected = []
+@@ -10041,13 +10045,17 @@
+         from async_result_storage import borrowed_result_fields
+         fields, parents = [], {}
+         for field, targets in borrowed_result_fields(self.async_definitions[nominal][0]):
+-            if any(target.kind not in ('parameter', 'exclusive_join_parameter') for target in targets):
+-                self.fail('résultat struct async : cible empruntée sans paramètre durable raccordé')
+-            dependencies, chain = self.project_task_result_captures(nominal, captures, ancestry,
+-                paths=frozenset((target.parameter, ()) for target in targets))
+-            roots = {root.id: root for _, candidates in dependencies for root in candidates}
++            roots = {}
++            for target in targets:
++                selector = result_capture_selector(target)
++                if selector is None:
++                    self.fail('résultat struct async : cible empruntée sans paramètre durable raccordé')
++                dependencies, chain = self.project_task_result_captures(
++                    nominal, capture_fields(captures, selector), ancestry,
++                    paths=frozenset({(target.parameter, ())}))
++                roots.update((root.id, root) for _, candidates in dependencies for root in candidates)
++                parents.update((id(parent), parent) for parent in chain)
+             fields.append((field, tuple(roots.values())))
+-            parents.update((id(parent), parent) for parent in chain)
+         return tuple(fields), tuple(parents.values())
+ 
+     def async_array_capture(self, loan, root):
+@@ -10213,9 +10221,9 @@
+                         self.fail('capture par transfert : valeur allouée du type déclaré et du scope courant requise')
+                     transferred.append(target)
+                     for carrier in self.dependency_carriers(target, ownership_only=True):
+-                        for borrowed in self.dependency_targets(carrier):
+-                            access = self.dependency_mode(carrier, borrowed)
+-                            dependencies.append((f'{access}.{index}', (borrowed,)))
++                        for field, borrowed in carrier.dependencies:
++                            access = self.field_modes(carrier.typ).get(field, 'ref')
++                            dependencies.append((f'{access}.{index}/{field}', borrowed))
+                     field_bindings[parameters[index][0]] = Binding(parameters[index][0], 'owned', value, target)
+                     if index in result_indexes:
+                         result_targets.append(target)
+@@ -10634,7 +10642,7 @@
+                 elif origin.kind == 'task_capture_parameter':
+                     captures = capture_fields(binding.alloc.dependencies, origin.field)
+                     nominal = params[origin.parameter][2]
+-                    capture_mode = self.async_definitions[nominal][0].args[1][int(origin.field)][1]
++                    capture_mode = self.async_definitions[nominal][0].args[1][capture_index(origin.field)][1]
+                     if not captures and capture_mode not in ASYNC_SHARED_VIEW_MODES and not is_public_handle(nominal):
+                         self.fail('contrat de transfert : capture empruntée introuvable')
+                     for actual_key, captured in captures:
+@@ -10707,7 +10715,7 @@
+                         roots.update((target.id, target) for target in self.async_reference_row_captures(actual))
+                     chain = ()
+                 elif origin.kind == 'parameter' and binding.alloc.typ in VECTOR_SLICE_MODES:
+-                    position = int(key.split('.')[1])
++                    position = capture_index(key.partition('.')[2])
+                     mode = self.async_definitions[summary.typ][0].args[1][position][1]
+                     for capture in self.async_vector_captures(binding.read_parent or binding, mode):
+                         roots[capture.id] = capture
+@@ -10718,7 +10726,7 @@
+                         exclusive |= self.retains_exclusive_field(binding, root, join_only=True)
+                     chain = (*binding.borrow_parents, *((binding.read_parent,) if binding.read_parent else ()))
+                 parents.update((id(parent), parent) for parent in chain)
+-            index = key.split('.')[1]
++            index = key.partition('.')[2]
+             if roots:
+                 dependencies.append((f'{"mut" if exclusive else "ref"}.{index}', tuple(roots.values())))
+         fresh_origins = {}

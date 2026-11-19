@@ -1,0 +1,11 @@
+--- before/results.py
++++ after/results.py
+@@ -3085,6 +3085,8 @@
+                         resolved |= origins or frozenset({BorrowTarget('local')})
+                     elif target.kind == 'detached_field_parameter':
+                         resolved |= self.detached_field_targets(actual, target.field)
++                    elif target.kind in ('inline_field_parameter', 'indirect_field_parameter'):
++                        resolved |= self.array_update_targets(target, actual)
+                     else:
+                         resolved |= dict(actual.fields).get(target.field, frozenset())
+                 fields.append((field, resolved))

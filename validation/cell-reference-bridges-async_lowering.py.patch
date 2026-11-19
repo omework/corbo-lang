@@ -1,0 +1,78 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1053,6 +1053,45 @@
+         keep_storage(cell, pool_storage(expr[1]))
+         return cell
+ 
++    def stored_reference_cell(pointer, loans, line):
++        """Select an existing allocation descriptor from statically known loans.
++
++        No descriptor is invented for a raw pointer or an inline scalar. The
++        referenced Cell must itself survive a field store beyond the C call.
++        """
++        candidates = []
++        for target, mode in loans:
++            if mode == 'storage':
++                continue
++            root, path = target if isinstance(target, tuple) else (target, ())
++            if root in received_refs:
++                # Its actual origins are also present in the prepared loans.
++                continue
++            if not path and references.get(root) == 'owned' and root not in collection_types:
++                candidates.append(f'frame->{fields[root]}')
++                continue
++            layout = reference_structs.get(reference_types.get(root))
++            if path and layout is not None:
++                selected = '.'.join(path)
++                offset = []
++                for field, typ in layout:
++                    if field == selected and typ in ('&Int', '&mut Int'):
++                        position = ' + '.join(offset) or '0'
++                        candidates.append(f'cell_load_ref(frame->{fields[root]}, {position})')
++                        break
++                    offset.append('sizeof(int)' if typ == 'Int' else 'sizeof(Cell *)')
++                else:
++                    fail(line, 'référence stockée : descripteur de la cible non disponible dans cet état')
++                continue
++            fail(line, 'référence stockée : descripteur de la cible non disponible dans cet état')
++        candidates = list(dict.fromkeys(candidates))
++        if not candidates:
++            fail(line, 'référence stockée : aucune allocation cible suivie')
++        selected = candidates[-1]
++        for candidate in reversed(candidates[:-1]):
++            selected = f'(({pointer}) == &({candidate})->value ? ({candidate}) : ({selected}))'
++        return selected
++
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False, execution=False):
+         expr = sync_method_call(expr)
+         contract = sync_contracts[expr[1]]
+@@ -1080,6 +1119,7 @@
+             for index, (argument, (_, mode, typ)) in enumerate(zip(expr[2], contract.parameters)):
+                 argument_tails.append((len(scopes) - 1, expr[2][index + 1:]))
+                 held = []
++                argument_ctype = sync_types[(mode, typ)]
+                 if mode == 'owned':
+                     if argument[0] not in ('down', 'transfer'):
+                         fail(line, 'argument propriétaire : transfert -> explicite requis')
+@@ -1109,7 +1149,11 @@
+                     loans.extend(held)
+                     # The existing sync ABI uses non-const C pointers for
+                     # read loans too; Crust's contract forbids their mutation.
+-                    value = f'({reference_sync_types[(mode, typ)]})({value})'
++                    if index in contract.result.stored_reference_parameters:
++                        value = stored_reference_cell(value, held, line)
++                        argument_ctype = 'Cell *'
++                    else:
++                        value = f'({reference_sync_types[(mode, typ)]})({value})'
+                 else:
+                     # A literal receives u8 context; a named Int never narrows.
+                     if mode == 'byte' and argument[0] == 'int' and 0 <= argument[1] <= 255:
+@@ -1119,7 +1163,7 @@
+                     expected_type = 'Bool' if mode == 'bool' else typ
+                     if actual != expected_type:
+                         fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
+-                snapshot = temporary(sync_types[(mode, typ)])
++                snapshot = temporary(argument_ctype)
+                 steps.append(f'{snapshot} = {value};')
+                 if mode == 'owned':
+                     prepared_owners.append(snapshot)

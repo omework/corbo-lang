@@ -1,0 +1,25 @@
+--- /tmp/crust-before-nested-option-joins/effects.py
++++ effects.py
+@@ -1,5 +1,10 @@
+ """Infer external source effects without concrete allocations or C emission."""
+-from exchange_join_types import EXCHANGE_JOIN_INNERS, EXCHANGE_JOIN_TYPES, exchange_join_mode
++from option_join_types import (
++    OPTION_JOIN_TYPES,
++)
++from exchange_join_types import (
++    EXCHANGE_JOIN_TYPES,
++)
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ERROR_VALUE_TYPES, RESULT_ERROR_MODES
+ from utf8_syntax import PLAIN_JOIN_TYPES, PLAIN_JOIN_PAYLOADS, PLAIN_RETURN_JOINS
+ from utf8_syntax import VECTOR_SPLIT_TYPES, VECTOR_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, VECTOR_PAYLOAD_TYPES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, VALUE_MODES
+@@ -126,8 +131,8 @@
+         return EXCHANGE_JOIN_TYPES[mode]
+     if mode in ('task', 'execution'):
+         return f'{mode.capitalize()}<{typ}>'
+-    if mode == 'join_option':
+-        return f'Result<Option<A<{typ}>>,runtime::Error>'
++    if mode in OPTION_JOIN_TYPES:
++        return OPTION_JOIN_TYPES[mode]
+     if mode == 'join_owned':
+         return f'Result<A<{typ}>,runtime::Error>'
+     if mode == 'join_nested':

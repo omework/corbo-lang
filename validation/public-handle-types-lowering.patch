@@ -1,0 +1,68 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -39,6 +39,22 @@
+                   **{(mode, VALUE_MODES[mode]): VALUE_MODES[mode] for mode in UTF8_VALUE_RESULT_FAMILIES}})
+ WRAPPED_UTF8_TYPES = {family: VALUE_MODES[mode] for mode, family in UTF8_VALUE_RESULT_FAMILIES.items()}
+ WRAPPED_UTF8_MODES = {family: mode for mode, family in UTF8_VALUE_RESULT_FAMILIES.items()}
++
++
++def public_handle_type(signature):
++    """Expose the result type; keep the concrete task and its loans internally."""
++    mode, typ = signature
++    if mode == 'owned':
++        payload = f'A<{typ}>'
++    elif mode in ('ref', 'mut'):
++        payload = ('&mut ' if mode == 'mut' else '&') + typ
++    elif mode in JOIN_PAYLOADS:
++        payload = f'Result<A<{typ}>,runtime::Error>'
++        if mode == 'join_nested':
++            payload = f'Result<{payload},runtime::Error>'
++    else:
++        payload = SCALAR_RESULTS.get(signature, typ)
++    return f'runtime::Handle<{payload}>'
+ 
+ 
+ def push_new_receiver(expr):
+@@ -1723,8 +1739,11 @@
+ 
+     def bind_transferred_value(name, kind, value, statement):
+         if statement.annotation is not None and kind != 'array':
+-            expected = f'A<{owned_result_types.get(value, "Int")}>' if kind == 'owned' else None
++            expected = (public_handle_type(functions[value[3]].args[2]) if kind == 'execution' else
++                        f'A<{owned_result_types.get(value, "Int")}>' if kind == 'owned' else None)
+             if statement.annotation != expected:
++                if kind == 'execution':
++                    fail(statement.line, f'annotation de handle : attendu {statement.annotation}, reçu {expected}')
+                 fail(statement.line, 'annotation incompatible avec le résultat transféré')
+         if kind == 'array':
+             source, shape, element = value
+@@ -2039,13 +2058,15 @@
+                 or join_move or owned_move or join or joined_await or export or conditional_move):
+             return False
+         array_annotation = statement.annotation is not None and scalar_array_layout(statement.annotation)[0]
++        handle_annotation = statement.annotation is not None and statement.annotation.startswith('runtime::Handle<')
+         if (statement.annotation is not None and operator != 'loop_expr'
+                 and not (join and statement.annotation in PLAIN_JOIN_TYPES.values())
++                and not handle_annotation
+                 and not (array_annotation and (export or conditional_move))) or statement.compact_transfer:
+             fail(statement.line, 'une tâche, un handle ou son résultat exige une nouvelle liaison locale')
+         check_new_name(name, statement.line)
+         if operator == 'loop_expr':
+-            if statement.annotation is not None and statement.annotation not in SCALAR_MODES and not array_annotation:
++            if statement.annotation is not None and statement.annotation not in SCALAR_MODES and not array_annotation and not handle_annotation:
+                 fail(statement.line, 'annotation de résultat de boucle async incompatible')
+             kind, value = emit_loop(initializer[1].args[0], statement.line, valued=True,
+                                     following=body[position + 1:])
+@@ -2104,6 +2125,12 @@
+                 tasks[name] = consume_task(initializer[1], statement.line)
+         else:
+             tasks[name] = create_task(initializer, statement.line)
++        if handle_annotation:
++            if name not in executions or executions[name] is None:
++                fail(statement.line, 'annotation de handle : un handle lancé est requis')
++            actual_type = public_handle_type(functions[executions[name][3]].args[2])
++            if statement.annotation != actual_type:
++                fail(statement.line, f'annotation de handle : attendu {statement.annotation}, reçu {actual_type}')
+         if references.get(name) == 'owned' or is_owned_join(name, nested=True):
+             require_owned_result_use(statement, body, position, export_name)
+         if owned_move or name in tasks or name in executions or is_owned_join(name, nested=True):

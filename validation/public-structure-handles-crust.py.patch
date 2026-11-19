@@ -1,0 +1,111 @@
+--- before/crust.py
++++ after/crust.py
+@@ -1945,6 +1945,7 @@
+         self.body_call_contracts = {}
+         self.enums = {}
+         self.struct_fields = {}
++        self.async_definitions.structures = self.struct_fields
+         self.definitions = []
+         self.call_stack = []
+         self.position_serial = 0
+@@ -4561,18 +4562,32 @@
+         frame['paths'].append(state)
+         frame['results'].append(result)
+ 
+-    def canonicalize_handle(self, allocation, expected):
+-        from async_lowering import public_handle_type
++    def canonicalize_handle(self, allocation, expected, *, annotation=False):
++        from handle_types import contextual_public_type, public_storage
+         if not allocation.typ.startswith('Execution<'):
+             self.fail(f'handle {expected} attendu')
+         nominal = allocation.typ[len('Execution<'):-1]
+-        actual = public_handle_type(self.async_definitions[nominal][0].args[2])
++        actual = contextual_public_type(nominal, expected, self.async_definitions)
+         if actual != expected:
+-            self.fail(f'handle {expected} attendu, reçu {actual}')
++            self.fail(f'{"annotation de " if annotation else ""}handle {expected} attendu, reçu {actual}')
++        required = public_storage(expected, self.struct_fields)
++        if required is not None:
++            kinds = {source.kind == 'local_stack' for source in allocation.task_result_sources}
++            if kinds != {required == 'local'}:
++                self.fail(f'handle {expected} : exigence de stockage {required} non satisfaite')
+         if nominal == expected:
+             return
+         result_dependencies = ()
+         mode = self.async_definitions[nominal][0].args[2][0]
++        if mode in ('owned', 'join_owned'):
++            projected, parents = self.project_task_result_fields(nominal, allocation.dependencies,
++                                                                 allocation.borrow_parents)
++            from array_syntax import owned_reference_paths
++            modes = {field: access for field, access, _ in owned_reference_paths(
++                self.enums, self.async_definitions[nominal][0].args[2][1])}
++            result_dependencies = tuple((modes[field] + '.4/' + field, targets) for field, targets in projected)
++            allocation.borrow_parents = tuple({id(parent): parent for parent in
++                                               (*allocation.borrow_parents, *parents)}.values())
+         if mode in ('ref', 'mut'):
+             projected, parents = self.project_task_result_captures(nominal, allocation.dependencies,
+                                                                   allocation.borrow_parents)
+@@ -4600,8 +4615,9 @@
+         allocation.typ = f'Execution<{expected}>'
+ 
+     def unify_execution_allocations(self, allocations):
++        kinds = {source.kind == 'local_stack' for allocation in allocations for source in allocation.task_result_sources}
+         public = common_public_handle((a.typ[len('Execution<'):-1] for a in allocations),
+-                                      self.async_definitions)
++                                      self.async_definitions, storage='local' if kinds == {True} else 'pool')
+         if public is not None:
+             for allocation in allocations:
+                 self.canonicalize_handle(allocation, public)
+@@ -4867,7 +4883,10 @@
+                                else allocation.typ if allocation is not None else kind)
+                     if selected_kind == kind == 'execution' and selected_type != typ:
+                         previous = Allocation(-1, -1, 'branche précédente', (), typ=selected_type,
+-                                              dependencies=selected_dependencies)
++                                              dependencies=selected_dependencies,
++                                              borrow_parents=tuple(selected_parents.values()),
++                                              task_result_sources=source_union(*(state['task_result_sources']
++                                                  for state in selected_item_states)))
+                         if self.unify_execution_allocations([previous, allocation]) is not None:
+                             selected_type = typ = allocation.typ
+                             selected_dependencies = previous.dependencies
+@@ -13248,11 +13267,7 @@
+                             or node.compact_transfer):
+                         self.fail('un handle exige une nouvelle liaison locale')
+                     if annotation is not None:
+-                        from async_lowering import public_handle_type
+-                        nominal = allocation.typ[len('Execution<'):-1]
+-                        actual_type = public_handle_type(self.async_definitions[nominal][0].args[2])
+-                        if annotation != actual_type:
+-                            self.fail(f'annotation de handle : attendu {annotation}, reçu {actual_type}')
++                        self.canonicalize_handle(allocation, annotation, annotation=True)
+                     scope.bindings[name] = Binding(name, kind, c, allocation)
+                     continue
+                 if (op == 'var' and expr[0] == 'match_expr' and expr[1].mutable
+@@ -14017,7 +14032,7 @@
+                 if is_public_handle(typ):
+                     if mode != 'owned':
+                         self.fail('un runtime::Handle exige un transfert -> explicite')
+-                    if public_signature(typ) is None:
++                    if public_signature(typ, self.struct_fields) is None:
+                         self.fail('prototype : forme de résultat du contrat Handle non encore prise en charge')
+                     normalized.append((pname, 'execution', typ))
+                     continue
+@@ -14086,7 +14101,7 @@
+             if is_public_handle(result[1]):
+                 if result[0] != 'owned':
+                     self.fail('un retour runtime::Handle exige un transfert <- explicite')
+-                if public_signature(result[1]) is None:
++                if public_signature(result[1], self.struct_fields) is None:
+                     self.fail('prototype : forme de résultat du contrat Handle non encore prise en charge')
+                 result = ('execution', result[1])
+                 node = replace(node, args=(name, params, result, node.args[3]))
+@@ -14381,7 +14396,8 @@
+             if mode == 'task':
+                 allocation = check.symbolic_task_input(parameter, mode, typ, parameter, index, root,
+                     {}, {}, lambda group: group, task_bridge_fields, storage_scope=external,
+-                    local_storage=task_bridge_local_storage)
++                    local_storage=task_bridge_local_storage,
++                    result_storage_kind='local' if index in local_parameters else None)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 ctype = 'CrustTask *'
+             elif mode == 'owned':

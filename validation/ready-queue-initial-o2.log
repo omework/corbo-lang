@@ -1,0 +1,36 @@
+test_fifo_model (test_ready_queue.ReadyQueueTests.test_fifo_model) ... ok
+test_old_tickets_cannot_wake_reused_frame (test_ready_queue.ReadyQueueTests.test_old_tickets_cannot_wake_reused_frame) ... FAIL
+test_workers_and_wakes_outlive_freed_frames (test_ready_queue.ReadyQueueTests.test_workers_and_wakes_outlive_freed_frames) ... ok
+
+======================================================================
+FAIL: test_old_tickets_cannot_wake_reused_frame (test_ready_queue.ReadyQueueTests.test_old_tickets_cannot_wake_reused_frame)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_ready_queue.py", line 99, in test_old_tickets_cannot_wake_reused_frame
+            self.run_c_oracle(TASK_RUNTIME + TASK_THREAD_RUNTIME + r'''
+            ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    #include <assert.h>
+    ^^^^^^^^^^^^^^^^^^^
+    ...<44 lines>...
+    }
+    ^
+    ''')
+    ^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12487, in run_c_oracle
+    self.assertEqual(build.returncode, 0, build.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp1z_2twak/task.c:619:16: error: logical not is only applied to the left hand side of this comparison [-Werror,-Wlogical-not-parentheses]
+  619 |         assert(!task_queue_close(&queue) == 0); /* Still one Pending task. */
+      |                ^                         ~~
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h:72:25: note: expanded from macro 'assert'
+   72 |     (__builtin_expect(!(e), 0) ? __assert_rtn(__func__, __ASSERT_FILE_NAME, __LINE__, #e) : (void)0)
+      |                         ^
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp1z_2twak/task.c:619:16: note: add parentheses after the '!' to evaluate the comparison first
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmp1z_2twak/task.c:619:16: note: add parentheses around left hand side expression to silence this warning
+1 error generated.
+
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.290s
+
+FAILED (failures=1)

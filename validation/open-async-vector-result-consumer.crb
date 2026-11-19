@@ -1,0 +1,7 @@
+async fn consume(r:->Result<A<Vector<A<Item>>>,runtime::Error>)->Int{yield;match r{Ok(received)=>{let mut items=<-received;let item=<-items.remove(0);let value=*item.value;drop(->item);drop(->items);return value;},Err(_)=>{return 0;}}}fn forward(r:->Result<A<Vector<A<Item>>>,runtime::Error>)-><-Result<A<Vector<A<Item>>>,runtime::Error>{return <-r;}fn wait(h:->runtime::Handle<A<Vector<A<Item>>>>)-><-Result<A<Vector<A<Item>>>,runtime::Error>{return <-h.join();}struct Item{value:&Int}
+async fn relay(v:->A<Vector<A<Item>>>)-><-A<Vector<A<Item>>>{yield;return <-v;}
+fn main(){
+ let mut ns=pool<Int>(1);let n=ns.new(7);let mut p=pool<Item>(1);
+ let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();v.push(->p.new(value:&n));
+ let h=runtime::spawn(->relay(->v));
+ let result=wait(->h);let worker=runtime::spawn(->consume(->result));match worker.join(){Ok(value)=>{print(value);},Err(_)=>{print(99);}}drop(->n);}

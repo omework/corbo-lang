@@ -1,0 +1,84 @@
+=== Témoins minimaux, deux entrées du compilateur, O2/UBSan ===
+annotation_A_vers_i32
+fn main(){let mut p=pool<i32>(1);let n:i32=p.new(10);print(*n);}
+  verify_program accepté
+  compile_source accepté
+  C natif '10\n'
+
+emprunt_tableau_async
+async fn lend(row:&mut [i32;2])->&mut i32{yield;return &mut row[1];} fn main(){let mut row:[i32;2]=[10,20];let h=runtime::spawn(lend(&mut row));match h.join(){Ok(v)=>{*v=30;},Err(_)=>{}} print(row[1]);}
+  verify_program TypeError sequence item 0: expected str instance, NoneType found
+  compile_source TypeError sequence item 0: expected str instance, NoneType found
+
+bool_handle_await
+async fn leaf()->bool{yield;true} async fn parent()->bool{let h=runtime::spawn(leaf());match h.await{Ok(n)=>{n},Err(_)=>{false}}} fn main(){let h=runtime::spawn(parent());match h.join(){Ok(n)=>{if n{print(7);}},Err(_)=>{}}}
+  verify_program accepté
+  compile_source accepté
+  C natif 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpi76y2meb/task.c:3134:41: error: no member named 'bool_value' in 'CrustJoinResult'; did you mean 'byte_value'? |  3134 |     frame->value_0 = frame->temporary_2.bool_value;
+
+bool_condition_await
+async fn leaf()->bool{yield;true} async fn parent()->bool{let n:bool=if true{leaf().await}else{false};n} fn main(){let h=runtime::spawn(parent());match h.join(){Ok(n)=>{if n{print(7);}},Err(_)=>{}}}
+  verify_program Error ligne 1: prototype async : liaison Int copiable requise
+  compile_source Error ligne 1: prototype async : liaison Int copiable requise
+
+bool_join_temoin
+async fn leaf()->bool{yield;true} fn main(){let h=runtime::spawn(leaf());match h.join(){Ok(n)=>{if n{print(7);}},Err(_)=>{}}}
+  verify_program accepté
+  compile_source accepté
+  C natif '7\n'
+
+async fn edit(row:&mut [i32;2]){yield;row[0]=12;} fn main(){let mut row:[i32;2]=[10,20];let h=runtime::spawn(edit(&mut row));match h.join(){Ok(())=>{},Err(_)=>{}}print(row[0]);}
+verify_program Error ligne 1: une expression i32 est attendue
+compile_source Error ligne 1: une expression i32 est attendue
+async fn edit(row:&mut [i32;2]){yield;let n:i32=12;row[0]=n;} fn main(){let mut row:[i32;2]=[10,20];let h=runtime::spawn(edit(&mut row));match h.join(){Ok(())=>{},Err(_)=>{}}print(row[0]);}
+verify_program accepté
+compile_source accepté
+C natif '12\n'
+fn main(){match "é".char_at(0){Ok(c)=>{print(c);},Err(_)=>{}}}
+Error ligne 1: char_at exige un indice Int
+fn main(){let i:i32=0;match "é".char_at(i){Ok(c)=>{print(c);},Err(_)=>{}}}
+C natif 'é\n'
+
+=== Migrations représentatives et oracles, O0/UBSan ===
+bool join Error ligne 7: une expression i32 est attendue [async_lowering.py:1086]
+bool if/match Error ligne 4: prototype async : liaison Int copiable requise [async_lowering.py:1086]
+tableau join TypeError sequence item 0: expected str instance, NoneType found [crust.py:12599]
+tableau imbriqué Error ligne 5: une expression i32 est attendue [async_lowering.py:1086]
+rangée de références TypeError sequence item 0: expected str instance, NoneType found [crust.py:12599]
+rangées mixtes TypeError sequence item 0: expected str instance, NoneType found [crust.py:12599]
+capture sous-tableau valide Error ligne 2: une expression i32 est attendue [async_lowering.py:1086]
+capture sous-tableau conflit avant spawn Error ligne 2: une expression i32 est attendue [async_lowering.py:1086]
+capture sous-tableau conflit avant join Error ligne 2: une expression i32 est attendue [async_lowering.py:1086]
+A<i32> dans i32 ACCEPTÉ
+i32 dans A<i32> Error ligne 1: annotation A<Int> : une allocation de Pool<Int> est requise [crust.py:2420]
+retour de View et réemprunt valide OK 'View.Item(42)\n7\n'
+retour de View réserve la cible Error ligne 5: accès à 'loan' incompatible avec un emprunt actif [crust.py:2420]
+u8 saved: u8 = 256 Error ligne 4: littéral entier hors des bornes de u8 [numeric_elaboration.py:48]
+u8 saved = 256 Error ligne 8: littéral entier hors des bornes de u8 [numeric_elaboration.py:48]
+u8 let saved Error ligne 15: opérandes de types différents : i32, i64 [numeric_elaboration.py:48]
+u8 if first == second { Error ligne 15: opérandes de types différents : i32, i64 [numeric_elaboration.py:48]
+u8 break local; Error ligne 11: résultats de boucle de types différents : i64, u8 [numeric_elaboration.py:48]
+u8 leaf(local).await Error ligne 15: une capture async u8 exige une valeur du même type [async_lowering.py:1086]
+direct-0 OK '7\n'
+direct-1 AssertionError 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpuzejblki/task.c:3134:41: error: no member named 'bool_value' in 'CrustJoinResult'; did you mean 'byte_value'? |  3134 |     frame->value_0 = frame->temporary_2.bool_value; |       |                                         ^~~~~~~~~~ |       |                                         byte_value [case.py:918]
+direct-2 Error ligne 1: prototype async : liaison Int copiable requise [async_lowering.py:1086]
+direct-3 AssertionError 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpe01qrtkm/task.c:3141:37: error: no member named 'bool_value' in 'CrustJoinResult'; did you mean 'byte_value'? |  3141 |     frame->value_2 = frame->value_1.bool_value; |       |                                     ^~~~~~~~~~ |       |                                     byte_value [case.py:918]
+direct-4 TypeError sequence item 0: expected str instance, NoneType found [crust.py:12599]
+direct-5 OK '12\n'
+capture/avant-lancement Error ligne 1: accès à 'table' incompatible avec un emprunt actif [crust.py:2420]
+capture/avant-attente Error ligne 1: accès à 'table' incompatible avec un emprunt actif [crust.py:2420]
+graph descendant async OK '1\n'
+annotation pool fait encore une cellule OK '10\n'
+projection détachée lit encore sa cible OK '9\n'
+projection détachée bloque le drop de la cible Error ligne 4: déplacement de 'n' interdit : emprunt encore utilisé [crust.py:2420]
+nettoyage de bloc avec U1 OK '7\n'
+U1 alloue sans usage Error ligne 1: résultat reçu 'inner' sans usage explicite [crust.py:2420]
+comparaison u8 même type admise OK '7\n'
+
+=== Captures de tableaux ===
+core avant lancement Error ligne 6: accès à 'table' incompatible avec un emprunt actif [crust.py:2420]
+core avant join Error ligne 8: accès à 'table' incompatible avec un emprunt actif [crust.py:2420]
+core drop du handle Error ligne 8: join requis : un handle doit être attendu explicitement, pas détruit ou abandonné [crust.py:2420]
+core cible locale Error ligne 5: transfert refusé : cible empruntée non durable dans le scope parent [crust.py:2420]
+core indice nommé ACCEPTÉ
+core indice indéterminé Error ligne 6: accès à 'table' incompatible avec un emprunt actif [crust.py:2420]

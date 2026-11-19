@@ -1,0 +1,168 @@
+--- before/async_structure_effects.py
++++ async_structure_effects.py
+@@ -0,0 +1,165 @@
++"""Infer deferred reference-field writes, separately from execution/loan checking.
++
++These summaries describe normal completion, not task creation. They are not yet
++an authorization to lower a field-changing call: the backend must also carry
++the effects through handles and enforce the corresponding lifetimes.
++"""
++
++from dataclasses import dataclass, replace
++from types import SimpleNamespace
++
++from results import FunctionResult, ResultAnalyzer, ResultContext, Value, VOID
++
++
++class IncompleteStructureEffects(Exception):
++    """An unsupported analysis must never masquerade as an empty effect."""
++
++
++@dataclass(frozen=True)
++class AsyncStructureEffects:
++    parameters: tuple
++    # None means unknown; () means a completed analysis found no field writes.
++    structure_fields: tuple | None
++    reason: str = ''
++    may_complete: bool | None = None
++
++    @property
++    def complete(self):
++        return self.structure_fields is not None
++
++
++class AsyncStructureEffectAnalyzer:
++    def __init__(self, definitions, sync_contracts, enums, error):
++        self.definitions = definitions
++        self.error = error
++        self.summaries = {}
++        self.visiting = set()
++        # Only the published synchronous contracts cross this boundary. The
++        # function bodies are deliberately absent from the symbolic adapter.
++        functions = {name: SimpleNamespace(
++            args=(name, contract.parameters, contract.result_type, ()), line=0)
++            for name, contract in sync_contracts.items()}
++        self.results = ResultAnalyzer(functions,
++            {name: contract.effects for name, contract in sync_contracts.items()},
++            error, enums, definitions)
++        self.results.summaries = {name: contract.result for name, contract in sync_contracts.items()}
++
++    def infer_all(self):
++        for name in self.definitions:
++            self.infer(name)
++        return self.summaries
++
++    def infer(self, name):
++        if name in self.summaries:
++            return self.summaries[name]
++        node = self.definitions[name]
++        parameters = tuple(node.args[1])
++        for _, mode, typ in parameters:
++            layout = self.results.enums.get(typ, {}).get('')
++            if layout is not None and (mode not in ('ref', 'mut') or any(
++                    field_type not in ('Int', '&Int', '&mut Int') for _, field_type in layout)):
++                summary = AsyncStructureEffects(parameters, None,
++                    'effets de champs des agrégats généraux non raccordés')
++                self.summaries[name] = summary
++                return summary
++        if name in self.visiting:
++            return AsyncStructureEffects(parameters, None, 'effets de champs async récursifs non résolus')
++        self.visiting.add(name)
++        try:
++            context = StructureEffectContext(self, node)
++            result = context.infer()
++            summary = AsyncStructureEffects(parameters, result.structure_fields,
++                                            may_complete=context.has_completion)
++        except (IncompleteStructureEffects, self.error) as error:
++            summary = AsyncStructureEffects(parameters, None, str(error))
++        finally:
++            self.visiting.remove(name)
++        self.summaries[name] = summary
++        return summary
++
++
++class StructureEffectContext(ResultContext):
++    def __init__(self, effects, node):
++        # Result checking belongs to the existing checker. This pass collects
++        # the states of injected structures at each continuing/returning exit.
++        super().__init__(effects.results, replace(node, args=(
++            node.args[0], node.args[1], ('void', 'Void'), node.args[3])))
++        self.effects = effects
++        self.pending = {}
++        self.has_completion = False
++
++    def collect(self, value, line, environment=None):
++        self.has_completion = True
++        super().collect(VOID, line, environment)
++
++    def check_call_actuals(self, name, actuals, line):
++        if any(isinstance(value, Value) and value.pending_structure_calls for value in actuals):
++            raise IncompleteStructureEffects(
++                'effets différés transmis à un auxiliaire synchrone non raccordés')
++
++    def expression(self, expr, environment, line, expected_array=None):
++        if expr is None:
++            return super().expression(expr, environment, line, expected_array)
++        op = expr[0]
++        if op == 'call' and expr[1] in self.effects.definitions:
++            definition = self.effects.definitions[expr[1]]
++            if len(expr[2]) != len(definition.args[1]):
++                self.fail(line, 'contrat async : nombre d’arguments incompatible')
++            actuals = []
++            flow = {'next'}
++            for argument in expr[2]:
++                if 'next' not in flow:
++                    return flow, VOID
++                part, value = self.expression(argument, environment, line)
++                flow = (flow - {'next'}) | part
++                actuals.append(value)
++            # Stable under loop re-analysis; copies of a task descriptor keep
++            # the same captures instead of looking up possibly shadowed names.
++            token = (id(expr), tuple(actuals))
++            self.pending[token] = (expr[1], tuple(actuals))
++            return flow, Value('task', expr[1], pending_structure_calls=frozenset({token}))
++        if op in ('await', 'task_join', 'task_join_value'):
++            operand = ('name', expr[1]) if op == 'task_join' else expr[1]
++            flow, task = self.expression(operand, environment, line)
++            if 'next' not in flow:
++                return flow, VOID
++            if not isinstance(task, Value) or task.mode not in ('task', 'execution') or not task.pending_structure_calls:
++                raise IncompleteStructureEffects('attente sans captures de champs identifiables')
++            branches = []
++            if task.mode == 'execution':
++                # LaunchFailed executes no body. Until the caller discriminates
++                # the status, both original and completed field states survive.
++                branches.append(({'next'}, environment.copy()))
++            for token in task.pending_structure_calls:
++                if token not in self.pending:
++                    raise IncompleteStructureEffects('attente sans contrat différé de champs')
++                name, actuals = self.pending[token]
++                summary = self.effects.infer(name)
++                if not summary.complete:
++                    raise IncompleteStructureEffects(summary.reason)
++                if not summary.may_complete:
++                    continue
++                branch = environment.copy()
++                names = tuple(f'\0async_argument:{i}' for i in range(len(actuals)))
++                for variable, value in zip(names, actuals):
++                    branch[variable] = value
++                self.apply_structure_updates(
++                    FunctionResult('void', 'Void', structure_fields=summary.structure_fields),
++                    actuals, tuple(('name', variable) for variable in names), branch, line)
++                for variable in names:
++                    branch.pop(variable)
++                branches.append(({'next'}, branch))
++            self.join_environments(environment, branches)
++            if not branches:
++                return flow - {'next'}, VOID
++            signatures = {self.effects.definitions[self.pending[token][0]].args[2]
++                          for token in task.pending_structure_calls}
++            if len(signatures) != 1:
++                raise IncompleteStructureEffects('résultats différents dans un choix de tâches')
++            mode, typ = signatures.pop()
++            if mode not in ('scalar', 'bool', 'byte', 'char', 'void'):
++                raise IncompleteStructureEffects('origine du résultat async non raccordée aux effets de champs')
++            # Scalar result data does not carry a field dependency. Its actual
++            # value/type and the execution envelope are checked elsewhere.
++            return flow, Value(mode, typ)
++        return super().expression(expr, environment, line, expected_array)

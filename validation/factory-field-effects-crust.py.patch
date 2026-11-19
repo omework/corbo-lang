@@ -1,0 +1,49 @@
+--- /tmp/crust-before-factory-field-effects/crust.py	2026-11-08 03:53:09
++++ crust.py	2026-11-08 03:54:02
+@@ -9879,8 +9879,6 @@
+         parameters = node.args[1]
+         field_summary = node.field_effect_summary
+         field_updates = bool(field_summary and field_summary.complete and field_summary.structure_fields)
+-        if field_updates and any(name != 'main' for name in self.call_stack):
+-            self.fail('prototype : effets de champs async dans un contrat synchrone non raccordés')
+         if len(args) != len(parameters):
+             self.fail(f"'{name}' attend {len(parameters)} argument(s), reçu {len(args)}")
+         from async_lowering import capture_ctype, scalar_array_layout, owned_result_parameters, int_reference_row
+@@ -10404,7 +10402,9 @@
+                                 item_origins=origins, task_result_sources=result_sources,
+                                 task_result_origins=result_origins,
+                                 async_field_updates=tuple(update for index in summary.task_forward_parameters
+-                                    for update in bindings[params[index][0]].alloc.async_field_updates))
++                                    for update in bindings[params[index][0]].alloc.async_field_updates)
++                                    + tuple(self.prepare_structure_updates(
++                                        replace(summary, structure_fields=summary.task_field_updates), params, bindings).values()))
+         self.check_borrow_destination(allocation, caller)
+         caller.allocations.append(allocation)
+         self.allocations.append(allocation)
+@@ -13668,10 +13668,22 @@
+         self.function_contracts = function_contracts(self.functions, self.function_effects,
+                                                      self.function_results, self.function_constraints)
+         from async_structure_effects import AsyncStructureEffectAnalyzer
+-        self.async_structure_effects = AsyncStructureEffectAnalyzer(
+-            async_functions, self.function_contracts, self.enums, Error).infer_all()
+-        for name, node in async_functions.items():
+-            node.field_effect_summary = self.async_structure_effects[name]
++        # Fresh task factories depend on deferred async effects; async bodies
++        # in turn depend on synchronous contracts. Publish both to a fixed point.
++        while True:
++            previous_results = self.function_results
++            self.async_structure_effects = AsyncStructureEffectAnalyzer(
++                async_functions, self.function_contracts, self.enums, Error).infer_all()
++            for name, node in async_functions.items():
++                node.field_effect_summary = self.async_structure_effects[name]
++            self.function_results = ResultAnalyzer(self.functions, self.function_effects, Error, self.enums,
++                                                   async_functions).infer_all()
++            self.function_constraints = ConstraintAnalyzer(self.functions, self.function_effects,
++                self.function_results, Error, self.enums, async_functions).infer_all()
++            self.function_contracts = function_contracts(self.functions, self.function_effects,
++                self.function_results, self.function_constraints)
++            if self.function_results == previous_results:
++                break
+         # Synchronous callers can join a borrowed result before frame C is
+         # emitted. Its provenance contract must already be available then.
+         from async_lowering import borrowed_result_paths

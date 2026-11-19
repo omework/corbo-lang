@@ -1,0 +1,100 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -80,6 +80,7 @@
+     task_result_fields: tuple = ()
+     task_reference_assets: frozenset[Asset] = frozenset()
+     execution_tokens: frozenset[tuple] = frozenset()
++    absent_owned_payload: bool = False
+ 
+     @property
+     def all_assets(self):
+@@ -137,7 +138,8 @@
+                      task_result_assets=frozenset(a for value in values for a in value.task_result_assets),
+                      task_result_fields=merge_fields(values, 'task_result_fields'),
+                      task_reference_assets=frozenset(a for value in values for a in value.task_reference_assets),
+-                     execution_tokens=frozenset(token for value in values for token in value.execution_tokens))
++                     execution_tokens=frozenset(token for value in values for token in value.execution_tokens),
++                     absent_owned_payload=all(value.absent_owned_payload for value in values))
+     return replace(first, variants=frozenset()) if isinstance(first, Value) else first
+ 
+ 
+@@ -353,8 +355,7 @@
+                     assets = frozenset({asset})
+                 from async_lowering import owned_result_parameters, utf8_result_parameters
+                 result_assets = frozenset()
+-                if owned_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions,
+-                                           sync_result=self.analyzer.results.get):
++                if self.analyzer.async_functions[typ].args[2][0] in ('owned', 'join_owned', 'join_nested'):
+                     asset = Asset(('task_result_parameter', index), Source('task_result_parameter', index))
+                     history[asset] = frozenset()
+                     result_assets = frozenset({asset})
+@@ -759,7 +760,16 @@
+                 mode = definition.args[2][0]
+                 if mode in ('owned', 'join_owned'):
+                     kind = 'join_owned' if mode == 'owned' else 'join_nested'
+-                    return paths, Value(kind, definition.args[2][1], execution.task_result_assets, execution.task_result_fields)
++                    effects = getattr(definition, 'field_effect_summary', None)
++                    if effects is not None and effects.complete and (
++                            effects.may_complete is False or effects.completion_result.absent_owned_payload):
++                        return paths, Value(kind, definition.args[2][1], absent_owned_payload=True)
++                    from async_result_storage import borrowed_result_fields
++                    fields = dict(execution.task_result_fields)
++                    for field, targets in borrowed_result_fields(definition):
++                        fields[field] = frozenset(asset for target in targets
++                            for asset in dict(execution.fields).get(str(target.parameter), ()))
++                    return paths, Value(kind, definition.args[2][1], execution.task_result_assets, tuple(fields.items()))
+                 if (plain := PLAIN_RETURN_JOINS.get(definition.args[2])) is not None:
+                     return paths, Value(plain, PLAIN_JOIN_TYPES[plain])
+                 if mode in ASYNC_CAPTURE_VIEW_MODES:
+@@ -1052,9 +1062,9 @@
+                 if values[0].mode == 'join_runtime_error':
+                     return paths, Value('runtime_error', 'runtime::Error')
+                 if values[0].mode == 'join_nested':
+-                    return paths, Value('join_owned', values[0].typ, values[0].assets)
++                    return paths, replace(values[0], mode='join_owned')
+                 if values[0].mode == 'join_owned':
+-                    return paths, Value('owned', values[0].typ, values[0].assets)
++                    return paths, replace(values[0], mode='owned')
+                 if values[0].mode in ('join_ref', 'join_mut'):
+                     return paths, Value(values[0].mode[5:], values[0].typ, values[0].assets)
+                 if values[0].mode in ('shared_ref_option', 'shared_ref_replace', 'shared_ref_try_push'):
+@@ -1492,6 +1502,17 @@
+                                for index, value in enumerate(actuals) if isinstance(value, Source)}
+                 assets |= frozenset(pool_assets.values())
+                 result_assets |= frozenset(asset for index, asset in pool_assets.items() if index in indexes)
++                from async_result_storage import result_storage
++                local_inputs = frozenset(index for index, value in enumerate(actuals)
++                    if isinstance(value, Value) and value.assets and all(
++                        asset.source.kind == 'local' and asset.source.name == 'data stack implicite'
++                        for asset in value.assets))
++                plan = result_storage(catalog[name], local_inputs)
++                if plan.destination:
++                    output = self.born(('task_output', id(expr)),
++                        Source('local', id(expr), 'data stack implicite', catalog[name].args[2][1]), paths['next'])
++                    result_assets |= frozenset({output})
++                    assets |= frozenset({output})
+                 reference_assets = self.async_reference_assets(catalog[name], actuals, line)
+                 return paths, Value('task', name, assets, captures, reservations=reservations,
+                                     task_result_assets=result_assets, task_reference_assets=reference_assets,
+@@ -1505,6 +1526,8 @@
+                 if typ != 'Allocator' and not typ.startswith('Pool<') and mode not in ('scalar', *VALUE_MODES, 'array', 'array_ref', 'array_mut', 'array_refs', 'array_refs_owned'):
+                     if not isinstance(value, Value) or (
+                             not value.assets and value.mode not in ('array_ref', 'array_mut')
++                            and not (mode == value.mode and mode in ('join_owned', 'join_nested')
++                                     and value.absent_owned_payload)
+                             and (mode, value.mode) != ('handle_option', 'handle_option')):
+                         self.fail(line, f"'{pname}' attend une allocation {typ}")
+                 if mode in UTF8_BORROW_MODES or mode not in ('scalar', *VALUE_MODES, 'array', 'array_ref', 'array_mut', 'array_refs', 'array_refs_owned'):
+@@ -1961,7 +1984,11 @@
+                         for slot in result.shared_vector_layout)
+             return paths, Value(result.mode, result.typ, assets, tuple(fields), frozenset(reservations),
+                                 exchange_payloads=tuple(resolve_assets(arm) for arm in result.exchange_payloads),
+-                                variants=variants, handle_items=item_sets)
++                                variants=variants, handle_items=item_sets,
++                                absent_owned_payload=not assets and (result.absent_owned_payload or
++                                    bool(result.candidates) and all(candidate.kind == 'parameter'
++                                        and actuals[candidate.parameter].absent_owned_payload
++                                        for candidate in result.candidates)))
+         finally:
+             self.pending_sources.pop()
+ 

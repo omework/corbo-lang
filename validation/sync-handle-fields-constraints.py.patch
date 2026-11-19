@@ -1,0 +1,59 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -281,10 +281,11 @@
+                 captures = []
+                 returned = utf8_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions,
+                                                   sync_result_contract=self.analyzer.sync_result_contract)
++                borrowed = getattr(self.analyzer.async_functions[typ], 'public_result_borrows', ())
+                 for position, (_, capture, _) in enumerate(self.analyzer.async_functions[typ].args[1]):
+-                    if capture in ASYNC_CAPTURE_VIEW_MODES or position in returned:
+-                        asset = Asset(('task_utf8_parameter', index, position),
+-                                      Source('task_utf8_parameter', index, str(position)))
++                    if capture in ASYNC_CAPTURE_VIEW_MODES or position in returned or position in borrowed:
++                        kind = 'task_borrow_parameter' if position in borrowed else 'task_utf8_parameter'
++                        asset = Asset((kind, index, position), Source(kind, index, str(position)))
+                         history[asset] = frozenset()
+                         captures.append((str(position), frozenset({asset})))
+                 reservations = frozenset(asset for _, targets in captures for asset in targets)
+@@ -659,6 +660,10 @@
+                     retained = frozenset(asset for position in utf8_result_parameters(definition, self.analyzer.async_functions,
+                                                           sync_result_contract=self.analyzer.sync_result_contract)
+                                          for asset in captures.get(str(position), ()))
++                    return paths, Value('join_' + mode, definition.args[2][1], retained)
++                if mode in ('ref', 'mut') and (returned := getattr(definition, 'public_result_borrows', ())):
++                    retained = frozenset(asset for position, assets in execution.fields
++                                         if int(position) in returned for asset in assets)
+                     return paths, Value('join_' + mode, definition.args[2][1], retained)
+                 if mode in UTF8_VALUE_RESULT_FAMILIES:
+                     return paths, Value('join_' + mode, VALUE_MODES[mode])
+@@ -944,6 +949,8 @@
+                     return paths, Value('join_owned', values[0].typ, values[0].assets)
+                 if values[0].mode == 'join_owned':
+                     return paths, Value('owned', values[0].typ, values[0].assets)
++                if values[0].mode in ('join_ref', 'join_mut'):
++                    return paths, Value(values[0].mode[5:], values[0].typ, values[0].assets)
+                 if values[0].mode in ('shared_ref_option', 'shared_ref_replace', 'shared_ref_try_push'):
+                     return paths, Value('ref', 'Int', assets=values[0].assets)
+                 if values[0].mode in ('int_option', 'int_replace', 'int_try_push', 'read_result', 'join_int'):
+@@ -1417,7 +1424,7 @@
+                 actual = actuals[symbol.index]
+                 if symbol.kind == 'task_result_parameter':
+                     return tuple(asset.source for asset in actual.task_result_assets)
+-                if symbol.kind == 'task_utf8_parameter':
++                if symbol.kind in ('task_utf8_parameter', 'task_borrow_parameter'):
+                     return tuple(asset.source for asset in dict(actual.fields).get(symbol.name, ()))
+                 if symbol.kind == 'allocation_field_parameter':
+                     assets = (self.projected_assets(actual, symbol.name, current)
+@@ -1688,6 +1695,12 @@
+                             continue
+                         if target.kind in ('utf8_parameter', 'string_parameter', 'vector_parameter'):
+                             captured.update(actual.all_assets)
++                        elif target.kind in ('parameter', 'inline_field_parameter'):
++                            captured.update(actual.assets | actual.reservations)
++                        elif target.kind == 'indirect_field_parameter':
++                            captured.update(array_contract_assets(target, actual))
++                        elif target.kind == 'detached_field_parameter':
++                            captured.update(self.projected_assets(actual, target.field, current))
+                         elif target.kind == 'task_capture_parameter':
+                             captured.update(dict(actual.fields).get(target.field, ()))
+                     if captured:

@@ -1,0 +1,435 @@
+--- /tmp/crust-before-typed-handle-vectors/crust.py
++++ /Users/jabarkarim/sources/crust/crust.py
+@@ -22,6 +22,7 @@
+ import copy
+ from contextlib import ExitStack, contextmanager
+ import json
++from array_syntax import HANDLE_VECTORS, is_handle_vector, handle_vector_element, register_handle_vector
+ from array_syntax import consumed_result_expression
+ from integer_syntax import exact_integer_conversion
+ from collections import ChainMap
+@@ -297,7 +298,7 @@
+                 prefix += self.take('mut') + ' '
+             element = prefix + self.type_name()
+             self.take('>')
+-            return f'{name}<{element}>'
++            return register_handle_vector(f'{name}<{element}>')
+         return name
+ 
+     def is_async_pool_directive(self):
+@@ -2188,7 +2189,7 @@
+         if any(source.scope not in scopes for source in stored_sources):
+             if allocation.typ.startswith(('Task<', 'Execution<')):
+                 self.fail('transfert refusé : un pool de capture ne survit pas à la tâche')
+-            holder = 'au vecteur' if allocation.typ == HANDLE_VECTOR else 'à l’agrégat'
++            holder = 'au vecteur' if is_handle_vector(allocation.typ) else 'à l’agrégat'
+             self.fail(f'transfert refusé : un pool d’élément ne survit pas {holder}')
+         dependencies = self.retained_dependencies(allocation)
+         holders = [loan.alloc for loan in self.match_reservations(self.retained_borrow_parents(allocation))]
+@@ -3018,9 +3019,10 @@
+                                                   f'symbolic_source_{sid}')
+                     root.sources.append(sources[group])
+                 item_source = sources[group]
+-                if item_source.element_type not in (None, 'Int'):
++                element = handle_vector_element(allocation.typ)
++                if item_source.element_type not in (None, element):
+                     check.fail('contraintes de sources incompatibles avec le type des éléments')
+-                item_source.element_type = 'Int'
++                item_source.element_type = element
+                 origin = check.uid()
+                 check.origin_sources[origin] = item_source
+                 allocation.item_sources = (item_source,)
+@@ -3136,7 +3138,7 @@
+                         check.allocations.append(allocation)
+                         check.origin_sources[allocation.id] = sources[group]
+                         add_field_dependencies(allocation, index)
+-                        if content_type == HANDLE_VECTOR:
++                        if is_handle_vector(content_type):
+                             add_vector_items(allocation, index)
+                         owner = check.array_allocation_root(allocation, handle=True)
+                     else:
+@@ -3207,7 +3209,7 @@
+                     add_field_dependencies(allocation, index)
+                     if mode in ('ref', 'mut', 'owned', *JOIN_RESULT_TYPES) and self.has_owned_fields(typ):
+                         add_owned_fields(allocation, index)
+-                    if typ == HANDLE_VECTOR and mode in ('owned', 'mut'):
++                    if is_handle_vector(typ) and mode in ('owned', 'mut'):
+                         add_vector_items(allocation, index)
+             for index, element in self.function_effects[name].pool_requirements:
+                 source = root.bindings[f'input_{index}'].source
+@@ -4448,7 +4450,7 @@
+                  (tuple(target.id for target in targets), tuple(id(parent) for parent in parents))
+                  for targets, parents in attrs['reference_positions']))
+             for a, attrs in state['allocations']
+-            if a.id in carries or a.typ in self.struct_fields or a.typ in (HANDLE_VECTOR, *REFERENCE_VECTORS) or attrs['handle_revision'])
++            if a.id in carries or a.typ in self.struct_fields or a.typ in (*HANDLE_VECTORS, *REFERENCE_VECTORS) or attrs['handle_revision'])
+         visible = {id(b) for row in state['scopes'] for b in row[1].values()}
+         def reference_metadata(loan):
+             attrs = state['bindings'].get(id(loan), (loan, vars(loan)))[1]
+@@ -5250,7 +5252,7 @@
+                 self.fail('reset interdit : une allocation est capturée par une tâche')
+             sources = self.owned_sources(allocation) if allocation.owned_fields else allocation.item_sources
+             if any(source.id in reset_ids for source in sources):
+-                destination = 'un vecteur' if allocation.typ == HANDLE_VECTOR else 'un agrégat'
++                destination = 'un vecteur' if is_handle_vector(allocation.typ) else 'un agrégat'
+                 self.fail(f'reset interdit : le pool fournit des handles encore stockés dans {destination}')
+ 
+     def reset_source(self, source, c):
+@@ -7147,7 +7149,7 @@
+                 return 'scalar', value, None
+             if place[0] == 'array_index' and place[1][0] == 'name':
+                 vector = self.lookup(place[1][1])
+-                if vector.alloc is not None and vector.alloc.typ == HANDLE_VECTOR:
++                if vector.alloc is not None and is_handle_vector(vector.alloc.typ):
+                     borrow = ('ref_expr', place)
+                     self.positions[id(borrow)] = self.positions[id(expr)]
+                     _, slot, _ = self.expression(borrow, scope, label)
+@@ -7907,7 +7909,17 @@
+             link.array_root = new_root
+             link.array_alternatives = ()
+ 
++    def check_handle_vector_payload(self, typ):
++        element = handle_vector_element(typ)
++        if element is None:
++            return
++        if element not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>') and element not in self.enums:
++            self.fail(f'type de charge inconnu dans {typ}')
++        if self.has_owned_fields(element) or any(aggregate_reference_paths(self.enums, element)):
++            self.fail('prototype : métadonnées des champs propriétaires/empruntés dans un vecteur de handles non raccordées')
++
+     def check_vector_handle_destination(self, vector, incoming, scope, *, borrowed_write=False):
++        self.check_handle_vector_payload(vector.typ)
+         if vector.scope == self.scopes[0].id and any(source.kind == 'symbolic' for source in vector.sources):
+             allowed = self.exit_frames and vector.id in self.exit_frames[-1]['borrowed_vector_writes']
+             if not borrowed_write or not allowed:
+@@ -7929,9 +7941,9 @@
+         finally:
+             self.argument_frames.pop()
+         self.array_access(loan, write=True, after=True)
+-        self.check_allocation_handle_type('A<Int>', kind, incoming)
+         for root in roots:
+             vector = root.alloc
++            self.check_allocation_handle_type(f'A<{handle_vector_element(vector.typ)}>', kind, incoming)
+             self.check_vector_handle_destination(vector, incoming, scope, borrowed_write=True)
+             ancestors = self.array_ancestors(loan, root)
+             index = next((part.handle_slot_index for key, part in self.array_lineage(loan).items()
+@@ -7961,7 +7973,7 @@
+ 
+     def evaluate_vector_handle_transfer(self, method, argument, vector, scope, label):
+         if argument[0] not in ('down', 'transfer'):
+-            self.fail(f'{method} exige un transfert explicite -> A<Int>')
++            self.fail(f'{method} exige un transfert explicite -> A<{handle_vector_element(vector.typ)}>')
+         if argument[0] == 'down':
+             self.expression_clock(argument)
+             source = self.lookup(argument[1])
+@@ -7971,7 +7983,7 @@
+         else:
+             kind, value, incoming = self.expression(argument[1], scope, label)
+             self.expression_clock(argument)
+-        self.check_allocation_handle_type('A<Int>', kind, incoming)
++        self.check_allocation_handle_type(f'A<{handle_vector_element(vector.typ)}>', kind, incoming)
+         self.check_vector_handle_destination(vector, incoming, scope, borrowed_write=True)
+         return value, incoming
+ 
+@@ -7998,6 +8010,8 @@
+         return 'void', '', None
+ 
+     def exchange_int_handle(self, expr, binding, index_expr, argument, scope, label, *, buffered=False):
++        if handle_vector_element(binding.alloc.typ) != 'Int':
++            self.fail('prototype : résultats typés de replace/try_push de handles non raccordés')
+         self.access(binding, write=True)
+         reservation = Binding(binding.name, 'mut', binding.c, binding.alloc, borrow_parents=(binding,))
+         self.argument_frames.append([reservation])
+@@ -8094,7 +8108,7 @@
+         self.lines.append(f'Cell *{name};')
+         self.lines.append(f'vector_remove({binding.c}, {index}, &{name});')
+         return self.receive_extracted_handle(name, sources, scope, label,
+-                                             origins=origins)
++                                             origins=origins, typ=handle_vector_element(vector.typ))
+ 
+     @staticmethod
+     def update_handle_positions(vector, index, origins, *, append=False, weak=False):
+@@ -8174,16 +8188,16 @@
+             self.lines.append(f'{name}.status = vector_pop({binding.c}, &{name}.value);')
+             if not sources:
+                 self.lines.append(f'if ({name}.status == CRUST_CHAR_OK) fail("pop de handle : provenance absente");')
+-            return self.buffered_handle_result(name, sources, scope, label, origins)
++            return self.buffered_handle_result(name, sources, scope, label, origins, typ=handle_vector_element(vector.typ))
+         self.lines.append(f'Cell *{name};')
+         self.lines.append(f'if (vector_pop({binding.c}, &{name}) != CRUST_CHAR_OK) fail("pop de handle vide");')
+         return self.receive_extracted_handle(name, sources, scope, label,
+-                                             origins=origins)
+-
+-    def buffered_handle_result(self, name, sources, scope, label, origins):
++                                             origins=origins, typ=handle_vector_element(vector.typ))
++
++    def buffered_handle_result(self, name, sources, scope, label, origins, *, typ='Int'):
+         if not sources:
+             return 'handle_option', name, None
+-        _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins)
++        _, _, allocation = self.receive_extracted_handle(f'{name}.value', sources, scope, label, origins=origins, typ=typ)
+         self.guard_buffered_handle(name, allocation, '==')
+         return 'handle_option', name, allocation
+ 
+@@ -8762,7 +8776,7 @@
+             if method != 'push':
+                 self.fail('Vector<&mut Int> : extraction explicite avec <- v.remove(indice) requise')
+             return self.push_mutable_vector_reference(expr, binding, args[0])
+-        if typ == HANDLE_VECTOR:
++        if is_handle_vector(typ):
+             if method == 'remove':
+                 self.fail('remove : le résultat A<Int> exige un transfert <- explicite')
+             return self.push_int_handle(expr, binding, args[0], scope, label)
+@@ -9204,6 +9218,8 @@
+ 
+     @staticmethod
+     def vector_element_c_type(typ):
++        if is_handle_vector(typ):
++            return 'Cell *'
+         return {'Vector<Int>': 'int', HANDLE_VECTOR: 'Cell *', SHARED_REF_VECTOR: 'Cell *', MUT_REF_VECTOR: 'Cell *'}.get(typ, 'uint8_t')
+ 
+     def typed_method_candidate(self, expr):
+@@ -9346,7 +9362,7 @@
+                     result = self.remove_mutable_vector_reference(call, binding, arguments, scope, source_name)
+                     self.expression_clock(expr)
+                     return result
+-                if binding.alloc is not None and binding.alloc.typ == HANDLE_VECTOR:
++                if binding.alloc is not None and is_handle_vector(binding.alloc.typ):
+                     if len(arguments) != 1:
+                         self.fail('remove exige un indice')
+                     result = self.remove_int_handle(call, binding, arguments[0], scope, source_name)
+@@ -9421,7 +9437,7 @@
+                 if op in ('array_handle_exchange', 'array_buffered_replace'):
+                     return self.replace_mutable_vector_reference(expr, binding, expr[2], expr[-1], scope, source_name)
+                 return self.try_push_mutable_vector_reference(expr, binding, expr[-1], source_name)
+-            if binding.alloc is None or binding.alloc.typ != HANDLE_VECTOR:
++            if binding.alloc is None or not is_handle_vector(binding.alloc.typ):
+                 self.fail('match d’une opération transférée exige un vecteur compatible')
+             index = expr[2] if op in ('array_handle_exchange', 'array_buffered_replace') else None
+             buffered = op in ('array_buffered_replace', 'array_buffered_try_push')
+@@ -9505,10 +9521,10 @@
+                 self.lines.append('fail("pop de handle : aucun élément possible");')
+                 raise PathsReturned()
+             return self.receive_extracted_handle(f'{binding.c}.value', allocation.sources, scope, source_name,
+-                                                 origins=allocation.origins)
++                                                 origins=allocation.origins, typ=allocation.typ)
+         if op in ('array_handle_len', 'array_pop_handle', 'array_handle_option_pop'):
+             binding = self.lookup(expr[1][1])
+-            if binding.alloc is None or binding.alloc.typ not in (HANDLE_VECTOR, MUT_REF_VECTOR):
++            if binding.alloc is None or binding.alloc.typ not in (*HANDLE_VECTORS, MUT_REF_VECTOR):
+                 self.fail('match de pop transféré exige un vecteur à éléments transférables')
+             if binding.alloc.typ == MUT_REF_VECTOR:
+                 if op != 'array_handle_len':
+@@ -9573,8 +9589,8 @@
+                 name = f'element{self.uid()}'
+                 self.lines.append(f'{typ} {name} = {value};')
+                 return ARRAY_SCALAR_MODES[typ], name, None
+-            if receiver.alloc is not None and receiver.alloc.typ == HANDLE_VECTOR:
+-                self.fail('une case A<Int> exige un emprunt explicite ou une extraction')
++            if receiver.alloc is not None and is_handle_vector(receiver.alloc.typ):
++                self.fail(f'une case A<{handle_vector_element(receiver.alloc.typ)}> exige un emprunt explicite ou une extraction')
+             if receiver.alloc is not None and receiver.alloc.typ in (*VECTOR_ELEMENTS, *REFERENCE_VECTORS):
+                 return self.vector_operation(expr, receiver, 'index', expr[2:], scope, source_name)
+         if op == 'array_index' and self.is_indexed_view(expr[1]):
+@@ -9607,17 +9623,18 @@
+                     pointer = f'vector_element{self.uid()}'
+                     self.lines.append(f'{element} *{pointer} = ({element} *)vector_checked_item({vector.c}, {index});')
+                     return ('array_mut' if write else 'array_ref'), pointer, (element, self.growing_storage_paths(vector))
+-                if vector.alloc is not None and vector.alloc.typ == HANDLE_VECTOR:
++                if vector.alloc is not None and is_handle_vector(vector.alloc.typ):
+                     write = op == 'mut_expr'
+                     mode = 'array_mut' if write else 'array_ref'
+                     paths = self.growing_storage_paths(vector)
++                    element = self.borrowed_element_type(f'A<{handle_vector_element(vector.alloc.typ)}>')
+                     if place[2][0] == 'int':
+                         if write and (vector.kind == 'ref' or vector.kind == 'owned' and not vector.mutable):
+                             self.fail('un emprunt mutable exige un vecteur mutable')
+                         self.expression_clock(place[2])
+                         self.expression_clock(expr)
+                         index = place[2][1]
+-                        slot = self.array_borrow_binding(vector.name, mode, '', ('Cell *', paths))
++                        slot = self.array_borrow_binding(vector.name, mode, '', (element, paths))
+                         slot.handle_slot_index = index
+                         self.array_access(slot, write=write)
+                         paths = tuple((root, slot) for root, _ in paths)
+@@ -9625,7 +9642,7 @@
+                         index = self.handle_vector_index(expr, vector, place[2], scope, source_name, write=write)
+                     name = f'handle_slot{self.uid()}'
+                     self.lines.append(f'Cell **{name} = (Cell **)vector_checked_item({vector.c}, {index});')
+-                    return mode, name, ('Cell *', paths)
++                    return mode, name, (element, paths)
+             if expr[1][0] == 'array_index' and self.is_indexed_view(expr[1][1]):
+                 if op == 'mut_expr':
+                     self.fail('les éléments d’une vue partagée sont immuables')
+@@ -9725,12 +9742,12 @@
+                 element_c = self.vector_element_c_type(typ)
+                 factory = (f'vector_construct_reserved({reservation}, {storage_reserved}, {source_c}, UINT64_C({scope.region_limit or 0}), '
+                            f'sizeof({element_c}), _Alignof({element_c}), {int(typ == "String")}, '
+-                           f'{int(typ == HANDLE_VECTOR)}, "{source_name}")')
++                           f'{int(is_handle_vector(typ))}, "{source_name}")')
+             elif typ in (*VECTOR_ELEMENTS, *REFERENCE_VECTORS):
+                 element_c = self.vector_element_c_type(typ)
+                 factory = (f'vector_new({source_c}, UINT64_C({scope.region_limit or 0}), '
+                            f'sizeof({element_c}), _Alignof({element_c}), 0, "{source_name}")')
+-            elif typ == HANDLE_VECTOR:
++            elif is_handle_vector(typ):
+                 factory = f'vector_new_handles({source_c}, UINT64_C({scope.region_limit or 0}), "{source_name}")'
+             elif typ == 'String':
+                 factory = f'string_new({source_c}, UINT64_C({scope.region_limit or 0}), "{source_name}")'
+@@ -9800,7 +9817,8 @@
+                 return self.array_borrow((f'(*{binding.c})', binding.static_type, binding),
+                                          'array_mut' if mode == 'mut' else 'array_ref')
+             if (binding.kind not in ('ref', 'mut') or binding.alloc is None
+-                    or (binding.alloc.typ != 'Int' and binding.alloc.typ not in self.enums)):
++                    or (binding.alloc.typ != 'Int' and binding.alloc.typ not in self.enums
++                        and not is_handle_vector(binding.alloc.typ))):
+                 self.fail('un réemprunt exige une référence Int ou une référence à un agrégat')
+             if mode == 'mut' and binding.kind != 'mut':
+                 self.fail('un réemprunt mutable exige une référence mutable')
+@@ -9978,7 +9996,7 @@
+         return tuple(sources), tuple(origins), tuple(fresh)
+ 
+     def handle_result_metadata(self, summary, params, bindings, *, opaque=False):
+-        if summary.mode != 'owned' or summary.typ != HANDLE_VECTOR:
++        if summary.mode != 'owned' or not is_handle_vector(summary.typ):
+             return (), (), frozenset(), (), ()
+         candidates = []
+         for item in summary.candidates:
+@@ -10508,7 +10526,7 @@
+             if parent.read_parent is not None:
+                 pending.append(parent.read_parent)
+         parents = tuple(ancestry.values())
+-        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', HANDLE_VECTOR, *self.enums)
++        if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', *HANDLE_VECTORS, *self.enums)
+                or parent.array_root or parent.match_reservation and parent.reserved_field is None
+                for parent in parents):
+             self.fail('prototype : réemprunt async Int avec parent projeté non pris en charge')
+@@ -10553,7 +10571,7 @@
+             for target in candidates:
+                 paths = capture_paths
+                 loan = target.array_capture
+-                if target.typ == HANDLE_VECTOR:
++                if is_handle_vector(target.typ):
+                     # The result is an int* into an owned item, not a pointer
+                     # to the vector Cell. Keep its carrier reserved while
+                     # exposing the ordinary scalar-reference representation.
+@@ -10719,7 +10737,7 @@
+         elif (loan.static_type == 'int' and (
+                 root.alloc.typ == 'Int' or self.struct_field_roots.get((root.alloc.id, root.name)) is root)
+                 or loan.static_type == 'uint8_t' and root.alloc.typ in ('String', 'Vector<u8>')
+-                or loan.static_type == 'int' and root.alloc.typ in ('Vector<Int>', HANDLE_VECTOR)):
++                or loan.static_type == 'int' and root.alloc.typ in ('Vector<Int>', *HANDLE_VECTORS)):
+             storage_scope, sources = root.alloc.scope, root.alloc.sources
+         else:
+             self.fail('capture synchrone : une cible Int stable est requise')
+@@ -11279,7 +11297,7 @@
+         updates = {}
+         for holder, incoming in task.async_field_updates:
+             previous = updates.get(holder.id, (holder, holder))[1]
+-            if holder.typ == HANDLE_VECTOR:
++            if is_handle_vector(holder.typ):
+                 proposed = replace(previous,
+                     item_sources=source_union(previous.item_sources, incoming.item_sources),
+                     item_origins=previous.item_origins | incoming.item_origins,
+@@ -11301,7 +11319,7 @@
+             holder.borrow_parents = proposed.borrow_parents
+             holder.owned_fields = proposed.owned_fields
+             holder.item_sources = proposed.item_sources
+-            if holder.typ == HANDLE_VECTOR:
++            if is_handle_vector(holder.typ):
+                 holder.item_origins = proposed.item_origins
+                 holder.item_positions = proposed.item_positions
+                 holder.item_position_origins = proposed.item_position_origins
+@@ -12560,7 +12578,7 @@
+                    for index, slots, exact, replacements, removals in result.vector_writes}
+         expected = []
+         for index, (name, mode, typ) in enumerate(params):
+-            if mode != 'mut' or typ != HANDLE_VECTOR:
++            if mode != 'mut' or not is_handle_vector(typ):
+                 continue
+             binding = bindings[name]
+             holders = binding.referents or (binding.alloc,)
+@@ -13626,7 +13644,7 @@
+             return False
+         binding = self.lookup(expr[1][1])
+         if operation == 'array_pop_handle':
+-            return binding.alloc is not None and binding.alloc.typ == HANDLE_VECTOR
++            return binding.alloc is not None and is_handle_vector(binding.alloc.typ)
+         return binding.kind in ('handle_option', 'handle_exchange', 'buffered_handle_exchange',
+                                 'join_owned', 'join_nested', 'join_option', *EXCHANGE_JOIN_TYPES, *OPTION_JOIN_TYPES, *OWNED_JOIN_TYPES)
+ 
+@@ -13692,7 +13710,7 @@
+                     if (expr[0] == 'array_transfer' and operand[0] == 'method_call'
+                             and operand[1][0] == 'name' and operand[2] == 'remove'
+                             and self.lookup(operand[1][1]).alloc is not None
+-                            and self.lookup(operand[1][1]).alloc.typ in (HANDLE_VECTOR, MUT_REF_VECTOR)):
++                            and self.lookup(operand[1][1]).alloc.typ in (*HANDLE_VECTORS, MUT_REF_VECTOR)):
+                         operand = expr
+                     value = self.expression(operand, scope, 'return')
+                     self.expression_clock(expr)
+@@ -13862,7 +13880,7 @@
+                     slot = place[1]
+                     if slot[0] == 'array_index' and slot[1][0] == 'name':
+                         vector = self.lookup(slot[1][1])
+-                        if vector.alloc is not None and vector.alloc.typ == HANDLE_VECTOR:
++                        if vector.alloc is not None and is_handle_vector(vector.alloc.typ):
+                             borrow = ('mut_expr', slot)
+                             self.positions[id(borrow)] = self.positions[id(place)]
+                             _, pointer, descriptor = self.expression(borrow, scope, 'tableau')
+@@ -13901,7 +13919,7 @@
+                     if binding.array_root and (binding.static_type == 'Cell *'
+                                                or binding.static_type in self.handle_slot_types.values()):
+                         roots = tuple({id(root): root for root, _ in self.array_paths(binding)}.values())
+-                        if binding.static_type == 'Cell *' and all(root.alloc and root.alloc.typ == HANDLE_VECTOR for root in roots):
++                        if all(root.alloc and is_handle_vector(root.alloc.typ) for root in roots):
+                             self.replace_borrowed_vector_handle(binding, rhs, scope, roots)
+                         else:
+                             self.replace_borrowed_handle(binding, rhs, scope)
+@@ -14071,6 +14089,7 @@
+                     element = expr[3] if expr[1] == 'pool' else None
+                     if element is not None and element not in ('Int', 'String', *VECTOR_TYPES) and element not in self.enums:
+                         self.fail(f"prototype : type de pool non pris en charge '{element}'")
++                    self.check_handle_vector_payload(element)
+                     source = MemorySource(sid, scope.id, expr[1], name, f'&s{sid}', element)
+                     scope.sources.append(source)
+                     if element == 'String' or element in VECTOR_TYPES:
+@@ -14978,6 +14997,9 @@
+                 if mode in ('array', 'array_ref', 'array_mut'):
+                     self.declared_array_type(typ)
+                     continue
++                if is_handle_vector(typ) and mode in ('ref', 'mut', 'owned'):
++                    self.check_handle_vector_payload(typ)
++                    continue
+                 if (mode, typ) in (('mut', 'u8'), ('ref', 'A<Int>'), ('mut', 'A<Int>'), ('ref', MUT_REF_VECTOR), ('mut', MUT_REF_VECTOR), ('owned', MUT_REF_VECTOR), ('ref', SHARED_REF_VECTOR), ('mut', SHARED_REF_VECTOR), ('owned', SHARED_REF_VECTOR), ('ref', HANDLE_VECTOR), ('mut', HANDLE_VECTOR), ('owned', HANDLE_VECTOR), ('handle_option', 'Int')):
+                     continue
+                 if mode in ('buffered_handle_exchange', *JOIN_RESULT_TYPES):
+@@ -15429,7 +15451,7 @@
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 ctype = 'Cell *'
+-            elif mode in ('ref', 'mut') and typ in (*self.enums, HANDLE_VECTOR):
++            elif mode in ('ref', 'mut') and typ in (*self.enums, *HANDLE_VECTORS):
+                 source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)
+@@ -15437,9 +15459,9 @@
+                 check.allocations.append(allocation)
+                 external.allocations.append(allocation)
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+-                if typ == HANDLE_VECTOR:
++                if is_handle_vector(typ):
+                     item_source = MemorySource(check.uid(), external.id, 'symbolic', parameter + '_items',
+-                                               'NULL', element_type='Int')
++                                               'NULL', element_type=handle_vector_element(typ))
+                     external.sources.append(item_source)
+                     origin = check.uid()
+                     check.origin_sources[origin] = item_source
+@@ -15461,7 +15483,7 @@
+                     root.bindings[parameter] = Binding(parameter, mode, parameter, view)
+                     ctype = 'CrustStructureView'
+                 else:
+-                    if typ != HANDLE_VECTOR:
++                    if not is_handle_vector(typ):
+                         owned_bridge_fields(allocation, parameter)
+                     ctype = 'Cell *'
+             elif mode in ('ref', 'mut'):

@@ -1,0 +1,177 @@
+BASELINE PASS
+test_bool_call_can_feed_child_and_suspend_in_later_argument (test_sync_bool_calls.SyncBoolCallTests.test_bool_call_can_feed_child_and_suspend_in_later_argument) ... ok
+test_bool_does_not_coerce_to_int_or_byte (test_sync_bool_calls.SyncBoolCallTests.test_bool_does_not_coerce_to_int_or_byte) ... ok
+test_conditions_short_circuit_and_argument_order (test_sync_bool_calls.SyncBoolCallTests.test_conditions_short_circuit_and_argument_order) ... ok
+test_loan_ends_before_owner_transfer_and_bool_has_no_provenance (test_sync_bool_calls.SyncBoolCallTests.test_loan_ends_before_owner_transfer_and_bool_has_no_provenance) ... ok
+test_mutable_argument_reservation_and_snapshot (test_sync_bool_calls.SyncBoolCallTests.test_mutable_argument_reservation_and_snapshot) ... ok
+test_named_annotated_mutated_and_native_captured_bool (test_sync_bool_calls.SyncBoolCallTests.test_named_annotated_mutated_and_native_captured_bool) ... ok
+test_prepared_owner_cleanup_on_bool_argument_return (test_sync_bool_calls.SyncBoolCallTests.test_prepared_owner_cleanup_on_bool_argument_return) ... ok
+test_primitive_block_result_materialized_before_pool_closes (test_sync_bool_calls.SyncBoolCallTests.test_primitive_block_result_materialized_before_pool_closes) ... ok
+test_truth_table_matches_independent_python_model (test_sync_bool_calls.SyncBoolCallTests.test_truth_table_matches_independent_python_model) ... ok
+test_verification_uses_contract_without_emitting_bridge (test_sync_bool_calls.SyncBoolCallTests.test_verification_uses_contract_without_emitting_bridge) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 11.086s
+
+OK
+
+boolean_argument_accepts_integer DETECTED
+test_bool_does_not_coerce_to_int_or_byte (test_sync_bool_calls.SyncBoolCallTests.test_bool_does_not_coerce_to_int_or_byte) ... 
+  test_bool_does_not_coerce_to_int_or_byte (test_sync_bool_calls.SyncBoolCallTests.test_bool_does_not_coerce_to_int_or_byte) (body='return flag(1);') ... FAIL
+
+======================================================================
+FAIL: test_bool_does_not_coerce_to_int_or_byte (test_sync_bool_calls.SyncBoolCallTests.test_bool_does_not_coerce_to_int_or_byte) (body='return flag(1);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_bool_calls.py", line 61, in test_bool_does_not_coerce_to_int_or_byte
+    with self.subTest(body=body), self.assertRaises(Error):
+                                  ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: Error not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.064s
+
+FAILED (failures=1)
+
+boolean_result_reversed DETECTED
+test_conditions_short_circuit_and_argument_order (test_sync_bool_calls.SyncBoolCallTests.test_conditions_short_circuit_and_argument_order) ... 
+  test_conditions_short_circuit_and_argument_order (test_sync_bool_calls.SyncBoolCallTests.test_conditions_short_circuit_and_argument_order) (native=False) ... FAIL
+  test_conditions_short_circuit_and_argument_order (test_sync_bool_calls.SyncBoolCallTests.test_conditions_short_circuit_and_argument_order) (native=True) ... FAIL
+
+======================================================================
+FAIL: test_conditions_short_circuit_and_argument_order (test_sync_bool_calls.SyncBoolCallTests.test_conditions_short_circuit_and_argument_order) (native=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_bool_calls.py", line 53, in test_conditions_short_circuit_and_argument_order
+    self.assertEqual(run.stdout,'1\n3\n30\n5\n6\n11\n1\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '1\n2\n3\n4\n30\n5\n6\n10\n0\n' != '1\n3\n30\n5\n6\n11\n1\n'
+  1
+- 2
+  3
+- 4
+  30
+  5
+  6
++ 11
+- 10
+?  -
++ 1
+- 0
+
+
+======================================================================
+FAIL: test_conditions_short_circuit_and_argument_order (test_sync_bool_calls.SyncBoolCallTests.test_conditions_short_circuit_and_argument_order) (native=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_bool_calls.py", line 53, in test_conditions_short_circuit_and_argument_order
+    self.assertEqual(run.stdout,'1\n3\n30\n5\n6\n11\n1\n')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '1\n2\n3\n4\n30\n5\n6\n10\n0\n' != '1\n3\n30\n5\n6\n11\n1\n'
+  1
+- 2
+  3
+- 4
+  30
+  5
+  6
++ 11
+- 10
+?  -
++ 1
+- 0
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.238s
+
+FAILED (failures=2)
+
+native_boolean_signature_lost DETECTED
+async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/async_lowering.py", line 1018, in _lower_async_function
+    fail(node.line, 'prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/async_lowering.py", line 845, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis
+
+======================================================================
+ERROR: test_truth_table_matches_independent_python_model (test_sync_bool_calls.SyncBoolCallTests.test_truth_table_matches_independent_python_model) (native=True, left=True, right=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_bool_calls.py", line 33, in test_truth_table_matches_independent_python_model
+    self.assertEqual(self.run_native(self.program(body,native_block=native_block)).stdout,
+                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/crust.py", line 14932, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/crust.py", line 14925, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/crust.py", line 13426, in compile
+    main = self.verify(nodes)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/crust.py", line 13303, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sync_contracts=self.function_contracts, sync_bridge=self.reserve_async_sync_bridge)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/async_lowering.py", line 819, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge)
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/async_lowering.py", line 1018, in _lower_async_function
+    fail(node.line, 'prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/crust-sync-bool-mut-2ah506do/async_lowering.py", line 845, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 4: prototype async : résultat Int, Bool, u8, char, &str ou &u8 statique, &Int, &mut Int, <- Int, Result alloué transféré ou Void requis
+
+----------------------------------------------------------------------
+Ran 1 test in 2.204s
+
+FAILED (errors=4)
+
+block_copy_after_cleanup DETECTED
+test_primitive_block_result_materialized_before_pool_closes (test_sync_bool_calls.SyncBoolCallTests.test_primitive_block_result_materialized_before_pool_closes) ... FAIL
+
+======================================================================
+FAIL: test_primitive_block_result_materialized_before_pool_closes (test_sync_bool_calls.SyncBoolCallTests.test_primitive_block_result_materialized_before_pool_closes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_sync_bool_calls.py", line 142, in test_primitive_block_result_materialized_before_pool_closes
+    run=self.run_native(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 28, in run_native
+    return self.run_c_oracle(code)
+           ~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_runtime.py", line 12481, in run_c_oracle
+    self.assertEqual(build.returncode, 0, build.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : /var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpv5h0weza/task.c:1479:9: error: unused variable 'block_value9' [-Werror,-Wunused-variable]
+ 1479 |     int block_value9 = read8;
+      |         ^~~~~~~~~~~~
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpv5h0weza/task.c:1502:9: error: unused variable 'block_value22' [-Werror,-Wunused-variable]
+ 1502 |     int block_value22 = selected21;
+      |         ^~~~~~~~~~~~~
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpv5h0weza/task.c:1511:13: error: unused variable 'block_value32' [-Werror,-Wunused-variable]
+ 1511 |     uint8_t block_value32 = v31;
+      |             ^~~~~~~~~~~~~
+/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpv5h0weza/task.c:1544:15: error: unused variable 'block_value49' [-Werror,-Wunused-variable]
+ 1544 |     CrustChar block_value49 = v47;
+      |               ^~~~~~~~~~~~~
+4 errors generated.
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.107s
+
+FAILED (failures=1)
+

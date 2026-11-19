@@ -1,0 +1,65 @@
+test_mutable_field_reborrow_keeps_capacity_and_target (test_inline_reference_views.InlineReferenceViewTests.test_mutable_field_reborrow_keeps_capacity_and_target) ... ok
+test_mutable_field_replacement_releases_previous_target (test_inline_reference_views.InlineReferenceViewTests.test_mutable_field_replacement_releases_previous_target) ... ok
+test_reference_replacement_through_contract (test_inline_reference_views.InlineReferenceViewTests.test_reference_replacement_through_contract) ... ok
+test_reference_replacement_updates_root (test_inline_reference_views.InlineReferenceViewTests.test_reference_replacement_updates_root) ... ok
+test_replacement_result_keeps_new_target_after_root_drop (test_inline_reference_views.InlineReferenceViewTests.test_replacement_result_keeps_new_target_after_root_drop) ... ok
+test_returned_copy_keeps_shared_target_after_root_drop (test_inline_reference_views.InlineReferenceViewTests.test_returned_copy_keeps_shared_target_after_root_drop) ... FAIL
+test_returned_mutable_view_updates_root (test_inline_reference_views.InlineReferenceViewTests.test_returned_mutable_view_updates_root) ... ok
+test_shared_field_return_detaches_from_view_and_root (test_inline_reference_views.InlineReferenceViewTests.test_shared_field_return_detaches_from_view_and_root) ... ok
+test_shared_view_and_copy_keep_target_without_root (test_inline_reference_views.InlineReferenceViewTests.test_shared_view_and_copy_keep_target_without_root) ... ok
+
+======================================================================
+FAIL: test_returned_copy_keeps_shared_target_after_root_drop (test_inline_reference_views.InlineReferenceViewTests.test_returned_copy_keeps_shared_target_after_root_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16454, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14607, in verify
+    self.verify_function_bodies()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 3134, in verify_function_bodies
+    check.invoke(call, root, verify_body=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 10224, in invoke
+    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 11704, in invoke_arguments
+    result = self.block(f'appel {name}', nodes, 'function', bindings, name)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13081, in block
+    result = self.statements(scope, nodes, returns, expected_array=expected_array,
+                             prove_static_utf8=prove_static_utf8)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13597, in statements
+    kind, c, allocation = self.contextual_array(expr, scope, label, expected)
+                          ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 6511, in contextual_array
+    return self.expression(expr, scope, label)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 9092, in expression
+    return self.copy_structure(binding, scope, source_name, expr=expr)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 5721, in copy_structure
+    self.fail('copie de sous-structure : fournir un Pool du type de la sous-structure avec pool.copy')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 1968, in fail
+    raise Error(f'ligne {self.line}: {message}')
+crust.Error: ligne 2: copie de sous-structure : fournir un Pool du type de la sous-structure avec pool.copy
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_reference_views.py", line 35, in test_returned_copy_keeps_shared_target_after_root_drop
+    self.assertEqual(self.run_source(source).stdout,'Link(7, 0)\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 2: copie de sous-structure : fournir un Pool du type de la sous-structure avec pool.copy
+
+----------------------------------------------------------------------
+Ran 9 tests in 4.690s
+
+FAILED (failures=1)

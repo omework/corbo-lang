@@ -1,0 +1,18 @@
+struct Holder { value: A<Int> }
+fn wrap(n: ->A<Int>) -> <-Holder {
+    let h = Holder { value: <-n };
+    return <-h;
+}
+async fn work(n: ->A<Int>) -> Int {
+    yield;
+    let h = wrap(->n);
+    let result = *h.value;
+    drop(->h);
+    return result;
+}
+fn main() {
+    let mut p = pool<Int>(1);
+    let n = p.new(7);
+    let execution = runtime::spawn(->work(->n));
+    match execution.join() { Ok(n) => { print(n); }, Err(_) => {} }
+}

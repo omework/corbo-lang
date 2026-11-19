@@ -1,0 +1,19 @@
+--- before/async_local_placement.py
++++ after/async_local_placement.py
+@@ -55,6 +55,16 @@
+             return None
+         if call_name in contracts:
+             summary = contracts[call_name].result
++            if getattr(summary, 'mode', None) == 'task':
++                from async_result_storage import needs_task_output
++                def local_argument(index):
++                    value = evaluate(arguments[index], env)
++                    return value is not None and not isinstance(value[0], tuple)
++                if needs_task_output(summary.task_result_sources, local_argument):
++                    node = async_functions.get(summary.typ)
++                    if node is not None:
++                        return ('task', node.args[2][1]), {id(expr): expr}
++                return None
+             candidates = []
+             for candidate in summary.candidates:
+                 if candidate.kind == 'fresh' and candidate.source.kind == 'local_value':

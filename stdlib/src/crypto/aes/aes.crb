@@ -1,0 +1,148 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Portable AES key expansion, block encryption and hardware dispatch.
+
+// Mask away the discarded bits before using Corbo's checked left shift.
+/// Shifts a byte left, discarding bits that would extend past eight bits.
+fn shift_byte(value: u8, count: u64) -> u8 {
+    let mask: u8 = 255;
+    (value & (mask >> copy(count))) << count
+}
+
+// Multiplication in AES's byte field. The mask depends on a single bit,
+// so the checked multiplications cannot overflow.
+/// Multiplies an AES byte by x in the Rijndael field.
+fn xtime(value: u8) -> u8 {
+    shift_byte(copy(value), 1) ^ ((value >> 7) * 27)
+}
+
+/// Multiplies two bytes in the Rijndael field.
+fn byte_product(left: u8, right: u8) -> u8 {
+    let mut a = left;
+    let mut b = right;
+    let mut product: u8 = 0;
+    let mut step: u64 = 0;
+    while step < 8 {
+        product = product ^ (copy(a) & ((copy(b) & 1) * 255));
+        a = xtime(a);
+        b = b >> 1;
+        step = step + 1;
+    }
+    product
+}
+
+/// Rotates the bits of a byte for the AES substitution transform.
+fn rotate_byte(value: u8, count: u64) -> u8 {
+    shift_byte(copy(value), copy(count)) | (value >> (8 - count))
+}
+
+// Invert by raising to 254. Zero passes through inversion as zero.
+/// Computes the multiplicative inverse in the AES field.
+fn field_inverse(value: u8) -> u8 {
+    let x2 = byte_product(copy(value), value);
+    let x4 = byte_product(copy(x2), copy(x2));
+    let x8 = byte_product(copy(x4), copy(x4));
+    let x16 = byte_product(copy(x8), copy(x8));
+    let x32 = byte_product(copy(x16), copy(x16));
+    let x64 = byte_product(copy(x32), copy(x32));
+    let x128 = byte_product(copy(x64), copy(x64));
+    let low = byte_product(x2, x4);
+    let middle = byte_product(x8, x16);
+    let high = byte_product(x32, x64);
+    byte_product(byte_product(low, middle), byte_product(high, x128))
+}
+
+/// Computes the AES S-box value by field inversion and affine transformation.
+fn substitute(value: u8) -> u8 {
+    let inverse = field_inverse(value);
+    rotate_byte(copy(inverse), 1) ^ rotate_byte(copy(inverse), 2)
+        ^ rotate_byte(copy(inverse), 3) ^ rotate_byte(copy(inverse), 4) ^ inverse ^ 99
+}
+
+/// Expands an AES key into the round-key buffer.
+fn expand_key(width: u64, schedule: &mut [u8; 240]) {
+    let limit: u64 = if width == 16 { 176 } else { 240 };
+    let mut at = copy(width);
+    let mut rcon: u8 = 1;
+    while at < limit {
+        let mut word: [u8; 4] = [0; 4];
+        let mut i: u64 = 0;
+        while i < 4 {
+            word[i] = (*schedule)[at - 4 + i];
+            i = i + 1;
+        }
+        if at % width == 0 {
+            let first = word[0];
+            word[0] = substitute(word[1]) ^ rcon;
+            word[1] = substitute(word[2]);
+            word[2] = substitute(word[3]);
+            word[3] = substitute(first);
+            rcon = xtime(rcon);
+        } else if width == 32 && at % width == 16 {
+            i = 0;
+            while i < 4 {
+                word[i] = substitute(word[i]);
+                i = i + 1;
+            }
+        }
+        i = 0;
+        while i < 4 {
+            let byte = (*schedule)[at - width];
+            let output = &mut (*schedule)[at];
+            *output = byte ^ word[i];
+            at = at + 1;
+            i = i + 1;
+        }
+    }
+}
+
+/// Encrypts one block using the portable AES round implementation.
+fn portable_encrypt(schedule: &[u8; 240], rounds: u64, block: &mut [u8; 16]) {
+    let mut at: u64 = 0;
+    while at < 16 {
+        let byte = &mut (*block)[at];
+        *byte = *byte ^ (*schedule)[at];
+        at = at + 1;
+    }
+    let mut round: u64 = 1;
+    let mut state: [u8; 16] = [0; 16];
+    while round <= rounds {
+        at = 0;
+        while at < 16 {
+            let row = at % 4;
+            let source = 4 * ((at / 4 + row) % 4) + row;
+            state[at] = substitute((*block)[source]);
+            at = at + 1;
+        }
+        if round < rounds {
+            at = 0;
+            while at < 16 {
+                let a = state[at];
+                let b = state[at + 1];
+                let c = state[at + 2];
+                let d = state[at + 3];
+                let parity = a ^ b ^ c ^ d;
+                state[at] = a ^ parity ^ xtime(a ^ b);
+                state[at + 1] = b ^ parity ^ xtime(b ^ c);
+                state[at + 2] = c ^ parity ^ xtime(c ^ d);
+                state[at + 3] = d ^ parity ^ xtime(d ^ a);
+                at = at + 4;
+            }
+        }
+        at = 0;
+        while at < 16 {
+            let byte = &mut (*block)[at];
+            *byte = state[at] ^ (*schedule)[round * 16 + at];
+            at = at + 1;
+        }
+        round = round + 1;
+    }
+}
+
+/// Encrypts one block using the selected AES backend.
+fn encrypt_block(schedule: &[u8; 240], rounds: u64, accelerated: bool, block: &mut [u8; 16]) {
+    if accelerated {
+        hardware_encrypt(&*schedule, rounds, &mut *block);
+    } else {
+        portable_encrypt(&*schedule, rounds, &mut *block);
+    }
+}

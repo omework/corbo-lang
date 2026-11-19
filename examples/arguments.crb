@@ -1,0 +1,23 @@
+fn read(data: &i32) -> i32 {
+    print(*data);
+    return 7;
+}
+
+fn consume(n: i32, data: A<i32>) {
+    print(n);
+    print(*data);
+    drop(data);
+}
+
+fn make(memory: &mut Pool<i32>) -> A<i32> {
+    memory.new(43)
+}
+
+fn main() {
+    let mut memory = pool<i32>(1);
+    let data = memory.new(42);
+    let view = data.vref();
+
+    consume(read(view), data); // Lecture terminée avant transfert.
+    consume(8, make(&mut memory)); // Expression allouée, passage par valeur.
+}

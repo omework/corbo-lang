@@ -1,0 +1,58 @@
+--- /tmp/crust-before-async-local-owned-result-graphs/async_result_storage.py
++++ async_result_storage.py
+@@ -39,7 +39,10 @@
+                 unknown = True
+         else:
+             unknown = True
+-    return ResultStorage(destination, None if unknown or summary.owned_fields else frozenset(parameters),
++    graph = pool_result_graph(node) if summary.owned_fields else None
++    if graph is not None:
++        parameters.update(source.index for _, symbols in graph[1] for source in symbols)
++    return ResultStorage(destination, None if unknown or summary.owned_fields and graph is None else frozenset(parameters),
+                          len(kinds)>1, bool(summary.owned_fields))
+ 
+ 
+@@ -82,8 +85,8 @@
+                and local_parameter(symbol.index) for symbol in symbols)
+ 
+ 
+-def pool_result_graph(node):
+-    """A fresh root in an injected pool, with separately tracked owned fields.
++def pool_result_graph(node, enums=None):
++    """A fresh root in caller storage or an injected pool, with owned fields.
+ 
+     This is a contract projection, not a new lifetime or a placement decision.
+     Local descendant sources remain unsupported and must not be promoted.
+@@ -93,7 +96,7 @@
+         return None
+     summary = effect.completion_result
+     if not summary.owned_fields or not summary.candidates or any(
+-            candidate.kind != 'fresh' or candidate.source.kind != 'source_parameter'
++            candidate.kind != 'fresh' or candidate.source.kind not in ('source_parameter', 'local_value')
+             for candidate in summary.candidates):
+         return None
+     fields = []
+@@ -108,9 +111,22 @@
+                 return False
+             path = prefix + key
+             fields.append((path, symbols))
++            if enums is not None:
++                from array_syntax import aggregate_owned_paths
++                from results import SourceOrigin
++                # A transferred parameter may represent a whole owned tree,
++                # without spelling every descendant in its Value contract.
++                for candidate in child.candidates:
++                    if candidate.kind == 'parameter':
++                        for suffix, _ in aggregate_owned_paths(enums, child.typ):
++                            fields.append((path + '/' + suffix, frozenset({SourceOrigin(
++                                'allocation_field_parameter', candidate.parameter, suffix)})))
+             if not visit(child.owned_fields, path + '/'):
+                 return False
+         return True
+     if not visit(summary.owned_fields):
+         return None
+-    return frozenset(candidate.source for candidate in summary.candidates), tuple(fields)
++    merged = {}
++    for path, symbols in fields:
++        merged[path] = merged.get(path, frozenset()) | symbols
++    return frozenset(output_origin(candidate.source, summary.typ) for candidate in summary.candidates), tuple(sorted(merged.items()))

@@ -1,0 +1,13 @@
+--- native_threads.py.before
++++ native_threads.py
+@@ -149,6 +149,10 @@
+             for field in expr[2].split('.'):
+                 typ = self.structures.get(typ, {}).get(field)
+             return transformed, self.declared(typ) if typ else None
++        if op == 'field_deref':
++            _, signature = self.expression(expr[1], env, [])
++            if signature in (('ref', 'Int'), ('mut', 'Int')):
++                return transformed, ('scalar', 'Int')
+         if op == 'method_call' and expr[1][0] == 'name':
+             binding = env.get(expr[1][1], Local(None)).signature
+             method = self.methods.get((binding[1], expr[2])) if binding else None

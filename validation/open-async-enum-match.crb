@@ -1,0 +1,12 @@
+enum Choice { Left { x:Int }, Right { x:Int } }
+async fn read(v:->Choice)->Int {
+    let n=match &v { Choice.Left{x:n}=>{n}, Choice.Right{x:n}=>{n} };
+    yield;
+    return n;
+}
+fn main(){
+    let mut choices=pool<Choice>(1);
+    let v=new(choices) Choice.Left{x:7};
+    let h=runtime::spawn(->read(->v));
+    match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}
+}

@@ -1,0 +1,8 @@
+async fn consume(r:->Result<(),A<Int>>)->Int{
+    yield;match (->r){Ok(())=>{return 1;},
+    Err(n)=>{let value=*n;drop(->n);return value;}}}
+fn main(){let mut p=pool<Int>(2);let mut vp=pool<Vector<A<Int>>>(1);let mut v=vp.new();
+    let incoming=p.new(8);let r=<-v.try_push(->incoming);
+    let t=consume(->r);drop(->t);
+    
+    print(*v[0]);drop(->v);let next=p.new(9);print(*next);}

@@ -1,0 +1,14 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -1482,8 +1482,10 @@
+                         local_target = references.get(root) == 'owned' and not source_path and collection_types.get(root, 'Int') == 'Int'
+                         local_holder = all(references.get(holder) == 'owned' for holder, _ in holders)
+                         captured_reference = parameter_modes.get(root) == 'owned' and source_path and durable_type
++                        own_capability = field_type == '&mut Int' and any(
++                            root == holder and source_path == (*prefix, *path) for holder, prefix in holders)
+                         if not (parameter_modes.get(root) in ('ref','mut') and durable_type
+-                                or captured_reference or local_holder and local_target):
++                                or captured_reference or local_holder and local_target or own_capability):
+                             fail(line,'remplacement de champ async : cible locale ou provenance non raccordée')
+                         retained.append((origin,mode))
+                 if not retained:

@@ -1,0 +1,15 @@
+// Ancien écart, couvert depuis par test_business_result_envelopes ; log de refus historique conservé.
+// RT5/RT6: an existing fallible scalar result must also cross an async join contract.
+async fn convert(n:Int)->Result<u8,IntegerConversionError>{
+    return u8::try_from(n);
+}
+async fn relay()->Result<Result<u8,IntegerConversionError>,runtime::Error>{
+    let h=runtime::spawn(->convert(255));
+    let r=h.await;
+    return r;
+}
+fn main(){
+    let h=runtime::spawn(->relay());
+    let r=h.join();
+    drop(->r);
+}

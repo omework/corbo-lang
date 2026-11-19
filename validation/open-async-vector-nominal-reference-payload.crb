@@ -1,0 +1,9 @@
+struct Point{x:Int}struct Item{value:&Point}fn inspect(p:&Point)->Int{return p.x;}
+async fn relay(v:->A<Vector<A<Item>>>)-><-A<Vector<A<Item>>>{yield;return <-v;}
+fn main(){
+ let mut ns=pool<Point>(1);let n=ns.new(x:7);let mut p=pool<Item>(1);
+ let mut vp=pool<Vector<A<Item>>>(1);let mut v=vp.new();v.push(->p.new(value:&n));
+ let h=runtime::spawn(->relay(->v));
+ match h.join(){Ok(received)=>{let mut items=<-received;let item=<-items.remove(0);print(inspect(item.value));drop(->item);drop(->items);},Err(_)=>{print(0);}}
+ drop(->n);
+}

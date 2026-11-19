@@ -1,0 +1,11 @@
+--- before/results.py
++++ after/results.py
+@@ -2131,6 +2131,8 @@
+                         break
+                     part, value = self.expression(arg, environment, line)
+                     flow = (flow - {'next'}) | part
++                    if index in getattr(declaration, 'cell_reference_parameters', ()):
++                        self.record_stored_references(borrowed_targets(value))
+                     if index < len(declaration.args[1]) and isinstance(value, SourceOrigin):
+                         _, capture_mode, capture_type = declaration.args[1][index]
+                         if capture_type.startswith('Pool<') and capture_mode in ('ref', 'mut'):

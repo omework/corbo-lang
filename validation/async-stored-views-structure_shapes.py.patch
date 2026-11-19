@@ -1,0 +1,19 @@
+--- before/structure_shapes.py
++++ after/structure_shapes.py
+@@ -1,4 +1,4 @@
+-"""Finite layouts currently represented by owned async structure graphs."""
++"""Finite layouts represented by async owned graphs and borrowed descriptors."""
+ 
+ 
+ def async_structure_shapes(layouts):
+@@ -7,7 +7,9 @@
+     while True:
+         available = leaves | represented
+         additions = {typ for typ, fields in layouts.items() if all(
+-            declared in ('Int', '&Int', '&mut Int') or declared.startswith('A<') and declared[2:-1] in available
++            declared in ('Int', '&Int', '&mut Int')
++            or declared.startswith('A<') and declared[2:-1] in available
++            or declared.startswith('&') and declared.removeprefix('&').removeprefix('mut ') in represented
+             for _, declared in fields)}
+         if additions <= represented:
+             break

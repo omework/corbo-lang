@@ -1,0 +1,117 @@
+FF
+======================================================================
+FAIL: test_suspended_cleanup_and_identity (test_async_borrowed_local_results.AsyncBorrowedLocalResultTests.test_suspended_cleanup_and_identity) (direct=True, finish=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 21, in storage_probe
+    return captures.AsyncLocalCaptureTests.storage_probe(self, source, body)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 139, in storage_probe
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15890, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15883, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14371, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14068, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 932, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6708, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2860, in bind_special
+    value = (pool_new_value(owned_initializer, statement.line, following=body[position + 1:],
+             ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                            label=name if '\0' not in name else 'temporary')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1230, in pool_new_value
+    fail(line, 'prototype : création directe dans un état exige un pool injecté')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 965, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: prototype : création directe dans un état exige un pool injecté
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_local_results.py", line 176, in test_suspended_cleanup_and_identity
+    run=self.storage_probe(program,'CrustTask *t=crust_async_work_create();assert(task_poll(t)==TASK_SUSPENDED);\n              assert(observed_count==1);Cell *root=observed_cells[0];Cell *target=cell_load_ref(root,0);\n              assert(root->alive && target->alive && root->source!=target->source);\n              assert(task_poll(t)==TASK_SUSPENDED);assert(task_pool_is_empty(&crust_task_context.pool_leaf));\n              assert(root==observed_cells[0] && root->alive && cell_load_ref(root,0)==target && target->alive);\n            '+ending)
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 23, in storage_probe
+    self.fail(f'programme attendu valide refusé avant la sonde C : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé avant la sonde C : ligne 2: prototype : création directe dans un état exige un pool injecté
+
+======================================================================
+FAIL: test_suspended_cleanup_and_identity (test_async_borrowed_local_results.AsyncBorrowedLocalResultTests.test_suspended_cleanup_and_identity) (direct=True, finish=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 21, in storage_probe
+    return captures.AsyncLocalCaptureTests.storage_probe(self, source, body)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_async_local_parent.py", line 139, in storage_probe
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15890, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15883, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14371, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14068, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 932, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {},
+                                   local_parameters, variant_name, specialize)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 6708, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 2860, in bind_special
+    value = (pool_new_value(owned_initializer, statement.line, following=body[position + 1:],
+             ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                            label=name if '\0' not in name else 'temporary')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1230, in pool_new_value
+    fail(line, 'prototype : création directe dans un état exige un pool injecté')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 965, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 2: prototype : création directe dans un état exige un pool injecté
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_borrowed_local_results.py", line 176, in test_suspended_cleanup_and_identity
+    run=self.storage_probe(program,'CrustTask *t=crust_async_work_create();assert(task_poll(t)==TASK_SUSPENDED);\n              assert(observed_count==1);Cell *root=observed_cells[0];Cell *target=cell_load_ref(root,0);\n              assert(root->alive && target->alive && root->source!=target->source);\n              assert(task_poll(t)==TASK_SUSPENDED);assert(task_pool_is_empty(&crust_task_context.pool_leaf));\n              assert(root==observed_cells[0] && root->alive && cell_load_ref(root,0)==target && target->alive);\n            '+ending)
+  File "/Users/jabarkarim/sources/crust/tests/test_async_result_storage.py", line 23, in storage_probe
+    self.fail(f'programme attendu valide refusé avant la sonde C : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé avant la sonde C : ligne 2: prototype : création directe dans un état exige un pool injecté
+
+----------------------------------------------------------------------
+Ran 1 test in 0.768s
+
+FAILED (failures=2)

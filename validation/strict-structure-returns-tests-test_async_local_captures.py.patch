@@ -1,0 +1,33 @@
+--- tests/test_async_local_captures.py
++++ tests/test_async_local_captures.py
+@@ -39,8 +39,8 @@
+         self.refused(self.program('let p=make(7);let task=relay(->p);print(p.x);return task.await;',helpers),'consomm|utilis|transfér')
+ 
+     def test_sync_caller_and_mixed_copy_variants(self):
+-        source=PREFIX+'''fn duplicate(p:&Point)-><-Point{let q=copy(p);return <-q;}
+-            async fn read(p:&Point)->Int{let q=duplicate(p);yield;return q.x;}
++        source=PREFIX+'''
++            async fn read(p:&Point)->Int{let q=copy(p);yield;return q.x;}
+             fn main(){let local=make(7);let mut points=pool<Point>(2);let allocated=points.new(x:9);
+                 let a=runtime::spawn(->read(&local));let b=runtime::spawn(->read(&allocated));
+                 match a.join(){Ok(n)=>{print(n);},Err(_)=>{}}
+@@ -51,7 +51,7 @@
+         self.assertEqual(code.count('CrustTaskPool pool_read;'),1)
+         self.assertIn('crust_async_read_storage states_read',code)
+         self.assertIn('sizeof(crust_async_read_storage)',code)
+-        self.assertEqual(run.stderr.count('destroy q=Point\n'),2)
++        self.assertEqual(run.stderr.count('destroy async copy=Point\n'),2)
+ 
+     def test_local_copy_in_child_is_independent(self):
+         helpers='''fn duplicate(p:&Point)-><-Point{let q=copy(p);return <-q;}
+@@ -62,8 +62,8 @@
+ 
+     def test_one_slot_reused_between_variants(self):
+         source=PREFIX+'''#(directive, async_pool_sizes={read:1})
+-            fn duplicate(p:&Point)-><-Point{let q=copy(p);return <-q;}
+-            async fn read(p:&Point)->Int{let q=duplicate(p);yield;return q.x;}
++            
++            async fn read(p:&Point)->Int{let q=copy(p);yield;return q.x;}
+             fn main(){let local=make(7);let mut points=pool<Point>(2);let allocated=points.new(x:9);
+                 let mut i=0;while i<4{
+                     let a=runtime::spawn(->read(&local));match a.join(){Ok(n)=>{print(n);},Err(_)=>{}}

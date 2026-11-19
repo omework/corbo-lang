@@ -1,0 +1,206 @@
+--- before/crust.py
++++ after/crust.py
+@@ -23,7 +23,7 @@
+ 
+ from array_syntax import aggregate_owned_paths, aggregate_reference_paths, SHARED_REF_VECTOR, MUT_REF_VECTOR, REFERENCE_VECTORS, replace_handle_positions, remaining_handle_positions, VECTOR_LAST_ITEM, last_handle_index, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, reference_array_path, reference_array_element, reference_type, reference_tree_type
+ from effects import allocation_handle_method, allocation_value_borrow, ARRAY_METHOD_ARITY, EffectAnalyzer, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+-from results import BorrowTarget, FunctionResult, ResultAnalyzer, capture_fields
++from results import BorrowTarget, FunctionResult, ResultAnalyzer, SourceOrigin, capture_fields
+ from constraints import ConstraintAnalyzer
+ from contracts import function_contracts
+ from async_runtime import UTF8_VALUE_TYPES_C
+@@ -1912,6 +1912,7 @@
+         self.positions = {}
+         self.stack_reservations = {}
+         self.local_reservations = {}
++        self.task_output_destinations = {}
+         self.local_copy_types = {}
+         self.active_local_reservations = []
+         self.line = 1
+@@ -3690,7 +3691,7 @@
+ 
+     def loop_expression(self, expr, scope, name, expected_array=None):
+         self.expression_clock(expr[1])
+-        with self.reserve_local_result(expr):
++        with self.reserve_task_output(expr), self.reserve_local_result(expr):
+             result = self.loop(expr[1], scope, name, expected_array)
+         self.expression_clock(expr)
+         return result
+@@ -8489,6 +8490,28 @@
+         return self.local_result_constructors(producer, producers) if producer is not None else ()
+ 
+     @contextmanager
++    def reserve_task_output(self, expr):
++        from async_local_placement import result_constructors
++        local_types = {name: binding.alloc.typ for scope in self.scopes for name, binding in scope.bindings.items()
++                       if binding.alloc is not None and binding.alloc.sources
++                       and all(source.kind == 'local_stack' for source in binding.alloc.sources)}
++        producers = result_constructors(expr, self.function_contracts, local_types,
++            async_functions={name: node for name, (node, _) in self.async_definitions.items()})
++        pending = [item for item in producers if item[0] == 'call'
++                   and (item[1] in self.async_definitions or item[1] in self.function_contracts
++                        and self.function_contracts[item[1]].result.mode == 'task')
++                   and id(item) not in self.task_output_destinations]
++        if pending:
++            source = self.local_stack_storage(self.scopes[-1])
++            for item in pending:
++                self.task_output_destinations[id(item)] = source, source.c
++        try:
++            yield
++        finally:
++            for item in pending:
++                self.task_output_destinations.pop(id(item), None)
++
++    @contextmanager
+     def reserve_local_result(self, expr):
+         constructors = self.local_result_constructors(expr)
+         if not constructors:
+@@ -8593,7 +8616,7 @@
+ 
+     def block_expression(self, expr, expected_array=None):
+         returns = expr[4] if len(expr) > 4 else True
+-        with self.reserve_local_result(expr), self.reserve_stack_result(expr):
++        with self.reserve_task_output(expr), self.reserve_local_result(expr), self.reserve_stack_result(expr):
+             result = self.block(expr[1], expr[2], returns, region_limit=expr[3] if len(expr) > 3 else None,
+                                 expected_array=expected_array)
+         if result is None and returns == 'if':
+@@ -8942,7 +8965,7 @@
+         if op not in ('new', 'new_enum', 'call', 'scope', 'ref_expr', 'mut_expr', 'if_expr'):
+             self.expression_clock(expr)
+         if op == 'if_expr':
+-            with self.reserve_local_result(expr), self.reserve_stack_result(expr):
++            with self.reserve_task_output(expr), self.reserve_local_result(expr), self.reserve_stack_result(expr):
+                 return self.conditional(expr, source_name)
+         if op == 'source':
+             self.fail('une source de stockage doit être déclarée avec let')
+@@ -9389,6 +9412,8 @@
+                 self.merge_handle_positions(candidates, key='fresh_positions'))
+ 
+     def parameter_storage(self, symbol, params, bindings):
++        if symbol.kind == 'task_output':
++            return (bindings['\0task-output'].source,)
+         if symbol.kind == 'local_value':
+             return (bindings['\0local-result'].source,)
+         binding = bindings[params[symbol.index][0]]
+@@ -9404,6 +9429,9 @@
+             return source_union(*(child.sources for carrier in binding.referents or (binding.alloc,)
+                                   for child in self.aggregate_field_targets(carrier, symbol.name)))
+         sources = source_union(*(item.sources for item in binding.referents or (binding.alloc,) if item is not None))
++        if (symbol.kind == 'task_output_parameter' and sources
++                and all(source.kind == 'local_stack' for source in sources)):
++            return (bindings['\0task-output'].source,)
+         if (symbol.kind == 'allocation_parameter' and '\0local-result' in bindings
+                 and sources and all(source.kind == 'local_stack' for source in sources)):
+             return (bindings['\0local-result'].source,)
+@@ -10240,11 +10268,14 @@
+                 result_targets = [targets_by_parameter[index] for index in plan.parameters if index in targets_by_parameter]
+                 pool_result_sources = [captured_sources[index] for index in plan.parameters if index in captured_sources]
+             destination = None
++            destination_c = 'NULL'
+             if plan.destination:
+-                destination = self.local_stack_storage(scope)
++                planned = self.task_output_destinations.get(id(expr))
++                destination = planned[0] if planned else self.local_stack_storage(scope)
++                destination_c = planned[1] if planned else destination.c
+                 pool_sources.append(destination)
+                 pool_result_sources.append(destination)
+-            captures.append(destination.c if destination else 'NULL')
++            captures.append(destination_c)
+             pool_origins.clear()
+             for source in pool_result_sources:
+                 origin = self.uid()
+@@ -10570,7 +10601,7 @@
+         for symbol in symbols:
+             storage = self.parameter_storage(symbol, params, bindings)
+             sources = source_union(sources, storage)
+-            binding = bindings[params[symbol.index][0]]
++            binding = bindings[params[symbol.index][0]] if symbol.kind != 'task_output' else None
+             if symbol.kind == 'allocation_parameter':
+                 origins.update(binding.alloc.origins)
+             elif symbol.kind == 'allocation_field_parameter':
+@@ -10967,6 +10998,23 @@
+             return bool(sources) and all(source.kind == 'local_stack' for source in sources)
+ 
+         local_result = any(local_candidate(candidate) for candidate in summary.candidates)
++        from async_result_storage import needs_task_output
++        task_output = None
++        task_output_parameter = None
++        if needs_task_output(summary.task_result_sources, lambda index: bool(
++                storage := self.parameter_storage(SourceOrigin('allocation_parameter', index), params, bindings))
++                and all(source.kind == 'local_stack' for source in storage)):
++            planned = self.task_output_destinations.get(id(expr))
++            task_output = planned[0] if planned else self.local_stack_storage(caller)
++            bindings['\0task-output'] = Binding('destination du résultat de tâche', 'source',
++                                               task_output.c, source=task_output)
++            task_output_parameter = f'task_output{self.uid()}'
++            arguments.append(('Source *', task_output_parameter, planned[1] if planned else task_output.c))
++        if any(source.kind in ('task_output', 'task_output_parameter') for source in summary.task_result_sources):
++            storage_kinds = {source.kind == 'local_stack' for symbol in summary.task_result_sources
++                             for source in self.parameter_storage(symbol, params, bindings)}
++            if len(storage_kinds) > 1:
++                self.fail('retours incompatibles : valeur locale T et allocation A<T>')
+         local_result_storage = None
+         if local_result:
+             if signature.handle_result or not all(local_candidate(candidate) for candidate in summary.candidates):
+@@ -11029,6 +11077,19 @@
+                 parameter_guards.add(pg)
+ 
+         nodes = copy.deepcopy(original)
++        task_constructors = ()
++        if task_output is not None:
++            from async_local_placement import result_constructors
++            local_types = {pname: binding.alloc.typ for pname, binding in bindings.items()
++                           if binding.alloc is not None and binding.alloc.sources
++                           and all(source.kind == 'local_stack' for source in binding.alloc.sources)}
++            task_constructors = result_constructors(('scope', None, nodes), self.function_contracts,
++                local_types, returns=True,
++                async_functions={name: node for name, (node, _) in self.async_definitions.items()})
++            if not task_constructors:
++                self.fail('destination du résultat de tâche : producteurs non raccordés')
++            for constructor in task_constructors:
++                self.task_output_destinations[id(constructor)] = task_output, task_output_parameter
+         local_inputs = {pname: ('new_enum', None, binding.alloc.typ, '', [])
+                         for pname, binding in bindings.items() if binding.alloc is not None
+                         and binding.alloc.sources
+@@ -11246,6 +11307,8 @@
+                         self.fail('invariant interne : porteur absent du contrat de résultat emprunté')
+                 result = (declared[0], '', expected)
+         finally:
++            for constructor in task_constructors:
++                self.task_output_destinations.pop(id(constructor), None)
+             for constructor in local_constructors:
+                 self.local_reservations.pop(id(constructor), None)
+             self.exit_frames.pop()
+@@ -14126,6 +14189,14 @@
+             parameters.append(f'{ctype} {parameter}')
+             arguments.append(('down' if mode == 'owned' or mode in JOIN_RESULT_TYPES else 'name', parameter))
+         call = ('call', name, arguments)
++        from async_result_storage import needs_task_output
++        if needs_task_output(contract.result.task_result_sources, lambda index: index in local_parameters):
++            parameter = 'bridge_task_output'
++            parameters.append(f'Source *{parameter}')
++            source = MemorySource(check.uid(), external.id, 'local_stack',
++                                  'destination du résultat de tâche', parameter)
++            external.sources.append(source)
++            check.task_output_destinations[id(call)] = source, parameter
+         if any(candidate.kind == 'fresh' and (candidate.source.kind == 'local_value'
+                     or candidate.source.kind == 'allocation_parameter' and candidate.source.index in local_parameters)
+                for candidate in contract.result.candidates):
+@@ -14144,7 +14215,7 @@
+         result = None
+         try:
+             result = check.invoke(call, root)
+-            if result is not None and result[0] in ('owned', 'execution', *JOIN_RESULT_TYPES):
++            if result is not None and result[0] in ('owned', 'task', 'execution', *JOIN_RESULT_TYPES):
+                 root.exports.append(result[2])
+             check.finish_scope(root)
+         except PathsReturned:
+@@ -14152,7 +14223,7 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[key]
+         mode = contract.result_type[0]
+-        ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++        ctype = ('CrustNestedJoinResult' if mode == 'join_nested' else 'CrustJoinResult' if mode == 'join_owned' else 'CrustTask *' if mode == 'task' else 'CrustExecution' if mode == 'execution' else 'Cell *' if mode == 'owned' or mode in ('ref', 'mut') and contract.result_type[1] in self.struct_fields else 'void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
+                  if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         qualifier = '_Noreturn ' if not contract.effects.may_return else ''
+         signature = f'static {qualifier}{ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'

@@ -1,0 +1,70 @@
+{
+  "accepted": [
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{r},W.Other{data:r}=>{r}};return out;}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);",
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{r},W.Other{data:r}=>{r}};return out;}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Other{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);print(n);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);q.reset();p.reset();",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}fn relay(unused:Int,owner:&mut W)->&mut Int{return identity(open(owner));}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=relay(0,&mut w);out.set(30);print(w);"
+  ],
+  "rejected": [
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{r},W.Other{data:r}=>{r}};return out;}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);print(w);out.set(30);",
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{r},W.Other{data:r}=>{r}};return out;}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Other{data:&mut n};let mut out=open(&mut w);print(w);out.set(30);",
+    "enum W{Bound{data:&mut Int}}fn identity(x:&mut Int)->&mut Int{return x;}fn bad(mut w:->W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);drop(->n);out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);drop(->w);out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);p.reset();out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);print(w);out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);q.reset();out.set(30);",
+    "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}fn relay(unused:Int,owner:&mut W)->&mut Int{return identity(open(owner));}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=relay(0,&mut w);print(w);out.set(30);"
+  ],
+  "mutations": [
+    {
+      "fault": "omit holder reservation from return descriptor",
+      "before": "(*parents.values(), *reservations.values()))",
+      "after": "tuple(parents.values()))",
+      "test": "test_caller_recovers_writer_after_last_use",
+      "detected": true,
+      "stderr": "======================================================================\nERROR: test_caller_recovers_writer_after_last_use (test_mutable_match_function_return.MutableMatchFunctionReturnTests.test_caller_recovers_writer_after_last_use)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/tests/test_mutable_match_function_return.py\", line 20, in test_caller_recovers_writer_after_last_use\n    result = self.run_source(PREFIX + 'out.set(30);print(w);print(n);')\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/tests/test_mutable_reference_fields.py\", line 24, in run_source\n    def run_source(self,s):return self.execute(s,add_source=False)\n                                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/tests/test_crust.py\", line 34, in execute\n    source_path.write_text(compile_source(self.with_source(source) if add_source else source))\n                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 3203, in compile_source\n    return compile_program(source)[1]\n           ~~~~~~~~~~~~~~~^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 3196, in compile_program\n    code = compiler.compile(Parser(source).parse())\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 2933, in compile\n    main = self.verify(nodes)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 2927, in verify\n    self.verify_function_bodies()\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 916, in verify_function_bodies\n    check.invoke(call, root, verify_body=True)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 2004, in invoke\n    return self.invoke_arguments(expr, caller, frame, borrowed, verify_body=verify_body)\n           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 2272, in invoke_arguments\n    self.fail('invariant interne : porteur absent du contrat de résultat emprunté')\n    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/crust.py\", line 671, in fail\n    raise Error(f'ligne {self.line}: {message}')\ncrust.Error: ligne 1: invariant interne : porteur absent du contrat de résultat emprunté\n\n======================================================================\nFAIL: test_caller_recovers_writer_after_last_use (test_mutable_match_function_return.MutableMatchFunctionReturnTests.test_caller_recovers_writer_after_last_use) (stage='verify_program')\n----------------------------------------------------------------------\ncrust.Error: ligne 1: invariant interne : porteur absent du contrat de résultat emprunté\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: \"emprunt actif\" does not match \"ligne 1: invariant interne : porteur absent du contrat de résultat emprunté\"\n\n======================================================================\nFAIL: test_caller_recovers_writer_after_last_use (test_mutable_match_function_return.MutableMatchFunctionReturnTests.test_caller_recovers_writer_after_last_use) (stage='compile_source')\n----------------------------------------------------------------------\ncrust.Error: ligne 1: invariant interne : porteur absent du contrat de résultat emprunté\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpb7xlg68i/tests/test_mutable_reference_fields.py\", line 23, in reject\n    with self.assertRaisesRegex(Error,pattern):stage(source)\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: \"emprunt actif\" does not match \"ligne 1: invariant interne : porteur absent du contrat de résultat emprunté\"\n\n----------------------------------------------------------------------\nRan 1 test in 0.007s\n\nFAILED (failures=2, errors=1)\n"
+    }
+  ],
+  "C": [
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);print(n);",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);print(n);",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);print(n);",
+      "flags": [
+        "-Os"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    },
+    {
+      "source": "fn identity(x:&mut Int)->&mut Int{return x;}fn open(w:&mut W)->&mut Int{let mut out=match &mut w{W.Bound{data:r}=>{let mut child=identity(r);child}};return out;}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};let mut out=open(&mut w);out.set(30);print(w);print(n);",
+      "flags": [
+        "-O2",
+        "-fsanitize=undefined",
+        "-fno-sanitize-recover=all"
+      ],
+      "stdout": "W.Bound(30)\n30\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=30\nreclaim n\n"
+    }
+  ],
+  "suites": {
+    "standard": "----------------------------------------------------------------------\nRan 762 tests in 365.806s\n\nOK\n",
+    "ubsan": "----------------------------------------------------------------------\nRan 90 tests in 37.713s\n\nOK\n"
+  }
+}

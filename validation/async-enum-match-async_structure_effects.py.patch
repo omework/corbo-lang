@@ -1,0 +1,35 @@
+--- before/async_structure_effects.py
++++ after/async_structure_effects.py
+@@ -69,7 +69,8 @@
+         # fields and separately owned descendants have distinct obligations.
+         from structure_shapes import async_structure_shapes
+         self.owned_structures, self.reference_structures = async_structure_shapes(
+-            {typ: variants[''] for typ, variants in enums.items() if '' in variants})
++            {typ: tuple(field for fields in variants.values() for field in fields)
++             for typ, variants in enums.items()})
+         # Only the published synchronous contracts cross this boundary. The
+         # function bodies are deliberately absent from the symbolic adapter.
+         functions = {name: SimpleNamespace(
+@@ -151,7 +152,8 @@
+         self.suspension_reason = ''
+         if any(mode in ('array_ref', 'array_mut') and reference_array_shape(typ)
+                or mode == 'mut' and (typ.startswith('A<') or typ in REFERENCE_VECTORS
+-                   or typ in effects.results.enums and '' not in effects.results.enums[typ])
++                   or typ in effects.results.enums and typ not in effects.reference_structures
++                   and typ not in effects.owned_structures)
+                for _, mode, typ in self.params):
+             # Do not publish a FunctionResult with empty array/handle updates
+             # when only injected structure fields have been observed.
+@@ -165,6 +167,12 @@
+                 # are not stores into an external borrowed carrier on suspension.
+                 continue
+             final = environment[f'\0structure:{index}']
++            typ = self.params[index][2]
++            if '' not in self.analyzer.enums.get(typ, {}) and final.owned_fields != original.owned_fields:
++                # Enum projections are newly admitted here. Do not publish an
++                # empty suspension contract for a changed owned graph until
++                # those graph writes have their own suspension representation.
++                self.suspension_reason = 'effets suspendus du graphe possédé dans un enum non raccordés'
+             fields = self.suspended_structures.setdefault(index, {})
+             for field, targets in final.fields:
+                 if any(target.kind not in ('field_parameter', 'parameter', 'detached_field_parameter')

@@ -1,0 +1,206 @@
+--- before/crust.py
++++ crust.py
+@@ -1621,6 +1621,7 @@
+     sources: tuple
+     origins: frozenset
+     variants: frozenset = frozenset()
++    recursive_sources: tuple = ()
+ 
+     def __iter__(self):
+         # Source consumers keep the existing three-component projection.
+@@ -2721,7 +2722,18 @@
+         variants = summary.fresh_variants | frozenset(
+             arm for candidate in summary.candidates if candidate.kind == 'parameter'
+             for arm in bindings[params[candidate.parameter][0]].alloc.variants)
+-        return tuple(fields), variants, (*parents.values(), *reservations.values())
++        inherited_fields = {}
++        for candidate in summary.candidates:
++            if candidate.kind != 'task_capture':
++                continue
++            parameter, _, nominal = params[candidate.parameter]
++            task = bindings[parameter].alloc
++            projected, chain = self.project_task_result_fields(nominal, task.dependencies, task.borrow_parents)
++            inherited_fields.update(projected)
++            parents.update((id(parent), parent) for parent in chain)
++            variants |= task.task_result_variants
++        inherited_fields.update(fields)
++        return tuple(inherited_fields.items()), variants, (*parents.values(), *reservations.values())
+ 
+     def resolve_shared_vector_layout(self, summary, params, bindings):
+         if summary.shared_vector_passthrough is not None:
+@@ -2852,7 +2864,9 @@
+             capture_sources.append(source)
+             capture_origins.add(origin)
+         result_fields = []
+-        for path, child_type in aggregate_owned_paths(check.enums, definition.args[2][1]):
++        result_type = definition.args[2][1]
++        paths = tuple(aggregate_owned_paths(check.enums, result_type))
++        for path, child_type in paths:
+             group = find(('task_result_field_parameter', index, path))
+             source = sources.get(group)
+             if source is None:
+@@ -2863,7 +2877,25 @@
+                 storage_scope.sources.append(source)
+             origin = check.uid()
+             check.origin_sources[origin] = source
+-            result_fields.append((path, (source,), frozenset({origin})))
++            continuation = ()
++            if check.has_owned_fields(child_type) and not any(p.startswith(path + '/') for p, _ in paths):
++                reachable = {child_type}
++                pending = [child_type]
++                opaque_sources = []
++                while pending:
++                    current = pending.pop()
++                    for members in check.enums.get(current, {}).values():
++                        for _, declared in members:
++                            if declared.startswith('A<') and declared[2:-1] not in reachable:
++                                reachable.add(declared[2:-1]); pending.append(declared[2:-1])
++                for current in sorted(reachable):
++                    opaque = MemorySource(check.uid(), storage_scope.id, 'symbolic', pname + path,
++                                          'NULL', element_type=current)
++                    storage_scope.sources.append(opaque)
++                    opaque_sources.append((current, opaque))
++                continuation = ((origin, tuple(opaque_sources)),)
++            result_fields.append(AsyncFieldStorage(path, (source,), frozenset({origin}),
++                frozenset(check.enums.get(child_type, {})), continuation))
+             capture_sources.append(source)
+             capture_origins.add(origin)
+         allocation = Allocation(check.uid(), root.id, pname, (), c=actual,
+@@ -8049,14 +8081,16 @@
+ 
+     @staticmethod
+     def merge_async_result_fields(*groups):
+-        fields, variants = {}, {}
++        fields, variants, recursive = {}, {}, {}
+         for group in groups:
+             for record in group:
+                 path, sources, origins = record
+                 previous_sources, previous_origins = fields.get(path, ((), frozenset()))
+                 fields[path] = source_union(previous_sources, sources), previous_origins | origins
+                 variants.setdefault(path, []).append(getattr(record, 'variants', frozenset()))
+-        return tuple(AsyncFieldStorage(path, *value, Compiler.merge_task_variants(variants[path]))
++                recursive.setdefault(path, {}).update(getattr(record, 'recursive_sources', ()))
++        return tuple(AsyncFieldStorage(path, *value, Compiler.merge_task_variants(variants[path]),
++                                       tuple(recursive[path].items()))
+                      for path, value in sorted(fields.items()))
+ 
+     def task_owned_result_fields(self, roots):
+@@ -8104,7 +8138,9 @@
+             path = prefix + key
+             output.append(AsyncFieldStorage(path, source_union(*(child.sources for child in targets)),
+                            frozenset(origin for child in targets for origin in child.origins),
+-                           self.merge_task_variants(child.variants for child in targets)))
++                           self.merge_task_variants(child.variants for child in targets),
++                           tuple({origin: sources for child in targets
++                                  for origin, sources in child.recursive_projection_sources}.items())))
+             for child in targets:
+                 output.extend(self.owned_field_storage(child.owned_fields, path + '/'))
+         return self.merge_async_result_fields(output)
+@@ -8112,6 +8148,7 @@
+     def restore_async_owned_fields(self, allocation, fields, variants=frozenset()):
+         storage = {path: (sources, origins) for path, sources, origins in fields}
+         child_variants = {record.path: record.variants for record in fields if isinstance(record, AsyncFieldStorage)}
++        recursive = {record.path: record.recursive_sources for record in fields if isinstance(record, AsyncFieldStorage)}
+         def restore(typ, prefix='', possible=frozenset()):
+             children = []
+             for arm, members in self.enums.get(typ, {}).items():
+@@ -8127,10 +8164,11 @@
+                         self.fail('résultat async : provenance du champ propriétaire absente')
+                     child_type = declared[2:-1]
+                     possible_child = child_variants.get(path, frozenset())
+-                    nested = restore(child_type, path + '/', possible_child)
++                    nested = () if recursive.get(path) else restore(child_type, path + '/', possible_child)
+                     child = Allocation(self.uid(), allocation.scope, name, sources, typ=child_type,
+                         origins=origins, owned_fields=nested, item_sources=self.owned_field_sources(nested),
+-                        variants=possible_child or frozenset(self.enums.get(child_type, {})))
++                        variants=possible_child or frozenset(self.enums.get(child_type, {})),
++                        recursive_projection_sources=recursive.get(path, ()))
+                     children.append((key, (child,)))
+             return tuple(children)
+         if not allocation.absent_owned_payload:
+@@ -8166,7 +8204,8 @@
+         def restore_borrowed_fields(holder, fields):
+             owned_prefixes = tuple(key + '/' for key, _ in holder.owned_fields)
+             holder.dependencies = tuple((path, targets) for path, targets in fields
+-                                        if not path.startswith(owned_prefixes))
++                                        if not path.startswith(owned_prefixes)
++                                        and (not holder.variants or path.partition('.')[0] in holder.variants))
+             for key, children in holder.owned_fields:
+                 descendants = tuple((path[len(key) + 1:], targets) for path, targets in fields
+                                     if path.startswith(key + '/'))
+@@ -10151,6 +10190,18 @@
+                     original = bindings[params[candidate.parameter][0]].alloc
+                     alternatives.append(self.copy_owned_tree(original, scope.id))
+                 elif candidate.kind == 'fresh':
++                    if candidate.source.kind == 'task_result_field_parameter':
++                        metadata = self.inherited_async_storage((candidate.source,), params, bindings)
++                        stored = next((record for record in metadata if not record.path), None)
++                        if stored is not None:
++                            item = Allocation(self.uid(), scope.id, name, stored.sources, typ=child.typ,
++                                origins=stored.origins, variants=stored.variants,
++                                recursive_projection_sources=stored.recursive_sources)
++                            if not stored.recursive_sources:
++                                self.restore_async_owned_fields(item,
++                                    tuple(record for record in metadata if record.path), stored.variants)
++                            alternatives.append(item)
++                            continue
+                     pools = self.parameter_storage(candidate.source, params, bindings)
+                     sources = source_union(sources, pools)
+                     for pool in pools:
+@@ -11276,7 +11327,7 @@
+                     roots = tuple(child for root in roots
+                                   for child in self.aggregate_field_targets(root, symbol.name))
+                 for root in roots:
+-                    groups.append((AsyncFieldStorage('', root.sources, root.origins, root.variants),
++                    groups.append((AsyncFieldStorage('', root.sources, root.origins, root.variants, root.recursive_projection_sources),
+                                    *self.owned_field_storage(root.owned_fields)))
+             else:
+                 allocation = binding.alloc
+@@ -11287,7 +11338,8 @@
+                 else:
+                     prefix = symbol.name + '/'
+                     groups.append(tuple(AsyncFieldStorage(path[len(prefix):] if path.startswith(prefix) else '',
+-                        sources, origins, getattr(record, 'variants', frozenset()))
++                        sources, origins, getattr(record, 'variants', frozenset()),
++                        getattr(record, 'recursive_sources', ()))
+                         for record in allocation.task_result_fields
+                         for path, sources, origins in (record,)
+                         if path == symbol.name or path.startswith(prefix)))
+@@ -11301,7 +11353,8 @@
+             root = next((record for record in inherited if not record.path), None)
+             sources, origins = self.resolve_async_sources(symbols, params, bindings, fresh_origins)
+             fields[path] = AsyncFieldStorage(path, sources, origins,
+-                                             root.variants if root else frozenset())
++                                             root.variants if root else frozenset(),
++                                             root.recursive_sources if root else ())
+             for record in inherited:
+                 if record.path:
+                     nested_path = path + '/' + record.path
+@@ -12102,7 +12155,7 @@
+                                                storage=signature.join_storage_result,
+                                                owned_fields=self.owned_field_storage(result_contract['owned_fields']),
+                                                borrowed_fields=result_contract['dependencies'],
+-                                               borrow_parents=result_contract['borrow_parents'])
++                                               borrow_parents=result_contract['borrow_parents'], variants=result_contract['variants'])
+         if result[0] == 'handle_option':
+             return self.buffered_handle_result(c, result_contract['sources'], caller,
+                                                f'retour {name}', conditional_origins)
+@@ -12545,7 +12598,7 @@
+                                                    for candidate in result.candidates),
+                                                storage=contract.join_storage_result,
+                                                owned_fields=self.owned_field_storage(fields),
+-                                               borrowed_fields=dependencies, borrow_parents=parents)
++                                               borrowed_fields=dependencies, borrow_parents=parents, variants=variants)
+         if result.mode == 'handle_option':
+             return self.buffered_handle_result(c, sources, caller, f'retour {name}', frozenset(origins))
+         if result.mode == 'buffered_handle_exchange':
+@@ -14486,6 +14539,9 @@
+                    for fields in self.enums[typ].values() for _, declared in fields)
+ 
+     def supports_fresh_owned_result(self, value, params):
++        if value.candidates and all(candidate.kind == 'task_capture'
++                and params[candidate.parameter][1] in ('task', 'execution') for candidate in value.candidates):
++            return self.supports_owned_signature(value.typ, allow_cycles=True)
+         variants = self.enums.get(value.typ, {})
+         declared = {f'{arm}.{field}': typ for arm, members in variants.items() for field, typ in members
+                     if typ.startswith('A<') and arm in value.fresh_variants}

@@ -1,0 +1,11 @@
+enum View { Item { data: &i32 } }
+
+fn make_view(views: &mut Pool<View>, data: &i32) -> A<View> {
+    views.new(View.Item { data: data })
+}
+
+fn wrong(data_pool: &mut Pool<i32>, views: &mut Pool<View>) -> A<View> {
+    let data = data_pool.new(42);
+    let view = make_view(views, data.vref()); // Cette première frontière est valide.
+    return view; // Refusé : data appartient encore à cette activation.
+}

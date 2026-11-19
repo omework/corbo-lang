@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Blocking TLS connection wrapper over the OpenSSL backend.
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    use std::net::tcp::{Connection as TcpConnection, __din_package_socket as descriptor};
+    use std::sys::valid_file_path;
+
+    /// Reports context, handshake, peer verification or TLS I/O failures.
+    pub enum TlsError {
+        /// Input does not meet this TLS backend's parameter contract.
+        InvalidInput,
+        /// The TLS backend could not construct its configuration.
+        ConfigurationFailed,
+        /// The peer certificate/identity verification failed.
+        PeerVerificationFailed,
+        /// The TLS handshake failed.
+        HandshakeFailed,
+        /// The TLS backend reported an underlying transport failure.
+        TransportFailed,
+    }
+
+    /// Owns the TLS session and its underlying TCP connection.
+    pub struct Connection {
+        /// Owned underlying TCP connection; it outlives the TLS session cleanup.
+        socket: TcpConnection,
+        /// Owned native OpenSSL session address; used only by this optional backend.
+        session: usize,
+        /// Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+        failed: bool,
+    }
+
+    /// Consumes a connected TCP socket and performs TLS with a NUL-terminated hostname and trust path.
+    pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) -> Result<Connection, TlsError> {
+        let name_length = hostname.len();
+        let trust_length = trust_file.len();
+        if !valid_file_path(&hostname[0..name_length]) || !valid_file_path(&trust_file[0..trust_length]) {
+            return Err(TlsError.InvalidInput);
+        }
+        let handle = descriptor(&socket);
+        let context = tls_context();
+        if context == 0 { return Err(TlsError.ConfigurationFailed); }
+        let session = client_session(copy(context), handle, hostname, trust_file);
+        free_context(context);
+        if session == 0 { return Err(TlsError.ConfigurationFailed); }
+        let connected = handshake(copy(session), false);
+        if connected != 1 {
+            let verified = verification_result(copy(session));
+            free_session(session);
+            if verified != 0 { return Err(TlsError.PeerVerificationFailed); }
+            return Err(TlsError.HandshakeFailed);
+        }
+        Ok(Connection { socket: socket, session: session, failed: false })
+    }
+
+    /// Consumes a connected TCP socket and performs TLS with NUL-terminated certificate and key paths.
+    pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) -> Result<Connection, TlsError> {
+        let cert_length = certificate.len();
+        let key_length = private_key.len();
+        if !valid_file_path(&certificate[0..cert_length]) || !valid_file_path(&private_key[0..key_length]) {
+            return Err(TlsError.InvalidInput);
+        }
+        let handle = descriptor(&socket);
+        let context = tls_context();
+        if context == 0 { return Err(TlsError.ConfigurationFailed); }
+        let session = server_session(copy(context), handle, certificate, private_key);
+        free_context(context);
+        if session == 0 { return Err(TlsError.ConfigurationFailed); }
+        if handshake(copy(session), true) != 1 {
+            free_session(session);
+            return Err(TlsError.HandshakeFailed);
+        }
+        Ok(Connection { socket: socket, session: session, failed: false })
+    }
+
+    impl Connection {
+        /// Reads authenticated application data into the caller's slice.
+        fn read(&mut self, destination: &mut [u8]) -> Result<usize, TlsError> {
+            if (*self).failed { return Err(TlsError.TransportFailed); }
+            let length = destination.len();
+            if length == 0 { return Ok(0); }
+            let (status, count) = read_session((*self).session, destination, length);
+            if status == 1 { return Ok(count); }
+            if status == -6 { return Ok(0); } // SSL_ERROR_ZERO_RETURN
+            let failed = &mut (*self).failed;
+            *failed = true;
+            Err(TlsError.TransportFailed)
+        }
+
+        /// Sends application bytes and returns the count accepted by the TLS session.
+        fn write(&mut self, source: &[u8]) -> Result<usize, TlsError> {
+            if (*self).failed { return Err(TlsError.TransportFailed); }
+            let length = source.len();
+            if length == 0 { return Ok(0); }
+            let (status, count) = write_session((*self).session, source, length);
+            if status == 1 { return Ok(count); }
+            let failed = &mut (*self).failed;
+            *failed = true;
+            Err(TlsError.TransportFailed)
+        }
+
+        // A terminal operation. OpenSSL returns zero after sending its alert
+        // when the peer has yet to send its own.
+        /// Consumes the connection and requests a TLS shutdown.
+        fn close(self: Connection) -> Result<(), TlsError> {
+            if self.failed { return Err(TlsError.TransportFailed); }
+            if shutdown_session(self.session) < 0 { return Err(TlsError.TransportFailed); }
+            Ok(())
+        }
+
+        /// Frees the OpenSSL session before the underlying TCP connection is destroyed.
+        fn drop(&mut self) {
+            free_session((*self).session);
+        }
+    }
+#(endif)

@@ -1,0 +1,95 @@
+--- /tmp/crust-async-before-expression-loop-exits.py	2026-11-07 20:43:39
++++ async_lowering.py	2026-11-07 20:45:16
+@@ -221,22 +221,59 @@
+ 
+ def reference_loop_exits(body, definitions=()):
+     """Yield only breaks belonging to this loop, with lexical initializers."""
++    def in_expression(value, visible):
++        if isinstance(value, list) and all(hasattr(part, 'op') for part in value):
++            yield from reference_loop_exits(value, visible)
++        elif isinstance(value, (list, tuple)):
++            if value and value[0] == 'loop_expr':
++                return  # This expression introduces a different break target.
++            for part in value:
++                yield from in_expression(part, visible)
++        elif hasattr(value, 'op'):
++            yield from reference_loop_exits([value], visible)
++
+     definitions = list(definitions)
+     for statement in body:
++        if statement.op in ('loop', 'while'):
++            continue
+         if statement.op == 'var':
++            yield from in_expression(statement.args[1], definitions)
+             definitions.append(statement)
+         elif statement.op == 'break':
++            yield from in_expression(statement.args[0], definitions)
+             yield statement.args[0], statement.line, definitions
+             return
+         elif statement.op in ('return', 'continue'):
++            yield from in_expression(statement.args, definitions)
+             return
+         elif statement.op == 'if':
++            yield from in_expression(statement.args[0], definitions)
+             for branch in statement.args[1:]:
+                 yield from reference_loop_exits(branch, definitions)
+         elif statement.op == 'scope':
+             yield from reference_loop_exits(statement.args[1], definitions)
+-        # An inner loop owns its own breaks. Expressions in initializers also
+-        # keep their own loops and are resolved only if their value is used.
++        else:
++            yield from in_expression(statement.args, definitions)
++
++
++def branch_control_exit(body):
++    """Recognize a tail with no value and no path back to its receiver."""
++    if not isinstance(body, list) or not body:
++        return False
++    tail = body[-1]
++    if tail.op in ('return', 'break', 'continue'):
++        return True
++    if tail.op == 'if':
++        return all(branch_control_exit(arm) for arm in tail.args[1:])
++    if tail.op == 'scope':
++        return branch_control_exit(tail.args[1])
++    if tail.op == 'if_yield':
++        value = tail.args[0]
++        if value[0] == 'if_expr':
++            return all(branch_control_exit(arm) for arm in value[2:])
++        if value[0] == 'scope':
++            return branch_control_exit(value[2])
++    return False
+ 
+ 
+ def expand_reference_return_branches(node):
+@@ -3060,10 +3097,19 @@
+                             received_refs[payload] = payload_loans
+                             active_loans[id(payload_loans)] = payload_loans
+                             track_result(payload, payload_loans, body, -1)
++            # The parser treats a trailing if/block as a yielded expression.
++            # If every path exits, emit it as control flow: it provides no
++            # value to this arm's receiver, but still exits the same loop.
++            if body and body[-1].op == 'if_yield' and branch_control_exit(body):
++                from dataclasses import replace
++                value = body[-1].args[0]
++                if value[0] == 'if_expr':
++                    body = [*body[:-1], replace(body[-1], op='if', args=value[1:])]
++                elif value[0] == 'scope':
++                    body = [*body[:-1], replace(body[-1], op='scope', args=value[1:3],
++                                               region_limit=value[3] if len(value) > 3 else None)]
+             terminal = body[-1] if body and (body[-1].op in ('return', 'if_yield')
+                                              or (transfer_result and ends_in_transfer(body))) else None
+-            if valued and not transfer_result and terminal is None and arm_value is None:
+-                fail(line, f'branche de {construct} async : résultat Int ou retour requis')
+             returned_in_branch = False
+             statements = iter(enumerate(body[:-1] if terminal is not None else body))
+             for position, statement in statements:
+@@ -3141,6 +3187,8 @@
+             elif terminal is not None and terminal.op == 'return':
+                 emit_return(terminal.args[0], terminal.line)
+             else:
++                if valued and not transfer_result and terminal is None and arm_value is None:
++                    fail(line, f'branche de {construct} async : résultat Int ou retour requis')
+                 if transfer_result:
+                     if terminal is None or terminal.op != '<-':
+                         fail(line, 'chaque branche continuante doit transférer une valeur avec <-')

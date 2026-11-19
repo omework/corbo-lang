@@ -1,0 +1,18 @@
+use std::compression::gzip::{Params, compress, decompress};
+
+fn main() {
+    let input: [u8; 3] = [65; 3];
+    let mut encoded: [u8; 128] = [0; 128];
+    let mut workspace: [u64; 36864] = [0; 36864];
+    let params = Params::new();
+    let count = match compress(&input[..], &mut encoded[..], &params, &mut workspace[..]) {
+        Ok(count) => { count },
+        Err(error) => { drop(error); return; },
+    };
+    let mut output: [u8; 3] = [0; 3];
+    match decompress(&encoded[..count], &mut output[..]) {
+        Ok(count) => { print(count); },
+        Err(error) => { drop(error); return; },
+    }
+    print(output[0]);
+}

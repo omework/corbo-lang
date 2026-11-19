@@ -1,0 +1,37 @@
+--- before/storage_requirements.py
++++ after/storage_requirements.py
+@@ -77,6 +77,21 @@
+             elif source.kind == 'source_parameter':
+                 if required != 'pool':
+                     context.fail(line, 'exigence de stockage local incompatible avec une allocation de pool')
++            elif source.kind == 'task_result_parameter':
++                definition = async_functions[context.params[source.index][2]]
++                actual = getattr(definition, 'join_storage_result', None)
++                if actual is None and getattr(definition, 'handle_result', False):
++                    actual = 'pool'
++                effect = getattr(definition, 'field_effect_summary', None)
++                if actual is None and effect and effect.complete:
++                    candidates = effect.completion_result.candidates
++                    if candidates and all(candidate.kind == 'fresh' and candidate.source.kind == 'local_value'
++                                          for candidate in candidates):
++                        actual = 'local'
++                if actual is None:
++                    context.fail(line, 'exigence de stockage du résultat de tâche non démontrée par son contrat')
++                if actual != required:
++                    context.fail(line, f'exigence de stockage {required} incompatible avec le résultat de tâche {actual}')
+             else:
+                 context.fail(line, 'prototype : exigence de stockage sur une projection non raccordée')
+         context.node.storage_requirements = tuple(sorted(demands.items()))
+@@ -94,8 +109,10 @@
+     analyzer.storage_annotation_hook = annotation
+     analyzer.storage_call_hook = call
+     for node in catalog.values():
+-        node.storage_requirements = tuple((i, 'pool') for i, (name, _, typ) in enumerate(node.args[1])
+-                                          if typ in structures and name in node.handle_parameters)
++        joined = dict(getattr(node, 'join_storage_parameters', ()))
++        node.storage_requirements = tuple((i, joined.get(name, 'pool'))
++                                          for i, (name, _, typ) in enumerate(node.args[1])
++                                          if typ in structures and (name in node.handle_parameters or name in joined))
+ 
+     def relevant(value):
+         if hasattr(value, 'op'):

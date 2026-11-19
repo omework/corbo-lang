@@ -1,0 +1,364 @@
+test_child_keeps_pool_reserved_until_await (test_async_pool_injection.AsyncPoolInjectionTests.test_child_keeps_pool_reserved_until_await) ... ERROR
+test_collection_factory_returns_from_injected_pool (test_async_pool_injection.AsyncPoolInjectionTests.test_collection_factory_returns_from_injected_pool) ... ok
+test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) ... 
+  test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='let a=relay(p,7);yield;return <-a;') ... ERROR
+  test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='let a=p.new(7);yield;return <-a;') ... ERROR
+  test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='return <-p.new(7);') ... ERROR
+  test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='return <-make(p,7);') ... ERROR
+test_distinct_live_allocation_can_drop_while_pool_is_borrowed (test_async_pool_injection.AsyncPoolInjectionTests.test_distinct_live_allocation_can_drop_while_pool_is_borrowed) ... ERROR
+test_factory_and_handle_relay_keep_source_reservation (test_async_pool_injection.AsyncPoolInjectionTests.test_factory_and_handle_relay_keep_source_reservation) ... ERROR
+test_failed_launch_does_not_run_factory_and_releases_pool (test_async_pool_injection.AsyncPoolInjectionTests.test_failed_launch_does_not_run_factory_and_releases_pool) ... ERROR
+test_left_to_right_source_arguments_remain_exclusive (test_async_pool_injection.AsyncPoolInjectionTests.test_left_to_right_source_arguments_remain_exclusive) ... FAIL
+test_pool_mode_type_and_explicit_reference (test_async_pool_injection.AsyncPoolInjectionTests.test_pool_mode_type_and_explicit_reference) ... ok
+test_pool_reserved_before_spawn_until_join (test_async_pool_injection.AsyncPoolInjectionTests.test_pool_reserved_before_spawn_until_join) ... ERROR
+test_recorded_case_and_contracts_only_verification (test_async_pool_injection.AsyncPoolInjectionTests.test_recorded_case_and_contracts_only_verification) ... ok
+test_returned_allocation_preserves_pool_but_not_exclusive_loan (test_async_pool_injection.AsyncPoolInjectionTests.test_returned_allocation_preserves_pool_but_not_exclusive_loan) ... ERROR
+test_shared_pool_captures_can_coexist_but_not_allocate (test_async_pool_injection.AsyncPoolInjectionTests.test_shared_pool_captures_can_coexist_but_not_allocate) ... ok
+
+======================================================================
+ERROR: test_child_keeps_pool_reserved_until_await (test_async_pool_injection.AsyncPoolInjectionTests.test_child_keeps_pool_reserved_until_await)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 100, in test_child_keeps_pool_reserved_until_await
+    run=self.run_native(source);self.assertEqual(run.stdout,'7\n9\n');self.assert_destroyed(run,[8,7,9])
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='let a=relay(p,7);yield;return <-a;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 35, in test_direct_helper_and_nested_helper_creation
+    run=self.run_native(self.program(body))
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='let a=p.new(7);yield;return <-a;')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 35, in test_direct_helper_and_nested_helper_creation
+    run=self.run_native(self.program(body))
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='return <-p.new(7);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 35, in test_direct_helper_and_nested_helper_creation
+    run=self.run_native(self.program(body))
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_direct_helper_and_nested_helper_creation (test_async_pool_injection.AsyncPoolInjectionTests.test_direct_helper_and_nested_helper_creation) (body='return <-make(p,7);')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 35, in test_direct_helper_and_nested_helper_creation
+    run=self.run_native(self.program(body))
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_distinct_live_allocation_can_drop_while_pool_is_borrowed (test_async_pool_injection.AsyncPoolInjectionTests.test_distinct_live_allocation_can_drop_while_pool_is_borrowed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 138, in test_distinct_live_allocation_can_drop_while_pool_is_borrowed
+    run=self.run_native(source);self.assertEqual(run.stdout,'7\n9\n')
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_factory_and_handle_relay_keep_source_reservation (test_async_pool_injection.AsyncPoolInjectionTests.test_factory_and_handle_relay_keep_source_reservation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 92, in test_factory_and_handle_relay_keep_source_reservation
+    run=self.run_native(source);self.assertEqual(run.stdout,'7\n9\n');self.assert_destroyed(run,[7,9])
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_failed_launch_does_not_run_factory_and_releases_pool (test_async_pool_injection.AsyncPoolInjectionTests.test_failed_launch_does_not_run_factory_and_releases_pool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 131, in test_failed_launch_does_not_run_factory_and_releases_pool
+    run=self.run_native(self.program('return <-make(p,7);'),fail_at=1)
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_pool_reserved_before_spawn_until_join (test_async_pool_injection.AsyncPoolInjectionTests.test_pool_reserved_before_spawn_until_join)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 51, in test_pool_reserved_before_spawn_until_join
+    run=self.run_native(source);self.assertEqual(run.stdout,'7\n9\n');self.assert_destroyed(run,[7,9])
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+ERROR: test_returned_allocation_preserves_pool_but_not_exclusive_loan (test_async_pool_injection.AsyncPoolInjectionTests.test_returned_allocation_preserves_pool_but_not_exclusive_loan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 75, in test_returned_allocation_preserves_pool_but_not_exclusive_loan
+    run=self.run_native(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_native_blocks.py", line 13, in run_native
+    code = compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14989, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14982, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13483, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13316, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 431, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 464, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 623, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 2678, in nodes
+    self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 504, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+======================================================================
+FAIL: test_left_to_right_source_arguments_remain_exclusive (test_async_pool_injection.AsyncPoolInjectionTests.test_left_to_right_source_arguments_remain_exclusive)
+----------------------------------------------------------------------
+crust.Error: ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_pool_injection.py", line 109, in test_left_to_right_source_arguments_remain_exclusive
+    with self.assertRaisesRegex(Error,'emprunt actif'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "emprunt actif" does not match "ligne 2: retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner"
+
+----------------------------------------------------------------------
+Ran 12 tests in 2.375s
+
+FAILED (failures=1, errors=10)

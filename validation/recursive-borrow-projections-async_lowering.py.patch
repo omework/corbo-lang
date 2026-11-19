@@ -1,0 +1,47 @@
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -1058,10 +1058,27 @@
+         from array_syntax import owned_reference_paths
+         return tuple(owned_reference_paths({name: {'': layout} for name, layout in struct_layouts.items()} | enum_layouts, typ))
+ 
++    def concrete_borrow_field(typ, path):
++        """Resolve a finite stored path, even when its types repeat."""
++        layouts = {name: {'': layout} for name, layout in struct_layouts.items()} | enum_layouts
++        for arm, members in layouts.get(typ, {}).items():
++            for name, declared in members:
++                key = arm + '.' + name
++                head = stored_field_path(key)
++                if path[:len(head)] != head:
++                    continue
++                tail = path[len(head):]
++                if not tail and declared.startswith('&'):
++                    return key, declared
++                if tail and declared.startswith('A<'):
++                    child = concrete_borrow_field(declared[2:-1], tail)
++                    if child is not None:
++                        return key + '/' + child[0], child[1]
++        return None
++
+     def borrowed_field_type(typ, path):
+-        return next(('&mut ' + target if access == 'mut' else '&' + target
+-                     for field, access, target in owned_borrow_fields(typ)
+-                     if stored_field_path(field) == path), None)
++        field = concrete_borrow_field(typ, path)
++        return field[1] if field is not None else None
+ 
+     def move_stored_fields(source, destination):
+         for key in list(active_loans):
+@@ -1102,6 +1119,13 @@
+             path = stored_field_path(field)
+             result[field] = list(active_loans.get(('stored_field', value, path),
+                 active_loans.get(('stored_field', holder, path), initial_stored_field_loans(holder, path))))
++        # Constructed owners carry deeper paths than the finite type template.
++        # Move every such concrete loan together with the owned child.
++        for key, loans in active_loans.items():
++            if isinstance(key, tuple) and key[0] == 'stored_field' and key[1] in (value, holder):
++                field = concrete_borrow_field(typ, key[2])
++                if field is not None:
++                    result[field[0]] = list(loans)
+         return result
+ 
+     def require_durable_storage(value, depth, line):

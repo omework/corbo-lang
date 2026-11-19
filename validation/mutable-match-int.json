@@ -1,0 +1,76 @@
+{
+  "accepted": [
+    "enum W{Bound{data:&mut Int},Other{data:&mut Int}}fn stop(x:&mut Int){loop{}}fn edit(x:&mut Int){x.set(20);}fn run(w:&mut W){match &mut w{W.Other{data:r}=>{stop(r);},W.Bound{data:r}=>{edit(r);}}print(w);}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};run(&mut w);print(n);",
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);},W.Other{data:r}=>{edit(r);}}print(n);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);}}print(w);p.reset();q.reset();",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{{forward(r);}print(r);r.set(21);edit(r);print(r);}}print(w);print(n);",
+    "fn read(x:&Int)->Int{return *x;}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);},W.Other{data:r}=>{let value=read(r);print(value);}}",
+    "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);r.set(20);print(value);print(r);}}print(w);print(n);"
+  ],
+  "rejected": [
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&n};match &mut w{W.Bound{data:r}=>{edit(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);},W.Other{data:r}=>{edit(r,r);}}print(n);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn duo(x:&mut Int,y:&Int){x.set(20);print(y);}match &mut w{W.Bound{data:r}=>{duo(r,r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn identity(x:&mut Int)->&mut Int{return x;}match &mut w{W.Bound{data:r}=>{identity(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn identity(x:&mut Int)->&mut Int{return x;}match &mut w{W.Bound{data:r}=>{let other=identity(r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};fn reset(x:&mut Int,p:&mut Pool<Int>){x.set(20);p.reset();}match &mut w{W.Bound{data:r}=>{reset(r,&mut p);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(&mut r);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(n);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);print(n);}}",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{edit(r);}}print(n);print(w);",
+    "fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &w{W.Bound{data:r}=>{edit(r);}}",
+    "fn read(x:&Int)->Int{return *x;}enum W{Bound{data:&mut Int},Other{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);},W.Other{data:r}=>{let value=read(r,r);print(value);}}",
+    "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);print(n);}}",
+    "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);print(value);}}print(value);"
+  ],
+  "mutations": [
+    {
+      "fault": "lose typed scalar in impossible arm",
+      "before": "return 'scalar', '0', None",
+      "after": "return 'void', '', None",
+      "test": "test_scalar_result_in_impossible_arm",
+      "detected": true,
+      "stderr": "======================================================================\nERROR: test_scalar_result_in_impossible_arm (test_mutable_match_calls.MutableMatchCallTests.test_scalar_result_in_impossible_arm)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/tests/test_mutable_match_calls.py\", line 84, in test_scalar_result_in_impossible_arm\n    self.assertEqual(self.run_source(source + arm % 'read(r)').stdout, '10\\n')\n                     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/tests/test_mutable_reference_fields.py\", line 24, in run_source\n    def run_source(self,s):return self.execute(s,add_source=False)\n                                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/tests/test_crust.py\", line 34, in execute\n    source_path.write_text(compile_source(self.with_source(source) if add_source else source))\n                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 3067, in compile_source\n    return compile_program(source)[1]\n           ~~~~~~~~~~~~~~~^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 3060, in compile_program\n    code = compiler.compile(Parser(source).parse())\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2797, in compile\n    main = self.verify(nodes)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2793, in verify\n    self.verify_top_level(main)\n    ~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 878, in verify_top_level\n    check.block('root', nodes)\n    ~~~~~~~~~~~^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2444, in block\n    result = self.statements(scope, nodes, returns)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2505, in statements\n    self.match_enum(node)\n    ~~~~~~~~~~~~~~~^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2411, in match_enum\n    self.block(f'match {typ}.{arm}', body, bindings=bindings)\n    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2444, in block\n    result = self.statements(scope, nodes, returns)\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 2585, in statements\n    self.fail('une fonction sans retour ne produit pas de valeur')\n    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/var/folders/rs/ld5jvh_n6t92p1hhs2qrmt7w0000gn/T/tmpxv8vtvbl/crust.py\", line 653, in fail\n    raise Error(f'ligne {self.line}: {message}')\ncrust.Error: ligne 1: une fonction sans retour ne produit pas de valeur\n\n----------------------------------------------------------------------\nRan 1 test in 0.003s\n\nFAILED (errors=1)\n"
+    }
+  ],
+  "C": [
+    {
+      "source": "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);r.set(21);print(value);}}print(w);print(n);",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "10\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    },
+    {
+      "source": "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);r.set(21);print(value);}}print(w);print(n);",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "10\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    },
+    {
+      "source": "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);r.set(21);print(value);}}print(w);print(n);",
+      "flags": [
+        "-Os"
+      ],
+      "stdout": "10\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    },
+    {
+      "source": "fn read(x:&Int)->Int{return *x;}fn edit(x:&mut Int){x.set(20);}fn forward(x:&mut Int){edit(x);}enum W{Bound{data:&mut Int}}let mut p=pool<Int>(3);let mut q=pool<W>(3);let mut n=new(p)Int(10);let mut w=new(q)W.Bound{data:&mut n};match &mut w{W.Bound{data:r}=>{let value=read(r);r.set(21);print(value);}}print(w);print(n);",
+      "flags": [
+        "-O2",
+        "-fsanitize=undefined",
+        "-fno-sanitize-recover=all"
+      ],
+      "stdout": "10\nW.Bound(21)\n21\n",
+      "stderr": "destroy w=W.Bound\nreclaim w\ndestroy n=21\nreclaim n\n"
+    }
+  ],
+  "suites": {
+    "standard": "----------------------------------------------------------------------\nRan 747 tests in 313.827s\n\nOK\n",
+    "ubsan": "----------------------------------------------------------------------\nRan 75 tests in 31.729s\n\nOK\n"
+  }
+}

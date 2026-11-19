@@ -1,0 +1,86 @@
+--- before/results.py
++++ after/results.py
+@@ -9,6 +9,7 @@
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ASYNC_SHARED_VIEW_MODES, VECTOR_SLICE_ELEMENTS, VECTOR_SPLIT_TYPES, SHARED_VECTOR_SLICE_MODES, VECTOR_SLICE_MODES, VECTOR_MUT_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, UTF8_BORROW_MODES, VALUE_MODES, UTF8_VALUE_RESULT_FAMILIES
+ from dataclasses import dataclass, field, replace
+ from array_syntax import aggregate_owned_paths
++from array_syntax import merge_structure_choices
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+ 
+ from array_syntax import consumed_result_expression, merge_owned_values, aggregate_reference_paths, nested_reference_fields, replace_shared_vector_item, shared_vector_field_items, update_shared_vector_items, MUT_REF_VECTOR, REFERENCE_VECTORS, merge_exchange_payloads, replace_handle_positions, UNKNOWN_VECTOR_REMOVALS, possible_handle_items, remaining_handle_items, VECTOR_LAST_ITEM, last_handle_index, merge_handle_items, handle_items_at, handle_items_after_exchange, handle_items_after_removal, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, borrowed_array_name, update_array_aliases, update_structure_parameters, update_local_structure_locations, restore_array_binding, reference_array_path, reference_array_projection, replace_reference_fields, swap_reference_fields, reference_array_variable, project_reference_array, merge_container_positions, reference_type, reference_array_element, reference_tree_fields, reference_tree_slot, reference_tree_targets, merge_reference_values, merge_reference_rows, unflatten_reference_value, reference_value_place, replace_reference_rows, swapped_reference_rows, target_row_templates, rebuild_reference_tree, reference_tree_type
+@@ -410,6 +411,7 @@
+     deferred_field_updates: frozenset = frozenset()
+     absent_owned_payload: bool = False
+     task_forward_only: bool = False
++    structure_choices: tuple = ()
+ 
+ 
+ SCALAR = Value('scalar', 'Int')
+@@ -1416,6 +1418,7 @@
+                     environment[name],
+                     owned_fields=merge_reference_rows(values, 'owned_fields'),
+                     owned_path=first.owned_path if all(value.owned_path == first.owned_path for value in values) else (),
++                    structure_choices=merge_structure_choices(values),
+                     structure_origins=frozenset(origin for value in values for origin in value.structure_origins),
+                     handle_items=merge_handle_items(values),
+                     input_item_history=merge_input_item_history(values),
+@@ -2188,6 +2191,18 @@
+         if op in ('ref_expr', 'mut_expr') and expr[1][0] == 'field_deref':
+             _, name, path = expr[1][1]
+             carrier = self.lookup(name, environment, line)
++            if isinstance(carrier, Value) and carrier.structure_choices:
++                branches, values, flow = [], [], set()
++                for choice in carrier.structure_choices:
++                    branch = environment.copy()
++                    branch[name] = choice
++                    part, value = self.expression(expr, branch, line)
++                    flow |= part
++                    branches.append((part, branch))
++                    if 'next' in part:
++                        values.append(value)
++                self.join_environments(environment, branches)
++                return flow, merge_reference_values(values) if values else UNKNOWN
+             mode = 'mut' if op == 'mut_expr' else 'ref'
+             if isinstance(carrier, Value):
+                 declared = dict(self.analyzer.enums.get(carrier.typ, {}).get('', ())).get(path, '')
+@@ -2274,6 +2289,7 @@
+                           rows=merge_reference_rows(returning),
+                           owned_fields=merge_reference_rows(returning, 'owned_fields'),
+                           structure_origins=frozenset(o for v in returning for o in v.structure_origins),
++                          structure_choices=merge_structure_choices(returning),
+                           handle_items=merge_handle_items(returning),
+                           exchange_payloads=merge_exchange_payloads(returning),
+                           input_item_history=merge_input_item_history(returning),
+@@ -2986,6 +3002,7 @@
+             frozenset(arm for v in values for arm in v.fresh_variants),
+             frozenset(t for v in values for t in v.reference_targets), any(v.payload_reference for v in values), frozenset(o for v in values for o in v.container_origins), merge_container_positions(values), any(value.container_borrow for value in values), next(iter(values)).container_mode, merge_reference_rows(values),
+             structure_origins=frozenset(o for value in values for o in value.structure_origins),
++            structure_choices=merge_structure_choices(values),
+             owned_fields=merge_reference_rows(values, 'owned_fields'),
+             handle_items=merge_handle_items(values),
+             exchange_payloads=merge_exchange_payloads(values),
+@@ -3385,7 +3402,8 @@
+         updated = {}
+         for parameter, fields in summary.structure_fields:
+             name = borrowed_array_name(args[parameter])
+-            projected = name is None and isinstance(actuals[parameter], Value) and actuals[parameter].owned_path
++            projected = name is None and isinstance(actuals[parameter], Value) and (
++                actuals[parameter].owned_path or actuals[parameter].structure_choices)
+             if projected:
+                 name = '\0projected_structure_update'
+                 environment[name] = actuals[parameter]
+@@ -3416,6 +3434,14 @@
+         return updated
+ 
+     def update_structure(self, environment, name, carrier, changes, line):
++        if carrier.structure_choices:
++            branches = []
++            for choice in carrier.structure_choices:
++                branch = environment.copy()
++                self.update_structure(branch, name, choice, changes, line)
++                branches.append(({'next'}, branch))
++            self.join_environments(environment, branches)
++            return
+         for targets in changes.values():
+             self.record_stored_references(targets)
+         if carrier.mode == 'mut' and carrier.storage_owner is None:

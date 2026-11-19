@@ -1,0 +1,13 @@
+--- before/results.py
++++ after/results.py
+@@ -2934,8 +2934,8 @@
+                 expected = self.declared[1] if self.declared[0] in ('array', 'array_refs') else None
+                 part, value = self.expression(args[0], environment, line, expected)
+                 if 'next' in part:
+-                    if isinstance(value, Value) and value.mode == 'owned' and args[0][0] != 'move':
+-                        self.fail(line, 'retour d’allocation : <- explicite requis ; recevoir la valeur avant de la retourner')
++                    if isinstance(value, Value) and value.mode == 'owned' and args[0][0] not in ('move', 'array_transfer', 'new_transfer'):
++                        self.fail(line, 'retour d’allocation : <- explicite requis')
+                     self.collect(value, line, environment)
+                     part = (part - {'next'}) | {'return'}
+             elif op in ('call', 'await_statement'):

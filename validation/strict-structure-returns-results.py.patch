@@ -1,0 +1,16 @@
+--- results.py
++++ results.py
+@@ -3951,6 +3951,13 @@
+         return updated
+ 
+     def update_structure(self, environment, name, carrier, changes, line):
++        # Shadowing a name cannot retarget a reference created before the block.
++        # Resolve the hidden root by construction identity in the shadow scopes.
++        if (carrier.mode == 'mut' and carrier.storage_owner and carrier.structure_origins
++                and not carrier.inline_path and not carrier.owned_path):
++            owner = environment.get(carrier.storage_owner)
++            if not carrier.structure_origins & getattr(owner, 'structure_origins', frozenset()):
++                carrier = replace(carrier, storage_owner=None)
+         if carrier.inline_path and not carrier.structure_choices:
+             owner = self.lookup(carrier.storage_owner, environment, line)
+             from structure_views import prefix_fields, project_fields

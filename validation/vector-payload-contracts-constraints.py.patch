@@ -1,0 +1,81 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -98,6 +98,19 @@
+     owned_path: tuple = ()
+     structure_choices: tuple = ()
+     inline_path: str = ''
++
++    def __post_init__(self):
++        if not is_handle_vector(self.typ):
++            return
++        items = possible_handle_items(self.handle_items)
++        fields = {}
++        for item in self.handle_payloads:
++            if items is not None and not item.assets & items:
++                continue
++            for name, assets in item.fields:
++                path = '[]/' + name
++                fields[path] = fields.get(path, frozenset()) | assets
++        object.__setattr__(self, 'fields', tuple(sorted(fields.items())))
+ 
+     @property
+     def all_assets(self):
+@@ -487,9 +500,20 @@
+                     item = Asset(('vector_element', index), source)
+                     history[item] = frozenset()
+                     contained_sources.add(source)
+-                    environment[name] = replace(environment[name], handle_items=frozenset({item}))
++                    element = handle_vector_element(content)
++                    paths = dict(aggregate_reference_paths(self.analyzer.enums, element))
++                    paths.update((path, pointee) for path, _, pointee in owned_reference_paths(self.analyzer.enums, element))
++                    paths.update(aggregate_owned_paths(self.analyzer.enums, element))
++                    payload_fields = []
++                    for path, pointee in paths.items():
++                        source = Source('allocation_field_parameter', index, '[]/' + path, pointee)
++                        child = Asset(('vector_field', index, path), source)
++                        history[child] = frozenset()
++                        payload_fields.append((path, frozenset({child})))
++                    payload = Value('owned', element, frozenset({item}), tuple(payload_fields))
++                    environment[name] = replace(environment[name], handle_items=frozenset({item}), handle_payloads=(payload,))
+                     if typ != content:
+-                        environment[key] = replace(environment[key], handle_items=frozenset({item}))
++                        environment[key] = replace(environment[key], handle_items=frozenset({item}), handle_payloads=(payload,))
+                 if mode == 'mut' and '' in self.analyzer.enums.get(typ, {}):
+                     key = f'\0structure:{index}'
+                     environment[name] = replace(environment[name], storage_owner=key)
+@@ -1791,7 +1815,34 @@
+                         else:
+                             source = actuals[item.source.index]
+                             assets.add(self.born(('vector_call', id(expr), source), source, current))
+-                    incoming = Value('owned', 'Int', frozenset(assets))
++                    incoming = Value('owned', handle_vector_element(actuals[parameter].typ), frozenset(assets))
++                    def resolve_payload(payload, root_assets):
++                        inherited = [actuals[item.parameter] for item in payload.candidates if item.kind == 'parameter']
++                        fields = dict(merge_fields(inherited)) if inherited else {}
++                        for field, targets in payload.fields:
++                            fields[field] = frozenset(asset for target in targets for asset in
++                                (dict(actuals[target.parameter].fields).get(target.field, ())
++                                 if target.kind == 'field_parameter' else
++                                 array_contract_assets(target, actuals[target.parameter])))
++                        for field, child in payload.owned_fields:
++                            child_assets = set()
++                            for candidate in child.candidates:
++                                actual = actuals[candidate.parameter] if candidate.parameter >= 0 else None
++                                if candidate.kind == 'parameter':
++                                    child_assets.update(actual.assets)
++                                elif candidate.kind == 'owned_projection':
++                                    child_assets.update(dict(actual.fields).get(candidate.field_path, ()))
++                                elif candidate.kind == 'fresh':
++                                    child_assets.update(self.born(('vector_child', id(expr), field, source), source, current)
++                                                        for source in sources(candidate.source))
++                            child_value = resolve_payload(child, frozenset(child_assets))
++                            fields[field] = child_value.assets
++                            fields.update((field + '/' + key, targets) for key, targets in child_value.fields)
++                        return Value('owned', payload.typ, root_assets, tuple(fields.items()),
++                                     reservations=frozenset(asset for value in inherited for asset in value.reservations))
++                    for payload in dict(result.vector_write_payloads).get(parameter, ()):
++                        if payload.candidates.intersection(slot):
++                            self.remember_handle_payload(current.environment, receiver, resolve_payload(payload, incoming.assets))
+                     self.retain_handle_origin(incoming, current)
+                     self.publish_handle_exchange(current, (receiver, index, incoming.assets, index is None), exact=exact)
+             updated_structures = {}

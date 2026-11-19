@@ -1,0 +1,300 @@
+--- before/crust.py
++++ crust.py
+@@ -13282,7 +13282,8 @@
+         def fail_async_contract(line, message):
+             raise Error(f'ligne {line}: {message}')
+         for node in async_functions.values():
+-            borrowed_result_paths(node, async_functions, fail_async_contract, self.async_reference_paths)
++            borrowed_result_paths(node, async_functions, fail_async_contract, self.async_reference_paths,
++                                  sync_contracts=self.function_contracts)
+         from async_lowering import lower_async_function
+         def warn_async(line, message, variable):
+             self.warnings.add(f"ligne {line}: {message} : '{variable}'")
+@@ -13314,7 +13315,7 @@
+     def emit_async_sync_bridge(self, name):
+         """Emit an ordinary synchronous ABI once, using the checked backend.
+ 
+-        Only independent scalar inputs/results cross this boundary for now.
++        Scalar values and scalar references cross this boundary.
+         Callee-local pools, loans and cleanup use the synchronous verifier.
+         Separate compiler state prevents speculative lowering/loop retries from
+         leaking those local lifetimes into a caller's frame.
+@@ -13331,8 +13332,18 @@
+         parameters, arguments = [], []
+         for index, (_, mode, typ) in enumerate(contract.parameters):
+             parameter = f'bridge_input_{index}'
+-            root.bindings[parameter] = Binding(parameter, mode, parameter)
+-            parameters.append(f'{COPY_VALUE_TYPES[mode]} {parameter}')
++            if mode in ('ref', 'mut'):
++                element = check.borrowed_element_type(typ)
++                storage = Binding(parameter + '_storage', 'array', '', static_type=element,
++                                  mutable=True, array_storage_scope=root.id)
++                root.bindings[storage.name] = storage
++                root.bindings[parameter] = check.array_borrow_binding(
++                    parameter, 'array_' + mode, parameter, (element, ((storage, None),)))
++                ctype = element + ' *'
++            else:
++                root.bindings[parameter] = Binding(parameter, mode, parameter)
++                ctype = COPY_VALUE_TYPES[mode]
++            parameters.append(f'{ctype} {parameter}')
+             arguments.append(('name', parameter))
+         call = ('call', name, arguments)
+         check.index_expression(call)
+@@ -13345,7 +13356,8 @@
+         check.record_async_slots()
+         symbol, _ = self.async_sync_bridges[name]
+         mode = contract.result_type[0]
+-        ctype = 'void' if mode == 'void' else COPY_VALUE_TYPES[mode]
++        ctype = ('void' if mode == 'void' else check.borrowed_element_type(contract.result_type[1]) + ' *'
++                 if mode in ('ref', 'mut') else COPY_VALUE_TYPES[mode])
+         signature = f'static {ctype} {symbol}(' + (', '.join(parameters) or 'void') + ')'
+         lines = check.flag_declarations + check.lines
+         if result is not None and mode != 'void':
+--- before/async_lowering.py
++++ async_lowering.py
+@@ -342,9 +342,10 @@
+     return frozenset(index for index, _ in borrowed_result_paths(node, functions, fail, cache))
+ 
+ 
+-def borrowed_result_paths(node, functions, fail, cache, visiting=()):
++def borrowed_result_paths(node, functions, fail, cache, visiting=(), *, sync_contracts=None):
+     """Infer which input references can reach the result, including awaited relays."""
+     node = expand_reference_return_branches(node)
++    sync_contracts = sync_contracts or {}
+     name, parameters, result, body = node.args
+     if result not in (('ref', 'Int'), ('mut', 'Int'), ('mut', 'u8')):
+         return frozenset()
+@@ -459,11 +460,18 @@
+         mode, typ = child.args[2]
+         if mode not in ('ref', 'mut') or typ != result[1] or len(operand[2]) != len(child.args[1]):
+             fail(line, diagnostic)
+-        paths = borrowed_result_paths(child, functions, fail, cache, (*visiting, name))
++        paths = borrowed_result_paths(child, functions, fail, cache, (*visiting, name),
++                                      sync_contracts=sync_contracts)
+         origins = set()
+         for index, suffix in paths:
+             argument = operand[2][index]
+             prefix = ()
++            if argument[0] == 'call' and argument[1] in sync_contracts:
++                if suffix:
++                    fail(line, diagnostic)
++                _, inherited = reference_origin(argument, {}, awaited, line)
++                origins.update(inherited)
++                continue
+             if argument[0] in ('ref_expr', 'mut_expr'):
+                 source, prefix = projected_origin(argument[1], line)
+             elif argument[0] in ('name', 'reborrow'):
+@@ -480,6 +488,18 @@
+         return mode, origins
+ 
+     def reference_origin(expr, task_calls, awaited, line):
++        if expr[0] == 'call' and expr[1] in sync_contracts:
++            contract = sync_contracts[expr[1]]
++            mode, typ = contract.result_type
++            if mode not in ('ref', 'mut') or typ != result[1] or len(expr[2]) != len(contract.parameters):
++                fail(line, diagnostic)
++            origins = set()
++            for target in contract.result.reference_targets:
++                if target.kind != 'parameter':
++                    fail(line, 'prototype : projection du résultat synchrone non prise en charge dans un état')
++                _, inherited = reference_origin(expr[2][target.parameter], task_calls, awaited, line)
++                origins.update(inherited)
++            return mode, origins
+         if expr[0] == 'loop_expr':
+             possibilities = []
+             for value, break_line, definitions in reference_loop_exits(expr[1].args[0]):
+@@ -806,37 +826,91 @@
+ 
+     scalar_sync_types = {('scalar', 'Int'): 'int', ('byte', 'u8'): 'uint8_t',
+                          ('char', 'char'): 'CrustChar'}
++    reference_sync_types = {('ref', 'Int'): 'int *', ('mut', 'Int'): 'int *', ('mut', 'u8'): 'uint8_t *'}
++    sync_types = scalar_sync_types | reference_sync_types
+ 
+     def sync_signature(expr):
+         if expr[0] == 'call' and expr[1] in sync_contracts:
+             return sync_contracts[expr[1]].result_type
+         return None
+ 
+-    def sync_call(expr, line, expected=None, *, following=None):
++    def sync_borrow_argument(argument, mode, typ, line):
++        if argument[0] in ('ref', 'mut'):
++            name = argument[1]
++            actual = references.get(name, 'scalar')
++            actual_type = reference_types.get(name, collection_types.get(name,
++                'Bool' if name in boolean_bindings else SCALAR_TYPES.get(inline_scalar_mode(name))))
++            if (name not in fields or name in arrays or actual not in ('scalar', 'owned')
++                    or argument[0] != mode or actual_type != typ or mode == 'mut' and name not in mutable):
++                fail(line, 'argument emprunté : type, mode ou mutabilité incompatible ; réemprunter une référence avec &* ou &mut *')
++            check_access(name, line, write=mode == 'mut')
++            pointer, loans = f'&({value_place(name)})', [(name, mode)]
++        else:
++            pointer, loans, shape = reference_value(argument, line)
++            if (shape[1] != typ or mode == 'mut' and shape[0] != 'mut'
++                    or argument[0] in ('reborrow', 'ref_expr', 'mut_expr') and shape[0] != mode):
++                fail(line, 'argument emprunté : type ou mode incompatible')
++            active_loans.pop(id(loans), None)
++        return pointer, loans
++
++    def release_sync_argument_loans(following):
++        # An earlier scalar sub-call can finish a named reference's last use.
++        # Keep remaining arguments, enclosing statement tails and loop
++        # back-edges in the liveness calculation. Prepared argument loans are
++        # not named scope bindings and therefore cannot expire here.
++        depth = len(scopes) - 1
++        tail = statement_tails.get(depth, ()) if following is None else following
++        remaining = [item for owner, arguments in argument_tails if owner == depth for item in arguments]
++        for owner_depth, scope in enumerate(scopes):
++            for name, (held, _) in scope[4].items():
++                if not utf8_current_live(tail, name, earlier=remaining,
++                                         owner_depth=owner_depth, owned=True):
++                    active_loans.pop(id(held), None)
++
++    def sync_call(expr, line, expected=None, *, following=None, borrow=False):
+         contract = sync_contracts[expr[1]]
+         if contract.effects.blocking_join and not node.native_block:
+             fail(line, 'join réservé au code synchrone, y compris à travers les appels auxiliaires ; utiliser await')
+         signature = contract.result_type
+-        if (signature not in scalar_sync_types and signature != ('void', 'Void')
+-                or any((mode, typ) not in scalar_sync_types for _, mode, typ in contract.parameters)):
+-            fail(line, 'prototype : appel synchrone depuis un état : signature scalaire Int, u8, char ou Void requise')
++        if (signature not in sync_types and signature != ('void', 'Void')
++                or any((mode, typ) not in sync_types for _, mode, typ in contract.parameters)):
++            fail(line, 'prototype : appel synchrone depuis un état : signature scalaire ou emprunt Int/u8 requis')
+         if expected is not None and signature != expected:
+             fail(line, f'appel synchrone : résultat {signature[1]}, attendu {expected[1]}')
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+-        prepared = []
+-        for argument, (_, mode, typ) in zip(expr[2], contract.parameters):
+-            # A literal receives the explicit u8 parameter's context; names
+-            # and computed values keep their own type and are never truncated.
+-            if mode == 'byte' and argument[0] == 'int' and 0 <= argument[1] <= 255:
+-                value, actual = str(argument[1]), 'u8'
+-            else:
+-                value, actual = infer_scalar_value(argument, line)
+-            if actual != typ:
+-                fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
+-            snapshot = temporary(scalar_sync_types[(mode, typ)])
+-            steps.append(f'{snapshot} = {value};')
+-            prepared.append(snapshot)
++        prepared, loans, argument_loans = [], [], []
++        active_loans[id(loans)] = loans
++        pending_capture_groups.append((len(scopes) - 1, [], loans))
++        argument_depth = len(argument_tails)
++        try:
++            for index, (argument, (_, mode, typ)) in enumerate(zip(expr[2], contract.parameters)):
++                argument_tails.append((len(scopes) - 1, expr[2][index + 1:]))
++                held = []
++                if mode in ('ref', 'mut'):
++                    value, held = sync_borrow_argument(argument, mode, typ, line)
++                    loans.extend(held)
++                    # The existing sync ABI uses non-const C pointers for
++                    # read loans too; Crust's contract forbids their mutation.
++                    value = f'({reference_sync_types[(mode, typ)]})({value})'
++                else:
++                    # A literal receives u8 context; a named Int never narrows.
++                    if mode == 'byte' and argument[0] == 'int' and 0 <= argument[1] <= 255:
++                        value, actual = str(argument[1]), 'u8'
++                    else:
++                        value, actual = infer_scalar_value(argument, line)
++                    if actual != typ:
++                        fail(line, f"argument de '{expr[1]}' : attendu {typ}, reçu {actual}")
++                snapshot = temporary(sync_types[(mode, typ)])
++                steps.append(f'{snapshot} = {value};')
++                prepared.append(snapshot)
++                argument_loans.append(held)
++                release_sync_argument_loans(following)
++                argument_tails.pop()
++        finally:
++            del argument_tails[argument_depth:]
++            pending_capture_groups.pop()
++            active_loans.pop(id(loans), None)
+         symbol, diverges = sync_bridge(expr[1], node.args[0])
+         call = symbol + '(' + ', '.join(prepared) + ')'
+         if signature == ('void', 'Void') or diverges:
+@@ -844,8 +918,18 @@
+             if diverges:
+                 raise NoAsyncContinuation()
+             return '', 'Void'
+-        value = temporary(scalar_sync_types[signature])
++        value = temporary(sync_types[signature])
+         steps.append(f'{value} = {call};')
++        if signature in reference_sync_types and borrow:
++            retained = []
++            for target in contract.result.reference_targets:
++                if target.kind != 'parameter':
++                    fail(line, 'prototype : résultat synchrone emprunté sans paramètre direct')
++                retained.extend(argument_loans[target.parameter])
++            active_loans[id(retained)] = retained
++            return value, retained, signature
++        if signature in reference_sync_types:
++            fail(line, 'un résultat emprunté exige une liaison ou un argument de référence')
+         return value, signature[1]
+ 
+     if any(not (scalar_array_layout(typ)[0] or int_reference_row(typ, mode))
+@@ -874,7 +958,7 @@
+     returns_byte_ref = result == ('byte_ref', 'u8')
+     returns_wrapped_utf8 = result[0] in UTF8_VALUE_RESULT_FAMILIES
+     returns_ref = result[0] in ('ref', 'mut')
+-    borrowed_result_paths(node, functions, fail, result_parameters_cache)
++    borrowed_result_paths(node, functions, fail, result_parameters_cache, sync_contracts=sync_contracts)
+     returns_owned = result[0] == 'owned'
+     join_return_mode = result[0] if result[0] in JOIN_PAYLOADS else None
+     returns_join = join_return_mode is not None
+@@ -1073,6 +1157,15 @@
+                         returned_loans.append(loan)
+                     else:
+                         returned_loans.extend(((root, prefix + path), reservation) for path in result_paths.get(index, ()))
++                elif (mode in ('ref', 'mut') and argument[0] == 'call'
++                      and sync_signature(argument) in reference_sync_types):
++                    value, inherited, shape = reference_value(argument, line)
++                    if shape[1] != typ or mode == 'mut' and shape[0] != 'mut':
++                        fail(line, 'capture async : résultat synchrone de type ou mode incompatible')
++                    active_loans.pop(id(inherited), None)
++                    loans.extend(inherited)
++                    if index in result_paths:
++                        returned_loans.extend(inherited)
+                 elif mode in ('ref', 'mut') and argument[0] == mode + '_expr' and argument[1][0] in (
+                         'array_index', 'array_deref_slot'):
+                     value, loan = capture_array_place(argument[1], mode, line, expected_element='uint8_t' if typ == 'u8' else 'int')
+@@ -1271,6 +1364,13 @@
+             check_access(name, statement.line, write=True)
+             consumed.add(name)
+             return True
++        if (name in fields and name not in arrays and name not in references
++                and inline_scalar_mode(name) in ('scalar', 'byte', 'char')):
++            if inline_binding_scopes.get(name) != id(scopes[-1][0]):
++                fail(statement.line, 'drop exige une liaison locale du scope courant')
++            check_access(name, statement.line, write=True)
++            consumed.add(name)
++            return True
+         if name in executions:
+             destroy = abandon_execution
+         elif name in tasks:
+@@ -1482,6 +1582,8 @@
+ 
+     def reference_shape(expr, bindings=None):
+         # Probe without evaluating; reference_value checks every continuing arm.
++        if sync_signature(expr) in reference_sync_types:
++            return sync_signature(expr)
+         if bindings is None:
+             bindings = {name: (mode, reference_types.get(name, 'Int'))
+                         for name, mode in references.items()
+@@ -1546,6 +1648,8 @@
+         return retained
+ 
+     def reference_value(expr, line, *, following=None):
++        if sync_signature(expr) in reference_sync_types:
++            return sync_call(expr, line, following=following, borrow=True)
+         if expr[0] == 'loop_expr':
+             kind, record = emit_loop(expr[1].args[0], line, valued=True, following=following)
+             if kind != 'reference':
+@@ -3579,7 +3683,7 @@
+         elif returns_ref:
+             if value[0] in ('name', 'ref', 'mut', 'reborrow') and value[1] in collection_types:
+                 fail(line, 'retour emprunté Int incompatible avec une collection')
+-            if value[0] in ('if_expr', 'scope', 'value_match', 'loop_expr'):
++            if value[0] in ('if_expr', 'scope', 'value_match', 'loop_expr') or sync_signature(value) in reference_sync_types:
+                 pointer, _, signature = reference_value(value, line, following=())
+                 if signature != result:
+                     fail(line, 'retour emprunté async : type ou mode incompatible')

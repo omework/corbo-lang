@@ -1,0 +1,230 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -7901,14 +7901,19 @@
+             element, layout = inline_vector_layout(collection, line)
+             if not (references.get(receiver) == 'mut' or references.get(receiver) == 'owned' and receiver in mutable) or len(arguments) != 1:
+                 fail(line, 'push exige un Vector mutable et un argument')
+-            if arguments[0][0] != 'transfer':
+-                fail(line, 'push de structure exige -> explicite et une construction ou copie')
++            if arguments[0][0] not in ('down', 'transfer'):
++                fail(line, 'push de structure exige un transfert -> explicite')
+             check_access(receiver, line, write=True)
+             loan = [(receiver, 'mut')]
+             active_loans[id(loan)] = loan
+             try:
+-                incoming = sync_owned_value(arguments[0][1], line, following=following)
+-                if owned_result_types.get(incoming) != element or not storage_of(incoming) & implicit_stacks:
++                if arguments[0][0] == 'down':
++                    require_local_async_value(arguments[0][1], line)
++                    kind, incoming = export_async_value(arguments[0][1], (), line)
++                else:
++                    incoming = sync_owned_value(arguments[0][1], line, following=following)
++                    kind = 'owned'
++                if kind != 'owned' or owned_result_types.get(incoming) != element or not storage_of(incoming) & implicit_stacks:
+                     fail(line, f'push exige une valeur locale {element}, pas une allocation A<T>')
+             finally:
+                 del active_loans[id(loan)]
+--- before/constraints.py
++++ after/constraints.py
+@@ -1003,6 +1003,10 @@
+                 values.append(value)
+             if 'next' not in paths:
+                 return paths, UNKNOWN
++            if (op == 'array_vector_push' and len(values) > 1
++                    and isinstance(values[0], Value) and values[0].typ in INLINE_VECTOR_ELEMENTS
++                    and (hook := getattr(self.analyzer, 'storage_vector_item_hook', None))):
++                hook(self, values[-1], line)
+             if op == 'array_literal':
+                 for value in values:
+                     if isinstance(value, Value) and value.mode in ('ref', 'mut', 'array_ref', 'array_mut', 'array_refs'):
+--- before/crust.py
++++ after/crust.py
+@@ -8965,17 +8965,24 @@
+         if method != 'push':
+             self.fail(f'prototype : {method} sur Vector<{element}> à raccorder')
+         argument = args[0]
+-        if argument[0] != 'transfer':
++        if argument[0] not in ('down', 'transfer'):
+             self.fail('push de structure : transfert -> explicite requis')
+         reservation = Binding(binding.name, 'mut', binding.c, binding.alloc, borrow_parents=(binding,))
+         self.argument_frames.append([reservation])
+         try:
+-            kind, value, incoming = self.expression(argument[1], scope, label)
++            if argument[0] == 'down':
++                self.expression_clock(argument)
++                source = self.lookup(argument[1])
++                self.movable(source)
++                if source.alloc.scope != scope.id:
++                    self.fail('-> à un appel exige une valeur du scope appelant direct')
++                kind, value, incoming = source.kind, source.c, source.alloc
++                source.valid = False
++            else:
++                kind, value, incoming = self.expression(argument[1], scope, label)
+             if (kind != 'owned' or incoming.typ != element
+                     or any(source.kind != 'local_stack' for source in incoming.sources)):
+                 self.fail(f'push exige une valeur {element}, pas A<{element}>')
+-            if argument[1][0] == 'name':
+-                self.fail('prototype : insertion de structure nommée à raccorder ; utiliser copy(valeur)')
+             if self.loans(incoming):
+                 self.fail('transfert interdit : structure encore empruntée')
+         finally:
+@@ -10150,6 +10157,7 @@
+                                          'array_mut' if mode == 'mut' else 'array_ref')
+             if (binding.kind not in ('ref', 'mut') or binding.alloc is None
+                     or (binding.alloc.typ != 'Int' and binding.alloc.typ not in self.enums
++                        and binding.alloc.typ not in INLINE_VECTOR_ELEMENTS
+                         and not is_handle_vector(binding.alloc.typ))):
+                 self.fail('un réemprunt exige une référence Int ou une référence à un agrégat')
+             if mode == 'mut' and binding.kind != 'mut':
+@@ -15984,7 +15992,7 @@
+                 check.origin_sources[allocation.id] = source
+                 root.bindings[parameter] = Binding(parameter, mode, parameter, allocation)
+                 ctype = 'Cell *'
+-            elif mode in ('ref', 'mut') and typ in (*self.enums, *HANDLE_VECTORS):
++            elif mode in ('ref', 'mut') and typ in (*self.enums, *HANDLE_VECTORS, *INLINE_VECTOR_ELEMENTS):
+                 source = MemorySource(check.uid(), external.id, 'local_stack' if index in local_parameters else 'symbolic', parameter,
+                                       f'{parameter}->source', element_type=typ)
+                 external.sources.append(source)
+--- before/storage_requirements.py
++++ after/storage_requirements.py
+@@ -98,7 +98,8 @@
+             elif source.kind == 'local':
+                 actual = 'local' if source.name == 'data stack implicite' else 'pool'
+                 if actual != required:
+-                    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} (T local / allocation A<T>)')
++                    context.fail(line, f'exigence de stockage {required} incompatible avec la valeur {actual} '
++                                 f'(T local / allocation A<T> ; distinction valeur {value.typ} / allocation A<{value.typ}>)')
+             elif source.kind == 'allocation_field_parameter' and source.element in structures:
+                 # This metadata is emitted for owned A<T> fields, unlike
+                 # borrowed fields. Their storage is independent of the carrier.
+@@ -169,6 +170,7 @@
+     analyzer.copy_storage_hook = copy_requirement
+     analyzer.storage_annotation_hook = annotation
+     analyzer.storage_call_hook = call
++    analyzer.storage_vector_item_hook = lambda context, value, line: require(context, value, 'local', line)
+     for node in catalog.values():
+         node.copied_structure_parameters = frozenset()
+         joined = dict(getattr(node, 'join_storage_parameters', ()))
+@@ -188,10 +190,14 @@
+         if isinstance(value, (tuple, list)):
+             if value and value[0] == 'array_copy':
+                 return True
++            if value and value[0] == 'array_vector_push':
++                return True
+             if len(value) == 3 and value[0] == 'call' and isinstance(value[1], str) and value[1] in catalog:
+                 if catalog[value[1]].storage_requirements or catalog[value[1]].copied_structure_parameters:
+                     return True
+             if len(value) == 4 and value[0] == 'method_call' and isinstance(value[2], str):
++                if value[2] == 'push':
++                    return True
+                 if any(name.endswith('.' + value[2]) and (node.storage_requirements or node.copied_structure_parameters)
+                        for name, node in catalog.items()):
+                     return True
+--- before/tests/test_inline_vector_moves.py
++++ after/tests/test_inline_vector_moves.py
+@@ -0,0 +1,105 @@
++"""Named local T moves into Vector<T>; A<T> and live borrows stay distinct."""
++import unittest
++from crust import verify_program
++import test_select_source as harness
++
++POINT='struct Point{x:Int,y:Int}'
++SETUP='let mut p=pool<Vector<Point>>(1);let mut v=p.new();'
++
++
++class InlineVectorMoveTests(unittest.TestCase):
++    run_source=harness.SelectSourceTests.run_source
++    run_c_oracle=harness.SelectSourceTests.run_c_oracle
++    refused=harness.SelectSourceTests.refused
++
++    @staticmethod
++    def source(body, *, asynchronous=False, helpers=''):
++        if not asynchronous:
++            return POINT+helpers+'fn main(){'+body+'}'
++        return POINT+helpers+'async fn work()->Int{'+body+'''return 0;}
++            fn main(){let h=runtime::spawn(->work());match h.join(){
++                Ok(n)=>{print(n);},Err(_)=>{print(99);}}}'''
++
++    def test_named_move_and_invalidation_sync_async(self):
++        body=SETUP+'''let point=Point{x:7,y:9};v.push(->point);
++            let r=copy(v[0]);drop(->v);print(r.x);print(r.y);'''
++        for asynchronous in (False,True):
++            source=self.source(body,asynchronous=asynchronous)
++            self.assertEqual(self.run_source(source).stdout,'7\n9\n'+('0\n' if asynchronous else ''))
++            for operation in ('print(point.x);','drop(->point);'):
++                self.refused(source.replace('let r=copy(v[0]);',operation+'let r=copy(v[0]);'),
++                             'utilisable|déplac|consomm|invalid|détruit')
++            self.refused(source.replace('v.push(->point)','v.push(point)'), 'transfert|explicite')
++
++    def test_borrow_ends_before_move(self):
++        body=SETUP+'''let point=Point{x:7,y:9};let view=&point;print(view.x);
++            v.push(->point);let r=<-v.remove(0);print(r.y);'''
++        for asynchronous in (False,True):
++            source=self.source(body,asynchronous=asynchronous)
++            self.assertEqual(self.run_source(source).stdout,'7\n9\n'+('0\n' if asynchronous else ''))
++            self.refused(source.replace('print(view.x);\n            v.push(->point);',
++                                       'v.push(->point);print(view.x);'), 'emprunt|réserv')
++            self.refused(source.replace('let point=Point{x:7,y:9};',
++                'let mut points=pool<Point>(1);let point=points.new(x:7,y:9);'), 'valeur.*Point|locale.*Point|A<Point>|A<T>')
++
++    def test_function_parameter_and_relay(self):
++        helper='''fn append(v:&mut Vector<Point>,point:->Point){v.push(->point);}
++            fn relay(v:&mut Vector<Point>,point:->Point){append(&mut *v,->point);}'''
++        body=SETUP+'''let point=Point{x:7,y:9};relay(&mut v,->point);
++            let r=<-v.remove(0);drop(->v);print(r.x);'''
++        for asynchronous in (False,True):
++            source=self.source(body,asynchronous=asynchronous,helpers=helper)
++            self.assertEqual(self.run_source(source).stdout,'7\n'+('0\n' if asynchronous else ''))
++            self.refused(source.replace('relay(&mut v,->point)','relay(&mut v,point)'), 'transfert|mode attendu|->')
++            check=verify_program(source)
++            for name in ('append','relay'):
++                self.assertEqual(check.function_contracts[name].storage_requirements,((1,'local'),))
++            self.refused(source.replace('let point=Point{x:7,y:9};',
++                'let mut points=pool<Point>(1);let point=points.new(x:7,y:9);'), 'stockage|local|allocation')
++
++    def test_async_owned_capture_and_injected_vector(self):
++        helper='''async fn append(v:&mut Vector<Point>,point:->Point){yield;v.push(->point);yield;}'''
++        body=SETUP+'''let point=Point{x:7,y:9};let task=append(&mut v,->point);yield;
++            task.await;let r=<-v.remove(0);print(r.x);'''
++        source=self.source(body,asynchronous=True,helpers=helper)
++        self.assertEqual(self.run_source(source).stdout,'7\n0\n')
++        self.assertEqual(verify_program(source).async_definitions['append'][0].storage_requirements,((1,'local'),))
++        self.refused(source.replace('let point=Point{x:7,y:9};',
++            'let mut points=pool<Point>(1);let point=points.new(x:7,y:9);'), 'stockage|local|allocation')
++        self.refused(source.replace('task.await;', 'print(point.x);task.await;'), 'utilisable|déplac|invalid|consomm')
++        self.refused(source.replace('task.await;', 'print(v.len());task.await;'), 'emprunt|réserv')
++
++    def test_child_scope_and_explicit_import(self):
++        body=SETUP+'''let point=Point{x:7,y:9};{point ->;v.push(->point);}
++            let r=copy(v[0]);print(r.x);'''
++        for asynchronous in (False,True):
++            source=self.source(body,asynchronous=asynchronous)
++            self.assertEqual(self.run_source(source).stdout,'7\n'+('0\n' if asynchronous else ''))
++            self.refused(source.replace('point ->;',''), 'scope|rattach|entrée')
++            child=self.source(SETUP+'''{let point=Point{x:7,y:9};v.push(->point);}
++                let r=copy(v[0]);print(r.y);''',asynchronous=asynchronous)
++            self.assertEqual(self.run_source(child).stdout,'9\n'+('0\n' if asynchronous else ''))
++
++    def test_extract_move_between_vectors_and_loop_cleanup(self):
++        body='''let mut p=pool<Vector<Point>>(2);let mut a=p.new();let mut b=p.new();
++            let mut i=0;while i<3{let point=Point{x:i,y:9};a.push(->point);i=i+1;}
++            let mut j=0;while j<3{let point=<-a.remove(0);b.push(->point);j=j+1;}
++            drop(->a);let r=copy(b[2]);drop(->b);print(r.x);
++            let fresh=p.new();print(fresh.len());'''
++        for asynchronous in (False,True):
++            source=self.source(body,asynchronous=asynchronous)
++            self.assertEqual(self.run_source(source).stdout,'2\n0\n'+('0\n' if asynchronous else ''))
++
++    def test_nested_and_empty_named_values(self):
++        body='''let mut p=pool<Vector<Pair>>(1);let mut v=p.new();
++            let pair=Pair{left:Point{x:7,y:9},right:Point{x:11,y:13}};v.push(->pair);
++            let r=<-v.remove(0);print(r.right.y);drop(->v);
++            let mut es=pool<Vector<Empty>>(1);let mut ev=es.new();let e=Empty{};ev.push(->e);
++            let out=<-ev.remove(0);drop(->out);print(ev.len());'''
++        helper='struct Pair{left:Point,right:Point}struct Empty{}'
++        for asynchronous in (False,True):
++            self.assertEqual(self.run_source(self.source(body,asynchronous=asynchronous,helpers=helper)).stdout,
++                             '13\n0\n'+('0\n' if asynchronous else ''))
++
++
++if __name__=='__main__':unittest.main()

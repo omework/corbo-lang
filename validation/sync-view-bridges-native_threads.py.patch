@@ -1,0 +1,16 @@
+--- before/native_threads.py
++++ after/native_threads.py
+@@ -161,6 +161,13 @@
+             if method is not None:
+                 result = method.args[2]
+                 return transformed, ('scalar', 'Bool') if result == ('bool', 'bool') else result
++        if op == 'utf8_slice':
++            _, source = self.expression(expr[1], env, [])
++            if source and source[1] in ('str', 'String'):
++                return transformed, ('text', 'str')
++            if source and source[1] in ('Vector<Int>', 'Vector<u8>', '[Int]', '[u8]'):
++                element = 'Int' if source[1] in ('Vector<Int>', '[Int]') else 'u8'
++                return transformed, self.declared(f'&[{element}]')
+         if op == 'array_index':
+             _, source = self.expression(expr[1], env, [])
+             shape = fixed_array_shape(source[1]) if source else None

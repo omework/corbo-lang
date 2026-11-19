@@ -1,0 +1,263 @@
+--- before/crust.py
++++ after/crust.py
+@@ -2,6 +2,7 @@
+ """Experimental scope checker and C emitter. No unchecked C input is accepted."""
+ from __future__ import annotations
+ from capture_paths import result_capture_selector, capture_index
++from structure_views import field_kind, field_size
+ 
+ import argparse
+ import copy
+@@ -1704,6 +1705,7 @@
+     borrow_parents: tuple = ()
+     match_reservation: bool = False
+     reserved_field: str | None = None
++    inline_reservation: bool = False
+     shared_async_barrier: bool = False
+     vector_projection_targets: tuple = ()
+     constant_int: int | None = None
+@@ -2544,7 +2546,7 @@
+                         self.fail('invariant interne : cible de champ absente du contrat de retour')
+                     key = (holder.id, field) if field is not None else holder.id
+                     reservations.setdefault(key, Binding(binding.name, 'ref', binding.c, holder,
+-                                                         borrow_parents=(binding,), match_reservation=True,
++                                                         borrow_parents=(binding, *holder.borrow_parents), match_reservation=True,
+                                                          reserved_field=field))
+                     targets.update((a.id, a) for a in projected)
+                 continue
+@@ -2582,7 +2584,7 @@
+                     key = (holder.id, field) if field is not None else holder.id
+                     if key not in reservations or reservations[key].kind == 'ref':
+                         reservations[key] = Binding(binding.name, 'mut', binding.c, holder,
+-                                                    borrow_parents=(binding,), match_reservation=True,
++                                                    borrow_parents=(binding, *holder.borrow_parents), match_reservation=True,
+                                                     reserved_field=field)
+                     targets.update((a.id, a) for a in projected)
+                 if field is not None:
+@@ -2612,6 +2614,14 @@
+             resolved = []
+             for target in targets:
+                 binding = bindings[params[target.parameter][0]]
++                if target.kind == 'inline_field_parameter' and not target.carrier_kind:
++                    arm, _, member = name.partition('.')
++                    declared = dict(self.enums[summary.typ][arm])[member]
++                    mode, typ = reference_type(declared)
++                    projection = self.inline_structure_projection(binding, target.field, mode)
++                    resolved.extend(projection.reference_targets)
++                    parents.update((id(parent), parent) for parent in projection.borrow_parents)
++                    continue
+                 if binding.array_root:
+                     self.fail('stockage dans un enum d’un emprunt de case non pris en charge')
+                 if target.kind == 'task_capture_parameter':
+@@ -5378,8 +5388,7 @@
+ 
+     @staticmethod
+     def field_offset(fields, index):
+-        return ' + '.join('sizeof(Cell *)' if reference_type(typ) or typ.startswith('A<') else 'sizeof(int)'
+-                          for _, typ in fields[:index]) or '0'
++        return ' + '.join(field_size(typ) for _, typ in fields[:index]) or '0'
+ 
+     def struct_place(self, expr):
+         _, name, path = expr
+@@ -5440,7 +5449,8 @@
+             self.refresh_inline_view(view)
+             targets.append(view)
+             parents.append(Binding(binding.name, mode, binding.c, root,
+-                borrow_parents=(binding,), match_reservation=True, reserved_field=full_path))
++                borrow_parents=(binding,), match_reservation=True, reserved_field=full_path,
++                inline_reservation=True))
+         return self.reference_descriptor(c, targets, parents)
+ 
+     def borrow_inline_structure(self, place, scope, *, write):
+@@ -5569,9 +5579,10 @@
+             else:
+                 targets.extend(dict(holder.dependencies).get(key, ()))
+             parents.append(Binding(binding.name, mode, binding.c, holder,
+-                                   borrow_parents=(binding,), match_reservation=True,
++                                   borrow_parents=(binding, *holder.borrow_parents), match_reservation=True,
+                                    reserved_field=place[2]))
+-        c = f'cell_load_ref({binding.c}, {offset})'
++        helper = 'cell_load_view' if targets and all(t.inline_root for t in targets) else 'cell_load_ref'
++        c = f'{helper}({binding.c}, {offset})'
+         if owned and not targets:
+             self.fail('projection de champ propriétaire au-delà de la provenance suivie')
+         descriptor = self.reference_descriptor(c, targets, parents)
+@@ -5645,7 +5656,7 @@
+                                      if len(holders) > 1 else
+                                      tuple((dict(carrier.owned_fields) | dict(incoming_field)).items()))
+             proposed.item_sources = self.owned_sources(proposed)
+-            if any(target.id == carrier.id for target in self.retained_dependencies(proposed)):
++            if any((target.inline_root or target).id == carrier.id for target in self.retained_dependencies(proposed)):
+                 self.fail('remplacement de champ interdit : cycle entre allocations empruntées')
+             destination = next(active for active in self.scopes if active.id == carrier.scope)
+             self.check_borrow_destination(proposed, destination)
+@@ -5666,7 +5677,7 @@
+             if not any(id(child) in changed for child in self.dependency_carriers(owner, ownership_only=True)):
+                 continue
+             owner.item_sources = self.owned_sources(owner)
+-            if any(target.id == owner.id for target in self.retained_dependencies(owner)):
++            if any((target.inline_root or target).id == owner.id for target in self.retained_dependencies(owner)):
+                 self.fail('remplacement de champ interdit : cycle entre allocations empruntées')
+             destination = next(active for active in self.scopes if active.id == owner.scope)
+             self.check_borrow_destination(owner, destination)
+@@ -5780,8 +5791,7 @@
+         fields = self.enums[typ]['']
+         layout = f'layout{self.uid()}'
+         offsets = ', '.join(self.field_offset(fields, i) for i in range(len(fields))) or '0'
+-        kinds = ', '.join('2' if t.startswith('A<') else '1' if reference_type(t) else '0'
+-                          for _, t in fields) or '0'
++        kinds = ', '.join(str(field_kind(t)) for _, t in fields) or '0'
+         self.lines.append(f'static const size_t {layout}_offsets[] = {{ {offsets} }};')
+         self.lines.append(f'static const unsigned char {layout}_kinds[] = {{ {kinds} }};')
+         self.lines.append(f'static const Source {layout} = {{.enum_name = "{typ}", .arm_name = "", '
+@@ -5818,6 +5828,7 @@
+         elif set(names) != types.keys():
+             self.fail(f"champs incorrects pour {typ}.{arm} : fournir tous les champs déclarés")
+         values, dependencies, frame, parents, owned = defaults, [], [], {}, []
++        stored_views = set()
+         self.argument_frames.append(frame)
+         try:
+             for name, value in fields:
+@@ -5848,8 +5859,6 @@
+                     ctype = 'Cell *'
+                 elif capability:
+                     field_mode, pointee = capability
+-                    if self.is_structure_view(target):
+-                        self.fail('prototype : stockage d’une référence de sous-structure non encore raccordé')
+                     if kind != field_mode or target is None or target.typ != pointee:
+                         self.fail(f"champ '{name}' : {types[name]} requis")
+                     if not targets:
+@@ -5861,7 +5870,9 @@
+                     if read_parent:
+                         parents[id(read_parent)] = read_parent
+                     dependencies.append((f'{arm}.{name}', targets))
+-                    ctype = 'Cell *'
++                    ctype = self.reference_c_type(targets)
++                    if ctype == 'CrustStructureView':
++                        stored_views.add(name)
+                 else:
+                     if kind != 'scalar':
+                         self.fail(f"champ '{name}' : valeur Int copiable requise")
+@@ -5907,6 +5918,8 @@
+             self.lines.append(f'Cell *{allocation.c} = {factory};')
+             for i, (name, field_type) in enumerate(expected):
+                 helper = 'cell_store_ref' if reference_type(field_type) or field_type.startswith('A<') else 'cell_store_int'
++                if name in stored_views:
++                    helper = 'cell_store_view'
+                 self.lines.append(f'{helper}({allocation.c}, {self.field_offset(expected, i)}, {values[name]});')
+             for _, child in owned:
+                 if child.guard:
+@@ -9139,7 +9152,9 @@
+             value = f'field{self.uid()}'
+             if typ != 'Int':
+                 targets, parents = self.struct_shared_reference(binding, '.' + expr[2])
+-                self.lines.append(f'Cell *{value} = cell_load_ref({binding.c}, {offset});')
++                ctype = self.reference_c_type(targets)
++                helper = 'cell_load_view' if ctype == 'CrustStructureView' else 'cell_load_ref'
++                self.lines.append(f'{ctype} {value} = {helper}({binding.c}, {offset});')
+                 descriptor = self.reference_descriptor(value, targets, parents)
+                 self.access(Binding(expr[2], 'ref', value, descriptor))
+                 return 'ref', value, descriptor
+@@ -10594,7 +10609,9 @@
+                         target = self.reference_descriptor(value, binding.referents or (binding.alloc,), parents)
+                 else:
+                     kind, value, target = self.expression(argument, scope, label)
+-                if kind in ('ref', 'mut') and self.is_structure_view(target):
++                if target is not None and kind in ('ref', 'mut', 'owned') and (
++                        self.is_structure_view(target) or any(
++                            item.inline_root is not None for item in self.retained_dependencies(target))):
+                     self.fail('prototype : capture async de sous-structure non encore raccordée')
+                 array_capture = kind in ('array_ref', 'array_mut') and mode in ('ref', 'mut', 'array_ref', 'array_mut')
+                 if not array_capture and mode in ('owned', 'ref', 'mut', *JOIN_RESULT_TYPES) and target is not None:
+@@ -12101,10 +12118,17 @@
+             proposed.dependencies = self.merge_dependencies(allocation.dependencies, dependencies)
+         else:
+             proposed.dependencies = tuple((dict(allocation.dependencies) | dict(dependencies)).items())
+-        if any(target.id == allocation.id for target in self.retained_dependencies(proposed)):
++        if any((target.inline_root or target).id == allocation.id for target in self.retained_dependencies(proposed)):
+             self.fail('remplacement de champ interdit : cycle entre allocations empruntées')
+         proposed.borrow_parents = tuple({id(parent): parent for parent in
+                                          (*allocation.borrow_parents, *parents)}.values())
++        from structure_views import paths_overlap
++        retained = self.retained_dependencies(proposed)
++        proposed.borrow_parents = tuple(parent for parent in proposed.borrow_parents
++            if not parent.inline_reservation or any(
++                target is parent.alloc or any(target is child for child in self.reserved_targets(parent))
++                or target.inline_root is parent.alloc and paths_overlap(target.inline_path, parent.reserved_field)
++                for target in retained))
+         return proposed
+ 
+     def expected_vector_writes(self, result, params, bindings):
+@@ -12870,11 +12894,13 @@
+                     if not targets and (not possible or arm in possible):
+                         self.fail('invariant interne : provenance de champ emprunté manquante')
+                     mode = 'mut' if (node.consuming or node.mutable) and reference_type(field_type)[0] == 'mut' else 'ref'
+-                    self.lines.append(f'Cell *{value} = cell_load_ref({binding.c}, {offset});')
++                    ctype = self.reference_c_type(targets) if targets else 'Cell *'
++                    helper = 'cell_load_view' if ctype == 'CrustStructureView' else 'cell_load_ref'
++                    self.lines.append(f'{ctype} {value} = {helper}({binding.c}, {offset});')
+                     bindings[name] = Binding(name, mode, value, next(iter(targets), None),
+                                              static_type=reference_type(field_type)[1], referents=targets,
+                                              borrow_parents=(binding.alloc.borrow_parents if node.consuming
+-                                                             else tuple(subject_loans)))
++                                                             else (*subject_loans, *binding.alloc.borrow_parents)))
+                 else:
+                     self.lines.append(f'int {value} = cell_load_int({binding.c}, {offset});')
+                     bindings[name] = Binding(name, 'scalar', value)
+@@ -13342,8 +13368,6 @@
+                     self.lines.append(f'cell_store_int({binding.c}, {offset}, {value});')
+                 else:
+                     expected, pointee = reference_type(typ)
+-                    if self.is_structure_view(descriptor):
+-                        self.fail('prototype : stockage d’une référence de sous-structure non encore raccordé')
+                     if kind != expected or descriptor is None or descriptor.typ != pointee:
+                         self.fail(f'une écriture de champ référence exige {typ}')
+                     holders = binding.referents or (allocation,)
+@@ -13356,7 +13380,8 @@
+                         self.check_borrow_destination(proposed, destination)
+                         holder.dependencies = proposed.dependencies
+                         holder.borrow_parents = proposed.borrow_parents
+-                    self.lines.append(f'cell_store_ref({binding.c}, {offset}, {value});')
++                    helper = 'cell_store_view' if self.is_structure_view(descriptor) else 'cell_store_ref'
++                    self.lines.append(f'{helper}({binding.c}, {offset}, {value});')
+             elif op == 'print_expr':
+                 kind, value, _ = self.expression(args[0], scope, 'print')
+                 if kind in ('text', 'borrowed_text', 'char'):
+@@ -13582,8 +13607,7 @@
+                             self.lines.append(f'arms{sid}[{i}].field_count = {len(fields)};')
+                             if fields:
+                                 offsets = ', '.join(self.field_offset(fields, j) for j in range(len(fields)))
+-                                kinds = ', '.join('2' if t.startswith('A<') else '1' if reference_type(t) else '0'
+-                                                  for _, t in fields)
++                                kinds = ', '.join(str(field_kind(t)) for _, t in fields)
+                                 self.lines.append(f'size_t offsets{sid}_{i}[] = {{ {offsets} }};')
+                                 self.lines.append(f'unsigned char kinds{sid}_{i}[] = {{ {kinds} }};')
+                                 self.lines.append(f'arms{sid}[{i}].field_offsets = offsets{sid}_{i};')
+@@ -15058,6 +15082,11 @@
+ }
+ typedef struct Cell Cell;
+ typedef struct Source Source;
++typedef struct {
++    Cell *root;
++    size_t offset, size;
++    const Source *layout;
++} CrustStructureView;
+ typedef struct VectorStorage VectorStorage;
+ static void vector_drop(Cell *cell);
+ static void vector_storage_close(VectorStorage *storage);
+@@ -15096,6 +15125,15 @@
+     return value;
+ }
+ static void cell_store_ref(Cell *cell, size_t offset, Cell *value) {
++    const Source *layout = cell->layout;
++    for (size_t i=0; layout->field_kinds && i<layout->field_count; ++i) {
++        if (layout->field_offsets[i] == offset && layout->field_kinds[i] == 3) {
++            CrustStructureView view = {value, 0, value ? value->storage_size - sizeof(Cell) : 0,
++                                       value ? value->layout : NULL};
++            memcpy((unsigned char *)cell->fields + offset, &view, sizeof view);
++            return;
++        }
++    }
+     memcpy((unsigned char *)cell->fields + offset, &value, sizeof value);
+ }
+ static Cell *cell_load_ref(Cell *cell, size_t offset) {

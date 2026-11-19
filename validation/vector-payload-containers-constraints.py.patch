@@ -1,0 +1,51 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -2174,12 +2174,33 @@
+             def exchange_value(value):
+                 payload_assets = resolve_assets(value.candidates)
+                 mapped = {}
++                for candidate in value.candidates:
++                    if candidate.kind == 'parameter':
++                        inherited = actuals[candidate.parameter].fields
++                    elif candidate.kind == 'exchange_parameter':
++                        inherited = nested_reference_fields(actuals[candidate.parameter].fields,
++                                                            ('ok', 'err')[candidate.item_index])
++                    elif candidate.kind == 'vector_element':
++                        vector = actuals[candidate.parameter]
++                        selected_sources = {asset.source for asset in payload_assets}
++                        inherited = merge_fields(item for item in vector.handle_payloads
++                                                 if any(asset.source in selected_sources for asset in item.assets))
++                    else:
++                        inherited = ()
++                    for key, children in inherited:
++                        mapped[key] = mapped.get(key, frozenset()) | children
+                 for key, targets in value.fields:
+                     mapped[key] = frozenset(asset for target in targets for asset in (
+                         actuals[target.parameter].all_assets if target.kind == 'parameter'
+                         else self.projected_assets(actuals[target.parameter], target.field, current)))
+                 for key, children in owned_fields(value.owned_fields):
+                     mapped[key] = mapped.get(key, frozenset()) | children
++                for key, child in value.owned_fields:
++                    nested = exchange_value(child)
++                    mapped[key] = mapped.get(key, frozenset()) | nested.assets
++                    for field, children in nested.fields:
++                        path = key + '/' + field
++                        mapped[path] = mapped.get(path, frozenset()) | children
+                 return Value('owned', value.typ, payload_assets, tuple(mapped.items()))
+             reservations = {a for candidate in result.candidates if candidate.kind == 'parameter'
+                             for a in actuals[candidate.parameter].reservations}
+@@ -2218,8 +2239,13 @@
+                         if target.kind == 'detached_field_parameter' else
+                         array_contract_assets(target, actuals[target.parameter])))
+                         for slot in result.shared_vector_layout)
++            payloads = tuple(exchange_value(value) for value in (*result.exchange_values, *result.vector_values) if value.candidates)
++            if is_handle_vector(result.typ):
++                active_items = possible_handle_items(item_sets) or frozenset()
++                payloads = tuple(replace(value, assets=frozenset(asset for asset in active_items
++                    if any(asset.source == original.source for original in value.assets))) for value in payloads)
+             return paths, Value(result.mode, result.typ, assets, tuple(fields), frozenset(reservations),
+-                                handle_payloads=tuple(exchange_value(value) for value in result.exchange_values if value.candidates),
++                                handle_payloads=payloads,
+                                 exchange_payloads=tuple(resolve_assets(arm) for arm in result.exchange_payloads),
+                                 variants=variants, handle_items=item_sets,
+                                 absent_owned_payload=not assets and (result.mode == 'handle_option' or result.absent_owned_payload or

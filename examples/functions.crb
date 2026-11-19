@@ -1,0 +1,34 @@
+fn create(memory: &mut Allocator, value: Int) -> <- Int {
+    let mut data = new(memory) Int(value);
+    address(data);
+    return <- data;
+}
+
+fn inspect(data: &Int) {
+    print(data);
+}
+
+fn modify(data: &mut Int) {
+    data.set(43);
+}
+
+fn round_trip(memory: &mut Allocator, mut data: -> Int) -> <- Int {
+    let mut temporary = new(memory) Int(99);
+    memory.drop(-> temporary);
+    modify(&mut data);
+    <- data
+}
+
+fn consume(memory: &mut Allocator, mut data: -> Int) {
+    inspect(&data);
+    memory.drop(-> data);
+}
+
+let mut memory = allocator();
+let mut data = create(&mut memory, 42);
+address(data); // Même adresse que dans create.
+inspect(&data);
+
+let mut returned = round_trip(&mut memory, -> data);
+consume(&mut memory, -> returned);
+memory.reset();

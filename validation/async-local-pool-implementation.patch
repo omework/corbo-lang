@@ -1,0 +1,381 @@
+--- before/async_lowering.py
++++ after/async_lowering.py
+@@ -866,13 +866,29 @@
+     sync_types = scalar_sync_types | reference_sync_types | view_sync_types | owned_sync_types | pool_sync_types
+ 
+     def pool_argument(argument, mode, typ, line):
+-        if argument[0] != 'name' or pool_types.get(argument[1]) != typ:
++        local = argument[1] in local_pools if argument[0] in ('name', 'ref', 'mut') else False
++        expected = mode if local else 'name'
++        if argument[0] != expected or pool_types.get(argument[1]) != typ:
+             fail(line, f'argument {typ} : passer le nom du pool déjà emprunté')
+         name = argument[1]
+         if mode == 'mut' and references[name] != 'mut':
+             fail(line, 'allouer exige un emprunt mutable du pool')
+         check_access(name, line, write=mode == 'mut')
+         return f'frame->{fields[name]}', [(name, mode)]
++
++    def storage_of(value):
++        for name, member in fields.items():
++            if value == f'frame->{member}':
++                return storage_bindings.get(name, frozenset())
++        return storage_values.get(value, frozenset())
++
++    def keep_storage(value, origins):
++        storage_values[value] = storage_values.get(value, frozenset()) | frozenset(origins)
++
++    def require_durable_storage(value, depth, line):
++        leaving = {name for scope in scopes[depth:] for name in scope[0] if name in local_pools}
++        if storage_of(value) & leaving:
++            fail(line, 'transfert refusé : le pool local ne survit pas au receveur')
+ 
+     def sync_signature(expr):
+         if expr[0] == 'call' and expr[1] in sync_contracts:
+@@ -937,7 +953,7 @@
+         typ = pool_type[5:-1] if expr[4:] == ('pool_default',) else expr[3]
+         if pool_type != f'Pool<{typ}>' or (typ != 'Int' and expr[4:] != ('pool_default',)):
+             fail(line, f'création directe async : type incompatible avec {pool_type}')
+-        source, loans = pool_argument(('name', expr[1]), 'mut', pool_type, line)
++        source, loans = pool_argument(('mut' if expr[1] in local_pools else 'name', expr[1]), 'mut', pool_type, line)
+         active_loans[id(loans)] = loans
+         try:
+             value = expression(expr[2], line, following=following)
+@@ -955,6 +971,7 @@
+                        f'_Alignof({element}), 0, "{label}")')
+         steps.append(f'{cell} = {factory};')
+         owned_result_types[cell] = typ
++        keep_storage(cell, {expr[1]} if expr[1] in local_pools else ())
+         return cell
+ 
+     def sync_call(expr, line, expected=None, *, following=None, borrow=False, owned=False):
+@@ -971,7 +988,7 @@
+             fail(line, 'résultat propriétaire : recevoir, transférer ou drop explicitement')
+         if len(expr[2]) != len(contract.parameters):
+             fail(line, f"'{expr[1]}' attend {len(contract.parameters)} argument(s), reçu {len(expr[2])}")
+-        prepared, loans, argument_loans, prepared_owners = [], [], [], []
++        prepared, loans, argument_loans, prepared_owners, argument_storage = [], [], [], [], []
+         active_loans[id(loans)] = loans
+         pending_capture_groups.append((len(scopes) - 1, prepared_owners, loans))
+         argument_depth = len(argument_tails)
+@@ -1015,6 +1032,8 @@
+                     steps.append(f'{value} = NULL;')
+                 prepared.append(snapshot)
+                 argument_loans.append(held)
++                argument_storage.append(({argument[1]} if (mode, typ) in pool_sync_types and argument[1] in local_pools
++                                         else storage_of(value) if mode == 'owned' else frozenset()))
+                 release_sync_argument_loans(following)
+                 argument_tails.pop()
+         finally:
+@@ -1032,6 +1051,12 @@
+         steps.append(f'{value} = {call};')
+         if signature in owned_sync_types:
+             owned_result_types[value] = signature[1]
++            for candidate in contract.result.candidates:
++                index = (candidate.parameter if candidate.kind == 'parameter' else
++                         candidate.source.index if candidate.kind == 'fresh'
++                         and candidate.source.kind == 'source_parameter' else None)
++                keep_storage(value, argument_storage[index] if index is not None else
++                             frozenset().union(*argument_storage))
+             return value, signature[1]
+         if signature in view_sync_types:
+             retained_views = []
+@@ -1065,6 +1090,9 @@
+     references = {name: mode for name, mode, _ in parameters if mode in ('ref', 'mut', 'owned')}
+     reference_types = {name: typ for name, mode, typ in parameters if mode in ('ref', 'mut')}
+     pool_types = {name: typ for name, mode, typ in parameters if (mode, typ) in pool_sync_types}
++    local_pools = {}
++    storage_bindings = {}
++    storage_values = {}
+     awaited_reference_types = {}
+     returns_array, array_result_ctype = scalar_array_layout(result[1]) if result[0] == 'array' else ((), None)
+     if (not returns_array and result not in SCALAR_RESULTS
+@@ -1172,6 +1200,8 @@
+         if len(arguments) != len(declaration.args[1]):
+             fail(line, f"'{callee}' attend {len(declaration.args[1])} argument(s), reçu {len(arguments)}")
+         captures, loans, returned_loans = [], [], []
++        owner_indexes = owned_result_parameters(declaration, functions,
++                                                sync_result=lambda name: sync_contracts[name].result if name in sync_contracts else None)
+         result_paths = {}
+         utf8_indexes = utf8_result_parameters(declaration, functions, sync_contracts=sync_contracts)
+         for index, path in borrowed_result_paths(declaration, functions, fail, result_parameters_cache):
+@@ -1188,6 +1218,8 @@
+                 if (mode, typ) in pool_sync_types:
+                     value, held = pool_argument(argument, mode, typ, line)
+                     loans.extend(held)
++                    if argument[1] in local_pools and index in owner_indexes:
++                        returned_loans.append((argument[1], 'storage'))
+                 elif mode == 'scalar':
+                     value = boolean_value(argument, line) if typ == 'Bool' else expression(argument, line)
+                 elif mode == 'byte':
+@@ -1377,6 +1409,11 @@
+                     # caller-side loan alive by requiring the child to finish.
+                     loans.append(('\0utf8-capture', 'ref'))
+                 captured = temporary(capture_ctype(mode, typ))
++                if mode in ('owned', *JOIN_PAYLOADS):
++                    held_storage = [(origin, 'storage') for origin in storage_of(value)]
++                    loans.extend(held_storage)
++                    if index in owner_indexes:
++                        returned_loans.extend(held_storage)
+                 steps.append(f'{captured} = {value};')
+                 captures.append(captured)
+                 if mode == 'owned':
+@@ -1456,6 +1493,7 @@
+         del active_loans[id(loans)]
+         if owned or joined:
+             owned_result_types[result] = result_type
++            keep_storage(result, (target for target, mode in returned_loans if mode == 'storage'))
+         if result_mode in ASYNC_CAPTURE_VIEW_MODES:
+             utf8_result_loans[result] = tuple(returned_loans)
+         if borrow:
+@@ -1530,6 +1568,7 @@
+         if record is None:
+             fail(line, f"résultat '{name}' déjà consommé")
+         join_results[name] = None
++        storage_bindings.pop(name, None)
+         return record
+ 
+     def discard_owned_join(name, line):
+@@ -1591,6 +1630,7 @@
+         del active_loans[id(loans)]
+         if mode in ('owned', *JOIN_PAYLOADS):
+             owned_result_types[result] = typ
++            keep_storage(result, (target for target, access in returned_loans if access == 'storage'))
+         if mode in ('ref', 'mut') or mode in ASYNC_CAPTURE_VIEW_MODES and returned_loans:
+             active_loans[id(returned_loans)] = returned_loans
+         else:
+@@ -1621,6 +1661,7 @@
+         join_results[name] = result
+         if is_owned_join(name, nested=True):
+             scopes[-1][0][name] = None
++            storage_bindings[name] = storage_of(result[0])
+         if result[2] is not None:
+             track_result(name, result[2], body, position)
+ 
+@@ -1650,6 +1691,7 @@
+                 steps.append(f'memcpy(frame->{member}, {source}, sizeof frame->{member});')
+         elif kind == 'owned':
+             member = declare(name, statement.line)
++            storage_bindings[name] = storage_of(value)
+             references[name] = 'owned'
+             received_type = owned_result_types.get(value, 'Int')
+             if received_type != 'Int':
+@@ -1660,6 +1702,7 @@
+             steps.append(f'frame->{member} = {value};')
+         elif kind in ('join_owned', 'join_nested'):
+             join_results[name] = value
++            storage_bindings[name] = storage_of(value[0])
+         else:
+             (tasks if kind == 'task' else executions)[name] = value
+ 
+@@ -1841,6 +1884,25 @@
+     def bind_special(statement, body, position, *, export_name=None):
+         name, initializer = statement.args
+         operator = initializer[0]
++        if operator == 'source':
++            if initializer[1] != 'pool' or initializer[3] not in ('Int', 'String', 'Vector<Int>', 'Vector<u8>'):
++                fail(statement.line, 'prototype async : pool local Int/String/Vector<Int/u8> requis')
++            if statement.annotation is not None or statement.compact_transfer:
++                fail(statement.line, 'un pool local ne peut être transféré ni annoté comme allocation')
++            member = declare(name, statement.line)
++            source = temporary('Source')
++            typ = initializer[3]
++            factory = f'source_pool({initializer[2]})'
++            if typ != 'Int':
++                vectors = temporary('VectorStorage')
++                steps.append(f'{vectors} = (VectorStorage){{0}};')
++                factory = f'source_vector_pool({initializer[2]}, &{vectors})'
++            steps.extend((f'{source} = {factory};', f'frame->{member} = &{source};'))
++            references[name] = 'mut' if statement.mutable else 'ref'
++            reference_types[name] = pool_types[name] = f'Pool<{typ}>'
++            local_pools[name] = source
++            scopes[-1][0][name] = None
++            return True
+         owned_initializer = initializer[1] if operator in ('array_transfer', 'new_transfer') else initializer
+         if sync_signature(owned_initializer) in owned_sync_types or owned_initializer[0] == 'new':
+             check_new_name(name, statement.line)
+@@ -1955,6 +2017,7 @@
+             if original in collection_types:
+                 collection_types[name] = collection_types[original]
+             consumed.add(original)
++            storage_bindings[name] = storage_bindings.pop(original, frozenset())
+             if statement.mutable:
+                 mutable.add(name)
+         elif handle_move or task_move or join_move:
+@@ -1996,10 +2059,12 @@
+         refs = tuple(scope[4].copy() for scope in scopes[:depth])
+         visible = set().union(*(ref.keys() for ref in refs)) if refs else set()
+         views = {name: loans for name, loans in utf8_view_loans.items() if name in visible}
+-        return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs
++        storage = {name: origins for name, origins in storage_bindings.items()
++                   if name in set().union(*(scope[0].keys() for scope in scopes[:depth])) and name not in consumed}
++        return tasks.copy(), executions.copy(), active_loans.copy(), consumed.copy(), join_results.copy(), orders, views, refs, storage
+ 
+     def non_utf8_control_state(state):
+-        task_state, handles, active, dead, joins, orders, views, refs = state
++        task_state, handles, active, dead, joins, orders, views, refs, storage = state
+         mutable_ids = {id(loans) for local in refs for name, (loans, _) in local.items()
+                        if name in mutable_utf8_bindings}
+         return (task_state, handles, {key: value for key, value in active.items() if key not in mutable_ids},
+@@ -2022,11 +2087,14 @@
+                 if any(name in state[7][depth] and id(state[7][depth][name][0]) in state[2]
+                        for state in (left, right)):
+                     active[id(loans)] = loans
+-        return tasks_state, handles, active, dead, joins, orders, views, tuple(refs)
++        storage = {name: left[8].get(name, frozenset()) | right[8].get(name, frozenset())
++                   for name in left[8].keys() | right[8].keys()}
++        return tasks_state, handles, active, dead, joins, orders, views, tuple(refs), storage
+ 
+     def restore_control_state(state):
+-        nonlocal tasks, executions, active_loans, consumed, join_results, utf8_view_loans
+-        tasks, executions, active_loans, consumed, join_results, orders, utf8_view_loans, refs = state
++        nonlocal tasks, executions, active_loans, consumed, join_results, utf8_view_loans, storage_bindings
++        tasks, executions, active_loans, consumed, join_results, orders, utf8_view_loans, refs, storage = state
++        storage_bindings = storage.copy()
+         tasks, executions, active_loans = tasks.copy(), executions.copy(), active_loans.copy()
+         consumed, join_results = consumed.copy(), join_results.copy()
+         utf8_view_loans = utf8_view_loans.copy()
+@@ -3168,6 +3236,15 @@
+ 
+     def cleanup_async_values(names, returned, line):
+         for name in reversed(names):
++            if name in local_pools:
++                if name in returned:
++                    fail(line, 'un pool local ne peut être transféré')
++                if any(name in origins for owner, origins in storage_bindings.items() if owner not in consumed):
++                    fail(line, 'transfert refusé : une allocation survit à son pool local')
++                if any(loan_root(target) == name for loans in active_loans.values() for target, _ in loans):
++                    fail(line, 'fermeture du pool local avec une tâche ou un emprunt actif')
++                steps.append(f'source_close(&{local_pools[name]});')
++                continue
+             if name in arrays:
+                 continue
+             if name in join_results:
+@@ -3332,6 +3409,8 @@
+         if (kind, returns_int, nominal) != (expected, expected_result, expected_nominal):
+             fail(line, 'les break async doivent fournir le même type et le même mode')
+         if kind != 'array':
++            if kind in ('owned', 'join_owned', 'join_nested'):
++                keep_storage(target, storage_of(result))
+             steps.append(f'{target} = {result};')
+         elif all(returns_int):
+             steps.append(f'memcpy({target}, {result}, sizeof {target});')
+@@ -3435,6 +3514,7 @@
+                         steps.extend((f'{inner} = {result}.value;', f'{result}.value.allocation = NULL;'))
+                         join_results[payload] = inner, 'allocation', None
+                         owned_result_types[inner] = owned_result_types.get(result, 'Int')
++                        keep_storage(inner, storage_of(result))
+                         scopes[-1][0][payload] = None
+                     else:
+                         declare(payload, line)
+@@ -3473,6 +3553,7 @@
+                         if owned_payload:
+                             references[payload] = 'owned'
+                             payload_type = owned_result_types.get(result, 'Int')
++                            storage_bindings[payload] = storage_of(result)
+                             if payload_type != 'Int':
+                                 collection_types[payload] = payload_type
+                             scopes[-1][0][payload] = None
+@@ -3620,6 +3701,8 @@
+                         elif signature != selected_signature:
+                             fail(terminal.line, 'même type et même mode requis dans toutes les branches async')
+                         if kind != 'array':
++                            if kind in ('owned', 'join_owned', 'join_nested'):
++                                keep_storage(target, storage_of(result))
+                             steps.append(f'{target} = {result};')
+                         elif all(shape):
+                             steps.append(f'memcpy({target}, {result}, sizeof {target});')
+@@ -3695,6 +3778,9 @@
+                 wrapped_utf8_bindings.pop(name, None)
+                 inline_binding_scopes.pop(name, None)
+                 collection_types.pop(name, None)
++                pool_types.pop(name, None)
++                local_pools.pop(name, None)
++                storage_bindings.pop(name, None)
+                 utf8_view_loans.pop(name, None)
+                 mutable_utf8_bindings.discard(name)
+             if index + 1 < len(arms):
+@@ -3752,13 +3838,19 @@
+             check_access(name, line, write=True)
+             member = f'frame->{fields[name]}'
+             result = temporary('Cell *')
++            keep_storage(result, storage_bindings.get(name, ()))
++            if depth is not None:
++                require_durable_storage(result, depth, line)
+             owned_result_types[result] = collection_types.get(name, 'Int')
+             steps.extend((f'{result} = {member};', f'{member} = NULL;'))
+             consumed.add(name)
++            storage_bindings.pop(name, None)
+             return 'owned', result
+         if name in executions and name in names:
+             kind, value = 'execution', consume_execution(name, line)
+         elif name in names and is_owned_join(name, nested=True):
++            if depth is not None:
++                require_durable_storage(join_results[name][0], depth, line)
+             record = consume_owned_join(name, line)
+             return ('join_nested' if record[1] == 'nested' else 'join_owned'), record
+         elif name in tasks and name in names:
+@@ -3844,6 +3936,7 @@
+             if value[0] != 'move' or not is_owned_join(value[1], nested=True):
+                 fail(line, 'retour de Result alloué : <- explicite requis')
+             joined, payload, _ = consume_owned_join(value[1], line)
++            require_durable_storage(joined, 0, line)
+             if (payload != JOIN_PAYLOADS[join_return_mode]
+                     or owned_result_types.get(joined, 'Int') != result[1]):
+                 fail(line, 'retour de Result alloué : type de Result incompatible')
+@@ -3851,6 +3944,7 @@
+         elif returns_owned:
+             if value[0] in ('array_transfer', 'new_transfer') and (sync_signature(value[1]) in owned_sync_types or value[1][0] == 'new'):
+                 received = sync_owned_value(value[1], line, following=())
++                require_durable_storage(received, 0, line)
+                 if owned_result_types[received] != result[1]:
+                     fail(line, 'retour propriétaire : type incompatible')
+                 steps.extend((f'frame->result = {received};', f'{received} = NULL;'))
+@@ -3863,6 +3957,7 @@
+             name = value[1]
+             check_access(name, line, write=True)
+             member = f'frame->{fields[name]}'
++            require_durable_storage(member, 0, line)
+             steps.extend((f'frame->result = {member};', f'{member} = NULL;'))
+             consumed.add(name)
+         elif returns_ref:
+@@ -3937,7 +4032,7 @@
+     def check_access(name, line, *, write=False, path=()):
+         if name in consumed:
+             fail(line, f"'{name}' n’est plus utilisable après drop ou transfert")
+-        if any(loan_root(target) == name and (mode == 'mut' or write)
++        if any(loan_root(target) == name and mode != 'storage' and (mode == 'mut' or write)
+                and (not isinstance(target, tuple)
+                     or all(left is None or right is None or left == right for left, right in zip(path, target[1])))
+                for loans in active_loans.values() for target, mode in loans):
+@@ -3946,6 +4041,7 @@
+     def drop_owned(name, line):
+         check_access(name, line, write=True)
+         consumed.add(name)
++        storage_bindings.pop(name, None)
+         member = f'frame->{fields[name]}'
+         steps.extend((f'cell_drop({member});', f'{member} = NULL;'))
+ 
+@@ -4374,6 +4470,7 @@
+                 if receiver not in consumed:
+                     drop_owned(receiver, line)
+                 consumed.remove(receiver)
++                storage_bindings[receiver] = storage_of(replacement)
+                 steps.append(f'frame->{fields[receiver]} = {replacement};')
+                 names = next(names for names, *_ in reversed(scopes) if receiver in names)
+                 del names[receiver]
+@@ -5040,6 +5137,7 @@
+         if mode in JOIN_PAYLOADS:
+             value = await_task(initializer, line, returns_value=True, joined=True, prepared=prepared)
+             join_results[name] = value, JOIN_PAYLOADS[mode], None
++            storage_bindings[name] = storage_of(value)
+             scopes[-1][0][name] = None
+             return True
+         if mode == 'owned':
+@@ -5054,6 +5152,7 @@
+         references[name] = mode
+         if mode == 'owned':
+             received_type = owned_result_types.get(value, 'Int')
++            storage_bindings[name] = storage_of(value)
+             if received_type != 'Int':
+                 collection_types[name] = received_type
+             scopes[-1][0][name] = None

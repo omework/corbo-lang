@@ -1,0 +1,305 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Readiness registration and task wakeups using the platform event queue.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    /// Opens the platform event queue and returns its native descriptor.
+    fn queue_create() -> i64 {
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                mov edi, 0x80000
+                mov eax, 291
+                syscall
+                mov ${result}, rax
+            }
+        }
+        result
+    }
+
+    /// Registers a socket for read or write readiness with the supplied wake token.
+    fn queue_watch(queue: i64, socket: u64, interests: u64, token: usize) -> i64 {
+        let direction: u64 = (copy(interests) & 1) | ((interests & 2) << 1);
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 16
+                mov rdi, ${queue}
+                mov rdx, ${socket}
+                mov r10, rsp
+                mov rax, ${direction}
+                or eax, 0x40000000
+                mov DWORD PTR [rsp], eax
+                mov rax, ${token}
+                mov QWORD PTR [rsp + 4], rax
+                mov esi, 1
+                test rax, rax
+                jnz 1f
+                mov esi, 2
+                1:
+                mov eax, 233
+                syscall
+                cmp rax, -17
+                jne 2f
+                mov esi, 3
+                mov eax, 233
+                syscall
+                2:
+                mov ${result}, rax
+                add rsp, 16
+            }
+        }
+        result
+    }
+
+    /// Waits for a ready event and returns its associated token.
+    fn queue_wait(queue: i64) -> usize {
+        let mut token: usize = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 16
+                1:
+                mov rdi, ${queue}
+                mov rsi, rsp
+                mov edx, 1
+                mov r10d, -1
+                mov eax, 232
+                syscall
+                cmp rax, -4
+                je 1b
+                cmp rax, 1
+                jne 2f
+                mov rdx, QWORD PTR [rsp + 4]
+                mov eax, DWORD PTR [rsp]
+                test eax, 24
+                jnz 3f
+                mov ecx, eax
+                and eax, 1
+                shr ecx, 1
+                and ecx, 2
+                or eax, ecx
+                jmp 4f
+                3:
+                mov eax, 3
+                4:
+                or rdx, rax
+                mov ${token}, rdx
+                2:
+                add rsp, 16
+            }
+        }
+        token
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    /// Opens the platform event queue and returns its native descriptor.
+    fn queue_create() -> i64 {
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                bl _kqueue
+                sxtw x0, w0
+                tbz x0, #63, 1f
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                1:
+                mov ${result}, x0
+            }
+        }
+        result
+    }
+
+    /// Registers a socket for read or write readiness with the supplied wake token.
+    fn queue_watch_one(queue: i64, socket: u64, write: bool, token: usize) -> i64 {
+        if token == 0 { return 0; }
+        let filter: i64 = if write { -2 } else { -1 };
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #32
+                mov x9, ${socket}
+                str x9, [sp]
+                mov x9, ${filter}
+                strh w9, [sp, #8]
+                mov w9, #17
+                strh w9, [sp, #10]
+                str wzr, [sp, #12]
+                str xzr, [sp, #16]
+                mov x9, ${token}
+                str x9, [sp, #24]
+                mov x0, ${queue}
+                mov x1, sp
+                mov x2, #1
+                mov x3, #0
+                mov x4, #0
+                mov x5, #0
+                bl _kevent
+                sxtw x0, w0
+                tbz x0, #63, 1f
+                bl ___error
+                ldr w0, [x0]
+                neg x0, x0
+                1:
+                mov ${result}, x0
+                add sp, sp, #32
+            }
+        }
+        result
+    }
+
+    /// Waits for a ready event and returns its associated token.
+    fn queue_wait(queue: i64) -> usize {
+        let mut token: usize = 0;
+        @unchecked {
+            @asm {
+                sub sp, sp, #32
+                1:
+                mov x0, ${queue}
+                mov x1, #0
+                mov x2, #0
+                mov x3, sp
+                mov x4, #1
+                mov x5, #0
+                bl _kevent
+                cmp w0, #1
+                b.eq 2f
+                cmn w0, #1
+                b.ne 3f
+                bl ___error
+                ldr w0, [x0]
+                cmp w0, #4
+                b.eq 1b
+                b 3f
+                2:
+                ldr x0, [sp, #24]
+                ldrsh x9, [sp, #8]
+                cmn x9, #1
+                cset x9, ne
+                add x9, x9, #1
+                orr x0, x0, x9
+                mov ${token}, x0
+                3:
+                add sp, sp, #32
+            }
+        }
+        token
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "x86_64")
+    /// Opens the platform event queue and returns its native descriptor.
+    fn queue_create() -> i64 {
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                call _kqueue
+                cdqe
+                test rax, rax
+                jns 1f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                1:
+                mov ${result}, rax
+            }
+        }
+        result
+    }
+
+    /// Registers a socket for read or write readiness with the supplied wake token.
+    fn queue_watch_one(queue: i64, socket: u64, write: bool, token: usize) -> i64 {
+        if token == 0 { return 0; }
+        let filter: i64 = if write { -2 } else { -1 };
+        let mut result: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rax, ${socket}
+                mov QWORD PTR [rsp], rax
+                mov rax, ${filter}
+                mov WORD PTR [rsp + 8], ax
+                mov WORD PTR [rsp + 10], 17
+                mov DWORD PTR [rsp + 12], 0
+                mov QWORD PTR [rsp + 16], 0
+                mov rax, ${token}
+                mov QWORD PTR [rsp + 24], rax
+                mov rdi, ${queue}
+                mov rsi, rsp
+                mov edx, 1
+                xor ecx, ecx
+                xor r8d, r8d
+                xor r9d, r9d
+                call _kevent
+                cdqe
+                test rax, rax
+                jns 1f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                neg rax
+                1:
+                mov ${result}, rax
+                add rsp, 32
+            }
+        }
+        result
+    }
+
+    /// Waits for a ready event and returns its associated token.
+    fn queue_wait(queue: i64) -> usize {
+        let mut token: usize = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                1:
+                mov rdi, ${queue}
+                xor esi, esi
+                xor edx, edx
+                mov rcx, rsp
+                mov r8d, 1
+                xor r9d, r9d
+                call _kevent
+                cmp eax, 1
+                je 2f
+                cmp eax, -1
+                jne 3f
+                call ___error
+                cmp DWORD PTR [rax], 4
+                je 1b
+                jmp 3f
+                2:
+                mov rax, QWORD PTR [rsp + 24]
+                movsx ecx, WORD PTR [rsp + 8]
+                cmp ecx, -1
+                mov edx, 2
+                mov ecx, 1
+                cmove edx, ecx
+                or rax, rdx
+                mov ${token}, rax
+                3:
+                add rsp, 32
+            }
+        }
+        token
+    }
+#(endif)
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    /// Suspends the current task until the requested socket readiness event arrives.
+    pub async fn ready(socket: u64, write: bool) -> i64 {
+        runtime::wait_socket(socket, write)
+    }
+#(endif)
+
+#(if: target.os == "macos")
+    /// Applies the aggregate read/write interest mask for one descriptor cohort.
+    fn queue_watch(queue: i64, socket: u64, interests: u64, token: usize) -> i64 {
+        if token == 0 { return 0; }
+        if (copy(interests) & 1) != 0 {
+            let status=queue_watch_one(copy(queue),copy(socket),false,copy(token));
+            if status < 0 { return status; }
+        }
+        if (interests & 2) != 0 { return queue_watch_one(queue,socket,true,token); }
+        0
+    }
+#(endif)

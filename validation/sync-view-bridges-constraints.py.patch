@@ -1,0 +1,56 @@
+--- before/constraints.py
++++ after/constraints.py
+@@ -185,6 +185,13 @@
+         self.functions, self.effects, self.results, self.error = functions, effects, results, error
+         self.summaries, self.visiting = {}, set()
+         self.enums = enums or {}
++
++    def sync_result_contract(self, name):
++        if name not in self.functions or name not in self.results:
++            return None
++        from results import ResultContract
++        node = self.functions[name]
++        return ResultContract(tuple(node.args[1]), node.args[2], self.results[name])
+ 
+     def infer_all(self):
+         for name in self.functions:
+@@ -272,7 +279,8 @@
+                     history[asset] = frozenset()
+                     result_assets = frozenset({asset})
+                 captures = []
+-                returned = utf8_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions)
++                returned = utf8_result_parameters(self.analyzer.async_functions[typ], self.analyzer.async_functions,
++                                                  sync_result_contract=self.analyzer.sync_result_contract)
+                 for position, (_, capture, _) in enumerate(self.analyzer.async_functions[typ].args[1]):
+                     if capture in ASYNC_CAPTURE_VIEW_MODES or position in returned:
+                         asset = Asset(('task_utf8_parameter', index, position),
+@@ -648,7 +656,8 @@
+                 if mode in ASYNC_CAPTURE_VIEW_MODES:
+                     from async_lowering import utf8_result_parameters
+                     captures = dict(execution.fields)
+-                    retained = frozenset(asset for position in utf8_result_parameters(definition, self.analyzer.async_functions)
++                    retained = frozenset(asset for position in utf8_result_parameters(definition, self.analyzer.async_functions,
++                                                          sync_result_contract=self.analyzer.sync_result_contract)
+                                          for asset in captures.get(str(position), ()))
+                     return paths, Value('join_' + mode, definition.args[2][1], retained)
+                 if mode in UTF8_VALUE_RESULT_FAMILIES:
+@@ -1346,7 +1355,8 @@
+                         from async_lowering import utf8_result_parameters
+                         definition = self.analyzer.async_functions[value.typ]
+                         if definition.args[2][0] in ASYNC_CAPTURE_VIEW_MODES:
+-                            indexes = utf8_result_parameters(definition, self.analyzer.async_functions)
++                            indexes = utf8_result_parameters(definition, self.analyzer.async_functions,
++                                                          sync_result_contract=self.analyzer.sync_result_contract)
+                             returned = frozenset(asset for key, assets in value.fields
+                                                  if int(key) in indexes for asset in assets)
+                             value = replace(value, fields=(('4', returned),))
+@@ -1361,7 +1371,8 @@
+                 assets = frozenset(asset for (_, mode, _), value in zip(params, actuals)
+                                    if mode in ('owned', 'join_owned', 'join_nested') and isinstance(value, Value) for asset in value.assets)
+                 from async_lowering import owned_result_parameters, utf8_result_parameters
+-                returned = utf8_result_parameters(catalog[name], catalog)
++                returned = utf8_result_parameters(catalog[name], catalog,
++                                                  sync_result_contract=self.analyzer.sync_result_contract)
+                 captures = tuple((str(position), value.all_assets)
+                                  for position, ((_, mode, _), value) in enumerate(zip(params, actuals))
+                                  if (mode in ASYNC_CAPTURE_VIEW_MODES or position in returned) and isinstance(value, Value))

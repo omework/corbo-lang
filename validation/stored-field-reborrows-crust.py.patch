@@ -1,0 +1,153 @@
+--- crust.py before stored reborrows
++++ crust.py
+@@ -2106,17 +2106,14 @@
+         for target in summary.reference_targets:
+             binding = bindings[params[target.parameter][0]]
+             if target.kind in ('stored_array_parameter', 'reserved_stored_array_parameter',
+-                               'inline_field_parameter', 'indirect_field_parameter') or binding.array_root:
++                               'inline_field_parameter') or binding.array_root:
+                 return True
+-            if target.kind == 'task_capture_parameter' and any(
+-                    candidate.array_capture is not None
+-                    for _, candidates in capture_fields(binding.alloc.dependencies, target.field)
+-                    for candidate in candidates):
+-                return True
+-            if target.kind == 'task_capture_parameter' and any(
+-                    index == int(target.field) and path
+-                    for index, path in self.async_reference_paths[params[target.parameter][2]]):
+-                return True
++            if target.kind == 'task_capture_parameter':
++                dependencies, _ = self.project_task_result_captures(
++                    params[target.parameter][2], capture_fields(binding.alloc.dependencies, target.field),
++                    binding.alloc.borrow_parents)
++                if any(candidate.array_capture is not None for _, candidates in dependencies for candidate in candidates):
++                    return True
+         return False
+ 
+     def original_array_slot(self, loan):
+@@ -2379,14 +2376,30 @@
+         targets, parents, reservations = {}, {}, {}
+         for target in summary.reference_targets:
+             binding = bindings[params[target.parameter][0]]
++            if target.kind == 'indirect_field_parameter':
++                # Dereferencing a stored Int reference still points at its
++                # allocation. Preserve that representation through contracts;
++                # only direct inline fields require a payload pointer.
++                if target.carrier_kind:
++                    path, _, field = target.field.rpartition('/')
++                    origin = BorrowTarget(target.carrier_kind, target.parameter, path, target.detached_prefix)
++                    projection = FunctionResult(summary.mode, binding.alloc.typ,
++                                                reference_targets=frozenset({origin}))
++                    intermediate = self.direct_result(projection, params, bindings, c, structure_updates)
++                    binding = Binding(binding.name, summary.mode, c, intermediate)
++                    target = replace(target, field=field, carrier_kind='', detached_prefix='')
++                target = replace(target,
++                                 kind='field_parameter' if summary.mode == 'mut' else 'shared_field_parameter',
++                                 field='.' + target.field)
+             if target.kind in ('task_capture_parameter', 'exclusive_join_parameter'):
+                 if target.kind == 'task_capture_parameter':
+-                    captures = capture_fields(binding.alloc.dependencies, target.field)
++                    captures, ancestry = self.project_task_result_captures(
++                        params[target.parameter][2], capture_fields(binding.alloc.dependencies, target.field),
++                        binding.alloc.borrow_parents)
+                     roots = tuple(root for _, captured in captures for root in captured)
+                     if not roots:
+                         self.fail('contrat de retour : capture empruntée introuvable')
+                     exclusive = summary.mode == 'ref' and any(key.startswith('mut.') for key, _ in captures)
+-                    ancestry = binding.alloc.borrow_parents
+                 else:
+                     roots = binding.referents or (binding.alloc,)
+                     exclusive = True
+@@ -2529,6 +2542,13 @@
+                 binding = bindings[params[target.parameter][0]]
+                 if binding.array_root:
+                     self.fail('stockage dans un enum d’un emprunt de case non pris en charge')
++                if target.kind == 'indirect_field_parameter':
++                    mode = self.field_modes(summary.typ).get(name, 'ref')
++                    projection = FunctionResult(mode, 'Int', reference_targets=frozenset({target}))
++                    descriptor = self.direct_result(projection, params, bindings, binding.c)
++                    resolved.extend(descriptor.reference_targets)
++                    parents.update((id(parent), parent) for parent in descriptor.borrow_parents)
++                    continue
+                 if target.kind == 'detached_field_parameter':
+                     if self.field_modes(summary.typ).get(name) == 'mut':
+                         self.fail('contrat de champ partagé incompatible avec un champ mutable')
+@@ -3219,8 +3239,10 @@
+                     direct_targets = (child.referents or (child.alloc,)) if child.kind in ('ref', 'mut') else ()
+                     dependencies = self.dependency_targets(child.alloc) if child.alloc else ()
+                     if (any(target is allocation for target in (*direct_targets, *dependencies))
+-                            or (loan.reserved_field is not None
+-                                and any(parent.alloc is allocation for parent in ancestors))):
++                            # A reservation of a descendant field already
++                            # represents the capability projected through an
++                            # enclosing struct field or enum arm.
++                            or any(parent.alloc is allocation for parent in ancestors)):
+                         projected.add(key)
+         for binding in active:
+             if binding is exclude or id(binding) in parents or id(binding) in seen:
+@@ -8760,7 +8782,7 @@
+                 self.expression_clock(expr)
+                 if typ.startswith('A<'):
+                     return self.nominal_field_borrow(place, binding, offset, write=write, owned=True)
+-                if capability and capability[0] == 'mut' and capability[1] in self.enums:
++                if capability and capability[0] == 'mut' and (capability[1] == 'Int' or capability[1] in self.enums):
+                     return self.nominal_field_borrow(place, binding, offset, write=write)
+                 view = self.struct_mutable_field_loan(place, write=write)
+                 return view.kind, view.c, ('int', self.array_paths(view))
+@@ -9568,7 +9590,8 @@
+                 pending.append(parent.read_parent)
+         parents = tuple(ancestry.values())
+         if any(parent.alloc is None or parent.alloc.typ not in ('Int', 'join_ref', 'String', *self.struct_fields)
+-               or parent.array_root or parent.match_reservation for parent in parents):
++               or parent.array_root or parent.match_reservation and parent.reserved_field is None
++               for parent in parents):
+             self.fail('prototype : réemprunt async Int avec parent projeté non pris en charge')
+         return parents
+ 
+@@ -9591,7 +9614,11 @@
+         result_paths = {}
+         for index, path in self.async_reference_paths[nominal]:
+             result_paths.setdefault(index, []).append(path)
+-        dependencies, detached, detached_parents = [], [], {}
++        inline_result = any(target.array_capture is not None or any(
++            dict(self.enums.get(target.typ, {}).get('', ())).get('.'.join(path)) == 'Int'
++            for path in result_paths.get(int(key.split('.')[1]), ()))
++            for key, candidates in captures for target in candidates)
++        dependencies, cell_dependencies, cell_parents = [], [], {}
+         for key, candidates in captures:
+             paths = result_paths.get(int(key.split('.')[1]), ())
+             if not paths:
+@@ -9608,8 +9635,20 @@
+                         typ = dict(self.enums[target.typ]['']).get(field)
+                         if typ == '&Int':
+                             roots, parents = self.struct_shared_reference(binding, '.' + field)
+-                            detached.append((f'ref.{key.split(".")[1]}', roots))
+-                            detached_parents.update((id(parent), parent) for parent in parents)
++                            cell_dependencies.append((f'ref.{key.split(".")[1]}', roots))
++                            cell_parents.update((id(parent), parent) for parent in parents)
++                            continue
++                        elif typ == '&mut Int' and not inline_result:
++                            # Keep the actual target plus the field capability;
++                            # neither is an inline piece of the other.
++                            roots = dict(target.dependencies).get('.' + field, ())
++                            if not roots:
++                                self.fail('projection du retour async : cible de champ mutable absente')
++                            reservation = Binding(target.label, mode,
++                                                  '', target, borrow_parents=(binding,),
++                                                  match_reservation=True, reserved_field=field)
++                            cell_dependencies.append((key, roots))
++                            cell_parents[id(reservation)] = reservation
+                             continue
+                         elif typ == '&mut Int':
+                             field_paths = self.struct_mutable_field_paths(binding, field, binding)
+@@ -9636,8 +9675,8 @@
+         targets = {target.id for _, candidates in dependencies for target in candidates}
+         parents = {id(parent): parent for parent in ancestry if any(target.id in targets for target in (
+             *(parent.referents or (parent.alloc,)), *self.dependency_targets(parent.alloc)))}
+-        parents.update(detached_parents)
+-        return tuple((*dependencies, *detached)), tuple(parents.values())
++        parents.update(cell_parents)
++        return tuple((*dependencies, *cell_dependencies)), tuple(parents.values())
+ 
+     def async_array_capture(self, loan, root):
+         if root.alloc is None:

@@ -1,0 +1,52 @@
+test_copy_escapes_child_and_loop_without_retaining_child (test_inline_view_copy.InlineViewCopyTests.test_copy_escapes_child_and_loop_without_retaining_child) ... ok
+test_copy_respects_active_reborrow (test_inline_view_copy.InlineViewCopyTests.test_copy_respects_active_reborrow) ... ok
+test_copy_through_parameter_and_returned_view (test_inline_view_copy.InlineViewCopyTests.test_copy_through_parameter_and_returned_view) ... FAIL
+test_explicit_pool_copy_and_reuse (test_inline_view_copy.InlineViewCopyTests.test_explicit_pool_copy_and_reuse) ... ok
+test_local_copy_is_independent_and_does_not_retain_root (test_inline_view_copy.InlineViewCopyTests.test_local_copy_is_independent_and_does_not_retain_root) ... ok
+
+======================================================================
+FAIL: test_copy_through_parameter_and_returned_view (test_inline_view_copy.InlineViewCopyTests.test_copy_through_parameter_and_returned_view)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 16417, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14481, in verify
+    async_functions).infer_all()
+                     ~~~~~~~~~^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 588, in infer_all
+    self.infer(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 631, in infer
+    result = ResultContext(self, node).infer()
+  File "/Users/jabarkarim/sources/crust/results.py", line 935, in infer
+    flow, tail = self.nodes(self.body, environment, valued=True)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 3269, in nodes
+    self.collect(value, line, environment)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 1315, in collect
+    self.fail(line, 'retour sans provenance symbolique vérifiable')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/results.py", line 683, in fail
+    raise self.analyzer.error(f'ligne {line}: {message}')
+crust.Error: ligne 5: retour sans provenance symbolique vérifiable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_inline_view_copy.py", line 46, in test_copy_through_parameter_and_returned_view
+    self.assertEqual(self.run_source(source).stdout,'Point(1, 2)\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: retour sans provenance symbolique vérifiable
+
+----------------------------------------------------------------------
+Ran 5 tests in 1.669s
+
+FAILED (failures=1)

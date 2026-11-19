@@ -1,0 +1,78 @@
+--- before/results.py
++++ after/results.py
+@@ -7,6 +7,7 @@
+ 
+ from utf8_syntax import ASYNC_CAPTURE_VIEW_MODES, ASYNC_SHARED_VIEW_MODES, VECTOR_SLICE_ELEMENTS, VECTOR_SPLIT_TYPES, SHARED_VECTOR_SLICE_MODES, VECTOR_SLICE_MODES, VECTOR_MUT_SLICE_MODES, VECTOR_OPTION_MODES, VECTOR_REPLACE_MODES, VECTOR_TRY_PUSH_MODES, UTF8_EXPRESSION_MODES, UTF8_METHODS, UTF8_TEXT_RESULT, UTF8_SLICE_RESULT, UTF8_BORROW_MODES, VALUE_MODES, UTF8_VALUE_RESULT_FAMILIES
+ from dataclasses import dataclass, field, replace
++from array_syntax import aggregate_owned_paths
+ from effects import allocation_handle_method, allocation_value_borrow, builtin_method_statement, check_builtin_expression_arity, method_arguments, method_candidate
+ 
+ from array_syntax import consumed_result_expression, merge_owned_values, aggregate_reference_paths, nested_reference_fields, replace_shared_vector_item, shared_vector_field_items, update_shared_vector_items, MUT_REF_VECTOR, REFERENCE_VECTORS, merge_exchange_payloads, replace_handle_positions, UNKNOWN_VECTOR_REMOVALS, possible_handle_items, remaining_handle_items, VECTOR_LAST_ITEM, last_handle_index, merge_handle_items, handle_items_at, handle_items_after_exchange, handle_items_after_removal, ARRAY_STATEMENTS, HANDLE_VECTOR, VECTOR_TYPES, VECTOR_ELEMENTS, vector_method, array_operands, reference_array_shape, fixed_array_shape, borrowed_array_name, update_array_aliases, update_structure_parameters, update_local_structure_locations, restore_array_binding, reference_array_path, reference_array_projection, replace_reference_fields, swap_reference_fields, reference_array_variable, project_reference_array, merge_container_positions, reference_type, reference_array_element, reference_tree_fields, reference_tree_slot, reference_tree_targets, merge_reference_values, merge_reference_rows, unflatten_reference_value, reference_value_place, replace_reference_rows, swapped_reference_rows, target_row_templates, rebuild_reference_tree, reference_tree_type
+@@ -26,6 +27,8 @@
+             return {'kind': 'parameter', 'parameter': params[self.index][0]}
+         if self.kind in ('allocation_parameter', 'task_parameter', 'task_result_parameter'):
+             return {'kind': self.kind, 'parameter': params[self.index][0]}
++        if self.kind == 'allocation_field_parameter':
++            return {'kind': self.kind, 'parameter': params[self.index][0], 'field': self.name}
+         return {'kind': 'local', 'name': self.name}
+ 
+ 
+@@ -630,6 +633,31 @@
+                          for slot in range(count))
+         return Value('array_refs', typ, fields=targets, rows=rows,
+                      container_origins=frozenset({('parameter', index, prefix)}))
++
++    def owned_capture_storage(self, value, path=''):
++        """Resolve an owned descendant without inspecting the async body.
++
++        Parameter fields can remain symbolic until an actual call. Constructed
++        fields instead retain their individual sources, including local pools.
++        """
++        if value.owned_alternatives:
++            return set().union(*(self.owned_capture_storage(item, path) for item in value.owned_alternatives))
++        if path:
++            key, _, tail = path.partition('/')
++            child = dict(value.owned_fields).get(key)
++            if child is not None:
++                return self.owned_capture_storage(child, tail)
++        sources = set()
++        for candidate in value.candidates:
++            if candidate.kind in ('owned_field_input', 'owned_projection'):
++                base = candidate.source.name if candidate.kind == 'owned_field_input' else candidate.field_path
++                sources.add(SourceOrigin('allocation_field_parameter', candidate.parameter,
++                                         base + ('/' + path if path else '')))
++            elif candidate.kind == 'parameter' and path:
++                sources.add(SourceOrigin('allocation_field_parameter', candidate.parameter, path))
++            elif not path:
++                sources.add(candidate.storage())
++        return sources or {SourceOrigin('local', -1, 'capture')}
+ 
+     def infer(self):
+         environment = {}
+@@ -949,7 +977,7 @@
+                 value = self.public_handle_value(value, typ, line)
+             if not isinstance(value, Value) or (value.mode, value.typ) != (mode, typ):
+                 self.fail(line, f"retour de '{self.name}' : {mode} de {typ} attendu")
+-            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'task_parameter', 'task_result_parameter')
++            if any(source.kind not in ('source_parameter', 'allocation_parameter', 'allocation_field_parameter', 'task_parameter', 'task_result_parameter')
+                    for source in value.task_sources | value.task_result_sources):
+                 self.fail(line, 'retour de tâche refusé : le pool de capture ne survit pas au retour')
+             self.returned_task_sources.update(value.task_sources)
+@@ -2216,6 +2244,8 @@
+                         elif capture_mode in ('owned', 'join_owned', 'join_nested'):
+                             sources = {candidate.storage() for candidate in value.candidates}
+                             task_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
++                            for field, _ in aggregate_owned_paths(self.analyzer.enums, value.typ):
++                                task_sources.update(self.owned_capture_storage(value, field))
+                             if index in owned_indexes:
+                                 task_result_sources.update(sources or {SourceOrigin('local', -1, 'capture')})
+                     if index in result_paths:
+@@ -2443,6 +2473,8 @@
+                             sources.add(actual)
+                         elif source.kind == 'allocation_parameter' and isinstance(actual, Value) and actual.candidates:
+                             sources.update(candidate.storage() for candidate in actual.candidates)
++                        elif source.kind == 'allocation_field_parameter' and isinstance(actual, Value):
++                            sources.update(self.owned_capture_storage(actual, source.name))
+                         elif source.kind == 'task_parameter' and isinstance(actual, Value):
+                             sources.update(actual.task_sources)
+                         elif source.kind == 'task_result_parameter' and isinstance(actual, Value) and actual.task_result_sources:

@@ -1,0 +1,73 @@
+test_borrowed_vector_capture (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_borrowed_vector_capture) ... ok
+test_element_pool_must_survive_task_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_element_pool_must_survive_task_factory) ... ok
+test_inactive_task_relay_cleanup (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_inactive_task_relay_cleanup) ... ok
+test_local_payload_survives_vector_drop (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_local_payload_survives_vector_drop) ... ok
+test_mutable_capture_and_local_payload (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_mutable_capture_and_local_payload) ... ok
+test_nested_owned_payload (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_nested_owned_payload) ... ok
+test_owned_capture_and_factory (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_owned_capture_and_factory) ... ok
+test_pop_keeps_payload_loan (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_pop_keeps_payload_loan) ... FAIL
+test_replace_retains_both_result_graphs (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_replace_retains_both_result_graphs) ... ok
+
+======================================================================
+FAIL: test_pop_keeps_payload_loan (test_async_vector_payload_graphs.AsyncVectorPayloadGraphTests.test_pop_keeps_payload_loan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 13, in run_source
+    verify_program(source)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 17376, in verify_program
+    compiler.verify(Parser(source).parse())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 15383, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        local_parameters=frozenset(index for index, required in node.storage_requirements if required == 'local'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        specialize=self.reserve_async_local_variant)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1006, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots,
+                                   sync_contracts or {}, sync_bridge, struct_layouts or {}, enum_layouts or {},
+                                   local_parameters, variant_name, specialize, inline_layouts or {})
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7915, in _lower_async_function
+    bind_scalar(statement, body[index + 1:], body, index)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7319, in bind_scalar
+    value, typ = infer_scalar_value(initializer, statement.line, following=following)
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7198, in infer_scalar_value
+    return conditional(condition, yes, no, line, valued=True, following=following, boolean=None)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5026, in conditional
+    return emit_branches(test, yes, no, line, valued=valued, construct='if', following=following,
+                         boolean=boolean, exchange_success=direct_exchange_success(condition), empty_option=empty_option)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 5791, in emit_branches
+    elif set_reference(statement, body[position + 1:]):
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 7712, in set_reference
+    record = handle_option_record(name, statement.line)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4592, in handle_option_record
+    fail(line, f"résultat '{name}' déjà consommé")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1042, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 5: résultat 'popped' déjà consommé
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_payload_graphs.py", line 73, in test_pop_keeps_payload_loan
+    self.assertEqual(self.run_source(source).stdout,'9\n7\n')
+                     ~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/tests/test_select_source.py", line 16, in run_source
+    self.fail(f'programme attendu valide refusé : {error}')
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: programme attendu valide refusé : ligne 5: résultat 'popped' déjà consommé
+
+----------------------------------------------------------------------
+Ran 9 tests in 4.789s
+
+FAILED (failures=1)

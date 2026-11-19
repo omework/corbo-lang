@@ -1,0 +1,93 @@
+--- before/results.py
++++ after/results.py
+@@ -129,6 +129,9 @@
+     owned_field_writes: tuple = ()
+     task_sources: frozenset[SourceOrigin] = frozenset()
+     task_result_sources: frozenset[SourceOrigin] = frozenset()
++    # Includes temporary stores restored before return. Final field deltas
++    # alone cannot describe the reference representation needed by a bridge.
++    stored_reference_parameters: frozenset[int] = frozenset()
+ 
+     @property
+     def same_parameter(self):
+@@ -211,6 +214,9 @@
+                 {'parameter': params[index][0], 'fields': [
+                     {'field': field, 'targets': [target.describe(params) for target in sorted(targets)]}
+                     for field, targets in fields]} for index, fields in self.structure_fields]
++        if self.stored_reference_parameters:
++            description['stored_reference_parameters'] = [
++                params[index][0] for index in sorted(self.stored_reference_parameters)]
+         return description
+ 
+ 
+@@ -473,7 +479,9 @@
+                                      declared.startswith('A<') for fields in self.enums.get(parameter_type, {}).values()
+                                      for _, declared in fields))
+                                  for _, parameter_mode, parameter_type in node.args[1])
+-        if mode not in ('task', 'execution', 'owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'ref', 'mut', 'array_refs', 'vector_split', *UTF8_BORROW_MODES) and not mutable_containers:
++        scalar_reference_inputs = any(mode in ('ref', 'mut') and typ == 'Int'
++                                      for _, mode, typ in node.args[1])
++        if mode not in ('task', 'execution', 'owned', 'handle_option', 'buffered_handle_exchange', 'join_owned', 'join_nested', 'ref', 'mut', 'array_refs', 'vector_split', *UTF8_BORROW_MODES) and not mutable_containers and not scalar_reference_inputs:
+             result = FunctionResult(mode, typ)
+         else:
+             if name in self.visiting:
+@@ -518,6 +526,7 @@
+         self.vector_write_paths = {}
+         self.updated_handles = {}
+         self.updated_handle_fields = {}
++        self.stored_reference_parameters = set()
+ 
+     def fail(self, line, message):
+         raise self.analyzer.error(f'ligne {line}: {message}')
+@@ -529,6 +538,13 @@
+ 
+     def check_call_actuals(self, name, actuals, line):
+         """Extension point for additional symbolic payloads crossing contracts."""
++
++    def record_stored_references(self, targets):
++        for target in targets:
++            if (target.kind == 'parameter'
++                    and self.params[target.parameter][1] in ('ref', 'mut')
++                    and self.params[target.parameter][2] == 'Int'):
++                self.stored_reference_parameters.add(target.parameter)
+ 
+     def public_handle_value(self, value, typ, line):
+         from handle_types import is_public_handle, canonical_captures
+@@ -730,6 +746,7 @@
+                               owned_fields=tuple(sorted(self.returned_owned_fields.items())),
+                               task_sources=frozenset(self.returned_task_sources),
+                               task_result_sources=frozenset(self.returned_task_result_sources),
++                              stored_reference_parameters=frozenset(self.stored_reference_parameters),
+                               owned_field_writes=tuple((index, name, child) for (index, name), child
+                                   in sorted(self.owned_field_writes.items())
+                                   if any(item.kind != 'owned_field_input' for item in child.candidates)))
+@@ -2086,6 +2103,7 @@
+                             self.fail(line, 'champ mutable : emprunt mutable requis')
+                         key = f'{expr[3]}.{name}'
+                         fields.append((key, stored_targets(value)))
++                        self.record_stored_references(stored_targets(value))
+                         fields.extend((f'{key}/{path}', self.detached_field_targets(value, path))
+                                       for path, targets in value.fields if targets)
+             return flow, Value('owned', typ, frozenset({ResultCandidate('fresh', source=source)}),
+@@ -2172,7 +2190,11 @@
+                 if mode == 'execution':
+                     value = self.public_handle_value(value, typ, line)
+                 actuals.append(value)
+-            if 'next' not in flow or not self.analyzer.effects[name].may_return:
++            if 'next' not in flow:
++                return flow - {'next'}, UNKNOWN
++            for index in self.analyzer.infer(name).stored_reference_parameters:
++                self.record_stored_references(borrowed_targets(actuals[index]))
++            if not self.analyzer.effects[name].may_return:
+                 return flow - {'next'}, UNKNOWN
+             self.check_call_actuals(name, actuals, line)
+             for (parameter_name, _, parameter_type), actual in zip(params, actuals):
+@@ -3030,6 +3052,8 @@
+         return updated
+ 
+     def update_structure(self, environment, name, carrier, changes, line):
++        for targets in changes.values():
++            self.record_stored_references(targets)
+         if carrier.mode == 'mut' and carrier.storage_owner is None:
+             indices = {target.parameter for target in carrier.reference_targets
+                        if target.kind == 'parameter' and self.params[target.parameter][1] == 'mut'}

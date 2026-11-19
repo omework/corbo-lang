@@ -1,0 +1,8 @@
+async fn leaf(p:&mut Pool<Int>)-><-Int{let value=p.new(7);return <-value;}
+fn relay(r:->Result<A<Int>,runtime::Error>)-><-Result<A<Int>,runtime::Error>{return <-r;}
+async fn work(p:&mut Pool<Int>)->Int{let h=runtime::spawn(->leaf(p));let r=h.await;
+ let moved=relay(->relay(->r));match moved{Ok(value)=>{print(*value);drop(->value);},Err(_)=>{}}
+ return 9;}
+fn main(){let mut p=pool<Int>(1);let h=runtime::spawn(->work(&mut p));
+ match h.join(){Ok(n)=>{print(n);},Err(_)=>{}}
+ let reused=p.new(10);print(*reused);}

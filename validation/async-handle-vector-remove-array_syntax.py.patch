@@ -1,0 +1,9 @@
+--- before/array_syntax.py
++++ array_syntax.py
+@@ -39,4 +39,6 @@
+     """Resolve the explicit -> inside drop without adding moves to ordinary calls."""
+     if expr[0] == 'method_call' and expr[1][0] == 'name' and nominal in (HANDLE_VECTOR, MUT_REF_VECTOR):
++        if expr[2] == 'remove':
++            return ('array_transfer', expr)
+         operation = {('pop', 0): 'array_handle_option_pop',
+                      ('try_push', 1): 'array_buffered_try_push'}.get((expr[2], len(expr[3])))

@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! GHASH arithmetic and block processing for AES-GCM.
+
+// GHASH transmits coefficient zero as the high bit of byte zero.
+/// Reverses the bit order of a byte for the polynomial representation.
+fn reverse_byte(value: u8) -> u8 {
+    let pairs = ((copy(value) & 0x55) << 1) | ((value >> 1) & 0x55);
+    let nibbles = ((copy(pairs) & 0x33) << 2) | ((pairs >> 2) & 0x33);
+    shift_byte(copy(nibbles), 4) | (nibbles >> 4)
+}
+
+// Convert only public lengths and counter bytes. Corbo's exact casts
+// do not narrow integers, so this helper spells out the conversion.
+/// Extracts the low octet of a public word.
+fn public_byte(value: u64) -> u8 {
+    let mut remaining = value;
+    let mut result: u8 = 0;
+    let mut bit: u64 = 0;
+    while bit < 8 {
+        let unit: u8 = if (remaining & 1) == 0 { 0 } else { 1 };
+        result = result | (unit << bit);
+        remaining = remaining >> 1;
+        bit = bit + 1;
+    }
+    result
+}
+
+/// Converts a serialized block to the words used in carryless multiplication.
+fn polynomial(block: &[u8; 16]) -> [u8; 16] {
+    let mut coefficients: [u8; 16] = [0; 16];
+    let mut i: u64 = 0;
+    while i < 16 {
+        coefficients[i] = reverse_byte((*block)[i]);
+        i = i + 1;
+    }
+    coefficients
+}
+
+/// Computes the GHASH field product using portable arithmetic.
+fn portable_product(accumulator: &mut [u8; 16], h: &[u8; 16]) {
+    let mut power: [u8; 16] = [0; 16];
+    let mut product: [u8; 16] = [0; 16];
+    let mut i: u64 = 0;
+    while i < 16 {
+        power[i] = (*h)[i];
+        i = i + 1;
+    }
+    let mut bit: u64 = 0;
+    while bit < 128 {
+        let flag = ((*accumulator)[bit / 8] >> (bit % 8)) & 1;
+        let mask = flag * 255;
+        let reduction = (power[15] >> 7) * 0x87;
+        let mut carry: u8 = 0;
+        i = 0;
+        while i < 16 {
+            let current = power[i];
+            product[i] = product[i] ^ (current & mask);
+            power[i] = shift_byte(copy(current), 1) | carry;
+            carry = current >> 7;
+            i = i + 1;
+        }
+        power[0] = power[0] ^ reduction;
+        bit = bit + 1;
+    }
+    i = 0;
+    while i < 16 {
+        let byte = &mut (*accumulator)[i];
+        *byte = product[i];
+        i = i + 1;
+    }
+}
+
+// Fold the upper 128 coefficients with x^128 = x^7 + x^2 + x + 1.
+// The carry after the first fold has at most seven bits.
+/// Computes the GHASH field product with the available multiplication backend.
+fn accelerated_product(accumulator: &mut [u8; 16], h: &[u8; 16]) {
+    let mut product: [u8; 32] = [0; 32];
+    hardware_product(&*accumulator, &*h, &mut product);
+    let mut carry: u8 = 0;
+    let mut i: u64 = 0;
+    while i < 16 {
+        let high = product[16 + i];
+        let byte = &mut (*accumulator)[i];
+        *byte = product[i] ^ high ^ shift_byte(copy(high), 1) ^ shift_byte(copy(high), 2) ^ shift_byte(copy(high), 7) ^ carry;
+        carry = (high >> 7) ^ (high >> 6) ^ (high >> 1);
+        i = i + 1;
+    }
+    let low = &mut (*accumulator)[0];
+    *low = *low ^ carry ^ shift_byte(copy(carry), 1) ^ shift_byte(copy(carry), 2) ^ shift_byte(copy(carry), 7);
+    let next = &mut (*accumulator)[1];
+    *next = *next ^ (carry >> 7) ^ (carry >> 6) ^ (carry >> 1);
+}
+
+/// Folds one block into the running GHASH accumulator.
+fn ghash_block(accumulator: &mut [u8; 16], h: &[u8; 16], accelerated: bool, block: &[u8; 16]) {
+    let mut i: u64 = 0;
+    while i < 16 {
+        let byte = &mut (*accumulator)[i];
+        *byte = *byte ^ reverse_byte((*block)[i]);
+        i = i + 1;
+    }
+    if accelerated {
+        accelerated_product(&mut *accumulator, &*h);
+    } else {
+        portable_product(&mut *accumulator, &*h);
+    }
+}
+
+/// Folds a byte slice into GHASH, padding a final partial block with zeros.
+fn ghash_slice(accumulator: &mut [u8; 16], h: &[u8; 16], accelerated: bool, data: &[u8]) {
+    let length = data.len() as u64;
+    let mut cursor: u64 = 0;
+    while cursor < length {
+        let mut block: [u8; 16] = [0; 16];
+        let mut i: u64 = 0;
+        while i < 16 && cursor < length {
+            block[i] = data[cursor];
+            i = i + 1;
+            cursor = cursor + 1;
+        }
+        ghash_block(&mut *accumulator, &*h, copy(accelerated), &block);
+    }
+}

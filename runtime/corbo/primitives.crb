@@ -1,0 +1,2925 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Unchecked C ABI field access, atomics, OS mappings and typed callbacks.
+//! All raw addresses must remain live and aligned; callers provide ownership and locking.
+// Machine/ABI primitives; allocation and scheduling policy live in Corbo.
+
+/// Reads payload base address in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_data(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->data;
+}}
+copy(out)
+}
+
+/// Writes payload base address in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_data(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->data=(__typeof__(((Region*)${pointer})->data))${value};
+}}
+}
+
+/// Returns the address of payload base address in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_data(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->data;
+}}
+copy(out)
+}
+
+/// Reads live element count in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_len(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->len;
+}}
+copy(out)
+}
+
+/// Writes live element count in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_len(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->len=(__typeof__(((Region*)${pointer})->len))${value};
+}}
+}
+
+/// Returns the address of live element count in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_len(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->len;
+}}
+copy(out)
+}
+
+/// Reads byte offset within its band in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_offset(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->offset;
+}}
+copy(out)
+}
+
+/// Writes byte offset within its band in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_offset(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->offset=(__typeof__(((Region*)${pointer})->offset))${value};
+}}
+}
+
+/// Returns the address of byte offset within its band in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_offset(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->offset;
+}}
+copy(out)
+}
+
+/// Reads maximum payload byte extent in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_bytes(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->bytes;
+}}
+copy(out)
+}
+
+/// Writes maximum payload byte extent in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_bytes(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->bytes=(__typeof__(((Region*)${pointer})->bytes))${value};
+}}
+}
+
+/// Returns the address of maximum payload byte extent in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_bytes(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->bytes;
+}}
+copy(out)
+}
+
+/// Reads bytes per stored element in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_width(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->width;
+}}
+copy(out)
+}
+
+/// Writes bytes per stored element in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_width(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->width=(__typeof__(((Region*)${pointer})->width))${value};
+}}
+}
+
+/// Returns the address of bytes per stored element in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_width(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->width;
+}}
+copy(out)
+}
+
+/// Reads next active-region link in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->next;
+}}
+copy(out)
+}
+
+/// Writes next active-region link in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_next(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->next=(__typeof__(((Region*)${pointer})->next))${value};
+}}
+}
+
+/// Returns the address of next active-region link in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->next;
+}}
+copy(out)
+}
+
+/// Reads containing band link in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_band(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Region*)${pointer})->band;
+}}
+copy(out)
+}
+
+/// Writes containing band link in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_band(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->band=(__typeof__(((Region*)${pointer})->band))${value};
+}}
+}
+
+/// Returns the address of containing band link in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Region_band(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Region*)${pointer})->band;
+}}
+copy(out)
+}
+
+/// Reads recursive child-region cleanup mode in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Region_owned(pointer:usize)->i32 {let mut out:i32=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Region*)${pointer})->owned;
+}}
+copy(out)
+}
+
+/// Writes recursive child-region cleanup mode in a live Region ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Region_owned(pointer:usize, value:i32) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Region*)${pointer})->owned=(__typeof__(((Region*)${pointer})->owned))${value};
+}}
+}
+
+/// Returns the C ABI size in bytes of Region on this target.
+fn size_Region()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(Region);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of Region on this target.
+fn align_Region()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(Region);
+}}
+copy(out)
+}
+
+/// Reads reserved virtual-memory base in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_base(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionBand*)${pointer})->base;
+}}
+copy(out)
+}
+
+/// Writes reserved virtual-memory base in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_base(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->base=(__typeof__(((RegionBand*)${pointer})->base))${value};
+}}
+}
+
+/// Returns the address of reserved virtual-memory base in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionBand_base(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionBand*)${pointer})->base;
+}}
+copy(out)
+}
+
+/// Reads reserved byte capacity in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_capacity(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionBand*)${pointer})->capacity;
+}}
+copy(out)
+}
+
+/// Writes reserved byte capacity in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_capacity(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->capacity=(__typeof__(((RegionBand*)${pointer})->capacity))${value};
+}}
+}
+
+/// Returns the address of reserved byte capacity in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionBand_capacity(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionBand*)${pointer})->capacity;
+}}
+copy(out)
+}
+
+/// Reads committed byte boundary in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_committed(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionBand*)${pointer})->committed;
+}}
+copy(out)
+}
+
+/// Writes committed byte boundary in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_committed(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->committed=(__typeof__(((RegionBand*)${pointer})->committed))${value};
+}}
+}
+
+/// Returns the address of committed byte boundary in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionBand_committed(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionBand*)${pointer})->committed;
+}}
+copy(out)
+}
+
+/// Reads per-region byte limit in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_limit(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionBand*)${pointer})->limit;
+}}
+copy(out)
+}
+
+/// Writes per-region byte limit in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_limit(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->limit=(__typeof__(((RegionBand*)${pointer})->limit))${value};
+}}
+}
+
+/// Returns the address of per-region byte limit in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionBand_limit(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionBand*)${pointer})->limit;
+}}
+copy(out)
+}
+
+/// Reads ordered active-region list in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_active(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionBand*)${pointer})->active;
+}}
+copy(out)
+}
+
+/// Writes ordered active-region list in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_active(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->active=(__typeof__(((RegionBand*)${pointer})->active))${value};
+}}
+}
+
+/// Returns the address of ordered active-region list in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionBand_active(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionBand*)${pointer})->active;
+}}
+copy(out)
+}
+
+/// Reads parent region-scope link in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_parent(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionBand*)${pointer})->parent;
+}}
+copy(out)
+}
+
+/// Writes parent region-scope link in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_parent(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->parent=(__typeof__(((RegionBand*)${pointer})->parent))${value};
+}}
+}
+
+/// Returns the address of parent region-scope link in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionBand_parent(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionBand*)${pointer})->parent;
+}}
+copy(out)
+}
+
+/// Reads closed-scope flag in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionBand_closed(pointer:usize)->i32 {let mut out:i32=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((RegionBand*)${pointer})->closed;
+}}
+copy(out)
+}
+
+/// Writes closed-scope flag in a live RegionBand ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionBand_closed(pointer:usize, value:i32) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionBand*)${pointer})->closed=(__typeof__(((RegionBand*)${pointer})->closed))${value};
+}}
+}
+
+/// Returns the C ABI size in bytes of RegionBand on this target.
+fn size_RegionBand()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(RegionBand);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of RegionBand on this target.
+fn align_RegionBand()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(RegionBand);
+}}
+copy(out)
+}
+
+/// Reads slot count per arm in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Pools_cap(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Pools*)${pointer})->cap;
+}}
+copy(out)
+}
+
+/// Writes slot count per arm in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Pools_cap(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Pools*)${pointer})->cap=(__typeof__(((Pools*)${pointer})->cap))${value};
+}}
+}
+
+/// Returns the address of slot count per arm in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Pools_cap(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Pools*)${pointer})->cap;
+}}
+copy(out)
+}
+
+/// Reads aligned bytes per slot in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Pools_stride(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Pools*)${pointer})->stride;
+}}
+copy(out)
+}
+
+/// Writes aligned bytes per slot in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Pools_stride(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Pools*)${pointer})->stride=(__typeof__(((Pools*)${pointer})->stride))${value};
+}}
+}
+
+/// Returns the address of aligned bytes per slot in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Pools_stride(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Pools*)${pointer})->stride;
+}}
+copy(out)
+}
+
+/// Reads enum-arm count in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Pools_arms(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Pools*)${pointer})->arms;
+}}
+copy(out)
+}
+
+/// Writes enum-arm count in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Pools_arms(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Pools*)${pointer})->arms=(__typeof__(((Pools*)${pointer})->arms))${value};
+}}
+}
+
+/// Returns the address of enum-arm count in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Pools_arms(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Pools*)${pointer})->arms;
+}}
+copy(out)
+}
+
+/// Reads stable slot-storage base in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Pools_data(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Pools*)${pointer})->data;
+}}
+copy(out)
+}
+
+/// Writes stable slot-storage base in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Pools_data(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Pools*)${pointer})->data=(__typeof__(((Pools*)${pointer})->data))${value};
+}}
+}
+
+/// Returns the address of stable slot-storage base in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Pools_data(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Pools*)${pointer})->data;
+}}
+copy(out)
+}
+
+/// Reads atomic occupancy-byte array in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Pools_used(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Pools*)${pointer})->used;
+}}
+copy(out)
+}
+
+/// Writes atomic occupancy-byte array in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Pools_used(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Pools*)${pointer})->used=(__typeof__(((Pools*)${pointer})->used))${value};
+}}
+}
+
+/// Returns the address of atomic occupancy-byte array in a live Pools ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Pools_used(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Pools*)${pointer})->used;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of Pools on this target.
+fn size_Pools()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(Pools);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of Pools on this target.
+fn align_Pools()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(Pools);
+}}
+copy(out)
+}
+
+/// Reads source pool link, zero after release in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Owned_pool(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Owned*)${pointer})->pool;
+}}
+copy(out)
+}
+
+/// Writes source pool link, zero after release in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Owned_pool(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Owned*)${pointer})->pool=(__typeof__(((Owned*)${pointer})->pool))${value};
+}}
+}
+
+/// Returns the address of source pool link, zero after release in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Owned_pool(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Owned*)${pointer})->pool;
+}}
+copy(out)
+}
+
+/// Reads payload slot address in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Owned_slot(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Owned*)${pointer})->slot;
+}}
+copy(out)
+}
+
+/// Writes payload slot address in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Owned_slot(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Owned*)${pointer})->slot=(__typeof__(((Owned*)${pointer})->slot))${value};
+}}
+}
+
+/// Returns the address of payload slot address in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Owned_slot(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Owned*)${pointer})->slot;
+}}
+copy(out)
+}
+
+/// Reads physical slot index in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Owned_index(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Owned*)${pointer})->index;
+}}
+copy(out)
+}
+
+/// Writes physical slot index in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Owned_index(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Owned*)${pointer})->index=(__typeof__(((Owned*)${pointer})->index))${value};
+}}
+}
+
+/// Returns the address of physical slot index in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Owned_index(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Owned*)${pointer})->index;
+}}
+copy(out)
+}
+
+/// Reads typed payload destructor callback in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Owned_destroy(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Owned*)${pointer})->destroy;
+}}
+copy(out)
+}
+
+/// Writes typed payload destructor callback in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Owned_destroy(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Owned*)${pointer})->destroy=(__typeof__(((Owned*)${pointer})->destroy))${value};
+}}
+}
+
+/// Returns the address of typed payload destructor callback in a live Owned ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Owned_destroy(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Owned*)${pointer})->destroy;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of Owned on this target.
+fn size_Owned()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(Owned);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of Owned on this target.
+fn align_Owned()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(Owned);
+}}
+copy(out)
+}
+
+/// Reads owned child-region link in a live RegionOwner ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionOwner_region(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionOwner*)${pointer})->region;
+}}
+copy(out)
+}
+
+/// Writes owned child-region link in a live RegionOwner ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionOwner_region(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionOwner*)${pointer})->region=(__typeof__(((RegionOwner*)${pointer})->region))${value};
+}}
+}
+
+/// Returns the address of owned child-region link in a live RegionOwner ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionOwner_region(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionOwner*)${pointer})->region;
+}}
+copy(out)
+}
+
+/// Reads address of the child's live-slot flag in a live RegionOwner ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionOwner_slot(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionOwner*)${pointer})->slot;
+}}
+copy(out)
+}
+
+/// Writes address of the child's live-slot flag in a live RegionOwner ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionOwner_slot(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionOwner*)${pointer})->slot=(__typeof__(((RegionOwner*)${pointer})->slot))${value};
+}}
+}
+
+/// Returns the address of address of the child's live-slot flag in a live RegionOwner ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionOwner_slot(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionOwner*)${pointer})->slot;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of RegionOwner on this target.
+fn size_RegionOwner()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(RegionOwner);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of RegionOwner on this target.
+fn align_RegionOwner()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(RegionOwner);
+}}
+copy(out)
+}
+
+/// Returns the address of stable entry-storage region in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionalMap_region(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionalMap*)${pointer})->region;
+}}
+copy(out)
+}
+
+/// Reads value byte width in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionalMap_width(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionalMap*)${pointer})->width;
+}}
+copy(out)
+}
+
+/// Writes value byte width in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionalMap_width(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionalMap*)${pointer})->width=(__typeof__(((RegionalMap*)${pointer})->width))${value};
+}}
+}
+
+/// Returns the address of value byte width in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionalMap_width(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionalMap*)${pointer})->width;
+}}
+copy(out)
+}
+
+/// Reads free-entry offset list head in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionalMap_free_slot(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionalMap*)${pointer})->free_slot;
+}}
+copy(out)
+}
+
+/// Writes free-entry offset list head in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionalMap_free_slot(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionalMap*)${pointer})->free_slot=(__typeof__(((RegionalMap*)${pointer})->free_slot))${value};
+}}
+}
+
+/// Returns the address of free-entry offset list head in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionalMap_free_slot(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionalMap*)${pointer})->free_slot;
+}}
+copy(out)
+}
+
+/// Reads value cleanup callback in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_RegionalMap_dispose(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((RegionalMap*)${pointer})->dispose;
+}}
+copy(out)
+}
+
+/// Writes value cleanup callback in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_RegionalMap_dispose(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((RegionalMap*)${pointer})->dispose=(__typeof__(((RegionalMap*)${pointer})->dispose))${value};
+}}
+}
+
+/// Returns the address of value cleanup callback in a live RegionalMap ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_RegionalMap_dispose(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((RegionalMap*)${pointer})->dispose;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of RegionalMap on this target.
+fn size_RegionalMap()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(RegionalMap);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of RegionalMap on this target.
+fn align_RegionalMap()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(RegionalMap);
+}}
+copy(out)
+}
+
+/// Reads normalized integer key bits in a live MapEntry ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_MapEntry_key(pointer:usize)->u64 {let mut out:u64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((MapEntry*)${pointer})->key;
+}}
+copy(out)
+}
+
+/// Writes normalized integer key bits in a live MapEntry ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_MapEntry_key(pointer:usize, value:u64) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((MapEntry*)${pointer})->key=(__typeof__(((MapEntry*)${pointer})->key))${value};
+}}
+}
+
+/// Reads next bucket-chain or free-list byte offset in a live MapEntry ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_MapEntry_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((MapEntry*)${pointer})->next;
+}}
+copy(out)
+}
+
+/// Writes next bucket-chain or free-list byte offset in a live MapEntry ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_MapEntry_next(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((MapEntry*)${pointer})->next=(__typeof__(((MapEntry*)${pointer})->next))${value};
+}}
+}
+
+/// Returns the address of next bucket-chain or free-list byte offset in a live MapEntry ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_MapEntry_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((MapEntry*)${pointer})->next;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of MapEntry on this target.
+fn size_MapEntry()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(MapEntry);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of MapEntry on this target.
+fn align_MapEntry()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(MapEntry);
+}}
+copy(out)
+}
+
+/// Reads resume-state program counter in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_pc(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->pc;
+}}
+copy(out)
+}
+
+/// Writes resume-state program counter in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_pc(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->pc=(__typeof__(((Task*)${pointer})->pc))${value};
+}}
+}
+
+/// Returns the address of resume-state program counter in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_pc(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->pc;
+}}
+copy(out)
+}
+
+/// Reads typed poll/clear callback in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_poll(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->poll;
+}}
+copy(out)
+}
+
+/// Writes typed poll/clear callback in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_poll(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->poll=(__typeof__(((Task*)${pointer})->poll))${value};
+}}
+}
+
+/// Returns the address of typed poll/clear callback in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_poll(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->poll;
+}}
+copy(out)
+}
+
+/// Reads ready-queue next link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->next;
+}}
+copy(out)
+}
+
+/// Writes ready-queue next link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_next(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->next=(__typeof__(((Task*)${pointer})->next))${value};
+}}
+}
+
+/// Returns the address of ready-queue next link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->next;
+}}
+copy(out)
+}
+
+/// Reads launch-failure flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_failed(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->failed;
+}}
+copy(out)
+}
+
+/// Writes launch-failure flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_failed(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->failed=(__typeof__(((Task*)${pointer})->failed))${value};
+}}
+}
+
+/// Reads completion-publication flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_done(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->done;
+}}
+copy(out)
+}
+
+/// Writes completion-publication flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_done(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->done=(__typeof__(((Task*)${pointer})->done))${value};
+}}
+}
+
+/// Reads worker-owned final-cleanup flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_abandoned(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->abandoned;
+}}
+copy(out)
+}
+
+/// Writes worker-owned final-cleanup flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_abandoned(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->abandoned=(__typeof__(((Task*)${pointer})->abandoned))${value};
+}}
+}
+
+/// Reads typed abandoned-task cleanup callback in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_discard(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->discard;
+}}
+copy(out)
+}
+
+/// Writes typed abandoned-task cleanup callback in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_discard(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->discard=(__typeof__(((Task*)${pointer})->discard))${value};
+}}
+}
+
+/// Returns the address of typed abandoned-task cleanup callback in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_discard(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->discard;
+}}
+copy(out)
+}
+
+/// Reads outer polling-root link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_root(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->root;
+}}
+copy(out)
+}
+
+/// Writes outer polling-root link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_root(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->root=(__typeof__(((Task*)${pointer})->root))${value};
+}}
+}
+
+/// Returns the address of outer polling-root link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_root(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->root;
+}}
+copy(out)
+}
+
+/// Reads dependent polling-root link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_waiter(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->waiter;
+}}
+copy(out)
+}
+
+/// Writes dependent polling-root link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_waiter(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->waiter=(__typeof__(((Task*)${pointer})->waiter))${value};
+}}
+}
+
+/// Returns the address of dependent polling-root link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_waiter(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->waiter;
+}}
+copy(out)
+}
+
+/// Reads readiness-publication flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_ready(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->io_ready;
+}}
+copy(out)
+}
+
+/// Writes readiness-publication flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_ready(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_ready=(__typeof__(((Task*)${pointer})->io_ready))${value};
+}}
+}
+
+/// Reads active-wait registration flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_registered(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->io_registered;
+}}
+copy(out)
+}
+
+/// Writes active-wait registration flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_registered(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_registered=(__typeof__(((Task*)${pointer})->io_registered))${value};
+}}
+}
+
+/// Reads native socket identifier in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_socket(pointer:usize)->u64 {let mut out:u64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->io_socket;
+}}
+copy(out)
+}
+
+/// Writes native socket identifier in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_socket(pointer:usize, value:u64) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_socket=(__typeof__(((Task*)${pointer})->io_socket))${value};
+}}
+}
+
+/// Reads write-interest selector in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_write(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->io_write;
+}}
+copy(out)
+}
+
+/// Writes write-interest selector in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_write(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_write=(__typeof__(((Task*)${pointer})->io_write))${value};
+}}
+}
+
+/// Reads intrusive readiness-waiter link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->io_next;
+}}
+copy(out)
+}
+
+/// Writes intrusive readiness-waiter link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_next(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_next=(__typeof__(((Task*)${pointer})->io_next))${value};
+}}
+}
+
+/// Returns the address of intrusive readiness-waiter link in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_io_next(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->io_next;
+}}
+copy(out)
+}
+
+/// Reads readiness-generation token in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_token(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((Task*)${pointer})->io_token;
+}}
+copy(out)
+}
+
+/// Writes readiness-generation token in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_token(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_token=(__typeof__(((Task*)${pointer})->io_token))${value};
+}}
+}
+
+/// Returns the address of readiness-generation token in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_Task_io_token(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((Task*)${pointer})->io_token;
+}}
+copy(out)
+}
+
+/// Reads recorded platform I/O status in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_io_error(pointer:usize)->i64 {let mut out:i64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->io_error;
+}}
+copy(out)
+}
+
+/// Writes recorded platform I/O status in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_io_error(pointer:usize, value:i64) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->io_error=(__typeof__(((Task*)${pointer})->io_error))${value};
+}}
+}
+
+/// Reads dependency-wait predicate in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_waiting(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->waiting;
+}}
+copy(out)
+}
+
+/// Writes dependency-wait predicate in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_waiting(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->waiting=(__typeof__(((Task*)${pointer})->waiting))${value};
+}}
+}
+
+/// Reads removed-from-ready-queue flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_parked(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->parked;
+}}
+copy(out)
+}
+
+/// Writes removed-from-ready-queue flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_parked(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->parked=(__typeof__(((Task*)${pointer})->parked))${value};
+}}
+}
+
+/// Reads dedicated blocking-worker flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_Task_blocking(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((Task*)${pointer})->blocking;
+}}
+copy(out)
+}
+
+/// Writes dedicated blocking-worker flag in a live Task ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_Task_blocking(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((Task*)${pointer})->blocking=(__typeof__(((Task*)${pointer})->blocking))${value};
+}}
+}
+
+/// Returns the C ABI size in bytes of Task on this target.
+fn size_Task()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(Task);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of Task on this target.
+fn align_Task()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(Task);
+}}
+copy(out)
+}
+
+/// Returns the address of scheduler header at offset zero in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskState_task(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskState*)${pointer})->task;
+}}
+copy(out)
+}
+
+/// Returns the address of inline scalar result storage in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskState_value(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskState*)${pointer})->value;
+}}
+copy(out)
+}
+
+/// Reads aggregate result address in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskState_payload(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((TaskState*)${pointer})->payload;
+}}
+copy(out)
+}
+
+/// Writes aggregate result address in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskState_payload(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskState*)${pointer})->payload=(__typeof__(((TaskState*)${pointer})->payload))${value};
+}}
+}
+
+/// Returns the address of aggregate result address in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskState_payload(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskState*)${pointer})->payload;
+}}
+copy(out)
+}
+
+/// Reads frame-storage region link in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskState_region(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((TaskState*)${pointer})->region;
+}}
+copy(out)
+}
+
+/// Writes frame-storage region link in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskState_region(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskState*)${pointer})->region=(__typeof__(((TaskState*)${pointer})->region))${value};
+}}
+}
+
+/// Returns the address of frame-storage region link in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskState_region(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskState*)${pointer})->region;
+}}
+copy(out)
+}
+
+/// Reads separate region-descriptor ownership flag in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskState_own_region(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((TaskState*)${pointer})->own_region;
+}}
+copy(out)
+}
+
+/// Writes separate region-descriptor ownership flag in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskState_own_region(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskState*)${pointer})->own_region=(__typeof__(((TaskState*)${pointer})->own_region))${value};
+}}
+}
+
+/// Reads typed capture/result cleanup callback in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskState_dispose(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((TaskState*)${pointer})->dispose;
+}}
+copy(out)
+}
+
+/// Writes typed capture/result cleanup callback in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskState_dispose(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskState*)${pointer})->dispose=(__typeof__(((TaskState*)${pointer})->dispose))${value};
+}}
+}
+
+/// Returns the address of typed capture/result cleanup callback in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskState_dispose(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskState*)${pointer})->dispose;
+}}
+copy(out)
+}
+
+/// Returns the address of suspended thread-local datastack context in a live TaskState ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskState_classic(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskState*)${pointer})->classic;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of TaskState on this target.
+fn size_TaskState()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(TaskState);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of TaskState on this target.
+fn align_TaskState()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(TaskState);
+}}
+copy(out)
+}
+
+/// Reads execution frame address in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskValue_state(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((TaskValue*)${pointer})->state;
+}}
+copy(out)
+}
+
+/// Writes execution frame address in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskValue_state(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskValue*)${pointer})->state=(__typeof__(((TaskValue*)${pointer})->state))${value};
+}}
+}
+
+/// Returns the address of execution frame address in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskValue_state(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskValue*)${pointer})->state;
+}}
+copy(out)
+}
+
+/// Reads owned backing-region link in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskValue_storage(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((TaskValue*)${pointer})->storage;
+}}
+copy(out)
+}
+
+/// Writes owned backing-region link in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskValue_storage(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskValue*)${pointer})->storage=(__typeof__(((TaskValue*)${pointer})->storage))${value};
+}}
+}
+
+/// Returns the address of owned backing-region link in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskValue_storage(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskValue*)${pointer})->storage;
+}}
+copy(out)
+}
+
+/// Reads frame-specific poll callback in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskValue_poll(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((TaskValue*)${pointer})->poll;
+}}
+copy(out)
+}
+
+/// Writes frame-specific poll callback in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskValue_poll(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskValue*)${pointer})->poll=(__typeof__(((TaskValue*)${pointer})->poll))${value};
+}}
+}
+
+/// Returns the address of frame-specific poll callback in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskValue_poll(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskValue*)${pointer})->poll;
+}}
+copy(out)
+}
+
+/// Reads native-worker ownership selector in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskValue_native(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((TaskValue*)${pointer})->native;
+}}
+copy(out)
+}
+
+/// Writes native-worker ownership selector in a live TaskValue ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskValue_native(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskValue*)${pointer})->native=(__typeof__(((TaskValue*)${pointer})->native))${value};
+}}
+}
+
+/// Returns the C ABI size in bytes of TaskValue on this target.
+fn size_TaskValue()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(TaskValue);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of TaskValue on this target.
+fn align_TaskValue()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(TaskValue);
+}}
+copy(out)
+}
+
+/// Reads successful-launch/completion flag in a live TaskCompletion ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_TaskCompletion_ok(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((TaskCompletion*)${pointer})->ok;
+}}
+copy(out)
+}
+
+/// Writes successful-launch/completion flag in a live TaskCompletion ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_TaskCompletion_ok(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((TaskCompletion*)${pointer})->ok=(__typeof__(((TaskCompletion*)${pointer})->ok))${value};
+}}
+}
+
+/// Returns the address of moved scalar result bits in a live TaskCompletion ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_TaskCompletion_value(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((TaskCompletion*)${pointer})->value;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of TaskCompletion on this target.
+fn size_TaskCompletion()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(TaskCompletion);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of TaskCompletion on this target.
+fn align_TaskCompletion()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(TaskCompletion);
+}}
+copy(out)
+}
+
+/// Reads saved fixed-stack base in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_base(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->base;
+}}
+copy(out)
+}
+
+/// Writes saved fixed-stack base in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_base(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->base=(__typeof__(((ClassicStack*)${pointer})->base))${value};
+}}
+}
+
+/// Returns the address of saved fixed-stack base in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_base(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->base;
+}}
+copy(out)
+}
+
+/// Reads saved next free byte offset in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_cursor(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->cursor;
+}}
+copy(out)
+}
+
+/// Writes saved next free byte offset in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_cursor(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->cursor=(__typeof__(((ClassicStack*)${pointer})->cursor))${value};
+}}
+}
+
+/// Returns the address of saved next free byte offset in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_cursor(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->cursor;
+}}
+copy(out)
+}
+
+/// Reads saved fixed-stack capacity in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_limit(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->limit;
+}}
+copy(out)
+}
+
+/// Writes saved fixed-stack capacity in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_limit(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->limit=(__typeof__(((ClassicStack*)${pointer})->limit))${value};
+}}
+}
+
+/// Returns the address of saved fixed-stack capacity in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_limit(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->limit;
+}}
+copy(out)
+}
+
+/// Reads saved committed-byte boundary in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_committed(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->committed;
+}}
+copy(out)
+}
+
+/// Writes saved committed-byte boundary in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_committed(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->committed=(__typeof__(((ClassicStack*)${pointer})->committed))${value};
+}}
+}
+
+/// Returns the address of saved committed-byte boundary in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_committed(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->committed;
+}}
+copy(out)
+}
+
+/// Reads saved OS page size in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_page_size(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->page_size;
+}}
+copy(out)
+}
+
+/// Writes saved OS page size in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_page_size(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->page_size=(__typeof__(((ClassicStack*)${pointer})->page_size))${value};
+}}
+}
+
+/// Returns the address of saved OS page size in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_page_size(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->page_size;
+}}
+copy(out)
+}
+
+/// Reads saved mapping extent in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_mapped_size(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->mapped_size;
+}}
+copy(out)
+}
+
+/// Writes saved mapping extent in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_mapped_size(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->mapped_size=(__typeof__(((ClassicStack*)${pointer})->mapped_size))${value};
+}}
+}
+
+/// Returns the address of saved mapping extent in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_mapped_size(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->mapped_size;
+}}
+copy(out)
+}
+
+/// Reads saved region-scope link in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_ClassicStack_band(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((ClassicStack*)${pointer})->band;
+}}
+copy(out)
+}
+
+/// Writes saved region-scope link in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_ClassicStack_band(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((ClassicStack*)${pointer})->band=(__typeof__(((ClassicStack*)${pointer})->band))${value};
+}}
+}
+
+/// Returns the address of saved region-scope link in a live ClassicStack ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_ClassicStack_band(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((ClassicStack*)${pointer})->band;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of ClassicStack on this target.
+fn size_ClassicStack()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(ClassicStack);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of ClassicStack on this target.
+fn align_ClassicStack()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(ClassicStack);
+}}
+copy(out)
+}
+
+/// Returns the address of embedded frame region at offset zero in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_NativeBox_region(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((NativeBox*)${pointer})->region;
+}}
+copy(out)
+}
+
+/// Reads native frame address in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_NativeBox_state(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((NativeBox*)${pointer})->state;
+}}
+copy(out)
+}
+
+/// Writes native frame address in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_NativeBox_state(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((NativeBox*)${pointer})->state=(__typeof__(((NativeBox*)${pointer})->state))${value};
+}}
+}
+
+/// Returns the address of native frame address in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_NativeBox_state(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((NativeBox*)${pointer})->state;
+}}
+copy(out)
+}
+
+/// Reads native frame run callback in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_NativeBox_run(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((NativeBox*)${pointer})->run;
+}}
+copy(out)
+}
+
+/// Writes native frame run callback in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_NativeBox_run(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((NativeBox*)${pointer})->run=(__typeof__(((NativeBox*)${pointer})->run))${value};
+}}
+}
+
+/// Returns the address of native frame run callback in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_NativeBox_run(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((NativeBox*)${pointer})->run;
+}}
+copy(out)
+}
+
+/// Reads worker-owned cleanup flag in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_NativeBox_abandoned(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((NativeBox*)${pointer})->abandoned;
+}}
+copy(out)
+}
+
+/// Writes worker-owned cleanup flag in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_NativeBox_abandoned(pointer:usize, value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((NativeBox*)${pointer})->abandoned=(__typeof__(((NativeBox*)${pointer})->abandoned))${value};
+}}
+}
+
+/// Reads capture/result cleanup callback in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_NativeBox_dispose(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((NativeBox*)${pointer})->dispose;
+}}
+copy(out)
+}
+
+/// Writes capture/result cleanup callback in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_NativeBox_dispose(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((NativeBox*)${pointer})->dispose=(__typeof__(((NativeBox*)${pointer})->dispose))${value};
+}}
+}
+
+/// Returns the address of capture/result cleanup callback in a live NativeBox ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_NativeBox_dispose(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((NativeBox*)${pointer})->dispose;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of NativeBox on this target.
+fn size_NativeBox()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(NativeBox);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of NativeBox on this target.
+fn align_NativeBox()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(NativeBox);
+}}
+copy(out)
+}
+
+/// Reads saved fixed-stack byte cursor in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_CorboStackMark_position(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((CorboStackMark*)${pointer})->position;
+}}
+copy(out)
+}
+
+/// Writes saved fixed-stack byte cursor in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_CorboStackMark_position(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((CorboStackMark*)${pointer})->position=(__typeof__(((CorboStackMark*)${pointer})->position))${value};
+}}
+}
+
+/// Returns the address of saved fixed-stack byte cursor in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_CorboStackMark_position(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((CorboStackMark*)${pointer})->position;
+}}
+copy(out)
+}
+
+/// Reads originating stack identity in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_CorboStackMark_stack(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((CorboStackMark*)${pointer})->stack;
+}}
+copy(out)
+}
+
+/// Writes originating stack identity in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_CorboStackMark_stack(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((CorboStackMark*)${pointer})->stack=(__typeof__(((CorboStackMark*)${pointer})->stack))${value};
+}}
+}
+
+/// Returns the address of originating stack identity in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_CorboStackMark_stack(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((CorboStackMark*)${pointer})->stack;
+}}
+copy(out)
+}
+
+/// Reads saved region-scope marker in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_CorboStackMark_region_scope(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((CorboStackMark*)${pointer})->region_scope;
+}}
+copy(out)
+}
+
+/// Writes saved region-scope marker in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_CorboStackMark_region_scope(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((CorboStackMark*)${pointer})->region_scope=(__typeof__(((CorboStackMark*)${pointer})->region_scope))${value};
+}}
+}
+
+/// Returns the address of saved region-scope marker in a live CorboStackMark ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_CorboStackMark_region_scope(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((CorboStackMark*)${pointer})->region_scope;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of CorboStackMark on this target.
+fn size_CorboStackMark()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(CorboStackMark);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of CorboStackMark on this target.
+fn align_CorboStackMark()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(CorboStackMark);
+}}
+copy(out)
+}
+
+/// Reads next free fixed-stack byte offset in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_CorboStackInfo_position(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((CorboStackInfo*)${pointer})->position;
+}}
+copy(out)
+}
+
+/// Writes next free fixed-stack byte offset in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_CorboStackInfo_position(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((CorboStackInfo*)${pointer})->position=(__typeof__(((CorboStackInfo*)${pointer})->position))${value};
+}}
+}
+
+/// Returns the address of next free fixed-stack byte offset in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_CorboStackInfo_position(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((CorboStackInfo*)${pointer})->position;
+}}
+copy(out)
+}
+
+/// Reads committed fixed-stack bytes in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_CorboStackInfo_committed(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((CorboStackInfo*)${pointer})->committed;
+}}
+copy(out)
+}
+
+/// Writes committed fixed-stack bytes in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_CorboStackInfo_committed(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((CorboStackInfo*)${pointer})->committed=(__typeof__(((CorboStackInfo*)${pointer})->committed))${value};
+}}
+}
+
+/// Returns the address of committed fixed-stack bytes in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_CorboStackInfo_committed(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((CorboStackInfo*)${pointer})->committed;
+}}
+copy(out)
+}
+
+/// Reads reserved fixed-stack byte capacity in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn g_CorboStackInfo_capacity(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)((CorboStackInfo*)${pointer})->capacity;
+}}
+copy(out)
+}
+
+/// Writes reserved fixed-stack byte capacity in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn s_CorboStackInfo_capacity(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((CorboStackInfo*)${pointer})->capacity=(__typeof__(((CorboStackInfo*)${pointer})->capacity))${value};
+}}
+}
+
+/// Returns the address of reserved fixed-stack byte capacity in a live CorboStackInfo ABI object.
+/// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
+fn a_CorboStackInfo_capacity(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&((CorboStackInfo*)${pointer})->capacity;
+}}
+copy(out)
+}
+
+/// Returns the C ABI size in bytes of CorboStackInfo on this target.
+fn size_CorboStackInfo()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=sizeof(CorboStackInfo);
+}}
+copy(out)
+}
+
+/// Returns the required C ABI alignment of CorboStackInfo on this target.
+fn align_CorboStackInfo()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(CorboStackInfo);
+}}
+copy(out)
+}
+
+/// Reads the current thread's fixed-stack base address.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_base()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)base;
+}}
+copy(out)
+}
+
+/// Updates the current thread's fixed-stack base address.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_base(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+base=(__typeof__(base))${value};
+}}
+}
+
+/// Reads the current thread's next free fixed-stack byte offset.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_cursor()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)cursor;
+}}
+copy(out)
+}
+
+/// Updates the current thread's next free fixed-stack byte offset.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_cursor(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+cursor=(__typeof__(cursor))${value};
+}}
+}
+
+/// Reads the current thread's fixed-stack byte capacity.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_limit()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)limit;
+}}
+copy(out)
+}
+
+/// Updates the current thread's fixed-stack byte capacity.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_limit(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+limit=(__typeof__(limit))${value};
+}}
+}
+
+/// Reads the current thread's committed fixed-stack byte boundary.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_committed()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)committed;
+}}
+copy(out)
+}
+
+/// Updates the current thread's committed fixed-stack byte boundary.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_committed(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+committed=(__typeof__(committed))${value};
+}}
+}
+
+/// Reads the current thread's OS page size.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_page_size()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)page_size;
+}}
+copy(out)
+}
+
+/// Updates the current thread's OS page size.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_page_size(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+page_size=(__typeof__(page_size))${value};
+}}
+}
+
+/// Reads the current thread's reserved mapping extent.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_mapped_size()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)mapped_size;
+}}
+copy(out)
+}
+
+/// Updates the current thread's reserved mapping extent.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_mapped_size(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+mapped_size=(__typeof__(mapped_size))${value};
+}}
+}
+
+/// Reads the configured per-thread fixed-stack byte budget.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_global_fixed_budget()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)global_fixed_budget;
+}}
+copy(out)
+}
+
+/// Updates the configured per-thread fixed-stack byte budget.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_global_fixed_budget(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+global_fixed_budget=(__typeof__(global_fixed_budget))${value};
+}}
+}
+
+/// Reads the configured region-stack byte budget.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_global_budget()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)global_budget;
+}}
+copy(out)
+}
+
+/// Updates the configured region-stack byte budget.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_global_budget(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+global_budget=(__typeof__(global_budget))${value};
+}}
+}
+
+/// Reads the configured default region byte limit.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_global_limit()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)global_limit;
+}}
+copy(out)
+}
+
+/// Updates the configured default region byte limit.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_global_limit(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+global_limit=(__typeof__(global_limit))${value};
+}}
+}
+
+/// Reads the current thread's region-scope band link.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_current_band()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)current_band;
+}}
+copy(out)
+}
+
+/// Updates the current thread's region-scope band link.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_current_band(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+current_band=(__typeof__(current_band))${value};
+}}
+}
+
+/// Reads the fixed-stack page-reclamation byte threshold.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_fixed_reclaim_threshold()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)fixed_reclaim_threshold;
+}}
+copy(out)
+}
+
+/// Updates the fixed-stack page-reclamation byte threshold.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_fixed_reclaim_threshold(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+fixed_reclaim_threshold=(__typeof__(fixed_reclaim_threshold))${value};
+}}
+}
+
+/// Reads the region page-reclamation byte threshold.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_region_reclaim_threshold()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)region_reclaim_threshold;
+}}
+copy(out)
+}
+
+/// Updates the region page-reclamation byte threshold.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_region_reclaim_threshold(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+region_reclaim_threshold=(__typeof__(region_reclaim_threshold))${value};
+}}
+}
+
+/// Reads the number of started poll workers.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_task_worker_count()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)task_worker_count;
+}}
+copy(out)
+}
+
+/// Updates the number of started poll workers.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_task_worker_count(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+task_worker_count=(__typeof__(task_worker_count))${value};
+}}
+}
+
+/// Reads the ready-queue head task.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_task_head()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)task_head;
+}}
+copy(out)
+}
+
+/// Updates the ready-queue head task.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_task_head(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+task_head=(__typeof__(task_head))${value};
+}}
+}
+
+/// Reads the ready-queue tail link address.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_task_tail()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)task_tail;
+}}
+copy(out)
+}
+
+/// Updates the ready-queue tail link address.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_task_tail(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+task_tail=(__typeof__(task_tail))${value};
+}}
+}
+
+/// Reads the number of unfinished scheduled tasks.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_task_active()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)task_active;
+}}
+copy(out)
+}
+
+/// Updates the number of unfinished scheduled tasks.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_task_active(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+task_active=(__typeof__(task_active))${value};
+}}
+}
+
+/// Reads the number of unfinished native/blocking workers.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_native_count()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)native_count;
+}}
+copy(out)
+}
+
+/// Updates the number of unfinished native/blocking workers.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_native_count(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+native_count=(__typeof__(native_count))${value};
+}}
+}
+
+/// Reads the intrusive socket-waiter head.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_socket_waiters()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)socket_waiters;
+}}
+copy(out)
+}
+
+/// Updates the intrusive socket-waiter head.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_socket_waiters(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+socket_waiters=(__typeof__(socket_waiters))${value};
+}}
+}
+
+/// Reads the current readiness-generation counter.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_socket_serial()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)socket_serial;
+}}
+copy(out)
+}
+
+/// Updates the current readiness-generation counter.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_socket_serial(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+socket_serial=(__typeof__(socket_serial))${value};
+}}
+}
+
+/// Reads the native completion-port handle.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_completion_port()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)completion_port;
+}}
+copy(out)
+}
+
+/// Updates the native completion-port handle.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_completion_port(value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+completion_port=(__typeof__(completion_port))${value};
+}}
+}
+
+/// Reads whether poll-worker initialization was attempted.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_task_attempted()->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=task_attempted;
+}}
+copy(out)
+}
+
+/// Updates whether poll-worker initialization was attempted.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_task_attempted(value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+task_attempted=(__typeof__(task_attempted))${value};
+}}
+}
+
+/// Reads whether poll workers must stop after draining.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_task_stopping()->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=task_stopping;
+}}
+copy(out)
+}
+
+/// Updates whether poll workers must stop after draining.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_task_stopping(value:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+task_stopping=(__typeof__(task_stopping))${value};
+}}
+}
+
+/// Reads the native readiness-queue descriptor.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_socket_queue()->i64 {let mut out:i64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=socket_queue;
+}}
+copy(out)
+}
+
+/// Updates the native readiness-queue descriptor.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_socket_queue(value:i64) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+socket_queue=(__typeof__(socket_queue))${value};
+}}
+}
+
+/// Reads the recorded readiness initialization status.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_socket_init_error()->i64 {let mut out:i64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=socket_init_error;
+}}
+copy(out)
+}
+
+/// Updates the recorded readiness initialization status.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_socket_init_error(value:i64) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+socket_init_error=(__typeof__(socket_init_error))${value};
+}}
+}
+
+/// Reads the recorded completion-port initialization status.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn get_completion_init_error()->i64 {let mut out:i64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=completion_init_error;
+}}
+copy(out)
+}
+
+/// Updates the recorded completion-port initialization status.
+/// Synchronize shared access; thread-local state belongs to the current execution context.
+fn set_completion_init_error(value:i64) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+completion_init_error=(__typeof__(completion_init_error))${value};
+}}
+}
+
+/// Returns the stable address of the shared fallback region band, without creating a loan or extending a lifetime.
+fn global_band_address()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&global_band;
+}}
+copy(out)
+}
+
+/// Returns the scheduler queue-head link address for locked tail-link maintenance.
+fn head_address()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&task_head;
+}}
+copy(out)
+}
+
+/// Returns the address of a poll-worker pthread_t slot; index must be inside the fixed worker array.
+fn worker_address(index:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=(uintptr_t)&task_workers[${index}];
+}}
+copy(out)
+}
+
+/// Loads one uintptr_t from a live, suitably aligned address; the caller must provide valid storage.
+fn read_word(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=*(uintptr_t*)${pointer};
+}}
+copy(out)
+}
+
+/// Stores one uintptr_t into live, aligned, writable storage; performs no ownership or synchronization checks.
+fn write_word(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+*(uintptr_t*)${pointer}=(uintptr_t)${value};
+}}
+}
+
+/// Loads one byte from a live readable address without a Corbo bounds check.
+fn read_byte(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=*(unsigned char*)${pointer};
+}}
+copy(out)
+}
+
+/// Stores the low byte of value into a live writable address.
+fn write_byte(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+*(unsigned char*)${pointer}=(unsigned char)${value};
+}}
+}
+
+/// Loads one C int from live, aligned storage used by region-owner flags.
+fn read_integer(pointer:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=*(int*)${pointer};
+}}
+copy(out)
+}
+
+/// Stores one C int into live, aligned, writable flag storage.
+fn write_integer(pointer:usize, value:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+*(int*)${pointer}=(int)${value};
+}}
+}
+
+/// Zeroes bytes of valid writable storage; the range must not contain resources needing destruction.
+fn memory_zero(pointer:usize, bytes:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+memset((void*)${pointer},0,${bytes});
+}}
+}
+
+/// Copies bytes between valid nonoverlapping ranges; ownership effects are managed by the calling algorithm.
+fn memory_copy(destination:usize, source:usize, bytes:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+memcpy((void*)${destination},(void*)${source},${bytes});
+}}
+}
+
+/// Moves bytes between valid ranges, allowing overlap; the caller updates element ownership and length.
+fn memory_move(destination:usize, source:usize, bytes:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+memmove((void*)${destination},(void*)${source},${bytes});
+}}
+}
+
+/// Returns the largest target uintptr_t value used for checked size arithmetic.
+fn max_size()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=SIZE_MAX;
+}}
+copy(out)
+}
+
+/// Returns PTRDIFF_MAX, the largest supported positive object-address difference.
+fn max_difference()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=PTRDIFF_MAX;
+}}
+copy(out)
+}
+
+/// Returns alignof(max_align_t) for fixed slots and map entry layout.
+fn max_alignment()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=_Alignof(max_align_t);
+}}
+copy(out)
+}
+
+/// Multiplies machine words with unsigned wrapping for the map hash mixer.
+fn wrapping_multiply(left:u64, right:u64)->u64 {let mut out:u64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=${left}*${right};
+}}
+copy(out)
+}
+
+/// Queries the target OS virtual-memory page size.
+fn os_page_size()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+SYSTEM_INFO info;GetSystemInfo(&info);${out}=info.dwPageSize;
+#else
+long value=sysconf(_SC_PAGESIZE);${out}=value>0?(uintptr_t)value:0;
+#endif
+}}
+copy(out)
+}
+
+/// Queries available physical-memory pages on Unix; nonpositive results require the documented fallback.
+fn os_available_pages()->i64 {let mut out:i64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+MEMORYSTATUSEX info={0};info.dwLength=sizeof info;${out}=GlobalMemoryStatusEx(&info)?(int64_t)(info.ullAvailPhys/page_size):-1;
+#elif defined(_SC_AVPHYS_PAGES)
+${out}=sysconf(_SC_AVPHYS_PAGES);
+#else
+${out}=-1;
+#endif
+}}
+copy(out)
+}
+
+/// Queries total physical-memory pages as a Unix sizing fallback.
+fn os_physical_pages()->i64 {let mut out:i64=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+MEMORYSTATUSEX info={0};info.dwLength=sizeof info;${out}=GlobalMemoryStatusEx(&info)?(int64_t)(info.ullTotalPhys/page_size):-1;
+#else
+${out}=sysconf(_SC_PHYS_PAGES);
+#endif
+}}
+copy(out)
+}
+
+/// Queries the OS processor count used to divide default memory budgets.
+fn os_cpus()->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+SYSTEM_INFO info;GetSystemInfo(&info);${out}=info.dwNumberOfProcessors;
+#else
+long n=sysconf(_SC_NPROCESSORS_ONLN);${out}=n>0?(uintptr_t)n:0;
+#endif
+}}
+copy(out)
+}
+
+/// Reserves a virtual address range without committing its full payload; returns zero on platform failure.
+fn os_reserve(bytes:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+${out}=(uintptr_t)VirtualAlloc(NULL,${bytes},MEM_RESERVE,PAGE_NOACCESS);
+#else
+void *p=mmap(NULL,${bytes},PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);${out}=p==MAP_FAILED?0:(uintptr_t)p;
+#endif
+}}
+copy(out)
+}
+
+/// Maps writable zero-initialized metadata pages and returns zero on failure.
+fn os_metadata(bytes:usize)->usize {let mut out:usize=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+${out}=(uintptr_t)VirtualAlloc(NULL,${bytes},MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+#else
+void *p=mmap(NULL,${bytes},PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);${out}=p==MAP_FAILED?0:(uintptr_t)p;
+#endif
+}}
+copy(out)
+}
+
+/// Makes the supplied page range readable/writable through the target OS; reports success.
+fn os_commit(pointer:usize, bytes:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+${out}=VirtualAlloc((void*)${pointer},${bytes},MEM_COMMIT,PAGE_READWRITE)!=NULL;
+#else
+${out}=mprotect((void*)${pointer},${bytes},PROT_READ|PROT_WRITE)==0;
+#endif
+}}
+copy(out)
+}
+
+/// Releases an OS mapping using its original address and byte extent.
+fn os_unmap(pointer:usize, bytes:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+(void)${bytes};VirtualFree((void*)${pointer},0,MEM_RELEASE);
+#else
+munmap((void*)${pointer},${bytes});
+#endif
+}}
+}
+
+/// Returns physical backing for complete unused pages while preserving the reserved address range; reports success.
+fn os_decommit(pointer:usize, bytes:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef _WIN32
+${out}=VirtualFree((void*)${pointer},${bytes},MEM_DECOMMIT)!=0;
+#else
+${out}=madvise((void*)${pointer},${bytes},MADV_DONTNEED)==0 && mprotect((void*)${pointer},${bytes},PROT_NONE)==0;
+#endif
+}}
+copy(out)
+}
+
+/// Terminates with the selected reference-runtime diagnostic for invalid storage, slots or bounds.
+fn fault(code:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+static const char *const messages[]={"","corbo: limite de la datastack fixe\n","corbo: limite de la datastack à régions\n","corbo: pool épuisé\n","corbo: indice hors du vecteur\n","corbo: reactor token budget exhausted\n"};fputs(messages[${code}],stderr);exit(EXIT_FAILURE);
+}}
+}
+
+/// Terminates immediately for an impossible worker/pthread contract violation.
+fn os_abort() {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+abort();
+}}
+}
+
+/// Atomically changes an unoccupied pool-slot byte to occupied and reports whether this caller claimed it.
+fn atomic_claim(pointer:usize)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+unsigned char expected=0;${out}=atomic_compare_exchange_strong((_Atomic unsigned char*)${pointer},&expected,1);
+}}
+copy(out)
+}
+
+/// Publishes a pool slot as free after its destructor has completed.
+fn atomic_clear(pointer:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+atomic_store((_Atomic unsigned char*)${pointer},0);
+}}
+}
+
+/// Initializes an occupancy byte before any thread may access the pool.
+fn atomic_init_slot(pointer:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+atomic_init((_Atomic unsigned char*)${pointer},0);
+}}
+}
+
+/// Calls a void(void*) payload destructor; function and payload addresses must satisfy that exact ABI.
+fn call_drop(callback:usize, pointer:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((void(*)(void*))${callback})((void*)${pointer});
+}}
+}
+
+/// Calls a task-state cleanup callback with the completion flag controlling capture/result cleanup.
+fn call_dispose(callback:usize, pointer:usize, completed:bool) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+((void(*)(TaskState*,bool))${callback})((TaskState*)${pointer},${completed});
+}}
+}
+
+/// Calls a bool(Task*,bool) poll/clear callback and returns its completion result.
+fn call_poll(callback:usize, pointer:usize, failed:bool)->bool {let mut out:bool=false;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=((bool(*)(Task*,bool))${callback})((Task*)${pointer},${failed});
+}}
+copy(out)
+}
+
+/// Acquires the shared runtime/scheduler mutex; callers must not already hold this nonrecursive lock.
+fn lock() {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef CORBO_RT_THREADED
+pthread_mutex_lock(&task_lock);
+#endif
+}}
+}
+
+/// Releases the shared mutex held by this thread.
+fn unlock() {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef CORBO_RT_THREADED
+pthread_mutex_unlock(&task_lock);
+#endif
+}}
+}
+
+/// Atomically releases the held runtime mutex while waiting, then reacquires it; callers recheck their predicate.
+fn condition_wait() {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef CORBO_RT_THREADED
+pthread_cond_wait(&task_ready,&task_lock);
+#endif
+}}
+}
+
+/// Wakes condition waiters so they can recheck state protected by the runtime mutex.
+fn broadcast() {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+#ifdef CORBO_RT_THREADED
+pthread_cond_broadcast(&task_ready);
+#endif
+}}
+}
+
+/// Starts a joinable platform thread using a correctly typed entry callback and caller-provided identifier storage.
+fn thread_create(slot:usize, entry:usize, argument:usize)->i32 {let mut out:i32=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=pthread_create((pthread_t*)${slot},NULL,(void*(*)(void*))${entry},(void*)${argument});
+}}
+copy(out)
+}
+
+/// Starts a detached platform worker with native thread attributes and returns the pthread status.
+fn thread_detached(entry:usize, argument:usize)->i32 {let mut out:i32=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+pthread_t thread;pthread_attr_t attr;int status=pthread_attr_init(&attr);if(!status){status=pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);if(!status)status=pthread_create(&thread,&attr,(void*(*)(void*))${entry},(void*)${argument});pthread_attr_destroy(&attr);}${out}=status;
+}}
+copy(out)
+}
+
+/// Joins a platform worker by identifier; failure violates the runtime shutdown contract.
+fn thread_join(slot:usize)->i32 {let mut out:i32=0;
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+${out}=pthread_join(*(pthread_t*)${slot},NULL);
+}}
+copy(out)
+}
+
+/// Detaches a platform thread identifier when its lifetime is managed independently.
+fn thread_detach(slot:usize) {
+@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+pthread_detach(*(pthread_t*)${slot});
+}}
+}
+
+
+
+
+
+
+
+
+/// Reinterprets a signed integer as unsigned bits, including negative values.
+fn unsigned_bits(value:i64)->usize{let mut out:usize=0;@unchecked{@c{${out}=(uintptr_t)${value};}}copy(out)}
+/// Reinterprets an unsigned word as signed bits without an exact-conversion requirement.
+fn signed_bits(value:usize)->i64{let mut out:i64=0;@unchecked{@c{${out}=(int64_t)${value};}}copy(out)}
+/// Returns the C ABI size in bytes of TaskResult on this target.
+fn size_TaskResult()->usize{let mut out:usize=0;@unchecked{@c{${out}=sizeof(TaskResult);}}copy(out)}
+/// Returns the stable address of the waiter-list head for locked intrusive-list updates.
+fn socket_waiters_address()->usize{let mut out:usize=0;@unchecked{@c{${out}=(uintptr_t)&socket_waiters;}}copy(out)}
+/// Returns thread-local scratch storage for a detached thread identifier.
+fn temporary_thread_slot()->usize{let mut out:usize=0;@unchecked{@c{static _Thread_local pthread_t slot;${out}=(uintptr_t)&slot;}}copy(out)}
+/// Calls a void(Task*) task destructor through its exact function-pointer type.
+fn call_task_drop(callback:usize,pointer:usize){@unchecked{@c{((void(*)(Task*))${callback})((Task*)${pointer});}}}
+/// Reports whether the selected C target is Windows for platform-specific capacity policy.
+fn os_windows()->bool{let mut out:bool=false;@unchecked{@c{
+#ifdef _WIN32
+${out}=true;
+#endif
+}}copy(out)}
+/// Queries available Windows physical bytes; returns UINTPTR_MAX if the OS query fails.
+fn os_available_bytes()->usize{let mut out:usize=0;@unchecked{@c{
+#ifdef _WIN32
+MEMORYSTATUSEX info={0};info.dwLength=sizeof info;${out}=GlobalMemoryStatusEx(&info)?(uintptr_t)info.ullAvailPhys:UINTPTR_MAX;
+#endif
+}}copy(out)}

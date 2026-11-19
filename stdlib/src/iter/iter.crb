@@ -1,0 +1,159 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Statically constrained iteration over an explicitly borrowed source.
+
+#(type: V)
+#(type: T<V> with {
+    fn next(&mut self) -> Option<V>;
+})
+/// Borrows a source exclusively. The source must outlive the iterator.
+pub struct Iter<T, V> {
+    /// Exclusively borrowed source; it must remain valid for the complete iterator lifetime.
+    source: &mut T,
+}
+
+impl Iter<T, V> {
+    /// Captures the source reference when the iterator is constructed.
+    fn new(source: &mut T) -> Iter<T, V> {
+        Iter { source: source }
+    }
+
+    /// Requests one item through the source's statically resolved method.
+    fn next(&mut self) -> Option<V> {
+        let source = &mut *(*self).source;
+        source.next()
+    }
+
+    /// Consumes this chain and appends its remaining items to the destination.
+    #(type: D<V> with { fn push(&mut self, item: V); })
+    fn collect(mut self: Iter<T, V>, destination: &mut D) {
+        loop {
+            match self.next() {
+                Some(item) => { destination.push(item); },
+                None => { break; },
+            }
+        }
+    }
+}
+
+#(type: V)
+#(type: X)
+#(type: T<V> with { fn next(&mut self) -> Option<V>; })
+/// Owns its predecessor and mapper. Items retain their ordinary dependencies.
+pub struct Map<T, V, X> {
+    /// Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+    previous: T,
+    /// Stored transformation/predicate/reduction function and its captured state.
+    mapper: fn(V) -> X,
+}
+
+impl Map<T, V, X> {
+    /// Advances the predecessor once and transforms the yielded item.
+    fn next(&mut self) -> Option<X> {
+        match (*self).previous.next() {
+            Some(item) => { Some(((*self).mapper)(item)) },
+            None => { None },
+        }
+    }
+
+    /// Consumes this chain and appends its remaining items to the destination.
+    #(type: D<X> with { fn push(&mut self, item: X); })
+    fn collect(mut self: Map<T, V, X>, destination: &mut D) {
+        loop {
+            match self.next() {
+                Some(item) => { destination.push(item); },
+                None => { break; },
+            }
+        }
+    }
+}
+
+#(type: V)
+#(type: T<V> with { fn next(&mut self) -> Option<V>; })
+/// Owns its predecessor and predicate; rejected items are destroyed normally.
+pub struct Filter<T, V> {
+    /// Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+    previous: T,
+    /// Stored transformation/predicate/reduction function and its captured state.
+    mapper: fn(&V) -> bool,
+}
+
+impl Filter<T, V> {
+    /// Returns the next accepted item. The predicate borrows it for this call.
+    fn next(&mut self) -> Option<V> {
+        while true {
+            match (*self).previous.next() {
+                Some(item) => {
+                    let accepted = ((*self).mapper)(&item);
+                    if accepted { return Some(item); }
+                },
+                None => { return None; },
+            }
+        }
+        None
+    }
+
+    /// Consumes this chain and appends its remaining items to the destination.
+    #(type: D<V> with { fn push(&mut self, item: V); })
+    fn collect(mut self: Filter<T, V>, destination: &mut D) {
+        loop {
+            match self.next() {
+                Some(item) => { destination.push(item); },
+                None => { break; },
+            }
+        }
+    }
+}
+
+#(type: V)
+#(type: T<V> with { fn next(&mut self) -> Option<V>; })
+/// Reduces a source once, using its first item as the initial accumulator.
+pub struct Reduce<T, V> {
+    /// Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+    previous: T,
+    /// Stored transformation/predicate/reduction function and its captured state.
+    mapper: fn(V, V) -> V,
+    /// Records that this reduction has already consumed its source and must yield no more items.
+    finished: bool,
+}
+
+impl Reduce<T, V> {
+    /// Consumes the remaining source and yields at most one accumulated item.
+    fn next(&mut self) -> Option<V> {
+        if (*self).finished { return None; }
+        let finished = &mut (*self).finished;
+        *finished = true;
+        match (*self).previous.next() {
+            Some(first) => { Some(self.remaining(first)) },
+            None => { None },
+        }
+    }
+
+    /// Folds the remainder into an existing accumulator without fabricating a default.
+    fn remaining(&mut self, mut accumulator: V) -> V {
+        while true {
+            match (*self).previous.next() {
+                Some(item) => { accumulator = ((*self).mapper)(accumulator, item); },
+                None => { return accumulator; },
+            }
+        }
+        accumulator
+    }
+
+    /// Consumes this chain and appends its remaining items to the destination.
+    #(type: D<V> with { fn push(&mut self, item: V); })
+    fn collect(mut self: Reduce<T, V>, destination: &mut D) {
+        loop {
+            match self.next() {
+                Some(item) => { destination.push(item); },
+                None => { break; },
+            }
+        }
+    }
+}
+
+#(type: V)
+#(type: T<V> with { fn next(&mut self) -> Option<V>; })
+/// Builds an iterator by explicitly borrowing a compatible source exclusively.
+pub fn iter(source: &mut T) -> Iter<T, V> {
+    Iter::new(source)
+}

@@ -1,0 +1,14 @@
+// RT5/RT6: formerly rejected; executed by test_runtime_error_values.
+async fn leaf() -> Int { return 7; }
+fn diagnose(error: runtime::Error) -> Int {
+    match error {
+        runtime::Error::LaunchFailed => { return 1; }
+    }
+}
+fn main() {
+    let h = runtime::spawn_blocking(-> leaf());
+    match h.join() {
+        Ok(n) => { print(n); },
+        Err(error) => { print(diagnose(error)); }
+    }
+}

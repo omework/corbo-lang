@@ -1,0 +1,15 @@
+// RT5/RT6: the accepted vector operation must also be executable in an async body.
+async fn push(v:&mut Vector<Int>,n:Int)->Result<(),Int>{
+    yield;
+    return v.try_push(n);
+}
+fn main(){
+    let mut p=pool<Vector<Int>>(1);
+    let mut v=p.new();
+    let h=runtime::spawn(->push(&mut v,17));
+    match h.join(){
+        Ok(result)=>{match result{Ok(())=>{print(1);},Err(n)=>{print(n);}}},
+        Err(_)=>{print(99);}
+    }
+    print(v.len());
+}

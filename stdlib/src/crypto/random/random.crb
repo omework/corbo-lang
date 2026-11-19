@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! System entropy with platform dispatch and retry for interrupted reads.
+
+#(if: target.os == "linux" || target.os == "macos")
+    use std::sys::unix::random::read_random;
+
+    /// Identifies whether a platform status requests an interruption retry.
+    fn interrupted(code: i64) -> bool { code == -4 }
+#(endif)
+
+#(if: target.os == "windows")
+    use std::sys::win::random::read_random;
+
+    /// Identifies whether a platform status requests an interruption retry.
+    fn interrupted(code: i64) -> bool {
+        drop(code);
+        false
+    }
+#(endif)
+
+/// Reports an OS entropy error or an invalid byte count from the backend.
+pub enum RandomError {
+    /// Preserves the native operating-system error code in code.
+    Os {
+            /// Native operating-system status code preserved by this error.
+            code: i64
+    },
+    /// The OS returned an invalid byte count.
+    InvalidCount,
+}
+
+// A successful call fills the entire slice. An error can leave it
+// partially written, and the caller must discard the output.
+/// Fills the caller's buffer with system random bytes. A failure can leave a partially filled buffer.
+pub fn fill(output: &mut [u8]) -> Result<(), RandomError> {
+    let length = output.len();
+    let mut written: usize = 0;
+    while written < length {
+        let remaining = length - written;
+        let end = if remaining > 256 { written + 256 } else { copy(length) };
+        let (status, count) = read_random(&mut output[written..end]);
+        if status != 0 {
+            if interrupted(copy(status)) { continue; }
+            return Err(RandomError.Os { code: status });
+        }
+        if count == 0 || count > end - written {
+            return Err(RandomError.InvalidCount);
+        }
+        written = written + count;
+    }
+    Ok(())
+}

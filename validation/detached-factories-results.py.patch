@@ -1,0 +1,103 @@
+--- before/results.py
++++ results.py
+@@ -491,6 +491,34 @@
+         self.summaries = {}
+         self.visiting = set()
+         self.enums = enums or {}
++        self.async_effect_analyzer = None
++        self.async_summary_resolver = None
++
++    def async_definition(self, name):
++        """Resolve a needed completion contract before inspecting its result.
++
++        This is inference, not call-site verification. Only completed summaries
++        are published; a dependency cycle remains explicitly incomplete.
++        """
++        node = self.async_functions[name]
++        if hasattr(node, 'public_result_storage') or getattr(node, 'field_effect_summary', None) is not None:
++            return node
++        if self.async_summary_resolver is None:
++            if self.async_effect_analyzer is None:
++                from types import SimpleNamespace
++                from async_structure_effects import AsyncStructureEffectAnalyzer
++                interfaces = {symbol: SimpleNamespace(parameters=tuple(function.args[1]),
++                    result_type=function.args[2], effects=self.effects[symbol], result=None)
++                    for symbol, function in self.functions.items()}
++                self.async_effect_analyzer = AsyncStructureEffectAnalyzer(
++                    self.async_functions, interfaces, self.enums, self.error,
++                    sync_resolver=self.sync_summary)
++            summary = self.async_effect_analyzer.infer(name)
++        else:
++            summary = self.async_summary_resolver(name)
++        if summary.complete:
++            node.field_effect_summary = summary
++        return node
+ 
+     def infer_all(self):
+         for name in self.functions:
+@@ -700,11 +728,11 @@
+         environment = {}
+         for index, (name, mode, typ) in enumerate(self.params):
+             if mode in ('task', 'execution'):
+-                definition = self.analyzer.async_functions[typ]
++                definition = self.analyzer.async_definition(typ)
+                 sources = frozenset({SourceOrigin('task_parameter', index)}) if any(
+                     capture in ('owned', 'join_owned', 'join_nested') or capture_type.startswith('Pool<')
+                     for _, capture, capture_type in definition.args[1]) else frozenset()
+-                from async_lowering import borrowed_result_parameters, owned_result_parameters
++                from async_lowering import borrowed_result_paths, owned_result_parameters
+                 fields = tuple((f'{"ref" if capture in ASYNC_SHARED_VIEW_MODES else "mut" if capture in SHARED_VECTOR_SLICE_MODES else capture.removeprefix("array_")}.{position}',
+                                 frozenset({BorrowTarget('task_capture_parameter', index, str(position))}))
+                                for position, (_, capture, _) in enumerate(definition.args[1])
+@@ -719,9 +747,12 @@
+                 if is_public_handle(typ):
+                     fields = tuple(('mut.' + key[4:] if key in ('ref.3', 'ref.5') else key, targets)
+                                    for key, targets in fields)
+-                indexes = borrowed_result_parameters(definition, self.analyzer.async_functions, self.fail, {},
+-                                                     sync_result_contract=self.analyzer.sync_result_contract)
+-                targets = capture_result_origins(fields, indexes, definition.args[2][0] == 'ref')
++                paths = borrowed_result_paths(definition, self.analyzer.async_functions, self.fail, {},
++                                              sync_result_contract=self.analyzer.sync_result_contract)
++                result_fields = tuple((key, origins) for key, origins in fields if '/' not in key or any(
++                    index == capture_index(key.partition('.')[2]) and key.partition('/')[2] == '.' + '.'.join(path)
++                    for index, path in paths))
++                targets = capture_result_origins(result_fields, {index for index, _ in paths}, definition.args[2][0] == 'ref')
+                 result_sources = frozenset({SourceOrigin('task_result_parameter', index)}) if (
+                     definition.args[2][0] in ('owned', 'join_owned', 'join_nested') or owned_result_parameters(
+                     definition, self.analyzer.async_functions, sync_result=self.analyzer.sync_summary)) else frozenset()
+@@ -1547,7 +1578,7 @@
+             if isinstance(execution, Value) and execution.mode == 'execution':
+                 self.task_wait_parameters.update(execution.task_parameters)
+                 self.apply_deferred_field_updates(execution, environment, line)
+-                declaration = self.analyzer.async_functions[execution.typ]
++                declaration = self.analyzer.async_definition(execution.typ)
+                 mode, typ = declaration.args[2]
+                 if mode in ('ref', 'mut'):
+                     from async_lowering import borrowed_result_parameters, int_reference_row
+@@ -2272,7 +2303,7 @@
+             name, args = expr[1:]
+             if name in self.analyzer.async_functions:
+                 from async_lowering import borrowed_result_paths, int_reference_row, owned_result_parameters
+-                declaration = self.analyzer.async_functions[name]
++                declaration = self.analyzer.async_definition(name)
+                 result_paths = {}
+                 for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {},
+                                                         sync_result_contract=self.analyzer.sync_result_contract):
+@@ -2511,7 +2542,7 @@
+             updated_structures = self.apply_structure_updates(summary, actuals, args, environment, line)
+             if summary.mode in ('task', 'execution'):
+                 from async_lowering import borrowed_result_paths, int_reference_row
+-                declaration = self.analyzer.async_functions[summary.typ]
++                declaration = self.analyzer.async_definition(summary.typ)
+                 result_paths = {}
+                 for index, path in borrowed_result_paths(declaration, self.analyzer.async_functions, self.fail, {},
+                                                         sync_result_contract=self.analyzer.sync_result_contract):
+@@ -2628,7 +2659,7 @@
+                             continue
+                         if isinstance(actual, Value) and actual.mode in ('task', 'execution'):
+                             from async_lowering import int_reference_row
+-                            declaration = self.analyzer.async_functions[actual.typ]
++                            declaration = self.analyzer.async_definition(actual.typ)
+                             _, capture_mode, capture_type = declaration.args[1][capture_index(target.field)]
+                             if (int_reference_row(capture_type, capture_mode)
+                                     or '' in self.analyzer.enums.get(capture_type, {})):

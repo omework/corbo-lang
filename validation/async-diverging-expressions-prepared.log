@@ -1,0 +1,57 @@
+test_all_breaks_from_initializer_assignment_and_print (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_all_breaks_from_initializer_assignment_and_print) ... ok
+test_continue_and_break_paths_with_independent_iteration_model (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_continue_and_break_paths_with_independent_iteration_model) ... ok
+test_lifetime_modes_and_partial_continuation_still_checked (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_lifetime_modes_and_partial_continuation_still_checked) ... ok
+test_match_all_exits_and_failed_launch (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_match_all_exits_and_failed_launch) ... ok
+test_owned_child_cleaned_once_on_break_or_return (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_owned_child_cleaned_once_on_break_or_return) ... ok
+test_prepared_owned_result_cleanup (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_prepared_owned_result_cleanup) ... ERROR
+test_prepared_owner_break_depth (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_prepared_owner_break_depth) ... ok
+test_prepared_owner_cleanup_on_aborted_or_completed_call (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_prepared_owner_cleanup_on_aborted_or_completed_call) ... ok
+test_recorded_diverging_initializer (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_recorded_diverging_initializer) ... ok
+test_return_expressions_and_dead_receiver (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_return_expressions_and_dead_receiver) ... ok
+test_unreachable_return_does_not_add_a_source (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_unreachable_return_does_not_add_a_source) ... ok
+
+======================================================================
+ERROR: test_prepared_owned_result_cleanup (test_async_diverging_expressions.AsyncDivergingExpressionTests.test_prepared_owned_result_cleanup)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jabarkarim/sources/crust/tests/test_async_diverging_expressions.py", line 156, in test_prepared_owned_result_cleanup
+    run=self.run_native(source)
+  File "/Users/jabarkarim/sources/crust/tests/test_async_vector_results.py", line 62, in run_native
+    code=compile_source(source)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14778, in compile_source
+    return compile_program(source, allow_legacy_reset=allow_legacy_reset)[1]
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/crust.py", line 14771, in compile_program
+    code = compiler.compile(Parser(source).parse())
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13275, in compile
+    main = self.verify(nodes)
+  File "/Users/jabarkarim/sources/crust/crust.py", line 13096, in verify
+    self.async_definitions[name] = node, lower_async_function(
+                                         ~~~~~~~~~~~~~~~~~~~~^
+        node, Error, async_functions, warn_async, enable_threads, self.async_reference_paths,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.declared_array_type, self.async_frame_slots)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 778, in lower_async_function
+    result = _lower_async_function(node, error, functions, lambda *args: warnings.append(args),
+                                   enable_threads, result_parameters_cache, array_c_type, hints, slots)
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4815, in _lower_async_function
+    if bind_special(statement, body, index):
+       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 1655, in bind_special
+    tasks[name] = create_task(initializer, statement.line)
+                  ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 934, in create_task
+    value = boolean_value(argument, line) if typ == 'Bool' else expression(argument, line)
+                                                                ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 4182, in expression
+    fail(line, f'prototype async : expression {op} non prise en charge')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jabarkarim/sources/crust/async_lowering.py", line 803, in fail
+    raise error(f'ligne {line}: {message}')
+crust.Error: ligne 5: prototype async : expression scope non prise en charge
+
+----------------------------------------------------------------------
+Ran 11 tests in 17.089s
+
+FAILED (errors=1)

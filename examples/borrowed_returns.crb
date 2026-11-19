@@ -1,0 +1,18 @@
+enum View { Item { data: &i32 }, Empty {} }
+
+fn make_view(views: &mut Pool<View>, data: &i32) -> A<View> {
+    views.new(View.Item { data: data })
+}
+
+fn relay(data: &i32, views: &mut Pool<View>) -> A<View> {
+    make_view(views, data)
+}
+
+fn main() {
+    let mut data_pool = pool<i32>(1);
+    let mut view_pool = pool<View>(1);
+    let data = data_pool.new(42);
+    let view = relay(data.vref(), &mut view_pool);
+    print(view);
+    drop(data); // L'emprunt ne doit plus servir.
+}
