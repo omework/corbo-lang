@@ -14,6 +14,7 @@ conjonction_cible   = test_cible, { "&&", test_cible } ;
 test_cible          = "target", ".", ( "os" | "family" | "arch" | "pointer_width" ), "==", texte ;
 declaration         = [ "pub" ], ( fonction | fonction_externe | structure | enumeration | constante )
                     | contrat_type, { contrat_type }, "pub", ( corps_structure | corps_enumeration )
+                    | constante_configurable
                     | implementation ;
 importation         = "use", chemin, "::",
                       ( import_element | "{", import_element, { ",", import_element }, [ "," ], "}" ),
@@ -53,6 +54,13 @@ implementation      = "impl", chemin, [ parametres_generiques ],
                       "{", { methode | constante }, "}" ;
 constante           = "const", identifiant, ":", primitif, "=",
                       ( [ "-" ], ( entier | flottant ) | "true" | "false" ), ";" ;
+(* Lexical configuration specialization; see docs/CONFIGURATION_CONSTANTS.md. *)
+annotation_configurable = "#", "(", "configurable", ")" ;
+constante_configurable = annotation_configurable, [ "pub" ], constante ;
+annotation_override = "#", "(", "override", ":", remplacement_constante,
+                      { ",", remplacement_constante }, [ "," ], ")" ;
+remplacement_constante = chemin, "=", expression ;
+
 methode             = [ contrat_lock ], [ "async" ], signature_methode, bloc ;
 exigence_methode    = [ "async" ], signature_methode, ";" ;
 signature_methode   = "fn", ( identifiant | "addr" ), "(",
@@ -71,7 +79,8 @@ arguments_type      = "<", type, { ",", type }, ">" ;
 type_appelable      = "fn", "(", [ type, { ",", type } ], ")", "->", type ;
 primitif            = "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
                     | "bool" | "f32" | "f64" | "usize" ;
-type_tableau        = "[", type, ";", entier, "]" ;
+type_tableau        = "[", type, ";", longueur_constante, "]" ;
+longueur_constante  = entier | chemin_valeur ;
 type_tranche        = "[", type, "]" ;
 chemin              = nom, { "::", nom } ;
 chemin_valeur       = chemin ;
@@ -93,7 +102,8 @@ annotation_region   = "#", "(", "stack_region", ":", "max_size", "=",
 unite_region        = "K" | "M" | "G" ;
 annotation_free_pages = "#", "(", "free_pages", ")" ;
 
-bloc                = [ annotation_region ], [ annotation_free_pages ], bloc_delimite ;
+bloc                = [ annotation_override ], [ annotation_region ],
+                      [ annotation_free_pages ], bloc_delimite ;
 bloc_delimite       = "{", { entree_move },
                       { instruction }, [ expression ], "}" ;
 entree_move         = "move", identifiant, ";" ;
@@ -180,7 +190,7 @@ primaire            = litteral | chemin_valeur, [ "(", [ arguments ], ")" ] | "s
                     | forme_bloc ;
 tuple               = "(", expression, ",", expression, { ",", expression }, [ "," ], ")" ;
 litteral            = entier | flottant | texte | "true" | "false" ;
-tableau             = "[", [ expression, ( ";", entier
+tableau             = "[", [ expression, ( ";", longueur_constante
                              | { ",", expression }, [ "," ] ) ], "]" ;
 construction        = nom_structure, "{", [ valeurs_champs ], "}"
                     | nom_enum, ".", identifiant, [ "{", [ valeurs_champs ], "}"
@@ -240,6 +250,11 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    Le vérificateur contrôle le nombre et les contraintes des arguments de type.
    Les annotations avec propriétés suivent la forme #(nom: propriétés).
    Chaque nom définit les propriétés admises et l'emplacement de l'annotation.
+   configurable marque une constante de module; override préfixe un bloc.
+   Ses chemins doivent désigner des constantes configurables visibles et ses
+   expressions doivent être évaluables à la compilation avec le type déclaré.
+   Les remplacements sont lexicaux, hérités et propagés par spécialisation;
+   ils ne modifient pas globalement le paquet. Voir docs/CONFIGURATION_CONSTANTS.md.
    Les directives d'analyse du compilateur sont définies dans docs/LANGUAGE_RULES.md.
    Elles s'appliquent pendant la vérification après l'analyse syntaxique.
    L'annotation type porte un contrat statique de fonction ou de structure.

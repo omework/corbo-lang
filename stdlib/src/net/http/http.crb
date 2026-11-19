@@ -1,0 +1,490 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Bounded HTTP/1.x heads and optional framed bodies over structural readers.
+//! Response body indication follows headers; the caller handles HEAD/context.
+use std::text::Utf8Error;
+
+/// Maximum request/status-line bytes, excluding CRLF.
+#(configurable)
+pub const REQUEST_LINE_MAX_SIZE: usize = 8192;
+/// Maximum individual header or chunk-line bytes, excluding CRLF.
+#(configurable)
+pub const HEADER_LINE_MAX_SIZE: usize = 8192;
+/// Maximum complete header/trailer section bytes, including CRLF terminators.
+#(configurable)
+pub const HEADERS_MAX_SIZE: usize = 32768;
+/// Maximum number of header/trailer fields, counting repeated fields.
+#(configurable)
+pub const HEADER_COUNT_MAX: usize = 100;
+
+#(type: E)
+/// Parsing failures retain transport errors and distinguish budgets from syntax.
+pub enum ParseError<E> {
+    /// Original reader error.
+    Read {
+        /// Transport-specific error value.
+        error: E,
+    },
+    /// EOF occurred inside a head or a framed body.
+    UnexpectedEof,
+    /// Invalid request/status line or unsupported HTTP version.
+    InvalidStartLine,
+    /// Invalid field syntax or obsolete line folding.
+    InvalidHeader,
+    /// A request/status/header/chunk line exceeds its selected bound.
+    LineTooLong,
+    /// The complete header/trailer section exceeds its selected bound.
+    HeadersTooLarge,
+    /// Too many header/trailer fields.
+    TooManyHeaders,
+    /// Ambiguous, unsupported or malformed body framing.
+    InvalidFraming,
+    /// Malformed chunk size or delimiter.
+    InvalidChunk,
+    /// The reader returned a count larger than its output slice.
+    InvalidReadCount,
+}
+
+/// Versions accepted by this HTTP/1.x parser.
+pub enum Version {
+    /// HTTP/1.0.
+    Http10,
+    /// HTTP/1.1.
+    Http11,
+}
+
+/// A field view borrows its message's header storage; duplicates stay distinct.
+pub struct Header {
+    /// ASCII field name, preserving its spelling.
+    name: &str,
+    /// Field value bytes with surrounding SP/HTAB removed.
+    value: &[u8],
+}
+
+
+impl Header {
+    /// Returns the validated ASCII field name.
+    fn name(&self) -> &str { (*self).name }
+    /// Borrows the original field value bytes, without UTF-8 interpretation.
+    fn value(&self) -> &[u8] { &*(*self).value }
+}
+
+/// Owns bounded raw header bytes; traversal needs no separately allocated index.
+pub struct Headers {
+    /// Parsed lines retain CRLF to permit offset-based traversal.
+    bytes: [u8; HEADERS_MAX_SIZE],
+    /// Number of populated bytes, including the final empty line.
+    used: usize,
+    /// Number of fields, including duplicates.
+    count: usize,
+}
+
+/// Converts parser-validated ASCII to a checked UTF-8 view.
+fn ascii(bytes: &[u8]) -> &str {
+    let checked: Result<&str, Utf8Error> = str::from_utf8(bytes);
+    match checked {
+        Ok(text) => { text },
+        Err(error) => { drop(error); "" },
+    }
+}
+
+impl Headers {
+    /// Number of header fields; repeated names each count once.
+    fn len(&self) -> usize { (*self).count }
+    /// Returns the field at an ordinal, preserving repeats and arrival order.
+    fn get(&self, index: usize) -> Option<Header> {
+        if index >= (*self).count { return None; }
+        let bytes = &(*self).bytes[..(*self).used];
+        let mut at: usize = 0;
+        let mut ordinal: usize = 0;
+        while ordinal < index {
+            while bytes[at] != 13 { at += 1; }
+            at += 2;
+            ordinal += 1;
+        }
+        let start = copy(at);
+        while bytes[at] != 58 { at += 1; }
+        let name_end = copy(at);
+        at += 1;
+        while bytes[at] == 32 || bytes[at] == 9 { at += 1; }
+        let value_start = copy(at);
+        while bytes[at] != 13 { at += 1; }
+        let mut value_end = copy(at);
+        while value_end > value_start && (bytes[value_end - 1] == 32 || bytes[value_end - 1] == 9) { value_end -= 1; }
+        let name = ascii(&bytes[start..name_end]);
+        let value = &bytes[value_start..value_end];
+        Some(Header { name: name, value: value })
+    }
+}
+
+/// Tests the HTTP token alphabet for methods and field names.
+fn token_byte(byte: u8) -> bool {
+    (byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+        || byte == 33 || byte == 35 || byte == 36 || byte == 37 || byte == 38 || byte == 39
+        || byte == 42 || byte == 43 || byte == 45 || byte == 46 || byte == 94 || byte == 95
+        || byte == 96 || byte == 124 || byte == 126
+}
+
+/// Compares ASCII header names/codings without case sensitivity.
+fn same_name(bytes: &[u8], text: &str) -> bool {
+    let expected = text.as_bytes();
+    if bytes.len() != expected.len() { return false; }
+    let mut i: usize = 0;
+    while i < bytes.len() {
+        let a = bytes[i];
+        let folded = if a >= 65 && a <= 90 { a + 32 } else { a };
+        if folded != expected[i] { return false; }
+        i += 1;
+    }
+    true
+}
+
+/// Validates one field, refusing whitespace before colon and control bytes.
+fn field_valid(bytes: &[u8]) -> bool {
+    let mut colon: usize = 0;
+    while colon < bytes.len() && token_byte(bytes[colon]) { colon += 1; }
+    if colon == 0 || colon == bytes.len() || bytes[colon] != 58 { return false; }
+    let mut i = colon + 1;
+    while i < bytes.len() {
+        let byte = bytes[i];
+        if (byte < 32 && byte != 9) || byte == 127 { return false; }
+        i += 1;
+    }
+    true
+}
+
+/// Private body-framing decision; mode zero means no declared body.
+struct Framing {
+    /// False when fields contradict each other or cannot be decoded.
+    valid: bool,
+    /// Zero: absent; one: length; two: chunked.
+    mode: u64,
+    /// Fixed body size in bytes.
+    length: u64,
+}
+
+/// Resolves supported body framing without consuming transport data.
+fn framing(fields: &Headers) -> Framing {
+    let mut length_seen = false;
+    let mut chunked = false;
+    let mut length: u64 = 0;
+    let bytes = &(*fields).bytes[..(*fields).used];
+    let mut at: usize = 0;
+    while at + 2 < bytes.len() {
+        let start = copy(at);
+        while bytes[at] != 58 { at += 1; }
+        let name_end = copy(at);
+        at += 1;
+        while bytes[at] == 32 || bytes[at] == 9 { at += 1; }
+        let value_start = copy(at);
+        while bytes[at] != 13 { at += 1; }
+        let mut value_end = copy(at);
+        while value_end > value_start && (bytes[value_end - 1] == 32 || bytes[value_end - 1] == 9) { value_end -= 1; }
+        if same_name(&bytes[start..name_end], "content-length") {
+            if length_seen || chunked { return Framing { valid: false, mode: 0, length: 0 }; }
+            length_seen = true;
+            let value = &bytes[value_start..value_end];
+            if value.len() == 0 { return Framing { valid: false, mode: 0, length: 0 }; }
+            let mut digit: usize = 0;
+            while digit < value.len() {
+                let byte = value[digit];
+                if byte < 48 || byte > 57 { return Framing { valid: false, mode: 0, length: 0 }; }
+                let value = (byte - 48) as u64;
+                if length > (18446744073709551615 - value) / 10 { return Framing { valid: false, mode: 0, length: 0 }; }
+                length = length * 10 + value;
+                digit += 1;
+            }
+        } else if same_name(&bytes[start..name_end], "transfer-encoding") {
+            if length_seen || chunked || !same_name(&bytes[value_start..value_end], "chunked") { return Framing { valid: false, mode: 0, length: 0 }; }
+            chunked = true;
+        }
+        at += 2;
+    }
+    Framing { valid: true, mode: if chunked { 2 } else if length_seen { 1 } else { 0 }, length: copy(length) }
+}
+
+#(type: E)
+#(type: R<E> with { fn read(&mut self, buffer: &mut [u8]) -> Result<usize, E>; })
+/// Borrows a reader and exposes only declared body bytes; dropping never drains.
+pub struct BodyReader<R, E> {
+    /// Injected reader, retained for this message's body lifetime.
+    source: &mut R,
+    /// Zero: absent; one: Content-Length; two: chunked.
+    mode: u64,
+    /// Unread bytes in the current fixed-length body or chunk.
+    remaining: u64,
+    /// A nonfinal chunk has been consumed and its CRLF is pending.
+    delimiter: bool,
+    /// The declared body has ended.
+    finished: bool,
+}
+
+impl BodyReader<R, E> {
+    /// Captures the reader without performing transport access.
+    fn new(reader: &mut R) -> BodyReader<R, E> {
+        BodyReader { source: reader, mode: 0, remaining: 0, delimiter: false, finished: false }
+    }
+
+    /// Reads exactly one logical byte, preserving any buffered-reader lookahead.
+    fn one(&mut self) -> Result<Option<u8>, ParseError<E>> {
+        let mut byte: [u8; 1] = [0; 1];
+        let reader = &mut *(*self).source;
+        let count = match reader.read(&mut byte[..]) {
+            Ok(count) => { count },
+            Err(error) => { return Err(ParseError.Read { error: error }); },
+        };
+        if count == 0 { return Ok(None); }
+        if count != 1 { return Err(ParseError.InvalidReadCount); }
+        Ok(Some(byte[0]))
+    }
+
+    /// Reads one strict CRLF line without copying its terminator into output.
+    fn line(&mut self, output: &mut [u8]) -> Result<Option<usize>, ParseError<E>> {
+        let mut length: usize = 0;
+        while true {
+            let byte = match self.one()? {
+                Some(byte) => { byte },
+                None => {
+                    if length == 0 { return Ok(None); }
+                    return Err(ParseError.UnexpectedEof);
+                },
+            };
+            if byte == 13 {
+                match self.one()? {
+                    Some(next) => { if next != 10 { return Err(ParseError.InvalidHeader); } },
+                    None => { return Err(ParseError.UnexpectedEof); },
+                }
+                return Ok(Some(copy(length)));
+            }
+            if byte == 10 { return Err(ParseError.InvalidHeader); }
+            if length == output.len() { return Err(ParseError.LineTooLong); }
+            output[length] = byte;
+            length += 1;
+        }
+            Err(ParseError.UnexpectedEof)
+    }
+
+    /// Reads a bounded section into owned storage, retaining repeated field lines.
+    fn headers(&mut self) -> Result<Headers, ParseError<E>> {
+        let mut result = Headers { bytes: [0; HEADERS_MAX_SIZE], used: 0, count: 0 };
+        while true {
+            let at = result.used;
+            if HEADERS_MAX_SIZE - at < 2 { return Err(ParseError.HeadersTooLarge); }
+            let remaining = HEADERS_MAX_SIZE - at - 2;
+            let limit = if remaining < HEADER_LINE_MAX_SIZE { remaining } else { HEADER_LINE_MAX_SIZE };
+            let parsed = self.line(&mut result.bytes[at..at + limit])?;
+            let count = match parsed {
+                Some(count) => { count },
+                None => { return Err(ParseError.UnexpectedEof); },
+            };
+            let destination = &mut result.bytes[..];
+            destination[at + count] = 13;
+            destination[at + count + 1] = 10;
+            let used = &mut result.used;
+            *used = at + count + 2;
+            if count == 0 { return Ok(result); }
+            if !field_valid(&result.bytes[at..at + count]) { return Err(ParseError.InvalidHeader); }
+            if result.count == HEADER_COUNT_MAX { return Err(ParseError.TooManyHeaders); }
+            let count_field = &mut result.count;
+            *count_field = *count_field + 1;
+        }
+            Err(ParseError.UnexpectedEof)
+    }
+
+    /// Reads a body prefix; empty output causes no transport access.
+    fn read(&mut self, output: &mut [u8]) -> Result<usize, ParseError<E>> {
+        if output.len() == 0 || (*self).finished || (*self).mode == 0 { return Ok(0); }
+        if (*self).mode == 2 && (*self).remaining == 0 {
+            if (*self).delimiter {
+                let a = self.one()?;
+                let b = self.one()?;
+                match a { Some(byte) => { if byte != 13 { return Err(ParseError.InvalidChunk); } }, None => { return Err(ParseError.UnexpectedEof); }, }
+                match b { Some(byte) => { if byte != 10 { return Err(ParseError.InvalidChunk); } }, None => { return Err(ParseError.UnexpectedEof); }, }
+                let delimiter = &mut (*self).delimiter; *delimiter = false;
+            }
+            let mut buffer: [u8; HEADER_LINE_MAX_SIZE] = [0; HEADER_LINE_MAX_SIZE];
+            let count = match self.line(&mut buffer[..])? { Some(count) => { count }, None => { return Err(ParseError.UnexpectedEof); }, };
+            let mut size: u64 = 0;
+            let mut at: usize = 0;
+            while at < count && buffer[at] != 59 {
+                let byte = buffer[at];
+                let digit: u64 = if byte >= 48 && byte <= 57 { (byte - 48) as u64 }
+                    else if byte >= 65 && byte <= 70 { (byte - 55) as u64 }
+                    else if byte >= 97 && byte <= 102 { (byte - 87) as u64 }
+                    else { return Err(ParseError.InvalidChunk); };
+                if size > (18446744073709551615 - digit) / 16 { return Err(ParseError.InvalidChunk); }
+                size = size * 16 + digit;
+                at += 1;
+            }
+            if at == 0 { return Err(ParseError.InvalidChunk); }
+            while at < count { if buffer[at] < 32 || buffer[at] > 126 { return Err(ParseError.InvalidChunk); } at += 1; }
+            if size == 0 {
+                let trailers = self.headers()?;
+                let decision = framing(&trailers);
+                if !decision.valid || decision.mode != 0 { return Err(ParseError.InvalidFraming); }
+                let finished = &mut (*self).finished; *finished = true;
+                return Ok(0);
+            }
+            let remaining = &mut (*self).remaining; *remaining = size;
+        }
+        let remaining = (*self).remaining;
+        if remaining == 0 { let finished = &mut (*self).finished; *finished = true; return Ok(0); }
+        let capacity = output.len();
+        let count: usize = if remaining < capacity as u64 { remaining as usize } else { capacity };
+        let reader = &mut *(*self).source;
+        let received = match reader.read(&mut output[0..count]) {
+            Ok(received) => { received },
+            Err(error) => { return Err(ParseError.Read { error: error }); },
+        };
+        if received > count { return Err(ParseError.InvalidReadCount); }
+        if received == 0 { return Err(ParseError.UnexpectedEof); }
+        let rest = remaining - received as u64;
+        let remaining = &mut (*self).remaining; *remaining = copy(rest);
+        if rest == 0 && (*self).mode == 2 { let delimiter = &mut (*self).delimiter; *delimiter = true; }
+        Ok(received)
+    }
+}
+
+#(type: E)
+#(type: R<E> with { fn read(&mut self, buffer: &mut [u8]) -> Result<usize, E>; })
+/// Owns request-head bytes and a reader-dependent optional body descriptor.
+pub struct Request<R, E> {
+    /// Request line bytes, excluding CRLF.
+    line: [u8; REQUEST_LINE_MAX_SIZE],
+    /// End of the method token.
+    method_end: usize,
+    /// End of the request target.
+    target_end: usize,
+    /// Parsed protocol version.
+    protocol: Version,
+    /// Owned header section.
+    fields: Headers,
+    /// Optional body's framing state and reader dependency.
+    body_reader: BodyReader<R, E>,
+}
+
+impl Request<R, E> {
+    /// Returns the method as a borrowed ASCII text view, including extensions.
+    fn method(&self) -> &str { ascii(&(*self).line[..(*self).method_end]) }
+    /// Returns the unmodified request target as a borrowed ASCII text view.
+    fn target(&self) -> &str { ascii(&(*self).line[(*self).method_end + 1..(*self).target_end]) }
+    /// Returns the protocol version without transferring its storage.
+    fn version(&self) -> &Version { &(*self).protocol }
+    /// Borrows owned headers, retaining repeats.
+    fn headers(&self) -> &Headers { &(*self).fields }
+    /// Borrows the optional framed body; this operation itself performs no reads.
+    fn body(&mut self) -> Option<&mut BodyReader<R, E>> {
+        if (*self).body_reader.mode == 0 { return None; }
+        Some(&mut (*self).body_reader)
+    }
+}
+
+#(type: E)
+#(type: R<E> with { fn read(&mut self, buffer: &mut [u8]) -> Result<usize, E>; })
+/// Owns response-head bytes; the caller supplies request-dependent semantics.
+pub struct Response<R, E> {
+    /// Status line bytes, excluding CRLF.
+    line: [u8; REQUEST_LINE_MAX_SIZE],
+    /// Populated status-line bytes.
+    line_length: usize,
+    /// Three-digit status code.
+    code: u16,
+    /// Parsed protocol version.
+    protocol: Version,
+    /// Owned header section.
+    fields: Headers,
+    /// Header-indicated body, which must not be read for a HEAD response.
+    body_reader: BodyReader<R, E>,
+}
+
+impl Response<R, E> {
+    /// Returns the status code.
+    fn status(&self) -> u16 { (*self).code }
+    /// Returns reason-phrase octets without imposing UTF-8.
+    fn reason(&self) -> &[u8] { &(*self).line[13..(*self).line_length] }
+    /// Returns the parsed protocol version.
+    fn version(&self) -> &Version { &(*self).protocol }
+    /// Borrows the response header section.
+    fn headers(&self) -> &Headers { &(*self).fields }
+    /// Returns a header-indicated body; caller handles HEAD and exchange context.
+    fn body(&mut self) -> Option<&mut BodyReader<R, E>> {
+        if (*self).body_reader.mode == 0 { return None; }
+        Some(&mut (*self).body_reader)
+    }
+}
+
+/// Materializes the already validated protocol variant.
+fn protocol(minor: u8) -> Version {
+    if minor == 48 { return Version.Http10; }
+    Version.Http11
+}
+
+/// Checks the fixed HTTP/1.0 or HTTP/1.1 version spelling.
+fn version(bytes: &[u8]) -> bool {
+    let text = "HTTP/1.";
+    let prefix = text.as_bytes();
+    if bytes.len() != 8 { return false; }
+    let start = &bytes[0..7];
+    start.content_eq(prefix) && (bytes[7] == 48 || bytes[7] == 49)
+}
+
+#(type: E)
+#(type: R<E> with { fn read(&mut self, buffer: &mut [u8]) -> Result<usize, E>; })
+/// Parses one request head, without prefetching body or next-request bytes.
+pub fn request(reader: &mut R) -> Result<Option<Request<R, E>>, ParseError<E>> {
+    let mut decoder: BodyReader<R, E> = BodyReader::new(reader);
+    let mut bytes: [u8; REQUEST_LINE_MAX_SIZE] = [0; REQUEST_LINE_MAX_SIZE];
+    let length = match decoder.line( &mut bytes[..])? { Some(length) => { length }, None => { return Ok(None); }, };
+    let mut method_end: usize = 0;
+    while method_end < length && token_byte(bytes[method_end]) { method_end += 1; }
+    if method_end == 0 || method_end == length || bytes[method_end] != 32 { return Err(ParseError.InvalidStartLine); }
+    let mut target_end = copy(method_end) + 1;
+    while target_end < length && bytes[target_end] > 32 && bytes[target_end] < 127 { target_end += 1; }
+    if target_end == method_end + 1 || target_end == length || bytes[target_end] != 32 { return Err(ParseError.InvalidStartLine); }
+    if !version(&bytes[target_end + 1..length]) { return Err(ParseError.InvalidStartLine); }
+    let protocol = protocol(bytes[length - 1]);
+    let fields = decoder.headers()?;
+    let decision = framing(&fields);
+    if !decision.valid { return Err(ParseError.InvalidFraming); }
+    let body_mode = &mut decoder.mode; *body_mode = decision.mode;
+    let remaining = &mut decoder.remaining; *remaining = decision.length;
+    let mut result = Request { line: [0; REQUEST_LINE_MAX_SIZE], method_end: method_end, target_end: target_end, protocol: protocol,
+        fields: fields, body_reader: decoder };
+    let destination = &mut result.line[..];
+    let mut index: usize = 0;
+    while index < length { destination[index] = bytes[index]; index += 1; }
+    Ok(Some(result))
+}
+
+#(type: E)
+#(type: R<E> with { fn read(&mut self, buffer: &mut [u8]) -> Result<usize, E>; })
+/// Parses one response head; a declared body is an indication, not HEAD context.
+pub fn response(reader: &mut R) -> Result<Option<Response<R, E>>, ParseError<E>> {
+    let mut decoder: BodyReader<R, E> = BodyReader::new(reader);
+    let mut bytes: [u8; REQUEST_LINE_MAX_SIZE] = [0; REQUEST_LINE_MAX_SIZE];
+    let length = match decoder.line( &mut bytes[..])? { Some(length) => { length }, None => { return Ok(None); }, };
+    if length < 13 || !version(&bytes[..8]) || bytes[8] != 32 || bytes[12] != 32 { return Err(ParseError.InvalidStartLine); }
+    let mut at: usize = 9;
+    let mut code: u16 = 0;
+    while at < 12 {
+        if bytes[at] < 48 || bytes[at] > 57 { return Err(ParseError.InvalidStartLine); }
+        code = code * 10 + (bytes[at] - 48) as u16;
+        at += 1;
+    }
+    if code < 100 || code > 599 { return Err(ParseError.InvalidStartLine); }
+    while at < length {
+        if (bytes[at] < 32 && bytes[at] != 9) || bytes[at] == 127 { return Err(ParseError.InvalidStartLine); }
+        at += 1;
+    }
+    let protocol = protocol(bytes[7]);
+    let fields = decoder.headers()?;
+    let decision = framing(&fields);
+    if !decision.valid { return Err(ParseError.InvalidFraming); }
+    let body_mode = &mut decoder.mode; *body_mode = decision.mode;
+    let remaining = &mut decoder.remaining; *remaining = decision.length;
+    let mut result = Response { line: [0; REQUEST_LINE_MAX_SIZE], line_length: copy(length), code: code, protocol: protocol,
+        fields: fields, body_reader: decoder };
+    let destination = &mut result.line[..];
+    let mut index: usize = 0;
+    while index < length { destination[index] = bytes[index]; index += 1; }
+    Ok(Some(result))
+}

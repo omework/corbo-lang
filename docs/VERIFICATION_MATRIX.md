@@ -7,15 +7,16 @@
 | N7 and composition regressions | Buffered sink flush, callable cleanup/iterator composition and actual resource decoder all execute under fatal UBSan. | 26 executions, 20 expected refusals, two runtime-only accepts and five packing round trips on macOS ARM64. |
 | Bootstrap and traceability | Final compiler installed; self-emitted C byte-identical; all 33 README blocks synchronized. | One reconstruction comparison, no full historical/platform campaign or independent audit. [Report](cycles/DOCUMENTATION_COVERAGE_CYCLE.md). |
 
-[Français](VERIFICATION_MATRIX-fr.md)
+## HTTP and configuration overrides — executed integration evidence
 
-<a id="matrice-règles--vérification"></a>
+| Mechanism / rules | Evidence | Limits |
+| --- | --- | --- |
+| CC1–CC7 / N1 | Scoped defaults, transitive helpers/layouts, escaped values, aliases and type/visibility refusals | Literal/constant-reference evaluation; bounded specialization |
+| N4/N5/N6 | Reader lifetime refusal, wrapper provenance and mutable reference/aggregate regressions | Recorded shapes; no independent audit |
+| HTTP parsing / bounds | Both roles, partial reads, fixed/chunked bodies, trailers, EOF/errors, four budgets and repeated header views | Synchronous in-memory reader on macOS ARM64 |
 
-# Matrix rules → verification
-
-[Overall checklist of construction sites](IMPLEMENTATION_CHECKLIST.md).
-
-<a id="compositions-du-core"></a>
+37 checks complete (25 UBSan executions, 12 refusals); self-emitted compiler C
+matches. [Evidence and limits](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md).
 
 ## Bare unconstrained type declarations
 

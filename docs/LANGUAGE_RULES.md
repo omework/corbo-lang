@@ -45,6 +45,15 @@ verification used those contracts, while the C backend remained specialized.
 
 [Package and module rules](MODULES.md) define source layout, visibility, and imports.
 
+[Configurable package constants](CONFIGURATION_CONSTANTS.md) define the accepted
+`#(configurable)` marker and lexical `#(override: ...)` blocks (CC1–CC7).
+They select compile-time specializations, not runtime limits or verifier analysis
+directives. The grammar records these forms; compiler implementation is pending.
+The [HTTP parsing design](HTTP.md) applies them to bounded request/response
+parsing and records caller responsibility for request-dependent body semantics.
+The synchronous HTTP API is implemented; its focused execution evidence and limits
+are recorded in the [implementation cycle](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md).
+
 <a id="noyau-mémoire--grille-de-lecture"></a>
 
 ## Core memory invariants

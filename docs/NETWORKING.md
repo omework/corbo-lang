@@ -1,5 +1,9 @@
 # TCP and UDP sockets
 
+For the accepted, not-yet-implemented HTTP/1.1 parsing building blocks above
+these transports, see [HTTP parsing design](HTTP.md). Transport APIs below are
+separate from that planned package.
+
 ## Blocking API
 
 The Rust compiler provides the blocking IPv4 APIs in `std::net::tcp`

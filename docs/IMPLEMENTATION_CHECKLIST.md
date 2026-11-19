@@ -19,6 +19,21 @@ unexercised compositions are listed in the report.
 
 # Global implementation checklist
 
+## Configurable constants and HTTP parsing (core + STD API)
+
+- [x] Parse configurable constants and lexical override blocks.
+- [x] Resolve/import aliases, visibility, types and duplicate targets.
+- [x] Specialize helper calls and nominal layouts; preserve escaped configurations.
+- [x] Implement bounded HTTP request/response heads and optional streaming bodies.
+- [x] Preserve nested result and reader dependencies with existing value summaries.
+- [x] Complete 37 focused checks: 25 UBSan executions and 12 expected refusals.
+- [x] Reconstruct the optimized compiler with identical emitted C.
+- [x] Regenerate/check API documentation and record scope/limits.
+
+No open design decision. Working-tree STD selection and untested platforms are
+explicit in the [cycle report](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md).
+
+
 ## General callable values (compiler/core)
 
 - [x] Keep the existing closure grammar and explicit `fn` / `&fn` / `&mut fn` passing modes.

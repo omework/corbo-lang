@@ -40,6 +40,7 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 - [`std::net`](#stdnet)
 - [`std::net::asyn::tcp`](#stdnetasyntcp)
 - [`std::net::asyn::udp`](#stdnetasynudp)
+- [`std::net::http`](#stdnethttp)
 - [`std::net::ipv4`](#stdnetipv4)
 - [`std::net::tcp`](#stdnettcp)
 - [`std::net::tls`](#stdnettls)
@@ -3680,6 +3681,388 @@ async fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize
 Awaits transmission of one complete datagram to the supplied destination, including an empty datagram.
 
 
+## `std::net::http`
+
+Bounded HTTP/1.x heads and optional framed bodies over structural readers.
+Response body indication follows headers; the caller handles HEAD/context.
+
+### `REQUEST_LINE_MAX_SIZE`
+
+[http.crb:8](../stdlib/src/net/http/http.crb#L8)
+
+```rust
+pub const REQUEST_LINE_MAX_SIZE: usize = 8192
+```
+
+Maximum request/status-line bytes, excluding CRLF.
+
+### `HEADER_LINE_MAX_SIZE`
+
+[http.crb:11](../stdlib/src/net/http/http.crb#L11)
+
+```rust
+pub const HEADER_LINE_MAX_SIZE: usize = 8192
+```
+
+Maximum individual header or chunk-line bytes, excluding CRLF.
+
+### `HEADERS_MAX_SIZE`
+
+[http.crb:14](../stdlib/src/net/http/http.crb#L14)
+
+```rust
+pub const HEADERS_MAX_SIZE: usize = 32768
+```
+
+Maximum complete header/trailer section bytes, including CRLF terminators.
+
+### `HEADER_COUNT_MAX`
+
+[http.crb:17](../stdlib/src/net/http/http.crb#L17)
+
+```rust
+pub const HEADER_COUNT_MAX: usize = 100
+```
+
+Maximum number of header/trailer fields, counting repeated fields.
+
+### `ParseError`
+
+[http.crb:21](../stdlib/src/net/http/http.crb#L21)
+
+```rust
+pub enum ParseError<E>
+```
+
+Parsing failures retain transport errors and distinguish budgets from syntax.
+
+Members:
+
+- [`Read`](../stdlib/src/net/http/http.crb#L23) (variant): Original reader error.
+- [`Read.error`](../stdlib/src/net/http/http.crb#L25) (implementation field): Transport-specific error value.
+- [`UnexpectedEof`](../stdlib/src/net/http/http.crb#L28) (variant): EOF occurred inside a head or a framed body.
+- [`InvalidStartLine`](../stdlib/src/net/http/http.crb#L30) (variant): Invalid request/status line or unsupported HTTP version.
+- [`InvalidHeader`](../stdlib/src/net/http/http.crb#L32) (variant): Invalid field syntax or obsolete line folding.
+- [`LineTooLong`](../stdlib/src/net/http/http.crb#L34) (variant): A request/status/header/chunk line exceeds its selected bound.
+- [`HeadersTooLarge`](../stdlib/src/net/http/http.crb#L36) (variant): The complete header/trailer section exceeds its selected bound.
+- [`TooManyHeaders`](../stdlib/src/net/http/http.crb#L38) (variant): Too many header/trailer fields.
+- [`InvalidFraming`](../stdlib/src/net/http/http.crb#L40) (variant): Ambiguous, unsupported or malformed body framing.
+- [`InvalidChunk`](../stdlib/src/net/http/http.crb#L42) (variant): Malformed chunk size or delimiter.
+- [`InvalidReadCount`](../stdlib/src/net/http/http.crb#L44) (variant): The reader returned a count larger than its output slice.
+
+### `Version`
+
+[http.crb:48](../stdlib/src/net/http/http.crb#L48)
+
+```rust
+pub enum Version
+```
+
+Versions accepted by this HTTP/1.x parser.
+
+Members:
+
+- [`Http10`](../stdlib/src/net/http/http.crb#L50) (variant): HTTP/1.0.
+- [`Http11`](../stdlib/src/net/http/http.crb#L52) (variant): HTTP/1.1.
+
+### `Header`
+
+[http.crb:56](../stdlib/src/net/http/http.crb#L56)
+
+```rust
+pub struct Header
+```
+
+A field view borrows its message's header storage; duplicates stay distinct.
+
+Members:
+
+- [`name`](../stdlib/src/net/http/http.crb#L58) (implementation field): ASCII field name, preserving its spelling.
+- [`value`](../stdlib/src/net/http/http.crb#L60) (implementation field): Field value bytes with surrounding SP/HTAB removed.
+
+### `Header::name`
+
+[http.crb:66](../stdlib/src/net/http/http.crb#L66)
+
+```rust
+fn name(&self) -> &str
+```
+
+Returns the validated ASCII field name.
+
+### `Header::value`
+
+[http.crb:68](../stdlib/src/net/http/http.crb#L68)
+
+```rust
+fn value(&self) -> &[u8]
+```
+
+Borrows the original field value bytes, without UTF-8 interpretation.
+
+### `Headers`
+
+[http.crb:72](../stdlib/src/net/http/http.crb#L72)
+
+```rust
+pub struct Headers
+```
+
+Owns bounded raw header bytes; traversal needs no separately allocated index.
+
+Members:
+
+- [`bytes`](../stdlib/src/net/http/http.crb#L74) (implementation field): Parsed lines retain CRLF to permit offset-based traversal.
+- [`used`](../stdlib/src/net/http/http.crb#L76) (implementation field): Number of populated bytes, including the final empty line.
+- [`count`](../stdlib/src/net/http/http.crb#L78) (implementation field): Number of fields, including duplicates.
+
+### `Headers::len`
+
+[http.crb:92](../stdlib/src/net/http/http.crb#L92)
+
+```rust
+fn len(&self) -> usize
+```
+
+Number of header fields; repeated names each count once.
+
+### `Headers::get`
+
+[http.crb:94](../stdlib/src/net/http/http.crb#L94)
+
+```rust
+fn get(&self, index: usize) -> Option<Header>
+```
+
+Returns the field at an ordinal, preserving repeats and arrival order.
+
+### `BodyReader`
+
+[http.crb:208](../stdlib/src/net/http/http.crb#L208)
+
+```rust
+pub struct BodyReader<R, E>
+```
+
+Borrows a reader and exposes only declared body bytes; dropping never drains.
+
+Members:
+
+- [`source`](../stdlib/src/net/http/http.crb#L210) (implementation field): Injected reader, retained for this message's body lifetime.
+- [`mode`](../stdlib/src/net/http/http.crb#L212) (implementation field): Zero: absent; one: Content-Length; two: chunked.
+- [`remaining`](../stdlib/src/net/http/http.crb#L214) (implementation field): Unread bytes in the current fixed-length body or chunk.
+- [`delimiter`](../stdlib/src/net/http/http.crb#L216) (implementation field): A nonfinal chunk has been consumed and its CRLF is pending.
+- [`finished`](../stdlib/src/net/http/http.crb#L218) (implementation field): The declared body has ended.
+
+### `BodyReader::new`
+
+[http.crb:223](../stdlib/src/net/http/http.crb#L223)
+
+```rust
+fn new(reader: &mut R) -> BodyReader<R, E>
+```
+
+Captures the reader without performing transport access.
+
+### `BodyReader::one`
+
+[http.crb:228](../stdlib/src/net/http/http.crb#L228)
+
+```rust
+fn one(&mut self) -> Result<Option<u8>, ParseError<E>>
+```
+
+Reads exactly one logical byte, preserving any buffered-reader lookahead.
+
+### `BodyReader::line`
+
+[http.crb:241](../stdlib/src/net/http/http.crb#L241)
+
+```rust
+fn line(&mut self, output: &mut [u8]) -> Result<Option<usize>, ParseError<E>>
+```
+
+Reads one strict CRLF line without copying its terminator into output.
+
+### `BodyReader::headers`
+
+[http.crb:267](../stdlib/src/net/http/http.crb#L267)
+
+```rust
+fn headers(&mut self) -> Result<Headers, ParseError<E>>
+```
+
+Reads a bounded section into owned storage, retaining repeated field lines.
+
+### `BodyReader::read`
+
+[http.crb:294](../stdlib/src/net/http/http.crb#L294)
+
+```rust
+fn read(&mut self, output: &mut [u8]) -> Result<usize, ParseError<E>>
+```
+
+Reads a body prefix; empty output causes no transport access.
+
+### `Request`
+
+[http.crb:350](../stdlib/src/net/http/http.crb#L350)
+
+```rust
+pub struct Request<R, E>
+```
+
+Owns request-head bytes and a reader-dependent optional body descriptor.
+
+Members:
+
+- [`line`](../stdlib/src/net/http/http.crb#L352) (implementation field): Request line bytes, excluding CRLF.
+- [`method_end`](../stdlib/src/net/http/http.crb#L354) (implementation field): End of the method token.
+- [`target_end`](../stdlib/src/net/http/http.crb#L356) (implementation field): End of the request target.
+- [`protocol`](../stdlib/src/net/http/http.crb#L358) (implementation field): Parsed protocol version.
+- [`fields`](../stdlib/src/net/http/http.crb#L360) (implementation field): Owned header section.
+- [`body_reader`](../stdlib/src/net/http/http.crb#L362) (implementation field): Optional body's framing state and reader dependency.
+
+### `Request::method`
+
+[http.crb:367](../stdlib/src/net/http/http.crb#L367)
+
+```rust
+fn method(&self) -> &str
+```
+
+Returns the method as a borrowed ASCII text view, including extensions.
+
+### `Request::target`
+
+[http.crb:369](../stdlib/src/net/http/http.crb#L369)
+
+```rust
+fn target(&self) -> &str
+```
+
+Returns the unmodified request target as a borrowed ASCII text view.
+
+### `Request::version`
+
+[http.crb:371](../stdlib/src/net/http/http.crb#L371)
+
+```rust
+fn version(&self) -> &Version
+```
+
+Returns the protocol version without transferring its storage.
+
+### `Request::headers`
+
+[http.crb:373](../stdlib/src/net/http/http.crb#L373)
+
+```rust
+fn headers(&self) -> &Headers
+```
+
+Borrows owned headers, retaining repeats.
+
+### `Request::body`
+
+[http.crb:375](../stdlib/src/net/http/http.crb#L375)
+
+```rust
+fn body(&mut self) -> Option<&mut BodyReader<R, E>>
+```
+
+Borrows the optional framed body; this operation itself performs no reads.
+
+### `Response`
+
+[http.crb:384](../stdlib/src/net/http/http.crb#L384)
+
+```rust
+pub struct Response<R, E>
+```
+
+Owns response-head bytes; the caller supplies request-dependent semantics.
+
+Members:
+
+- [`line`](../stdlib/src/net/http/http.crb#L386) (implementation field): Status line bytes, excluding CRLF.
+- [`line_length`](../stdlib/src/net/http/http.crb#L388) (implementation field): Populated status-line bytes.
+- [`code`](../stdlib/src/net/http/http.crb#L390) (implementation field): Three-digit status code.
+- [`protocol`](../stdlib/src/net/http/http.crb#L392) (implementation field): Parsed protocol version.
+- [`fields`](../stdlib/src/net/http/http.crb#L394) (implementation field): Owned header section.
+- [`body_reader`](../stdlib/src/net/http/http.crb#L396) (implementation field): Header-indicated body, which must not be read for a HEAD response.
+
+### `Response::status`
+
+[http.crb:401](../stdlib/src/net/http/http.crb#L401)
+
+```rust
+fn status(&self) -> u16
+```
+
+Returns the status code.
+
+### `Response::reason`
+
+[http.crb:403](../stdlib/src/net/http/http.crb#L403)
+
+```rust
+fn reason(&self) -> &[u8]
+```
+
+Returns reason-phrase octets without imposing UTF-8.
+
+### `Response::version`
+
+[http.crb:405](../stdlib/src/net/http/http.crb#L405)
+
+```rust
+fn version(&self) -> &Version
+```
+
+Returns the parsed protocol version.
+
+### `Response::headers`
+
+[http.crb:407](../stdlib/src/net/http/http.crb#L407)
+
+```rust
+fn headers(&self) -> &Headers
+```
+
+Borrows the response header section.
+
+### `Response::body`
+
+[http.crb:409](../stdlib/src/net/http/http.crb#L409)
+
+```rust
+fn body(&mut self) -> Option<&mut BodyReader<R, E>>
+```
+
+Returns a header-indicated body; caller handles HEAD and exchange context.
+
+### `request`
+
+[http.crb:433](../stdlib/src/net/http/http.crb#L433)
+
+```rust
+pub fn request(reader: &mut R) -> Result<Option<Request<R, E>>, ParseError<E>>
+```
+
+Parses one request head, without prefetching body or next-request bytes.
+
+### `response`
+
+[http.crb:461](../stdlib/src/net/http/http.crb#L461)
+
+```rust
+pub fn response(reader: &mut R) -> Result<Option<Response<R, E>>, ParseError<E>>
+```
+
+Parses one response head; a declared body is an indication, not HEAD context.
+
+
 ## `std::net::ipv4`
 
 IPv4 addresses and socket endpoints with dotted-decimal parsing.
@@ -4865,3 +5248,20 @@ fn next(&mut self) -> Option<&str>
 
 Returns the next UTF-8 view, or None after exhaustion.
 Returned pieces depend on the original text, independently of this cursor.
+
+
+Error type for checked, zero-copy byte-to-text conversion.
+
+### `Utf8Error`
+
+[utf8.crb:5](../stdlib/src/text/utf8.crb#L5)
+
+```rust
+pub enum Utf8Error
+```
+
+Reports invalid UTF-8 without replacing or copying input bytes.
+
+Members:
+
+- [`InvalidEncoding`](../stdlib/src/text/utf8.crb#L7) (variant): Input contains an invalid, overlong, surrogate or incomplete sequence.
