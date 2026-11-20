@@ -3989,3 +3989,14 @@ protocole et les limites de la référence reconstituée figurent dans le
 | Règles | Propriété exercée | Preuve et limite |
 | --- | --- | --- |
 | G8, G10, G12 | Le nettoyage précède le recul et un slot transféré arrête le recul à sa frontière. | P — deux traces natives du curseur, contrôle de l'adresse après transfert, 102 témoins C sous UBSan et 54 refus. [Rapport](cycles/CORE_COMPOSITION_CYCLE.md#g10--recul-groupé-du-curseur-régional) |
+
+## Chaînes bornées, binaire et temps
+
+TX23 : bornes UTF-8, stockage inline, déplacement, vues et emprunts en pool
+exercés. N4/N5/N6 : dix refus ciblés couvrent types incompatibles, accès privés,
+déplacement et durée de vie des vues. Neuf programmes fonctionnels et deux
+régressions passent sous UBSan sur macOS ARM64. Les témoins binaires/temporels
+et de disposition inline passent sur macOS x86-64, Linux ARM64/x86-64 et Windows
+x86-64 ; Windows ARM64 est compilé uniquement. L’auto-reconstruction produit un
+C identique aux générations 2 et 3. Pas d’audit indépendant ni de preuve générale.
+[Rapport détaillé](cycles/BINARY_TIME_BOUNDED_CYCLE.md).

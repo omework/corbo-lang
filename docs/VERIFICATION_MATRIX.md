@@ -4917,3 +4917,29 @@ and handoff validation. This is not a new language-rule or safety validation.
 
 [Cycle report](cycles/POOL_CONSTRUCTION_TRY_CYCLE.md) records the baseline iterator
 failure and the absence of other-platform execution or an independent audit.
+
+## TX23 — bounded inline UTF-8 strings (specification only)
+
+| Mechanism | Recorded contract | Evidence / status |
+| --- | --- | --- |
+| `String<N>` | Compile-time byte maximum, fixed inline payload plus length; UTF-8 invariant; no silent truncation or growing fallback. | Implemented; scoped executable evidence below. |
+| Existing `String` | Growing representation retained; no new implicit conversions or Copy classification. | No change to existing implementation or prior validation scope. |
+
+See the historical [specification record](cycles/BOUNDED_STRINGS_SPEC_CYCLE.md) and current integration evidence below.
+
+
+## Bounded strings, binary encoding and time — executed integration
+
+| Mechanism / rules | Executed evidence | Limits |
+| --- | --- | --- |
+| TX23 fixed inline UTF-8 | Capacity, literal/qualified identity, UTF-8 boundaries, TooLong unchanged, zero capacity, moves and pool borrows | Native padding is not a portable disk layout |
+| N4 / N5 / N6 dependencies and moves | Rejected byte/text/pooled view escape, conflicting mutation, moved reuse and private construction; Result text source retained | Scoped probes, not a general proof |
+| Explicit binary endianness | LE/BE integer/float reads and writes, extrema, short buffers and bool errors | 64-bit supported targets; no exhaustive bit campaign |
+| Time API | Monotonic blocking/async deadline probes on macOS/Linux ARM64+x86-64 and Windows x86-64 | Wine Windows execution; Windows ARM64 compile-only; worker-per-wait |
+| Core reconstruction | Byte-identical stage2/stage3 with updated STD; constant and generic regressions pass | Published STD pin remains unchanged until publication |
+
+Nine focused host UBSan executions, ten expected refusals and two related UBSan
+regressions completed. Three API and three bounded-layout probes per non-host
+target completed as detailed in the report. No independent audit claimed.
+
+[Cycle evidence](cycles/BINARY_TIME_BOUNDED_CYCLE.md).

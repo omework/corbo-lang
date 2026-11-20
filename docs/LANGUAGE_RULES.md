@@ -1305,6 +1305,13 @@ The proposals are not yet fully implemented.
 The following decisions on Vector and String are reported:
 are recorded in [FOUNDATIONS_AND_VECTORS.md](FOUNDATIONS_AND_VECTORS.md).
 
+**TX23 — Bounded inline strings.** `String<N>` adds a
+compile-time byte bound and fixed inline payload with current-length metadata.
+Plain `String` retains growing storage. See the normative
+[bounded-string definition](UTF8_STRINGS.md#bounded-inline-utf-8-strings).
+The grammar, corboc specialization and STD implementation are integrated; see
+the verification matrix for scoped evidence.
+
 <a id="13-fondamentaux-allocations-typées-et-vecteurs"></a>
 
 ## 13. Fundamentals, typed allowances and delivery systems

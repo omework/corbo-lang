@@ -1,0 +1,11 @@
+use std::{String, BoundedStringError};
+fn echo(text: String<4>) -> String<4> { text }
+fn main() {
+    let text = match String<4>::try_from("é") { Ok(v) => { v }, Err(e) => { drop(e); return; }, };
+    let view = match text.as_str() { Ok(v) => { v }, Err(e) => { drop(e); return; }, };
+    print(view.byte_len());
+    let bytes = view.as_bytes();
+    print(bytes[0]);
+    let moved = echo(text);
+    print(moved.len());
+}

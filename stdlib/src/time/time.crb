@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Monotonic durations, instants and deadline waits; no wall-clock/calendar semantics.
+use std::sys::time::{clock, pause};
+
+/// Reports clock, sleep or asynchronous worker-launch failure.
+pub enum Error {
+    /// The system monotonic clock could not be read.
+    ClockFailure,
+    /// The system sleep call failed for a reason other than interruption.
+    WaitFailure,
+    /// The asynchronous runtime could not start the blocking worker.
+    LaunchFailed,
+}
+
+/// A nonnegative span with nanosecond units and checked arithmetic.
+pub struct Duration {
+    /// Span in nanoseconds; private so constructors define the representation.
+    nanos: u64,
+}
+impl Duration {
+    /// Constructs a span from nanoseconds.
+    fn from_nanos(nanos: u64) -> Duration { Duration { nanos: nanos } }
+    /// Constructs a span from milliseconds; integer overflow follows checked arithmetic.
+    fn from_millis(millis: u64) -> Duration { Duration { nanos: millis * 1000000 } }
+    /// Constructs a span from seconds; integer overflow follows checked arithmetic.
+    fn from_secs(seconds: u64) -> Duration { Duration { nanos: seconds * 1000000000 } }
+    /// Returns the span in nanoseconds without changing it.
+    fn as_nanos(&self) -> u64 { (*self).nanos }
+}
+
+/// An opaque monotonic timestamp; not a date or portable serialized timestamp.
+pub struct Instant {
+    /// Platform clock expressed in nanoseconds; clock resolution remains platform-specific.
+    ticks: u64,
+}
+impl Instant {
+    /// Reads the current monotonic timestamp.
+    fn now() -> Result<Instant, Error> {
+        let (status, ticks) = clock();
+        if status != 0 { return Err(Error.ClockFailure); }
+        Ok(Instant { ticks: ticks })
+    }
+    /// Returns an instant after this one; addition uses checked integer arithmetic.
+    fn after(&self, duration: Duration) -> Instant {
+        Instant { ticks: (*self).ticks + duration.as_nanos() }
+    }
+    /// Measures time since this instant, saturating a backward platform reading at zero.
+    fn elapsed(&self) -> Result<Duration, Error> {
+        let now = Instant::now()?;
+        let current = now.ticks;
+        let start = (*self).ticks;
+        Ok(Duration { nanos: if copy(current) >= copy(start) { current - start } else { 0 } })
+    }
+}
+
+/// A reusable monotonic deadline; waiting does not consume it.
+pub struct Timer {
+    /// Absolute monotonic timestamp of the deadline.
+    deadline: Instant,
+}
+impl Timer {
+    /// Creates a timer that becomes ready after the given span.
+    fn after(duration: Duration) -> Result<Timer, Error> {
+        let now = Instant::now()?;
+        let deadline = now.after(duration);
+        Ok(Timer { deadline: deadline })
+    }
+    /// Creates a timer for an existing monotonic deadline.
+    fn at(deadline: Instant) -> Timer { Timer { deadline: deadline } }
+    /// Blocks this thread until the deadline, retrying interruptions and early wakes.
+    fn wait(&self) -> Result<(), Error> {
+        loop {
+            let (status, now) = clock();
+            if status != 0 { return Err(Error.ClockFailure); }
+            let deadline = (*self).deadline.ticks;
+            if copy(now) >= copy(deadline) { return Ok(()); }
+            let remaining = deadline - now;
+            let chunk: u64 = if copy(remaining) > 60000000000 { 60000000000 } else { remaining };
+            if pause(chunk) != 0 { return Err(Error.WaitFailure); }
+        };
+        Err(Error.WaitFailure)
+    }
+}
+
+/// Blocks the current thread for at least the given monotonic span.
+pub fn sleep(duration: Duration) -> Result<(), Error> {
+    let timer = Timer::after(duration)?;
+    timer.wait()
+}

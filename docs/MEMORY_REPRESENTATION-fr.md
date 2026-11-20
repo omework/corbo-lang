@@ -362,3 +362,15 @@ Le contrôle de durée de vie suit la valeur qu’une écriture peut
 installer, ses descendants et ses effets différés. Une écriture
 gardée conserve le verrou, la charge protégée et les cibles que
 ses nouveaux liens doivent garder vivantes.
+
+## Bornes littérales et texte inline borné
+
+Le compilateur conserve l’argument générique littéral dans un nœud AST de genre
+94 avec sa plage source. La spécialisation le substitue dans le tableau fixe de
+String<N>, représenté comme une structure ordinaire. Les résumés de provenance,
+de placement et de dépendances existants sont réutilisés. L’emprunt de la charge
+de A<T> vise la liaison de l’allocation ; une vue texte dans Result conserve sa
+racine source. La visibilité privée suit chaque déclaration concrète générée et
+son implémentation, plutôt que l’emplacement d’un modèle effacé.
+
+Voir les [résultats d’intégration](cycles/BINARY_TIME_BOUNDED_CYCLE.md).

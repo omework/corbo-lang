@@ -1,0 +1,20 @@
+use std::encoding::binary;
+fn main() {
+    let mut b: [u8;8] = [170;8];
+    match binary::write_u64_be(18446744073709551615, &mut b[..]) { Ok(n) => { drop(n); }, Err(e) => { drop(e); return; }, }
+    match binary::read_u64_be(&b[..]) { Ok(v) => { print(v == 18446744073709551615); }, Err(e) => { drop(e); }, }
+    match binary::write_i32_le(-2147483648, &mut b[..]) { Ok(n) => { drop(n); }, Err(e) => { drop(e); return; }, }
+    match binary::read_i32_le(&b[..]) { Ok(v) => { print(v == -2147483648); }, Err(e) => { drop(e); }, }
+    let before = b[0];
+    match binary::write_u32_be(42, &mut b[..1]) { Ok(n) => { drop(n); print(false); }, Err(e) => { drop(e); print(b[0] == before); }, }
+    match binary::read_u64_le(&b[..7]) { Ok(v) => { drop(v); print(false); }, Err(e) => { drop(e); print(true); }, }
+    let invalid: [u8;1] = [2];
+    match binary::read_bool(&invalid[..]) { Ok(v) => { drop(v); print(false); }, Err(e) => { match e { binary::Error.InvalidBoolean => { print(true); }, binary::Error.BufferTooSmall => { print(false); }, } }, }
+    match binary::write_bool(true, &mut b[..]) { Ok(n) => { drop(n); }, Err(e) => { drop(e); return; }, }
+    match binary::read_bool(&b[..]) { Ok(v) => { print(v); }, Err(e) => { drop(e); }, }
+    match binary::write_f32_be(-1.5, &mut b[..]) { Ok(n) => { drop(n); }, Err(e) => { drop(e); return; }, }
+    match binary::read_f32_be(&b[..]) { Ok(v) => { print(v == -1.5); }, Err(e) => { drop(e); }, }
+    match binary::write_u16_le(258, &mut b[..]) { Ok(n) => { drop(n); }, Err(e) => { drop(e); return; }, }
+    print(b[0] == 2 && b[1] == 1);
+    match binary::read_u16_be(&b[..]) { Ok(v) => { print(v == 513); }, Err(e) => { drop(e); }, }
+}

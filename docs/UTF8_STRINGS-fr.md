@@ -316,3 +316,58 @@ l’intégration synchrone de la découpe faillible du brouillon 07. Les preuves
 constituent pas des preuves de validité UTF-8 ou de leurs interactions avec
 String. Voir la [matrice](VERIFICATION_MATRIX.md) et le
 [rapport documentaire](cycles/UTF8_STRINGS_CYCLE.md).
+
+## Chaînes UTF-8 inline bornées
+
+**TX23 — Borne en octets à la compilation.** `String<N>` est une chaîne UTF-8
+inline contenant au maximum `N` octets. La borne est connue à la compilation et
+fait partie du type ; des bornes différentes désignent des types différents.
+La syntaxe retenue utilise un entier littéral, par exemple `String<64>`. Elle
+compte les octets encodés, pas les caractères Unicode ou les graphèmes.
+
+Le stockage contient la longueur courante et une zone inline de `N` octets,
+y compris les octets inutilisés. Son empreinte est fixe et connue à la
+compilation, métadonnées de longueur et alignement compris : elle ne vaut donc
+pas nécessairement exactement `N` octets. Il ne s'agit pas d'un descripteur vers
+une zone grandissante. Les offsets de champs et la largeur d'une ligne de
+stockage fixe peuvent ainsi être déterminés à la compilation.
+
+Toute valeur satisfait `0 <= longueur_en_octets <= N` et son contenu utilisé
+reste UTF-8 valide. Un dépassement est refusé sans troncature silencieuse,
+sans agrandissement implicite et sans bascule vers `String` grandissant.
+La STD propose `String<N>::new()` pour une valeur vide et
+`String<N>::try_from(&str) -> Result<String<N>, BoundedStringError>` pour une
+copie complète. `set(&mut self, &str) -> Result<(), BoundedStringError>` conserve
+la valeur précédente si le texte dépasse la borne (`TooLong`). `len()` et
+`capacity()` renvoient des `usize`. `as_bytes()` emprunte les octets ; `as_str()`
+renvoie `Result<&str, std::text::Utf8Error>` via la validation existante.
+La notation est accessible avec `std::String`, ses alias et ses chemins qualifiés.
+La spécialisation utilise le template de STD `BoundedString<N>`.
+
+`String` sans argument conserve sa représentation grandissante en région.
+TX9–TX19 et TX21 concernent cette forme grandissante et ne déterminent pas la
+classification de copie de `String<N>`. Les règles générales de possession,
+d'emprunt et de durée de vie s'appliquent ; aucune copie ni conversion implicite
+supplémentaire n'est introduite.
+
+```rust
+struct Customer {
+    id: u64,
+    email: String<254>,
+    display_name: String<64>,
+    country_code: String<2>,
+    active: bool,
+}
+```
+
+La borne ne garantit ni longueur exacte, ni contenu ASCII, ni format métier.
+L'implémentation stocke une longueur `usize` puis `[u8; N]` et remet les
+parties inutilisées du payload à zéro lors de la construction et de `set`.
+L'alignement/padding natif contribue à la taille. Il ne constitue pas un format
+disque portable et figé ; le padding ne fait pas partie d'un contrat d'encodage.
+Utiliser l'encodage binaire explicite pour définir un format disque. Cette extension littérale n'introduit ni paramètres constants
+génériques utilisateur, ni arguments sous forme de constantes nommées.
+
+**Statut :** intégré dans corboc et la STD par spécialisation de structures
+fixes ordinaires. Le [rapport](cycles/BINARY_TIME_BOUNDED_CYCLE.md) précise les
+exécutions, refus et limites ; aucune preuve générale de sécurité annoncée.

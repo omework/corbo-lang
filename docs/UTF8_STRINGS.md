@@ -363,3 +363,70 @@ Literal matching uses a forward byte scan, with worst-case O(n × m) comparisons
 for text length n and separator length m; no Unicode normalization is applied.
 
 The implementation is in [the STD source](../stdlib/src/text/split.crb).
+
+## Bounded inline UTF-8 strings
+
+**TX23 — Compile-time byte bound.** `String<N>` is an inline UTF-8 string
+whose maximum content length is `N` bytes, known at compile time. The accepted
+syntax supplies an integer literal as the type argument, for example
+`String<64>`. The bound counts encoded bytes, not Unicode characters or grapheme
+clusters. It is part of the type: different bounds designate different types.
+
+Storage contains the current byte length and a fixed `N`-byte payload, including
+unused bytes when the content is shorter than its bound. The payload is inline:
+it is not a descriptor pointing to growing storage. Its footprint is fixed and
+known at compile time, including length metadata and alignment; it is not
+necessarily exactly `N` bytes. A containing fixed-layout row can therefore have
+statically determined field offsets and row width.
+
+Every valid value satisfies `0 <= byte_length <= N`, and the used payload is
+valid UTF-8. Content exceeding the bound is rejected, never silently truncated.
+There is no implicit allocation of larger storage or fallback to growing
+`String`. The STD provides the following explicit operations:
+
+| Operation | Result |
+| --- | --- |
+| `String<N>::new()` | Empty inline value, without a pool or growing allocation. |
+| `String<N>::try_from(text: &str)` | `Result<String<N>, BoundedStringError>`; copies complete UTF-8 or returns `TooLong`. |
+| `value.set(text: &str)` | `Result<(), BoundedStringError>`; replaces content, preserving the prior value on `TooLong`. |
+| `value.len()` / `value.capacity()` | Current byte length / fixed maximum, as `usize`. |
+| `value.as_bytes()` | An immutable byte slice tied to the value's storage. |
+| `value.as_str()` | `Result<&str, std::text::Utf8Error>`; validates and borrows a text view without copying. |
+
+Use `std::String` through normal imports or qualified paths. The source template
+is `std::BoundedString<N>`; the public `String<N>` spelling selects its concrete
+layout. The API is implemented in [collections.crb](../stdlib/src/collections.crb).
+`as_str` uses the existing checked UTF-8 conversion rather than adding an
+unchecked text-construction primitive.
+
+Plain `String` retains its existing growing, region-backed representation.
+TX9–TX19 and TX21 describe that growing type; they do not impose its storage or
+copy classification on `String<N>`. The existing general ownership, borrowing
+and lifetime rules apply to bounded values and references to their content.
+No new implicit conversion or copying rule is introduced.
+
+Example schema (declarations only):
+
+```rust
+struct Customer {
+    id: u64,
+    email: String<254>,
+    display_name: String<64>,
+    country_code: String<2>,
+    active: bool,
+}
+```
+
+The bound alone does not enforce an exact length, ASCII-only content, or a
+business format such as an email address. The current implementation stores a `usize` length followed by `[u8; N]`;
+construction and replacement zero unused payload bytes. Native alignment/padding
+still contributes to the footprint. This layout is not a portable, frozen disk
+format, and padding bytes are not an encoding contract. Define disk fields and
+byte order explicitly with [binary encoding](BINARY_AND_TIME_API.md).
+General constant-generic declarations and named constant arguments are not
+introduced by this literal syntax extension.
+
+**Status:** implemented in corboc and the STD through ordinary fixed-layout
+record specialization. Focused execution/refusal evidence and platform limits
+are recorded in [the integration report](cycles/BINARY_TIME_BOUNDED_CYCLE.md).
+This is not a general safety proof.

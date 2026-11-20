@@ -1,3 +1,18 @@
+## Chaînes bornées, binaire et temps (core + API STD)
+
+- [x] Parser les bornes littérales et spécialiser `String<N>` en stockage inline fixe.
+- [x] Conserver la visibilité privée, les dépendances des vues et les emprunts en pool.
+- [x] Implémenter les conversions binaires little-endian et big-endian explicites.
+- [x] Implémenter Duration, Instant, Timer et les attentes synchrones/asynchrones.
+- [x] Exécuter neuf programmes sous UBSan et dix refus attendus.
+- [x] Exécuter deux régressions ciblées et les témoins des plateformes concernées.
+- [x] Reconstruire corboc avec une émission C identique entre les générations 2 et 3.
+- [x] Régénérer les références et consigner les limites de validation.
+
+L’exécution Windows ARM64 reste différée. Aucun commit ni changement de révision
+épinglée : le compilateur de développement utilise sa STD correspondante.
+[Rapport](cycles/BINARY_TIME_BOUNDED_CYCLE.md).
+
 [English](IMPLEMENTATION_CHECKLIST.md)
 
 # Checklist globale d'implémentation

@@ -1309,6 +1309,13 @@ structurellement Copy. Les itérateurs sont reportés. Les propositions non
 arbitrées sont signalées. Les décisions suivantes sur Vector et String
 sont consignées dans [FOUNDATIONS_AND_VECTORS.md](FOUNDATIONS_AND_VECTORS.md).
 
+**TX23 — Chaînes inline bornées.** `String<N>`
+possède une borne en octets connue à la compilation et un stockage inline fixe
+avec métadonnées de longueur. `String` sans argument reste grandissant.
+Voir TX23 dans [UTF8_STRINGS-fr.md](UTF8_STRINGS-fr.md).
+La grammaire, corboc et la STD sont intégrés ; les preuves ciblées figurent
+dans la matrice de vérification.
+
 ## 13. Fondamentaux, allocations typées et vecteurs
 
 Voir [FOUNDATIONS_AND_VECTORS.md](FOUNDATIONS_AND_VECTORS.md) pour F1–F5,

@@ -1,0 +1,328 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Native monotonic clock and bounded blocking sleep backends.
+
+#(if: target.os == "linux" && target.arch == "x86_64")
+
+/// Reads CLOCK_MONOTONIC into a native timespec and returns status plus nanoseconds.
+pub fn clock() -> (i64, u64) {
+    let mut stamp: [u64; 2] = [0; 2];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov rsi, ${address}
+            mov edi, 1
+            mov eax, 228
+            syscall
+            mov ${status}, rax
+        }
+    }
+    if status != 0 { return (status, 0); }
+    let ticks: u64 = stamp[0] * 1000000000 + stamp[1];
+    (0, ticks)
+}
+/// Sleeps a bounded interval; interruptions are retried by the deadline-based caller.
+pub fn pause(nanos: u64) -> i64 {
+    let mut stamp: [u64; 2] = [copy(nanos) / 1000000000, nanos % 1000000000];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov rdi, ${address}
+            xor esi, esi
+            mov eax, 35
+            syscall
+            mov ${status}, rax
+        }
+    }
+
+    if status == -4 { return 0; }
+
+    status
+}
+
+#(endif)
+
+#(if: target.os == "linux" && target.arch == "aarch64")
+
+/// Reads CLOCK_MONOTONIC into a native timespec and returns status plus nanoseconds.
+pub fn clock() -> (i64, u64) {
+    let mut stamp: [u64; 2] = [0; 2];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov x1, ${address}
+            mov w0, #1
+            mov x8, #113
+            svc #0
+            mov ${status}, x0
+        }
+    }
+    if status != 0 { return (status, 0); }
+    let ticks: u64 = stamp[0] * 1000000000 + stamp[1];
+    (0, ticks)
+}
+/// Sleeps a bounded interval; interruptions are retried by the deadline-based caller.
+pub fn pause(nanos: u64) -> i64 {
+    let mut stamp: [u64; 2] = [copy(nanos) / 1000000000, nanos % 1000000000];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov x0, ${address}
+            mov x1, #0
+            mov x8, #101
+            svc #0
+            mov ${status}, x0
+        }
+    }
+
+    if status == -4 { return 0; }
+
+    status
+}
+
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "x86_64")
+
+/// Reads CLOCK_MONOTONIC into a native timespec and returns status plus nanoseconds.
+pub fn clock() -> (i64, u64) {
+    let mut stamp: [u64; 2] = [0; 2];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov rsi, ${address}
+            mov edi, 6
+            call _clock_gettime
+            mov ${status}, rax
+        }
+    }
+    if status != 0 { return (status, 0); }
+    let ticks: u64 = stamp[0] * 1000000000 + stamp[1];
+    (0, ticks)
+}
+/// Sleeps a bounded interval; interruptions are retried by the deadline-based caller.
+pub fn pause(nanos: u64) -> i64 {
+    let mut stamp: [u64; 2] = [copy(nanos) / 1000000000, nanos % 1000000000];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov rdi, ${address}
+            xor esi, esi
+            call _nanosleep
+            mov ${status}, rax
+        }
+    }
+
+    if status != 0 {
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                call ___error
+                mov eax, DWORD PTR [rax]
+                mov ${error}, rax
+            }
+        }
+        if error == 4 { return 0; }
+    }
+
+    status
+}
+
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+
+/// Reads CLOCK_MONOTONIC into a native timespec and returns status plus nanoseconds.
+pub fn clock() -> (i64, u64) {
+    let mut stamp: [u64; 2] = [0; 2];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov x1, ${address}
+            mov w0, #6
+            bl _clock_gettime
+            mov ${status}, x0
+        }
+    }
+    if status != 0 { return (status, 0); }
+    let ticks: u64 = stamp[0] * 1000000000 + stamp[1];
+    (0, ticks)
+}
+/// Sleeps a bounded interval; interruptions are retried by the deadline-based caller.
+pub fn pause(nanos: u64) -> i64 {
+    let mut stamp: [u64; 2] = [copy(nanos) / 1000000000, nanos % 1000000000];
+    let mut status: i64 = 0;
+    @unchecked {
+        let address = addr(&mut stamp[0]);
+        @asm {
+            mov x0, ${address}
+            mov x1, #0
+            bl _nanosleep
+            mov ${status}, x0
+        }
+    }
+
+    if status != 0 {
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                bl ___error
+                ldr w0, [x0]
+                mov ${error}, x0
+            }
+        }
+        if error == 4 { return 0; }
+    }
+
+    status
+}
+
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+
+/// Scales a subsecond counter remainder without overflowing a 64-bit product.
+fn fractional_nanos(part: u64, frequency: u64) -> u64 {
+    if frequency <= 18446744073 { return (part * 1000000000) / frequency; }
+    let multiplier: u64 = 1000000000;
+    let mut bit: u64 = 30;
+    let mut remainder: u64 = 0;
+    let mut quotient: u64 = 0;
+    while bit > 0 {
+        bit -= 1;
+        quotient *= 2;
+        if remainder >= frequency - remainder {
+            remainder = remainder - (frequency - remainder);
+            quotient += 1;
+        } else { remainder *= 2; }
+        if ((multiplier >> bit) & 1) != 0 {
+            if remainder >= frequency - part {
+                remainder = remainder - (frequency - part);
+                quotient += 1;
+            } else { remainder += part; }
+        }
+    }
+    quotient
+}
+/// Reads the high-resolution monotonic performance counter and scales it to nanoseconds.
+pub fn clock() -> (i64, u64) {
+    let mut frequency: u64 = 0;
+    let mut ticks: u64 = 0;
+    let mut success: u32 = 0;
+    @unchecked {
+        let address = addr(&mut frequency);
+        @asm {
+            sub rsp, 32
+            mov rcx, ${address}
+            call QueryPerformanceFrequency
+            mov ${success}, eax
+            add rsp, 32
+        }
+    }
+    if success == 0 || frequency == 0 { return (-1, 0); }
+    @unchecked {
+        let address = addr(&mut ticks);
+        @asm {
+            sub rsp, 32
+            mov rcx, ${address}
+            call QueryPerformanceCounter
+            mov ${success}, eax
+            add rsp, 32
+        }
+    }
+    if success == 0 { return (-1, 0); }
+    let seconds = ticks / copy(frequency);
+    let remainder = ticks % copy(frequency);
+    let fraction = fractional_nanos(remainder, frequency);
+    let nanos: u64 = seconds * 1000000000 + fraction;
+    (0, nanos)
+}
+/// Sleeps at most sixty seconds; rounds positive fractions to a millisecond.
+pub fn pause(nanos: u64) -> i64 {
+    let millis = (nanos + 999999) / 1000000;
+    @unchecked {
+        @asm {
+            sub rsp, 32
+            mov rcx, ${millis}
+            call Sleep
+            add rsp, 32
+        }
+    }
+    0
+}
+
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+
+/// Scales a subsecond counter remainder without overflowing a 64-bit product.
+fn fractional_nanos(part: u64, frequency: u64) -> u64 {
+    if frequency <= 18446744073 { return (part * 1000000000) / frequency; }
+    let multiplier: u64 = 1000000000;
+    let mut bit: u64 = 30;
+    let mut remainder: u64 = 0;
+    let mut quotient: u64 = 0;
+    while bit > 0 {
+        bit -= 1;
+        quotient *= 2;
+        if remainder >= frequency - remainder {
+            remainder = remainder - (frequency - remainder);
+            quotient += 1;
+        } else { remainder *= 2; }
+        if ((multiplier >> bit) & 1) != 0 {
+            if remainder >= frequency - part {
+                remainder = remainder - (frequency - part);
+                quotient += 1;
+            } else { remainder += part; }
+        }
+    }
+    quotient
+}
+/// Reads the high-resolution monotonic performance counter and scales it to nanoseconds.
+pub fn clock() -> (i64, u64) {
+    let mut frequency: u64 = 0;
+    let mut ticks: u64 = 0;
+    let mut success: u32 = 0;
+    @unchecked {
+        let address = addr(&mut frequency);
+        @asm {
+            mov x0, ${address}
+            bl QueryPerformanceFrequency
+            mov ${success}, w0
+        }
+    }
+    if success == 0 || frequency == 0 { return (-1, 0); }
+    @unchecked {
+        let address = addr(&mut ticks);
+        @asm {
+            mov x0, ${address}
+            bl QueryPerformanceCounter
+            mov ${success}, w0
+        }
+    }
+    if success == 0 { return (-1, 0); }
+    let seconds = ticks / copy(frequency);
+    let remainder = ticks % copy(frequency);
+    let fraction = fractional_nanos(remainder, frequency);
+    let nanos: u64 = seconds * 1000000000 + fraction;
+    (0, nanos)
+}
+/// Sleeps at most sixty seconds; rounds positive fractions to a millisecond.
+pub fn pause(nanos: u64) -> i64 {
+    let millis = (nanos + 999999) / 1000000;
+    @unchecked {
+        @asm {
+            mov x0, ${millis}
+            bl Sleep
+        }
+    }
+    0
+}
+
+#(endif)

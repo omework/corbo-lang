@@ -393,3 +393,18 @@ unsupported-analysis result. This is compiler storage, not runtime allocation.
 Concrete generic nominal instances are separately interned by template and the
 complete concrete argument list, including nested instance identities. Dependency
 selection uses the source occurrence as well as the enclosing specialization.
+
+## Literal bounds and bounded inline text
+
+The active compiler preserves a literal generic argument as AST kind 94 with its
+source span. It is a bound, not an i64 value expression. Generic specialization
+substitutes that bound into the ordinary fixed-array member of the STD template
+selected for `String<N>`. Equivalent integer spellings share type identity.
+No new ownership entity is introduced: the specialized record uses the existing
+Value provenance, placement and dependency summaries. A borrowed payload of A<T>
+targets the allocation binding, preserving its source pool and lifetime; a text
+view returned inside Result retains the same source root as a direct view.
+Private generic-layout metadata is attached to each generated concrete declaration
+and its implementation, rather than to an erased template’s output offset.
+
+See [integration evidence](cycles/BINARY_TIME_BOUNDED_CYCLE.md).

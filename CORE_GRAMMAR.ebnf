@@ -75,7 +75,14 @@ type                = "&", [ "mut" ], ( type | type_tranche ) | type_base ;
 type_base           = "(", ")" | type_tuple | type_tableau | type_appelable | type_nomme ;
 type_tuple          = "(", type, ",", type, { ",", type }, [ "," ], ")" ;
 type_nomme          = chemin, [ arguments_type ] ;
-arguments_type      = "<", type, { ",", type }, ">" ;
+arguments_type      = "<", argument_type, { ",", argument_type }, ">" ;
+argument_type       = type | entier ;
+(* String<N> : N est une borne entière connue à la compilation, en octets.
+   Cette forme désigne un stockage UTF-8 inline de capacité fixe (TX23).
+   String sans argument conserve son stockage grandissant.
+   L'argument entier est consigné pour String<N> ; cela ne définit pas
+   une fonctionnalité générale de paramètres constants pour les types utilisateur.
+   Le parseur conserve la borne littérale ; la spécialisation produit un layout fixe. *)
 type_appelable      = "fn", "(", [ type, { ",", type } ], ")", "->", type ;
 primitif            = "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
                     | "bool" | "f32" | "f64" | "usize" ;

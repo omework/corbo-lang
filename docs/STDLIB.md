@@ -28,6 +28,7 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 - [`std::crypto::sha512`](#stdcryptosha512)
 - [`std::crypto::x509`](#stdcryptox509)
 - [`std::encoding::base64`](#stdencodingbase64)
+- [`std::encoding::binary`](#stdencodingbinary)
 - [`std::encoding::der`](#stdencodingder)
 - [`std::encoding::hex`](#stdencodinghex)
 - [`std::encoding::pem`](#stdencodingpem)
@@ -50,6 +51,8 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 - [`std::net::udp`](#stdnetudp)
 - [`std::num`](#stdnum)
 - [`std::text`](#stdtext)
+- [`std::time`](#stdtime)
+- [`std::time::asyn`](#stdtimeasyn)
 
 ## `std`
 
@@ -60,7 +63,7 @@ Storage, operations and dependency tracking retain their existing native impleme
 
 ### `Vector`
 
-[collections.crb:9](../stdlib/src/collections.crb#L9)
+[collections.crb:11](../stdlib/src/collections.crb#L11)
 
 ```rust
 pub struct Vector<T>
@@ -71,7 +74,7 @@ Construct through `Pool<Vector<T>>::new(...).new()`; normal moves and loans appl
 
 ### `HashMap`
 
-[collections.crb:14](../stdlib/src/collections.crb#L14)
+[collections.crb:16](../stdlib/src/collections.crb#L16)
 
 ```rust
 pub struct HashMap<K, V>
@@ -82,7 +85,7 @@ A region-backed map with integer or boolean keys and stable entry storage.
 
 ### `String`
 
-[collections.crb:20](../stdlib/src/collections.crb#L20)
+[collections.crb:22](../stdlib/src/collections.crb#L22)
 
 ```rust
 pub struct String
@@ -94,7 +97,7 @@ Construct through a String pool; borrowed text views retain its lifetime.
 
 ### `Pool`
 
-[collections.crb:26](../stdlib/src/collections.crb#L26)
+[collections.crb:28](../stdlib/src/collections.crb#L28)
 
 ```rust
 pub struct Pool<T>
@@ -106,7 +109,7 @@ Fixed-capacity typed slot storage on the datastack; allocations retain its lifet
 
 ### `PoolError`
 
-[collections.crb:30](../stdlib/src/collections.crb#L30)
+[collections.crb:32](../stdlib/src/collections.crb#L32)
 
 ```rust
 pub enum PoolError
@@ -116,7 +119,108 @@ Recoverable failure to allocate a slot in an existing typed pool.
 
 Members:
 
-- [`Full`](../stdlib/src/collections.crb#L32) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
+- [`Full`](../stdlib/src/collections.crb#L34) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
+
+### `BoundedStringError`
+
+[collections.crb:38](../stdlib/src/collections.crb#L38)
+
+```rust
+pub enum BoundedStringError
+```
+
+Reports content exceeding a bounded inline string's byte capacity.
+
+Members:
+
+- [`TooLong`](../stdlib/src/collections.crb#L40) (variant): The full UTF-8 input does not fit; the destination remains unchanged.
+
+### `BoundedString`
+
+[collections.crb:46](../stdlib/src/collections.crb#L46)
+
+```rust
+pub struct BoundedString<N>
+```
+
+Fixed-layout template selected by String<N>; length plus N inline bytes.
+Import std::String to make the bounded spelling available to a package.
+No field is writable outside this STD module; constructors retain UTF-8.
+
+Members:
+
+- [`length`](../stdlib/src/collections.crb#L48) (implementation field): Current UTF-8 byte count, always no greater than N.
+- [`data`](../stdlib/src/collections.crb#L50) (implementation field): Inline storage; unused bytes are zeroed by construction and set.
+
+### `BoundedString::new`
+
+[collections.crb:54](../stdlib/src/collections.crb#L54)
+
+```rust
+fn new() -> BoundedString<N>
+```
+
+Constructs an empty inline string without an allocation.
+
+### `BoundedString::try_from`
+
+[collections.crb:58](../stdlib/src/collections.crb#L58)
+
+```rust
+fn try_from(text: &str) -> Result<BoundedString<N>, BoundedStringError>
+```
+
+Copies a complete UTF-8 input or returns TooLong without truncation.
+
+### `BoundedString::capacity`
+
+[collections.crb:66](../stdlib/src/collections.crb#L66)
+
+```rust
+fn capacity(&self) -> usize
+```
+
+Returns the compile-time byte capacity.
+
+### `BoundedString::len`
+
+[collections.crb:68](../stdlib/src/collections.crb#L68)
+
+```rust
+fn len(&self) -> usize
+```
+
+Returns the current byte length, not a character count.
+
+### `BoundedString::set`
+
+[collections.crb:70](../stdlib/src/collections.crb#L70)
+
+```rust
+fn set(&mut self, text: &str) -> Result<(), BoundedStringError>
+```
+
+Replaces the content, retaining the old value if the input is too long.
+
+### `BoundedString::as_str`
+
+[collections.crb:89](../stdlib/src/collections.crb#L89)
+
+```rust
+fn as_str(&self) -> Result<&str, Utf8Error>
+```
+
+Borrows validated UTF-8 text without allocating or copying its payload.
+
+### `BoundedString::as_bytes`
+
+[collections.crb:94](../stdlib/src/collections.crb#L94)
+
+```rust
+fn as_bytes(&self) -> &[u8]
+```
+
+Borrows the used bytes; mutation and moves respect the ordinary loan rules.
 
 
 ## `std::compression::gzip`
@@ -2268,6 +2372,390 @@ pub fn decode_wrapped(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
 ```
 
 Decodes canonical Base64 while allowing ASCII spaces, tabs, CR and LF.
+
+
+## `std::encoding::binary`
+
+Explicit byte-order conversion of primitive values using caller-owned slices.
+Operations use the first width bytes and leave trailing bytes unchanged.
+Float encodings preserve IEEE-754 bits, including signed zero and NaN payloads.
+
+### `Error`
+
+[binary.crb:7](../stdlib/src/encoding/binary/binary.crb#L7)
+
+```rust
+pub enum Error
+```
+
+Reports insufficient bytes or a noncanonical boolean encoding.
+
+Members:
+
+- [`BufferTooSmall`](../stdlib/src/encoding/binary/binary.crb#L9) (variant): The input or output slice contains fewer than the required bytes.
+- [`InvalidBoolean`](../stdlib/src/encoding/binary/binary.crb#L11) (variant): A boolean byte is neither zero nor one.
+
+### `read_u8`
+
+[binary.crb:15](../stdlib/src/encoding/binary/binary.crb#L15)
+
+```rust
+pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+```
+
+Reads 1 bytes as u8.
+
+### `write_u8`
+
+[binary.crb:22](../stdlib/src/encoding/binary/binary.crb#L22)
+
+```rust
+pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 1 bytes of u8; short-buffer errors leave output unchanged.
+
+### `read_u16_le`
+
+[binary.crb:31](../stdlib/src/encoding/binary/binary.crb#L31)
+
+```rust
+pub fn read_u16_le(input: &[u8]) -> Result<u16, Error>
+```
+
+Reads 2 bytes as u16 in le order.
+
+### `write_u16_le`
+
+[binary.crb:47](../stdlib/src/encoding/binary/binary.crb#L47)
+
+```rust
+pub fn write_u16_le(value: u16, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 2 bytes of u16; short-buffer errors leave output unchanged.
+
+### `read_u16_be`
+
+[binary.crb:64](../stdlib/src/encoding/binary/binary.crb#L64)
+
+```rust
+pub fn read_u16_be(input: &[u8]) -> Result<u16, Error>
+```
+
+Reads 2 bytes as u16 in be order.
+
+### `write_u16_be`
+
+[binary.crb:80](../stdlib/src/encoding/binary/binary.crb#L80)
+
+```rust
+pub fn write_u16_be(value: u16, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 2 bytes of u16; short-buffer errors leave output unchanged.
+
+### `read_u32_le`
+
+[binary.crb:97](../stdlib/src/encoding/binary/binary.crb#L97)
+
+```rust
+pub fn read_u32_le(input: &[u8]) -> Result<u32, Error>
+```
+
+Reads 4 bytes as u32 in le order.
+
+### `write_u32_le`
+
+[binary.crb:113](../stdlib/src/encoding/binary/binary.crb#L113)
+
+```rust
+pub fn write_u32_le(value: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 4 bytes of u32; short-buffer errors leave output unchanged.
+
+### `read_u32_be`
+
+[binary.crb:130](../stdlib/src/encoding/binary/binary.crb#L130)
+
+```rust
+pub fn read_u32_be(input: &[u8]) -> Result<u32, Error>
+```
+
+Reads 4 bytes as u32 in be order.
+
+### `write_u32_be`
+
+[binary.crb:146](../stdlib/src/encoding/binary/binary.crb#L146)
+
+```rust
+pub fn write_u32_be(value: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 4 bytes of u32; short-buffer errors leave output unchanged.
+
+### `read_u64_le`
+
+[binary.crb:163](../stdlib/src/encoding/binary/binary.crb#L163)
+
+```rust
+pub fn read_u64_le(input: &[u8]) -> Result<u64, Error>
+```
+
+Reads 8 bytes as u64 in le order.
+
+### `write_u64_le`
+
+[binary.crb:179](../stdlib/src/encoding/binary/binary.crb#L179)
+
+```rust
+pub fn write_u64_le(value: u64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 8 bytes of u64; short-buffer errors leave output unchanged.
+
+### `read_u64_be`
+
+[binary.crb:196](../stdlib/src/encoding/binary/binary.crb#L196)
+
+```rust
+pub fn read_u64_be(input: &[u8]) -> Result<u64, Error>
+```
+
+Reads 8 bytes as u64 in be order.
+
+### `write_u64_be`
+
+[binary.crb:212](../stdlib/src/encoding/binary/binary.crb#L212)
+
+```rust
+pub fn write_u64_be(value: u64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes 8 bytes of u64; short-buffer errors leave output unchanged.
+
+### `read_i32_le`
+
+[binary.crb:309](../stdlib/src/encoding/binary/binary.crb#L309)
+
+```rust
+pub fn read_i32_le(input: &[u8]) -> Result<i32, Error>
+```
+
+Reads the 4-byte i32 representation in le order.
+
+### `write_i32_le`
+
+[binary.crb:314](../stdlib/src/encoding/binary/binary.crb#L314)
+
+```rust
+pub fn write_i32_le(value: i32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 4-byte i32 representation in le order.
+
+### `read_i32_be`
+
+[binary.crb:319](../stdlib/src/encoding/binary/binary.crb#L319)
+
+```rust
+pub fn read_i32_be(input: &[u8]) -> Result<i32, Error>
+```
+
+Reads the 4-byte i32 representation in be order.
+
+### `write_i32_be`
+
+[binary.crb:324](../stdlib/src/encoding/binary/binary.crb#L324)
+
+```rust
+pub fn write_i32_be(value: i32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 4-byte i32 representation in be order.
+
+### `read_i64_le`
+
+[binary.crb:409](../stdlib/src/encoding/binary/binary.crb#L409)
+
+```rust
+pub fn read_i64_le(input: &[u8]) -> Result<i64, Error>
+```
+
+Reads the 8-byte i64 representation in le order.
+
+### `write_i64_le`
+
+[binary.crb:414](../stdlib/src/encoding/binary/binary.crb#L414)
+
+```rust
+pub fn write_i64_le(value: i64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 8-byte i64 representation in le order.
+
+### `read_i64_be`
+
+[binary.crb:419](../stdlib/src/encoding/binary/binary.crb#L419)
+
+```rust
+pub fn read_i64_be(input: &[u8]) -> Result<i64, Error>
+```
+
+Reads the 8-byte i64 representation in be order.
+
+### `write_i64_be`
+
+[binary.crb:424](../stdlib/src/encoding/binary/binary.crb#L424)
+
+```rust
+pub fn write_i64_be(value: i64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 8-byte i64 representation in be order.
+
+### `read_f32_le`
+
+[binary.crb:509](../stdlib/src/encoding/binary/binary.crb#L509)
+
+```rust
+pub fn read_f32_le(input: &[u8]) -> Result<f32, Error>
+```
+
+Reads the 4-byte f32 representation in le order.
+
+### `write_f32_le`
+
+[binary.crb:514](../stdlib/src/encoding/binary/binary.crb#L514)
+
+```rust
+pub fn write_f32_le(value: f32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 4-byte f32 representation in le order.
+
+### `read_f32_be`
+
+[binary.crb:519](../stdlib/src/encoding/binary/binary.crb#L519)
+
+```rust
+pub fn read_f32_be(input: &[u8]) -> Result<f32, Error>
+```
+
+Reads the 4-byte f32 representation in be order.
+
+### `write_f32_be`
+
+[binary.crb:524](../stdlib/src/encoding/binary/binary.crb#L524)
+
+```rust
+pub fn write_f32_be(value: f32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 4-byte f32 representation in be order.
+
+### `read_f64_le`
+
+[binary.crb:609](../stdlib/src/encoding/binary/binary.crb#L609)
+
+```rust
+pub fn read_f64_le(input: &[u8]) -> Result<f64, Error>
+```
+
+Reads the 8-byte f64 representation in le order.
+
+### `write_f64_le`
+
+[binary.crb:614](../stdlib/src/encoding/binary/binary.crb#L614)
+
+```rust
+pub fn write_f64_le(value: f64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 8-byte f64 representation in le order.
+
+### `read_f64_be`
+
+[binary.crb:619](../stdlib/src/encoding/binary/binary.crb#L619)
+
+```rust
+pub fn read_f64_be(input: &[u8]) -> Result<f64, Error>
+```
+
+Reads the 8-byte f64 representation in be order.
+
+### `write_f64_be`
+
+[binary.crb:624](../stdlib/src/encoding/binary/binary.crb#L624)
+
+```rust
+pub fn write_f64_be(value: f64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes the 8-byte f64 representation in be order.
+
+### `read_bool`
+
+[binary.crb:629](../stdlib/src/encoding/binary/binary.crb#L629)
+
+```rust
+pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+```
+
+Reads canonical bool encoding; rejects bytes other than zero and one.
+
+### `write_bool`
+
+[binary.crb:636](../stdlib/src/encoding/binary/binary.crb#L636)
+
+```rust
+pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes one byte: zero for false, one for true.
+
+Available when `target.pointer_width == "64"`.
+
+### `read_usize_le`
+
+[binary.crb:644](../stdlib/src/encoding/binary/binary.crb#L644)
+
+```rust
+pub fn read_usize_le(input: &[u8]) -> Result<usize, Error>
+```
+
+Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed widths on disk.
+
+### `write_usize_le`
+
+[binary.crb:649](../stdlib/src/encoding/binary/binary.crb#L649)
+
+```rust
+pub fn write_usize_le(value: usize, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a pointer-width unsigned integer on supported 64-bit targets.
+
+### `read_usize_be`
+
+[binary.crb:654](../stdlib/src/encoding/binary/binary.crb#L654)
+
+```rust
+pub fn read_usize_be(input: &[u8]) -> Result<usize, Error>
+```
+
+Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed widths on disk.
+
+### `write_usize_be`
+
+[binary.crb:659](../stdlib/src/encoding/binary/binary.crb#L659)
+
+```rust
+pub fn write_usize_be(value: usize, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes a pointer-width unsigned integer on supported 64-bit targets.
 
 
 ## `std::encoding::der`
@@ -5291,3 +5779,236 @@ Reports invalid UTF-8 without replacing or copying input bytes.
 Members:
 
 - [`InvalidEncoding`](../stdlib/src/text/utf8.crb#L7) (variant): Input contains an invalid, overlong, surrogate or incomplete sequence.
+
+
+## `std::time`
+
+Monotonic durations, instants and deadline waits; no wall-clock/calendar semantics.
+
+### `Error`
+
+[time.crb:6](../stdlib/src/time/time.crb#L6)
+
+```rust
+pub enum Error
+```
+
+Reports clock, sleep or asynchronous worker-launch failure.
+
+Members:
+
+- [`ClockFailure`](../stdlib/src/time/time.crb#L8) (variant): The system monotonic clock could not be read.
+- [`WaitFailure`](../stdlib/src/time/time.crb#L10) (variant): The system sleep call failed for a reason other than interruption.
+- [`LaunchFailed`](../stdlib/src/time/time.crb#L12) (variant): The asynchronous runtime could not start the blocking worker.
+
+### `Duration`
+
+[time.crb:16](../stdlib/src/time/time.crb#L16)
+
+```rust
+pub struct Duration
+```
+
+A nonnegative span with nanosecond units and checked arithmetic.
+
+Members:
+
+- [`nanos`](../stdlib/src/time/time.crb#L18) (implementation field): Span in nanoseconds; private so constructors define the representation.
+
+### `Duration::from_nanos`
+
+[time.crb:22](../stdlib/src/time/time.crb#L22)
+
+```rust
+fn from_nanos(nanos: u64) -> Duration
+```
+
+Constructs a span from nanoseconds.
+
+### `Duration::from_millis`
+
+[time.crb:24](../stdlib/src/time/time.crb#L24)
+
+```rust
+fn from_millis(millis: u64) -> Duration
+```
+
+Constructs a span from milliseconds; integer overflow follows checked arithmetic.
+
+### `Duration::from_secs`
+
+[time.crb:26](../stdlib/src/time/time.crb#L26)
+
+```rust
+fn from_secs(seconds: u64) -> Duration
+```
+
+Constructs a span from seconds; integer overflow follows checked arithmetic.
+
+### `Duration::as_nanos`
+
+[time.crb:28](../stdlib/src/time/time.crb#L28)
+
+```rust
+fn as_nanos(&self) -> u64
+```
+
+Returns the span in nanoseconds without changing it.
+
+### `Instant`
+
+[time.crb:32](../stdlib/src/time/time.crb#L32)
+
+```rust
+pub struct Instant
+```
+
+An opaque monotonic timestamp; not a date or portable serialized timestamp.
+
+Members:
+
+- [`ticks`](../stdlib/src/time/time.crb#L34) (implementation field): Platform clock expressed in nanoseconds; clock resolution remains platform-specific.
+
+### `Instant::now`
+
+[time.crb:38](../stdlib/src/time/time.crb#L38)
+
+```rust
+fn now() -> Result<Instant, Error>
+```
+
+Reads the current monotonic timestamp.
+
+### `Instant::after`
+
+[time.crb:44](../stdlib/src/time/time.crb#L44)
+
+```rust
+fn after(&self, duration: Duration) -> Instant
+```
+
+Returns an instant after this one; addition uses checked integer arithmetic.
+
+### `Instant::elapsed`
+
+[time.crb:48](../stdlib/src/time/time.crb#L48)
+
+```rust
+fn elapsed(&self) -> Result<Duration, Error>
+```
+
+Measures time since this instant, saturating a backward platform reading at zero.
+
+### `Timer`
+
+[time.crb:57](../stdlib/src/time/time.crb#L57)
+
+```rust
+pub struct Timer
+```
+
+A reusable monotonic deadline; waiting does not consume it.
+
+Members:
+
+- [`deadline`](../stdlib/src/time/time.crb#L59) (implementation field): Absolute monotonic timestamp of the deadline.
+
+### `Timer::after`
+
+[time.crb:63](../stdlib/src/time/time.crb#L63)
+
+```rust
+fn after(duration: Duration) -> Result<Timer, Error>
+```
+
+Creates a timer that becomes ready after the given span.
+
+### `Timer::at`
+
+[time.crb:69](../stdlib/src/time/time.crb#L69)
+
+```rust
+fn at(deadline: Instant) -> Timer
+```
+
+Creates a timer for an existing monotonic deadline.
+
+### `Timer::wait`
+
+[time.crb:71](../stdlib/src/time/time.crb#L71)
+
+```rust
+fn wait(&self) -> Result<(), Error>
+```
+
+Blocks this thread until the deadline, retrying interruptions and early wakes.
+
+### `sleep`
+
+[time.crb:86](../stdlib/src/time/time.crb#L86)
+
+```rust
+pub fn sleep(duration: Duration) -> Result<(), Error>
+```
+
+Blocks the current thread for at least the given monotonic span.
+
+
+## `std::time::asyn`
+
+Deadline waits on existing blocking workers; caller tasks suspend at await.
+A pending wait uses one blocking worker, not an executor/poller thread.
+
+### `sleep`
+
+[asyn.crb:12](../stdlib/src/time/asyn/asyn.crb#L12)
+
+```rust
+pub async fn sleep(duration: Duration) -> Result<(), Error>
+```
+
+Suspends this task for a span without blocking an executor thread.
+
+### `Timer`
+
+[asyn.crb:21](../stdlib/src/time/asyn/asyn.crb#L21)
+
+```rust
+pub struct Timer
+```
+
+Owns a reusable deadline whose waits suspend the calling task.
+
+Members:
+
+- [`inner`](../stdlib/src/time/asyn/asyn.crb#L23) (implementation field): Shared deadline state borrowed until the worker wait completes.
+
+### `Timer::after`
+
+[asyn.crb:27](../stdlib/src/time/asyn/asyn.crb#L27)
+
+```rust
+fn after(duration: Duration) -> Result<Timer, Error>
+```
+
+Creates an asynchronous timer after the supplied span.
+
+### `Timer::at`
+
+[asyn.crb:32](../stdlib/src/time/asyn/asyn.crb#L32)
+
+```rust
+fn at(deadline: Instant) -> Timer
+```
+
+Creates an asynchronous timer at an existing monotonic instant.
+
+### `Timer::wait`
+
+[asyn.crb:37](../stdlib/src/time/asyn/asyn.crb#L37)
+
+```rust
+async fn wait(&self) -> Result<(), Error>
+```
+
+Suspends until the deadline; the timer outlives its borrowed worker wait.
