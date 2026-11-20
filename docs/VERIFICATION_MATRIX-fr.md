@@ -4007,3 +4007,10 @@ Aucune nouvelle règle. Régressions ciblées des emprunts File/buffered, durée
 vie de split TCP et confidentialité/refus TLS conservées avec les nouveaux
 imports. Témoins sur macOS, Linux et Windows x86-64 ; Windows ARM64 compilé
 uniquement. Voir le [rapport](cycles/ASYNC_DEFAULT_API_CYCLE.md).
+
+## Lisibilité des exemples
+
+Aucune nouvelle règle. Quatorze programmes modifiés passent sous UBSan O1 sur
+macOS ARM64 ; les 38 blocs EN/FR correspondent aux sources. Le refus de insert
+sans receveur est consigné ; `_previous` résout l’exemple sans modifier le core.
+[Rapport](cycles/EXAMPLE_CLEANUP_CYCLE.md).

@@ -2,19 +2,19 @@ use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
 
 async fn round_trip() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
-    let mut file = File::create(
-        &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
-    ).await?;
+    let count = {
+        let mut file = File::create(
+            &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
+        ).await?;
 
-    let bytes: [u8; 2] = [111, 107];
-    file.write(&bytes[..]).await?;
-    file.seek(SeekFrom.Start(0)).await?;
+        let bytes: [u8; 2] = [111, 107];
+        file.write(&bytes[..]).await?;
+        file.seek(SeekFrom.Start(0)).await?;
 
-    let mut output: [u8; 2] = [0; 2];
-    let count = file.read(&mut output[..]).await?;
+        let mut output: [u8; 2] = [0; 2];
+        file.read(&mut output[..]).await?
+    }; // The file is closed when this block ends.
 
-    // Release the open handle before deleting the path, including on Windows.
-    drop(file);
     File::delete(&path[..]).await?;
     Ok(count)
 }
@@ -25,9 +25,9 @@ fn main() {
         Ok(result) => {
             match result {
                 Ok(count) => { print(count); },
-                Err(error) => { print(0); },
+                Err(_error) => { print(0); },
             }
         },
-        Err(error) => { print(-1); },
+        Err(_error) => { print(-1); },
     }
 }

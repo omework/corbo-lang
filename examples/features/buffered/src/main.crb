@@ -1,30 +1,35 @@
-use std::io::sync::{File};
+use std::io::sync::File;
 use std::io::{FileMode, FilePerm};
 use std::io::sync::buffered::BufWriter;
 
 fn main() {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
-    let mut file = match File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode) {
-        Ok(file) => { file },
-        Err(error) => { drop(error); return; },
-    };
-    let mut scratch: [u8; 4] = [0; 4];
     {
-        let mut writer = BufWriter::new(&mut file, &mut scratch[..]);
-        let bytes: [u8; 2] = [111, 107];
-        match writer.write(&bytes[..]) {
-            Ok(count) => { print(count); },
-            Err(error) => { drop(error); return; },
+        let mut file = match File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode) {
+            Ok(file) => { file },
+            Err(_error) => { return; },
+        };
+        let mut scratch: [u8; 4] = [0; 4];
+        {
+            let mut writer = BufWriter::new(&mut file, &mut scratch[..]);
+            let bytes: [u8; 2] = [111, 107];
+            match writer.write(&bytes[..]) {
+                Ok(count) => { print(count); },
+                Err(_error) => { return; },
+            }
+            match writer.flush() {
+                Ok(()) => {},
+                Err(_error) => { return; },
+            }
         }
-        match writer.flush() {
-            Ok(()) => {},
-            Err(error) => { drop(error); return; },
-        }
+        match file.stats() {
+            Ok(stats) => { print(stats.size()); },
+            Err(_error) => { return; },
+        };
+    } // The writer is flushed, then the file closes at scope exit.
+
+    match File::delete(&path[..]) {
+        Ok(()) => {},
+        Err(_error) => { print(0); },
     }
-    match file.stats() {
-        Ok(stats) => { print(stats.size()); },
-        Err(error) => { drop(error); return; },
-    };
-    drop(file);
-    drop(File::delete(&path[..]));
 }

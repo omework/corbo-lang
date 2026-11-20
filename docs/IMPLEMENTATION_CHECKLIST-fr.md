@@ -1,3 +1,12 @@
+## Lisibilité des exemples (documentation uniquement)
+
+- [x] Relire les 38 exemples et les fragments de configuration/API du README.
+- [x] Retirer les drops redondants et utiliser des blocs pour les fichiers.
+- [x] Conserver les drops pédagogiques, flush et la gestion des erreurs.
+- [x] Synchroniser les blocs EN/FR et valider les quatorze programmes modifiés sous UBSan.
+
+[Rapport et limite du receveur de insert](cycles/EXAMPLE_CLEANUP_CYCLE.md).
+
 ## API async par défaut
 
 - [x] Déplacer les API async dans les packages par défaut et les variantes bloquantes sous sync.

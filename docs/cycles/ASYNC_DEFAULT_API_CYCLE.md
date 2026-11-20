@@ -67,3 +67,12 @@ python3 scripts/stdlib_docs.py --check
 Publication updates the compiler's STD pin to this committed API layout; the
 published lock must not reference an uncommitted working tree. The development
 compiler is retained under corboc/build/async-default, with matching bundled STD.
+
+## Block-scoped File examples follow-up
+
+The synchronous and asynchronous README File examples now bind the returned
+byte count to an inner block. File is destroyed automatically at that block's
+exit before File::delete runs; no explicit drop(file) is needed. Both runnable
+packages pass separately on macOS ARM64 at O1/fatal UBSan (output 2). Both EN/FR
+README source blocks match their packages. This example-only follow-up does
+not add a new rule or claim a fresh cross-platform compiler validation.

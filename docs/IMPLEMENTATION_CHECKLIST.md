@@ -1,9 +1,20 @@
+## Example readability review (documentation only)
+
+- [x] Review all 38 feature examples and README setup/API fragments.
+- [x] Remove redundant drops and use block-scoped File cleanup.
+- [x] Preserve meaningful pool/destructor examples, flush and error handling.
+- [x] Synchronize all EN/FR runnable snippets with their packages.
+- [x] Execute the fourteen changed programs under fatal UBSan; record the map receiver constraint.
+
+[Evidence and scope](cycles/EXAMPLE_CLEANUP_CYCLE.md). No core/STD change.
+
 ## Async-default APIs (API/STD organization)
 
 - [x] Move async I/O/waits to default packages and blocking APIs under sync.
 - [x] Keep shared options, metadata, addresses and time values common.
 - [x] Migrate corboc imports/namespace metadata and compile the active compiler.
 - [x] Update EN/FR READMEs, runnable examples, API guides and generated reference.
+- [x] Use inner-block cleanup in both File examples; each passes under fatal UBSan.
 - [x] Execute affected File/buffered/network/timer regressions and TLS interop.
 - [x] Complete targeted platform probes; Windows ARM64 remains compile-only.
 

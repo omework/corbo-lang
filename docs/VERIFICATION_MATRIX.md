@@ -4957,3 +4957,14 @@ TCP split lifetime refusal and TLS privacy/refusal regressions are retained.
 Targeted executions cover macOS ARM64/x86-64, Linux x86-64 (timers also ARM64),
 Windows x86-64 under Wine; Windows ARM64 is compile-only. Runtime primitives
 are unchanged. [Cycle report](cycles/ASYNC_DEFAULT_API_CYCLE.md).
+
+File example follow-up: sync/async inner-block cleanup before path deletion
+passes in two focused macOS ARM64 O1/fatal-UBSan executions. No new core rule.
+
+## Example readability review
+
+No new rule or checker behavior. Fourteen changed example programs pass at O1
+with fatal UBSan on macOS ARM64; all 38 EN/FR source blocks are synchronized.
+The bare map insert statement refusal is recorded and the example uses an
+explicit `_previous` receiver. Spacing-only and unchanged examples were not
+re-executed. [Cycle evidence](cycles/EXAMPLE_CLEANUP_CYCLE.md).

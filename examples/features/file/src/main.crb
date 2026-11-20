@@ -3,14 +3,15 @@ use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
-    let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
-    let bytes: [u8; 2] = [111, 107];
-    file.write(&bytes[..])?;
-    file.seek(SeekFrom.Start(0))?;
-    let mut output: [u8; 2] = [0; 2];
-    let count = file.read(&mut output[..])?;
-    // Close before deleting the file, including on Windows.
-    drop(file);
+    let count = {
+        let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
+        let bytes: [u8; 2] = [111, 107];
+        file.write(&bytes[..])?;
+        file.seek(SeekFrom.Start(0))?;
+        let mut output: [u8; 2] = [0; 2];
+        file.read(&mut output[..])?
+    }; // The file is closed when this block ends.
+
     File::delete(&path[..])?;
     Ok(count)
 }
@@ -18,6 +19,6 @@ fn run() -> Result<usize, FileError> {
 fn main() {
     match run() {
         Ok(count) => { print(count); },
-        Err(error) => { print(0); },
+        Err(_error) => { print(0); },
     }
 }

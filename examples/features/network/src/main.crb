@@ -6,7 +6,7 @@ fn exchange() -> Result<usize, SocketError> {
     let mut listener = Listener::bind(SocketAddr::new(Addr::new(127, 0, 0, 1), 0))?;
     let mut peer = connect(listener.addr())?;
     let input: [u8; 1] = [42];
-    drop(peer.send(&input[..])?);
+    peer.send(&input[..])?;
     let mut output: [u8; 1] = [0];
     let datagram = listener.recv(&mut output[..])?;
     print(output[0]);
@@ -16,6 +16,6 @@ fn exchange() -> Result<usize, SocketError> {
 fn main() {
     match exchange() {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); print(0); },
+        Err(_error) => { print(0); },
     }
 }

@@ -251,14 +251,17 @@ fn main() {
     let selected = if true { 40 } else { 0 };
     let mut total: i64 = 0;
     let mut index: i64 = 0;
+
     while index < 4 {
         index += 1;
         if index == 2 { continue; }
         total += index;
     }
+
     let result = loop {
         break selected + 2;
     };
+
     print(total);
     print(result);
 }
@@ -476,6 +479,7 @@ fn main() {
     let middle = &mut values[1];
     *middle += 1;
     print(sum(&values[..]));
+
     let tokens: [Token; 2] = [Token { kind: 7 }; 2];
     print(tokens[1].kind);
 }
@@ -564,7 +568,9 @@ fn main() {
     let received = first;
     print(1);
     drop(received);
-    { let scoped = Item { number: 9 }; }
+    {
+        let scoped = Item { number: 9 };
+    }
 }
 ```
 
@@ -647,7 +653,7 @@ use std::HashMap;
 fn main() {
     let mut values = HashMap<i64, i64>::new();
     let key: i64 = 7;
-    drop(values.insert(copy(key), 42));
+    let _previous = values.insert(copy(key), 42);
     match values.get(&key) {
         Some(value) => { print(*value); },
         None => { print(0); },
@@ -712,7 +718,7 @@ fn main() {
     // Two UTF-8 characters occupy four bytes, exactly our inline budget.
     let mut name = match String<4>::try_from("éé") {
         Ok(value) => { value },
-        Err(error) => { return; },
+        Err(_error) => { return; },
     };
 
     print(name.capacity());
@@ -721,7 +727,7 @@ fn main() {
     // Five bytes cannot fit. The previous content stays intact.
     match name.set("hello") {
         Ok(()) => { print(false); },
-        Err(error) => { print(true); },
+        Err(_error) => { print(true); },
     }
 
     print(name.len());
@@ -762,7 +768,10 @@ fn main() {
     print(offset);
 
     let mut count: i64 = 0;
-    let mut next = move || { count += 1; count };
+    let mut next = move || {
+        count += 1;
+        count
+    };
 
     print(advance(&mut next));
     print(next());
@@ -987,7 +996,7 @@ fn main() {
     let execution = runtime::spawn(calculate());
     match execution.join() {
         Ok(value) => { print(value); },
-        Err(error) => { drop(error); print(0); },
+        Err(_error) => { print(0); },
     }
 }
 ```
@@ -1011,8 +1020,10 @@ fn main() {
         move view;
         *view += 1;
     });
-    drop(execution.join());
-    print(number);
+    match execution.join() {
+        Ok(()) => { print(number); },
+        Err(_error) => { print(0); },
+    }
 }
 ```
 
@@ -1036,7 +1047,7 @@ async fn calculate() -> i64 {
     let execution = runtime::spawn_blocking(operation());
     match execution.await {
         Ok(value) => { value },
-        Err(error) => { drop(error); 0 },
+        Err(_error) => { 0 },
     }
 }
 
@@ -1044,7 +1055,7 @@ fn main() {
     let execution = runtime::spawn(calculate());
     match execution.join() {
         Ok(value) => { print(value); },
-        Err(error) => { drop(error); print(0); },
+        Err(_error) => { print(0); },
     }
 }
 ```
@@ -1060,7 +1071,7 @@ Sortie : `42`. [Paquet complet](examples/features/blocking/).
 
 #### Fichiers async par défaut
 
-`std::io::File` utilise `.await` pour ses opérations. Les modes, permissions et origines de seek sont communs avec `std::io::sync::File`. La fermeture anticipée avant suppression est explicite ; les erreurs sont détruites automatiquement à la sortie de leur bloc.
+`std::io::File` utilise `.await` pour ses opérations. Les modes, permissions et origines de seek sont communs avec `std::io::sync::File`. Un bloc interne ferme le fichier avant la suppression du chemin ; les erreurs sont elles aussi détruites automatiquement à la sortie de leur bloc.
 
 <!-- example: async_file -->
 ```rust
@@ -1068,19 +1079,19 @@ use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
 
 async fn round_trip() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
-    let mut file = File::create(
-        &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
-    ).await?;
+    let count = {
+        let mut file = File::create(
+            &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
+        ).await?;
 
-    let bytes: [u8; 2] = [111, 107];
-    file.write(&bytes[..]).await?;
-    file.seek(SeekFrom.Start(0)).await?;
+        let bytes: [u8; 2] = [111, 107];
+        file.write(&bytes[..]).await?;
+        file.seek(SeekFrom.Start(0)).await?;
 
-    let mut output: [u8; 2] = [0; 2];
-    let count = file.read(&mut output[..]).await?;
+        let mut output: [u8; 2] = [0; 2];
+        file.read(&mut output[..]).await?
+    }; // The file is closed when this block ends.
 
-    // Release the open handle before deleting the path, including on Windows.
-    drop(file);
     File::delete(&path[..]).await?;
     Ok(count)
 }
@@ -1091,10 +1102,10 @@ fn main() {
         Ok(result) => {
             match result {
                 Ok(count) => { print(count); },
-                Err(error) => { print(0); },
+                Err(_error) => { print(0); },
             }
         },
-        Err(error) => { print(-1); },
+        Err(_error) => { print(-1); },
     }
 }
 ```
@@ -1105,7 +1116,7 @@ Sortie: `2`. [Paquet complet](examples/features/async_file/).
 
 <a id="files-errors-and-caller-provided-buffers"></a>
 
-#### Fichiers, erreurs et tampons fournis par l’appelant
+#### Fichiers bloquants, erreurs et tampons fournis par l’appelant
 
 L’appelant choisit le mode d’ouverture, les permissions et la taille du tampon. Dans cette API, les chemins sont des tranches d’octets terminées par NUL. Ce programme crée un fichier dans son répertoire de travail, y effectue des entrées-sorties puis le supprime. Un déplacement ou une destruction de `File` entraîne une seule fermeture de son handle natif.
 
@@ -1116,14 +1127,15 @@ use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
-    let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
-    let bytes: [u8; 2] = [111, 107];
-    file.write(&bytes[..])?;
-    file.seek(SeekFrom.Start(0))?;
-    let mut output: [u8; 2] = [0; 2];
-    let count = file.read(&mut output[..])?;
-    // Close before deleting the file, including on Windows.
-    drop(file);
+    let count = {
+        let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
+        let bytes: [u8; 2] = [111, 107];
+        file.write(&bytes[..])?;
+        file.seek(SeekFrom.Start(0))?;
+        let mut output: [u8; 2] = [0; 2];
+        file.read(&mut output[..])?
+    }; // The file is closed when this block ends.
+
     File::delete(&path[..])?;
     Ok(count)
 }
@@ -1131,7 +1143,7 @@ fn run() -> Result<usize, FileError> {
 fn main() {
     match run() {
         Ok(count) => { print(count); },
-        Err(error) => { print(0); },
+        Err(_error) => { print(0); },
     }
 }
 ```
@@ -1148,35 +1160,40 @@ Les wrappers tamponnés empruntent explicitement le flux et le tampon de travail
 
 <!-- example: buffered -->
 ```rust
-use std::io::sync::{File};
+use std::io::sync::File;
 use std::io::{FileMode, FilePerm};
 use std::io::sync::buffered::BufWriter;
 
 fn main() {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
-    let mut file = match File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode) {
-        Ok(file) => { file },
-        Err(error) => { drop(error); return; },
-    };
-    let mut scratch: [u8; 4] = [0; 4];
     {
-        let mut writer = BufWriter::new(&mut file, &mut scratch[..]);
-        let bytes: [u8; 2] = [111, 107];
-        match writer.write(&bytes[..]) {
-            Ok(count) => { print(count); },
-            Err(error) => { drop(error); return; },
+        let mut file = match File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode) {
+            Ok(file) => { file },
+            Err(_error) => { return; },
+        };
+        let mut scratch: [u8; 4] = [0; 4];
+        {
+            let mut writer = BufWriter::new(&mut file, &mut scratch[..]);
+            let bytes: [u8; 2] = [111, 107];
+            match writer.write(&bytes[..]) {
+                Ok(count) => { print(count); },
+                Err(_error) => { return; },
+            }
+            match writer.flush() {
+                Ok(()) => {},
+                Err(_error) => { return; },
+            }
         }
-        match writer.flush() {
-            Ok(()) => {},
-            Err(error) => { drop(error); return; },
-        }
+        match file.stats() {
+            Ok(stats) => { print(stats.size()); },
+            Err(_error) => { return; },
+        };
+    } // The writer is flushed, then the file closes at scope exit.
+
+    match File::delete(&path[..]) {
+        Ok(()) => {},
+        Err(_error) => { print(0); },
     }
-    match file.stats() {
-        Ok(stats) => { print(stats.size()); },
-        Err(error) => { drop(error); return; },
-    };
-    drop(file);
-    drop(File::delete(&path[..]));
 }
 ```
 
@@ -1200,7 +1217,7 @@ fn exchange() -> Result<usize, SocketError> {
     let mut listener = Listener::bind(SocketAddr::new(Addr::new(127, 0, 0, 1), 0))?;
     let mut peer = connect(listener.addr())?;
     let input: [u8; 1] = [42];
-    drop(peer.send(&input[..])?);
+    peer.send(&input[..])?;
     let mut output: [u8; 1] = [0];
     let datagram = listener.recv(&mut output[..])?;
     print(output[0]);
@@ -1210,7 +1227,7 @@ fn exchange() -> Result<usize, SocketError> {
 fn main() {
     match exchange() {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); print(0); },
+        Err(_error) => { print(0); },
     }
 }
 ```
@@ -1235,13 +1252,13 @@ fn main() {
     let mut hash = Sha256::new();
     match hash.update(&input[..]) {
         Ok(()) => {},
-        Err(error) => { drop(error); return; },
+        Err(_error) => { return; },
     }
     let digest = hash.finish();
     let mut encoded: [u8; 64] = [0; 64];
     match encode(&digest[..], &mut encoded[..]) {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); print(0); },
+        Err(_error) => { print(0); },
     }
 }
 ```
@@ -1276,7 +1293,7 @@ fn encode() -> Result<(), Error> {
 fn main() {
     match encode() {
         Ok(()) => {},
-        Err(error) => { },
+        Err(_error) => { },
     }
 }
 ```
@@ -1311,7 +1328,7 @@ fn wait() -> Result<(), Error> {
 fn main() {
     match wait() {
         Ok(()) => { print(1); },
-        Err(error) => { },
+        Err(_error) => { },
     }
 }
 ```
@@ -1326,8 +1343,7 @@ L’attente suspend la tâche appelante. Un worker bloquant existant effectue l�
 
 <!-- example: async_time -->
 ```rust
-use std::time::{Duration, Error};
-use std::time::{sleep, Timer};
+use std::time::{Duration, Error, sleep, Timer};
 
 async fn delayed_value() -> Result<i64, Error> {
     sleep(Duration::from_millis(2)).await?;
@@ -1346,10 +1362,10 @@ fn main() {
         Ok(result) => {
             match result {
                 Ok(value) => { print(value); },
-                Err(error) => { },
+                Err(_error) => { },
             }
         },
-        Err(error) => { },
+        Err(_error) => { },
     }
 }
 ```
@@ -1375,12 +1391,12 @@ fn main() {
     let params = Params::new();
     let count = match compress(&input[..], &mut encoded[..], &params, &mut workspace[..]) {
         Ok(count) => { count },
-        Err(error) => { drop(error); return; },
+        Err(_error) => { return; },
     };
     let mut output: [u8; 3] = [0; 3];
     match decompress(&encoded[..count], &mut output[..]) {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); return; },
+        Err(_error) => { return; },
     }
     print(output[0]);
 }
