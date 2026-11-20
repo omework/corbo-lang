@@ -4943,3 +4943,8 @@ regressions completed. Three API and three bounded-layout probes per non-host
 target completed as detailed in the report. No independent audit claimed.
 
 [Cycle evidence](cycles/BINARY_TIME_BOUNDED_CYCLE.md).
+
+README follow-up: the four new bounded_text/binary/time/async_time packages
+pass individually under O1/fatal UBSan. Their English README source blocks
+match the tracked packages; the French README carries the same code blocks.
+This documentation check does not extend the platform evidence above.

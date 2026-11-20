@@ -198,10 +198,10 @@ The examples are synchronized with their source and validated with `corboc`;
 
 - [Basics](#basics): [A synchronous entry point](#hello), [Primitives and checked operators](#numbers), [Expressions and control flow](#control), [Functions, tuples and destructuring](#tuples), [Structs, constants and receiver modes](#methods), [Enums and pattern matching](#enums), [Result, Option and early propagation](#errors).
 - [Memory and lifetimes](#memory-and-lifetimes): [Moves and explicit copies](#moves), [Shared borrows and mutable reborrows](#borrows), [Fixed arrays, structural repetition and slices](#arrays), [Fixed-capacity pools and allocation handles](#pools), [Receivers and placement across scopes](#placement), [Destruction before storage release](#destruction), [Datastack budgets, local regions and page reclamation](#regions).
-- [Collections and pipelines](#collections-and-pipelines): [Vectors and extraction](#vector), [HashMap lookup, replacement and removal](#map), [UTF-8 text and caller-owned bytes](#text), [Closures and explicit callable passing](#closures), [STD iterator pipelines](#iter).
+- [Collections and pipelines](#collections-and-pipelines): [Vectors and extraction](#vector), [HashMap lookup, replacement and removal](#map), [UTF-8 text and caller-owned bytes](#text), [Bounded inline strings](#bounded-text), [Closures and explicit callable passing](#closures), [STD iterator pipelines](#iter).
 - [Generic code and packages](#generic-code-and-packages): [Contracts on generic structs](#generic), [Static structural type contracts](#contracts), [Packages, modules, visibility and aliases](#modules), [Conditional compilation](#target).
 - [Async and threads](#async-and-threads): [Futures, suspension and execution branches](#async), [Native threads and captured loans](#threads), [Blocking work from an async context](#blocking).
-- [STD in practice](#std-in-practice): [Files, errors and caller-provided buffers](#file), [Buffered I/O through structural contracts](#buffered), [Typed network endpoints and datagrams](#network), [Hashes and encodings with bounded output](#encoding), [Compression with an explicit workspace](#compression).
+- [STD in practice](#std-in-practice): [Files, errors and caller-provided buffers](#file), [Buffered I/O through structural contracts](#buffered), [Typed network endpoints and datagrams](#network), [Hashes and encodings with bounded output](#encoding), [Binary endianness](#binary), [Monotonic time](#time), [Async timers](#async-time), [Compression with an explicit workspace](#compression).
 - [Native interop](#native-interop): [Unchecked C, typed operands and native assembly](#foreign).
 
 ### Basics
@@ -660,6 +660,10 @@ Output: `42, 42`. [Complete package](examples/features/map/).
 
 `String` owns region-backed UTF-8 bytes; a literal provides a static `&str` view. Byte length differs from character count. Convert to a byte slice explicitly with `as_bytes()`. Both `String` and `&str` provide `split(separator)`: its iterator yields borrowed `&str` pieces, preserving empty pieces without allocating strings.
 
+`String<N>` instead keeps at most `N` UTF-8 bytes inline, with its bound known
+at compilation. Oversized construction or replacement returns an error without
+truncation. See [bounded string APIs](docs/UTF8_STRINGS.md#bounded-inline-utf-8-strings).
+
 <!-- example: text -->
 ```rust
 use std::String;
@@ -686,6 +690,38 @@ fn main() {
 ```
 
 Output: `13, 2, 5, 6, 0`. [Complete package](examples/features/text/).
+
+<a id="bounded-text"></a>
+
+#### Inline UTF-8 strings with a compile-time byte maximum
+
+String<N> keeps UTF-8 bytes inline; exceeding the bound returns an error before changing the string.
+
+<!-- example: bounded_text -->
+```rust
+use std::String;
+
+fn main() {
+    // Two UTF-8 characters occupy four bytes, exactly our inline budget.
+    let mut name = match String<4>::try_from("éé") {
+        Ok(value) => { value },
+        Err(error) => { drop(error); return; },
+    };
+
+    print(name.capacity());
+    print(name.len());
+
+    // Five bytes cannot fit. The previous content stays intact.
+    match name.set("hello") {
+        Ok(()) => { print(false); },
+        Err(error) => { drop(error); print(true); },
+    }
+
+    print(name.len());
+}
+```
+
+Output: `4, 4, true, 4`. [Complete package](examples/features/bounded_text/).
 
 <a id="closures"></a>
 
@@ -1128,6 +1164,113 @@ fn main() {
 
 Output: `64`. [Complete package](examples/features/encoding/).
 
+<a id="binary"></a>
+
+#### Binary primitives with explicit endianness
+
+The caller provides storage and chooses byte order for every multi-byte read or write.
+
+<!-- example: binary -->
+```rust
+use std::encoding::binary::{write_u32_be, read_u32_be, read_u32_le, Error};
+
+fn encode() -> Result<(), Error> {
+    let mut bytes: [u8; 4] = [0; 4];
+
+    // 0x01020304 becomes the four bytes 01 02 03 04.
+    let written = write_u32_be(16909060, &mut bytes[..])?;
+    print(written);
+
+    let big = read_u32_be(&bytes[..])?;
+    let little = read_u32_le(&bytes[..])?;
+    print(big);
+    print(little);
+
+    Ok(())
+}
+
+fn main() {
+    match encode() {
+        Ok(()) => {},
+        Err(error) => { drop(error); },
+    }
+}
+```
+
+Output: `4, 16909060, 67305985`. [Complete package](examples/features/binary/).
+
+<a id="time"></a>
+
+#### Monotonic time and blocking deadlines
+
+Duration expresses a span; Instant reads a monotonic clock, and Timer waits for a deadline.
+
+<!-- example: time -->
+```rust
+use std::time::{Duration, Instant, Timer, sleep, Error};
+
+fn wait() -> Result<(), Error> {
+    let start = Instant::now()?;
+    sleep(Duration::from_millis(2))?;
+
+    let elapsed = start.elapsed()?;
+    print(elapsed.as_nanos() >= 2000000);
+
+    // A zero-duration deadline is already ready when waited.
+    let timer = Timer::after(Duration::from_nanos(0))?;
+    timer.wait()?;
+
+    Ok(())
+}
+
+fn main() {
+    match wait() {
+        Ok(()) => { print(1); },
+        Err(error) => { drop(error); },
+    }
+}
+```
+
+Output: `true, 1`. [Complete package](examples/features/time/).
+
+<a id="async-time"></a>
+
+#### Async deadline waits
+
+Async waits suspend the caller task while an existing blocking worker performs the native wait.
+
+<!-- example: async_time -->
+```rust
+use std::time::{Duration, Error};
+use std::time::asyn::{sleep, Timer};
+
+async fn delayed_value() -> Result<i64, Error> {
+    sleep(Duration::from_millis(2)).await?;
+
+    let timer = Timer::after(Duration::from_nanos(0))?;
+    timer.wait().await?;
+
+    Ok(42)
+}
+
+fn main() {
+    let execution = runtime::spawn(delayed_value());
+
+    // Launch failures and the task's own errors remain distinct.
+    match execution.join() {
+        Ok(result) => {
+            match result {
+                Ok(value) => { print(value); },
+                Err(error) => { drop(error); },
+            }
+        },
+        Err(error) => { drop(error); },
+    }
+}
+```
+
+Output: `42`. [Complete package](examples/features/async_time/).
+
 <a id="compression"></a>
 
 #### Compression with an explicit workspace
@@ -1189,18 +1332,23 @@ header paths, typed operands and unchecked responsibilities.
 ## Explore the STD
 
 Import the native collection types with `use std::{Vector, HashMap, String};`.
-Their public names live in [collections.crb](stdlib/src/collections.crb), while
-the algorithms live in the runtime. See the [collection API guide](docs/COLLECTIONS_API.md)
+Their public names live in [collections.crb](stdlib/src/collections.crb). Native
+collection algorithms live in the runtime; bounded `String<N>` is implemented
+in the STD. See the [collection API guide](docs/COLLECTIONS_API.md)
 for construction, element ownership, borrowing and cleanup.
 
 | Package | Main capabilities | Reference |
 | --- | --- | --- |
+| `std::{Pool, Vector, HashMap, String}` | Fixed-capacity pools, vectors, maps, growing UTF-8 strings and inline `String<N>` with a compile-time byte maximum | [Collections](docs/COLLECTIONS_API.md) · [Bounded strings](docs/UTF8_STRINGS.md#bounded-inline-utf-8-strings) |
 | `std::iter` | Iter, Map, Filter, Reduce and instance `collect` | [API](docs/STDLIB.md#stditer) |
 | `std::io`, `std::io::asyn` | File read/write, seek, stats, rename/delete and buffered streams | [API](docs/STDLIB.md#stdio) · [File guide](docs/FILE.md) |
 | `std::net::{tcp, udp}` and `std::net::asyn` | Typed IPv4 endpoints, sockets, partial TCP I/O and borrowed async halves | [Networking](docs/NETWORKING.md) |
+| `std::net::http` | Request/response head parsing, configurable static limits and optional streaming bodies through a reader contract | [HTTP](docs/HTTP.md) |
 | `std::net::tls` | Native TLS 1.3 key schedule, records, handshake and X.509 validation; optional OpenSSL wrapper | [API](docs/STDLIB.md#stdnettls) |
 | `std::crypto` | AES-GCM/CBC, SHA families, HMAC/HKDF, Argon2id, random, P-256 and key containers | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER and PEM with caller-owned output | [API](docs/STDLIB.md#stdencodinghex) |
+| `std::encoding::binary` | Primitive reads/writes with explicit little-/big-endian byte order and caller-provided buffers | [Binary API](docs/BINARY_AND_TIME_API.md#stdencodingbinary) |
+| `std::time`, `std::time::asyn` | Monotonic Duration/Instant, sleep and reusable deadline timers; async waits use blocking workers | [Time API](docs/BINARY_AND_TIME_API.md#stdtime) |
 | `std::compression::{gzip, zstd}` | Native bounded codecs, streaming and dictionary support | [Compression](docs/COMPRESSION.md) |
 | `std::env` | Process arguments while keeping `main` argument-free | [API](docs/STDLIB.md#stdenv) |
 

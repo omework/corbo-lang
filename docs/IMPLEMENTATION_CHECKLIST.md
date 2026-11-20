@@ -9,6 +9,7 @@
 - [x] Execute binary/time and bounded-layout probes on supported host/target combinations.
 - [x] Complete byte-identical stage2/stage3 compiler self-emission with the development STD.
 - [x] Regenerate API references and document platform and publication limits.
+- [x] Add four synchronized EN/FR README examples and validate each under fatal UBSan.
 
 No open language decision. Windows ARM64 execution remains deferred. The
 committed STD pin is unchanged; this uncommitted lot uses a matching development

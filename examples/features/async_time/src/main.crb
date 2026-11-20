@@ -1,0 +1,26 @@
+use std::time::{Duration, Error};
+use std::time::asyn::{sleep, Timer};
+
+async fn delayed_value() -> Result<i64, Error> {
+    sleep(Duration::from_millis(2)).await?;
+
+    let timer = Timer::after(Duration::from_nanos(0))?;
+    timer.wait().await?;
+
+    Ok(42)
+}
+
+fn main() {
+    let execution = runtime::spawn(delayed_value());
+
+    // Launch failures and the task's own errors remain distinct.
+    match execution.join() {
+        Ok(result) => {
+            match result {
+                Ok(value) => { print(value); },
+                Err(error) => { drop(error); },
+            }
+        },
+        Err(error) => { drop(error); },
+    }
+}

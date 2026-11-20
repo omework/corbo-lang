@@ -1,0 +1,20 @@
+use std::String;
+
+fn main() {
+    // Two UTF-8 characters occupy four bytes, exactly our inline budget.
+    let mut name = match String<4>::try_from("éé") {
+        Ok(value) => { value },
+        Err(error) => { drop(error); return; },
+    };
+
+    print(name.capacity());
+    print(name.len());
+
+    // Five bytes cannot fit. The previous content stays intact.
+    match name.set("hello") {
+        Ok(()) => { print(false); },
+        Err(error) => { drop(error); print(true); },
+    }
+
+    print(name.len());
+}

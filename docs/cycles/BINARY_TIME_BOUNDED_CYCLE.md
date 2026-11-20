@@ -109,3 +109,13 @@ in serialization, independent of host order; native struct padding is not
 serialized. Calendar time, periodic/cancellation APIs and a shared timer reactor
 are outside the retained API. Successful probes are scoped evidence, not a
 proof of complete language safety.
+
+## README examples follow-up
+
+Documentation-only follow-up: English and French READMEs now include complete
+`bounded_text`, `binary`, `time` and `async_time` examples. Matching packages
+are in examples/features and registered in its manifest. Each new example
+passed individually through validation/check_documentation.py with the
+development corboc at O1 and fatal UBSan. README/source synchronization checks
+passed; unrelated examples were not re-executed. The STD coverage table also
+now lists bounded strings, binary byte order, time and the existing HTTP API.

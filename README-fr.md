@@ -185,10 +185,10 @@ Commencez par les bases, puis suivez les valeurs à travers les emprunts, le sto
 
 - [Bases](#basics) : [Point d’entrée synchrone](#hello), [Primitives et opérateurs vérifiés](#numbers), [Expressions et contrôle du flux](#control), [Fonctions, tuples et déstructuration](#tuples), [Structures, constantes et modes du receveur](#methods), [Énumérations et filtrage par motifs](#enums), [Result, Option et propagation anticipée](#errors).
 - [Mémoire et durées de vie](#memory-and-lifetimes) : [Moves et copies explicites](#moves), [Emprunts partagés et réemprunts mutables](#borrows), [Tableaux fixes, répétition structurelle et tranches](#arrays), [Pools de capacité fixe et handles d’allocation](#pools), [Receveurs et placement entre scopes](#placement), [Destruction avant libération du stockage](#destruction), [Budgets de datastack, régions locales et restitution des pages](#regions).
-- [Collections et pipelines](#collections-and-pipelines) : [Vecteurs et extraction](#vector), [Recherche, remplacement et suppression dans une HashMap](#map), [Texte UTF-8 et octets détenus par l’appelant](#text), [Closures et passage explicite des fonctions](#closures), [Pipelines d’itérateurs de la STD](#iter).
+- [Collections et pipelines](#collections-and-pipelines) : [Vecteurs et extraction](#vector), [Recherche, remplacement et suppression dans une HashMap](#map), [Texte UTF-8 et octets détenus par l’appelant](#text), [Chaînes inline bornées](#bounded-text), [Closures et passage explicite des fonctions](#closures), [Pipelines d’itérateurs de la STD](#iter).
 - [Code générique et paquets](#generic-code-and-packages) : [Contrats sur les structures génériques](#generic), [Contrats de type structurels statiques](#contracts), [Paquets, modules, visibilité et alias](#modules), [Compilation conditionnelle](#target).
 - [Asynchrone et threads](#async-and-threads) : [Futures, suspension et branches d’exécution](#async), [Threads natifs et emprunts capturés](#threads), [Travail bloquant depuis un contexte asynchrone](#blocking).
-- [La STD en pratique](#std-in-practice) : [Fichiers, erreurs et tampons fournis par l’appelant](#file), [Entrées-sorties tamponnées et contrats structurels](#buffered), [Points de terminaison réseau typés et datagrammes](#network), [Hachage et encodage avec une sortie bornée](#encoding), [Compression avec un espace de travail explicite](#compression).
+- [La STD en pratique](#std-in-practice) : [Fichiers, erreurs et tampons fournis par l’appelant](#file), [Entrées-sorties tamponnées et contrats structurels](#buffered), [Points de terminaison réseau typés et datagrammes](#network), [Hachage et encodage avec une sortie bornée](#encoding), [Binaire et endianness](#binary), [Temps monotone](#time), [Timers async](#async-time), [Compression avec un espace de travail explicite](#compression).
 - [Interopérabilité native](#native-interop) : [C non vérifié, opérandes typées et assembleur natif](#foreign).
 
 <a id="basics"></a>
@@ -669,6 +669,8 @@ Sortie : `42, 42`. [Paquet complet](examples/features/map/).
 
 `String` détient des octets UTF-8 stockés dans une région ; un littéral fournit une vue statique `&str`. La longueur en octets diffère du nombre de caractères. Convertissez explicitement en tranche d’octets avec `as_bytes()`. `String` et `&str` proposent tous deux `split(separator)` : l’itérateur produit des morceaux empruntés de type `&str`, en conservant les morceaux vides sans allouer de chaînes.
 
+`String<N>` conserve au contraire au plus `N` octets UTF-8 inline, avec une borne connue à la compilation. Une construction ou un remplacement trop long renvoie une erreur sans tronquer le texte. Voir les [API des chaînes bornées](docs/UTF8_STRINGS-fr.md).
+
 <!-- example: text -->
 ```rust
 use std::String;
@@ -695,6 +697,38 @@ fn main() {
 ```
 
 Sortie : `13, 2, 5, 6, 0`. [Paquet complet](examples/features/text/).
+
+<a id="bounded-text"></a>
+
+#### Chaînes UTF-8 inline avec un maximum en octets connu à la compilation
+
+`String<N>` conserve ses octets UTF-8 inline. Dépasser la borne renvoie une erreur avant toute modification. Ici, deux caractères `é` occupent exactement quatre octets.
+
+<!-- example: bounded_text -->
+```rust
+use std::String;
+
+fn main() {
+    // Two UTF-8 characters occupy four bytes, exactly our inline budget.
+    let mut name = match String<4>::try_from("éé") {
+        Ok(value) => { value },
+        Err(error) => { drop(error); return; },
+    };
+
+    print(name.capacity());
+    print(name.len());
+
+    // Five bytes cannot fit. The previous content stays intact.
+    match name.set("hello") {
+        Ok(()) => { print(false); },
+        Err(error) => { drop(error); print(true); },
+    }
+
+    print(name.len());
+}
+```
+
+Sortie: `4, 4, true, 4`. [Paquet complet](examples/features/bounded_text/).
 
 <a id="closures"></a>
 
@@ -1167,6 +1201,113 @@ fn main() {
 
 Sortie : `64`. [Paquet complet](examples/features/encoding/).
 
+<a id="binary"></a>
+
+#### Primitifs binaires avec un ordre des octets explicite
+
+L’appelant fournit le tampon et choisit l’ordre little-endian ou big-endian. Les mêmes quatre octets donnent ici deux valeurs différentes selon l’ordre demandé.
+
+<!-- example: binary -->
+```rust
+use std::encoding::binary::{write_u32_be, read_u32_be, read_u32_le, Error};
+
+fn encode() -> Result<(), Error> {
+    let mut bytes: [u8; 4] = [0; 4];
+
+    // 0x01020304 becomes the four bytes 01 02 03 04.
+    let written = write_u32_be(16909060, &mut bytes[..])?;
+    print(written);
+
+    let big = read_u32_be(&bytes[..])?;
+    let little = read_u32_le(&bytes[..])?;
+    print(big);
+    print(little);
+
+    Ok(())
+}
+
+fn main() {
+    match encode() {
+        Ok(()) => {},
+        Err(error) => { drop(error); },
+    }
+}
+```
+
+Sortie: `4, 16909060, 67305985`. [Paquet complet](examples/features/binary/).
+
+<a id="time"></a>
+
+#### Temps monotone et échéances bloquantes
+
+`Duration` exprime une durée, `Instant` lit une horloge monotone et `Timer` attend une échéance. Ces instants ne sont pas des dates calendaires.
+
+<!-- example: time -->
+```rust
+use std::time::{Duration, Instant, Timer, sleep, Error};
+
+fn wait() -> Result<(), Error> {
+    let start = Instant::now()?;
+    sleep(Duration::from_millis(2))?;
+
+    let elapsed = start.elapsed()?;
+    print(elapsed.as_nanos() >= 2000000);
+
+    // A zero-duration deadline is already ready when waited.
+    let timer = Timer::after(Duration::from_nanos(0))?;
+    timer.wait()?;
+
+    Ok(())
+}
+
+fn main() {
+    match wait() {
+        Ok(()) => { print(1); },
+        Err(error) => { drop(error); },
+    }
+}
+```
+
+Sortie: `true, 1`. [Paquet complet](examples/features/time/).
+
+<a id="async-time"></a>
+
+#### Attentes asynchrones d’échéances
+
+L’attente suspend la tâche appelante. Un worker bloquant existant effectue l’attente native ; cette première implémentation utilise un worker par attente active.
+
+<!-- example: async_time -->
+```rust
+use std::time::{Duration, Error};
+use std::time::asyn::{sleep, Timer};
+
+async fn delayed_value() -> Result<i64, Error> {
+    sleep(Duration::from_millis(2)).await?;
+
+    let timer = Timer::after(Duration::from_nanos(0))?;
+    timer.wait().await?;
+
+    Ok(42)
+}
+
+fn main() {
+    let execution = runtime::spawn(delayed_value());
+
+    // Launch failures and the task's own errors remain distinct.
+    match execution.join() {
+        Ok(result) => {
+            match result {
+                Ok(value) => { print(value); },
+                Err(error) => { drop(error); },
+            }
+        },
+        Err(error) => { drop(error); },
+    }
+}
+```
+
+Sortie: `42`. [Paquet complet](examples/features/async_time/).
+
 <a id="compression"></a>
 
 <a id="compression-with-an-explicit-workspace"></a>
@@ -1234,16 +1375,20 @@ Les [contrats du code externe](docs/FOREIGN_C.md) expliquent la sélection de ci
 
 ## Explorer la STD
 
-Importez les types natifs de collections avec `use std::{Vector, HashMap, String};`. Leurs noms publics sont déclarés dans [collections.crb](stdlib/src/collections.crb), tandis que les algorithmes se trouvent dans le runtime. Le [guide de l’API des collections](docs/COLLECTIONS_API.md) décrit la construction, la possession des éléments, les emprunts et le nettoyage.
+Importez les types natifs de collections avec `use std::{Vector, HashMap, String};`. Leurs noms publics sont déclarés dans [collections.crb](stdlib/src/collections.crb). Les algorithmes des collections natives se trouvent dans le runtime ; `String<N>` bornée est implémentée dans la STD. Le [guide de l’API des collections](docs/COLLECTIONS_API.md) décrit la construction, la possession des éléments, les emprunts et le nettoyage.
 
 | Paquet | Fonctionnalités principales | Référence |
 | --- | --- | --- |
+| `std::{Pool, Vector, HashMap, String}` | Pools de capacité fixe, vecteurs, maps, chaînes UTF-8 grandissantes et `String<N>` inline avec un maximum en octets connu à la compilation | [Collections](docs/COLLECTIONS_API.md) · [Chaînes bornées](docs/UTF8_STRINGS-fr.md) |
 | `std::iter` | Iter, Map, Filter, Reduce et méthode d’instance `collect` | [API](docs/STDLIB.md#stditer) |
 | `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
 | `std::net::{tcp, udp}` et `std::net::asyn` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
+| `std::net::http` | Analyse des en-têtes de requêtes/réponses, limites statiques configurables et corps optionnels en flux via un contrat de lecture | [HTTP](docs/HTTP.md) |
 | `std::net::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnettls) |
 | `std::crypto` | AES-GCM/CBC, familles SHA, HMAC/HKDF, Argon2id, aléa, P-256 et conteneurs de clés | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER et PEM avec sortie détenue par l’appelant | [API](docs/STDLIB.md#stdencodinghex) |
+| `std::encoding::binary` | Lecture/écriture de primitifs, ordre little-endian/big-endian explicite et tampons fournis par l’appelant | [API binaire](docs/BINARY_AND_TIME_API-fr.md) |
+| `std::time`, `std::time::asyn` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::compression::{gzip, zstd}` | Codecs natifs bornés, traitement en flux et dictionnaires | [Compression](docs/COMPRESSION.md) |
 | `std::env` | Arguments du processus tout en conservant un `main` sans paramètres | [API](docs/STDLIB.md#stdenv) |
 
