@@ -2,6 +2,11 @@
 
 # File et assembleur intégré
 
+Les fichiers sont async par défaut (`std::io::File`). La variante bloquante est
+`std::io::sync::File`. FileMode, FilePerm, FileStats et SeekFrom restent dans
+`std::io`. Les opérations async s’exécutent sur des workers bloquants.
+
+
 Le frontend Rust et le backend C intègrent `@unchecked`, `addr` et
 `usize` déduit de la cible. `@asm` couvre Linux x86-64 et macOS et Windows sur x86-64 et ARM64. Les opérandes entiers de `mov` deviennent des accès mémoire Intel ou des chargements et écritures ARM64. Le bloc `@asm` doit être dans un `@unchecked`.
 
@@ -36,10 +41,10 @@ laisse la taille intacte. Un offset absolu négatif renvoie `InvalidOptions`.
 fichiers. Un fichier de destination existant est remplacé si le système
 l’autorise. Les deux chemins suivent la même convention que `open`.
 
-`std::io::asyn::File` fournit les mêmes opérations avec `.await` sur les
+`std::io::File` fournit les mêmes opérations avec `.await` sur les
 threads bloquants du runtime. Son `FileError` ajoute `LaunchFailed`.
 
-`std::io::File` sélectionne à la compilation `std::sys::unix::File` sur
+`std::io::sync::File` sélectionne à la compilation `std::sys::unix::File` sur
 Linux x86-64 et macOS, ou `std::sys::win::File` sur Windows. Le type
 interne possède la ressource et la ferme via son destructeur. Linux appelle le noyau, macOS appelle libSystem et Windows appelle Win32 depuis `@asm`. Windows convertit le chemin UTF-8 en UTF-16, puis possède le `HANDLE` renvoyé par `CreateFileW` et le ferme avec `CloseHandle`.
 

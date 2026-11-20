@@ -13,8 +13,9 @@ ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "build/rust_frontend/debug/corbo-frontend"
 STDLIB = ROOT / "stdlib/src"
 IMPORTS = """
-use std::io::buffered::{BufReader, BufWriter, BufferedError};
-use std::io::{File, FileError, FileMode, SeekFrom};
+use std::io::sync::buffered::{BufReader, BufWriter, BufferedError};
+use std::io::sync::{File, FileError};
+use std::io::{FileMode, SeekFrom};
 
 fn count_is(result: Result<usize, BufferedError<FileError>>, expected: usize) -> bool {
     match result {
@@ -83,7 +84,7 @@ fn main() -> i32 {
     0
 }
 """
-TCP = "use std::net::ipv4::from_parts;\nuse std::net::tcp::connect;\n" + IMPORTS + """
+TCP = "use std::net::ipv4::from_parts;\nuse std::net::sync::tcp::connect;\n" + IMPORTS + """
 fn main() -> i32 {
     let mut conn = match connect(from_parts(0x7f000001, TEST_PORT)) {
         Ok(value) => { value }, Err(error) => { drop(error); return 1; },
@@ -105,7 +106,7 @@ fn main() -> i32 {
 }
 """
 MEMORY = """
-use std::io::buffered::{BufReader, BufWriter, BufferedError};
+use std::io::sync::buffered::{BufReader, BufWriter, BufferedError};
 struct Memory { value: u8 }
 impl Memory {
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, bool> {
@@ -258,10 +259,10 @@ def source(root, text):
 
 def asynchronous(program):
     tcp = "TEST_PORT" in program
-    program = program.replace("std::io::buffered", "std::io::asyn::buffered")
-    program = program.replace("use std::io::{File, FileError, FileMode, SeekFrom};",
-                              "use std::io::{FileMode, SeekFrom};\nuse std::io::asyn::{File, FileError};")
-    program = program.replace("std::net::tcp", "std::net::asyn::tcp")
+    program = program.replace("std::io::sync::buffered", "std::io::buffered")
+    program = program.replace("use std::io::sync::{File, FileError};\nuse std::io::{FileMode, SeekFrom};",
+                              "use std::io::{FileMode, SeekFrom};\nuse std::io::{File, FileError};")
+    program = program.replace("std::net::sync::tcp", "std::net::tcp")
     program = program.replace("File::open(&path[..], FileMode::READ_WRITE)",
                               "File::open(&path[..], FileMode::READ_WRITE).await")
     program = program.replace("File::open(&path[..], FileMode::READ_ONLY)",

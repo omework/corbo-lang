@@ -4,7 +4,7 @@ fn main() {
     // Two UTF-8 characters occupy four bytes, exactly our inline budget.
     let mut name = match String<4>::try_from("éé") {
         Ok(value) => { value },
-        Err(error) => { drop(error); return; },
+        Err(error) => { return; },
     };
 
     print(name.capacity());
@@ -13,7 +13,7 @@ fn main() {
     // Five bytes cannot fit. The previous content stays intact.
     match name.set("hello") {
         Ok(()) => { print(false); },
-        Err(error) => { drop(error); print(true); },
+        Err(error) => { print(true); },
     }
 
     print(name.len());

@@ -15,7 +15,7 @@ FRONTEND = ROOT / "build/rust_frontend/debug/corbo-frontend"
 FIXTURE = ROOT / "validation/fixtures/tls13-rfc8448-section3.json"
 
 IMPORTS = """
-use std::net::tls::keys::{Transcript, Traffic, KeyError, early_secret, derived_secret,
+use std::net::sync::tls::keys::{Transcript, Traffic, KeyError, early_secret, derived_secret,
     handshake_secret, master_secret, traffic_secret, aes128_key, traffic_iv, derive_secret,
     finished_key, finished_verify_data, verify_finished, hkdf_expand_label};
 use std::crypto::sha256::digest;

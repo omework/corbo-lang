@@ -188,7 +188,7 @@ Commencez par les bases, puis suivez les valeurs à travers les emprunts, le sto
 - [Collections et pipelines](#collections-and-pipelines) : [Vecteurs et extraction](#vector), [Recherche, remplacement et suppression dans une HashMap](#map), [Texte UTF-8 et octets détenus par l’appelant](#text), [Chaînes inline bornées](#bounded-text), [Closures et passage explicite des fonctions](#closures), [Pipelines d’itérateurs de la STD](#iter).
 - [Code générique et paquets](#generic-code-and-packages) : [Contrats sur les structures génériques](#generic), [Contrats de type structurels statiques](#contracts), [Paquets, modules, visibilité et alias](#modules), [Compilation conditionnelle](#target).
 - [Asynchrone et threads](#async-and-threads) : [Futures, suspension et branches d’exécution](#async), [Threads natifs et emprunts capturés](#threads), [Travail bloquant depuis un contexte asynchrone](#blocking).
-- [La STD en pratique](#std-in-practice) : [Fichiers, erreurs et tampons fournis par l’appelant](#file), [Entrées-sorties tamponnées et contrats structurels](#buffered), [Points de terminaison réseau typés et datagrammes](#network), [Hachage et encodage avec une sortie bornée](#encoding), [Binaire et endianness](#binary), [Temps monotone](#time), [Timers async](#async-time), [Compression avec un espace de travail explicite](#compression).
+- [La STD en pratique](#std-in-practice) : [Fichiers async](#async-file), [Fichiers bloquants, erreurs et tampons fournis par l’appelant](#file), [Entrées-sorties tamponnées et contrats structurels](#buffered), [Points de terminaison réseau typés et datagrammes](#network), [Hachage et encodage avec une sortie bornée](#encoding), [Binaire et endianness](#binary), [Temps monotone](#time), [Timers async](#async-time), [Compression avec un espace de travail explicite](#compression).
 - [Interopérabilité native](#native-interop) : [C non vérifié, opérandes typées et assembleur natif](#foreign).
 
 <a id="basics"></a>
@@ -712,7 +712,7 @@ fn main() {
     // Two UTF-8 characters occupy four bytes, exactly our inline budget.
     let mut name = match String<4>::try_from("éé") {
         Ok(value) => { value },
-        Err(error) => { drop(error); return; },
+        Err(error) => { return; },
     };
 
     print(name.capacity());
@@ -721,7 +721,7 @@ fn main() {
     // Five bytes cannot fit. The previous content stays intact.
     match name.set("hello") {
         Ok(()) => { print(false); },
-        Err(error) => { drop(error); print(true); },
+        Err(error) => { print(true); },
     }
 
     print(name.len());
@@ -1056,6 +1056,51 @@ Sortie : `42`. [Paquet complet](examples/features/blocking/).
 
 ### La STD en pratique
 
+<a id="async-file"></a>
+
+#### Fichiers async par défaut
+
+`std::io::File` utilise `.await` pour ses opérations. Les modes, permissions et origines de seek sont communs avec `std::io::sync::File`. La fermeture anticipée avant suppression est explicite ; les erreurs sont détruites automatiquement à la sortie de leur bloc.
+
+<!-- example: async_file -->
+```rust
+use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
+
+async fn round_trip() -> Result<usize, FileError> {
+    let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
+    let mut file = File::create(
+        &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
+    ).await?;
+
+    let bytes: [u8; 2] = [111, 107];
+    file.write(&bytes[..]).await?;
+    file.seek(SeekFrom.Start(0)).await?;
+
+    let mut output: [u8; 2] = [0; 2];
+    let count = file.read(&mut output[..]).await?;
+
+    // Release the open handle before deleting the path, including on Windows.
+    drop(file);
+    File::delete(&path[..]).await?;
+    Ok(count)
+}
+
+fn main() {
+    let execution = runtime::spawn(round_trip());
+    match execution.join() {
+        Ok(result) => {
+            match result {
+                Ok(count) => { print(count); },
+                Err(error) => { print(0); },
+            }
+        },
+        Err(error) => { print(-1); },
+    }
+}
+```
+
+Sortie: `2`. [Paquet complet](examples/features/async_file/).
+
 <a id="file"></a>
 
 <a id="files-errors-and-caller-provided-buffers"></a>
@@ -1066,17 +1111,18 @@ L’appelant choisit le mode d’ouverture, les permissions et la taille du tamp
 
 <!-- example: file -->
 ```rust
-use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
+use std::io::sync::{File, FileError};
+use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
     let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
     let bytes: [u8; 2] = [111, 107];
-    let written = file.write(&bytes[..])?;
-    drop(written);
-    drop(file.seek(SeekFrom.Start(0))?);
+    file.write(&bytes[..])?;
+    file.seek(SeekFrom.Start(0))?;
     let mut output: [u8; 2] = [0; 2];
     let count = file.read(&mut output[..])?;
+    // Close before deleting the file, including on Windows.
     drop(file);
     File::delete(&path[..])?;
     Ok(count)
@@ -1085,7 +1131,7 @@ fn run() -> Result<usize, FileError> {
 fn main() {
     match run() {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); print(0); },
+        Err(error) => { print(0); },
     }
 }
 ```
@@ -1102,8 +1148,9 @@ Les wrappers tamponnés empruntent explicitement le flux et le tampon de travail
 
 <!-- example: buffered -->
 ```rust
-use std::io::{File, FileMode, FilePerm};
-use std::io::buffered::BufWriter;
+use std::io::sync::{File};
+use std::io::{FileMode, FilePerm};
+use std::io::sync::buffered::BufWriter;
 
 fn main() {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
@@ -1146,7 +1193,7 @@ Les opérations `bind` et `connect` reçoivent des objets d’adresse IPv4. Le p
 <!-- example: network -->
 ```rust
 use std::net::ipv4::{Addr, SocketAddr};
-use std::net::udp::{Listener, connect};
+use std::net::sync::udp::{Listener, connect};
 use std::net::SocketError;
 
 fn exchange() -> Result<usize, SocketError> {
@@ -1229,7 +1276,7 @@ fn encode() -> Result<(), Error> {
 fn main() {
     match encode() {
         Ok(()) => {},
-        Err(error) => { drop(error); },
+        Err(error) => { },
     }
 }
 ```
@@ -1244,7 +1291,8 @@ Sortie: `4, 16909060, 67305985`. [Paquet complet](examples/features/binary/).
 
 <!-- example: time -->
 ```rust
-use std::time::{Duration, Instant, Timer, sleep, Error};
+use std::time::{Duration, Instant, Error};
+use std::time::sync::{Timer, sleep};
 
 fn wait() -> Result<(), Error> {
     let start = Instant::now()?;
@@ -1263,7 +1311,7 @@ fn wait() -> Result<(), Error> {
 fn main() {
     match wait() {
         Ok(()) => { print(1); },
-        Err(error) => { drop(error); },
+        Err(error) => { },
     }
 }
 ```
@@ -1279,7 +1327,7 @@ L’attente suspend la tâche appelante. Un worker bloquant existant effectue l�
 <!-- example: async_time -->
 ```rust
 use std::time::{Duration, Error};
-use std::time::asyn::{sleep, Timer};
+use std::time::{sleep, Timer};
 
 async fn delayed_value() -> Result<i64, Error> {
     sleep(Duration::from_millis(2)).await?;
@@ -1298,10 +1346,10 @@ fn main() {
         Ok(result) => {
             match result {
                 Ok(value) => { print(value); },
-                Err(error) => { drop(error); },
+                Err(error) => { },
             }
         },
-        Err(error) => { drop(error); },
+        Err(error) => { },
     }
 }
 ```
@@ -1377,18 +1425,42 @@ Les [contrats du code externe](docs/FOREIGN_C.md) expliquent la sélection de ci
 
 Importez les types natifs de collections avec `use std::{Vector, HashMap, String};`. Leurs noms publics sont déclarés dans [collections.crb](stdlib/src/collections.crb). Les algorithmes des collections natives se trouvent dans le runtime ; `String<N>` bornée est implémentée dans la STD. Le [guide de l’API des collections](docs/COLLECTIONS_API.md) décrit la construction, la possession des éléments, les emprunts et le nettoyage.
 
+### I/O asynchrones par défaut
+
+Les API qui attendent sont asynchrones par défaut. Les variantes bloquantes
+sont importées explicitement depuis `sync` :
+
+```rust
+use std::io::File;                    // File::open(...).await
+use std::io::sync::File as SyncFile;  // SyncFile::open(...)
+
+use std::net::tcp;                   // tcp::connect(...).await
+use std::net::sync::tcp as sync_tcp;  // sync_tcp::connect(...)
+
+use std::time::sleep;                // sleep(...).await
+use std::time::sync::sleep as sync_sleep;
+```
+
+`main` reste synchrone ; `.await` exige un corps async. Les types partagés
+restent communs : modes/permissions dans `std::io`, adresses dans
+`std::net::ipv4`, Duration/Instant dans `std::time`. Les accès aux métadonnées
+en mémoire, les parseurs, les collections et la cryptographie restent des
+calculs synchrones. Les fichiers et les timers async utilisent des workers
+bloquants. Le transport TLS actuel est uniquement bloquant, sous
+`std::net::sync::tls` ; aucune variante TLS async n’est annoncée.
+
 | Paquet | Fonctionnalités principales | Référence |
 | --- | --- | --- |
 | `std::{Pool, Vector, HashMap, String}` | Pools de capacité fixe, vecteurs, maps, chaînes UTF-8 grandissantes et `String<N>` inline avec un maximum en octets connu à la compilation | [Collections](docs/COLLECTIONS_API.md) · [Chaînes bornées](docs/UTF8_STRINGS-fr.md) |
 | `std::iter` | Iter, Map, Filter, Reduce et méthode d’instance `collect` | [API](docs/STDLIB.md#stditer) |
-| `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
-| `std::net::{tcp, udp}` et `std::net::asyn` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
+| `std::io`, `std::io::sync` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
+| `std::net::{tcp, udp}`, `std::net::sync::{tcp, udp}` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
 | `std::net::http` | Analyse des en-têtes de requêtes/réponses, limites statiques configurables et corps optionnels en flux via un contrat de lecture | [HTTP](docs/HTTP.md) |
-| `std::net::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnettls) |
+| `std::net::sync::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnetsynctls) |
 | `std::crypto` | AES-GCM/CBC, familles SHA, HMAC/HKDF, Argon2id, aléa, P-256 et conteneurs de clés | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER et PEM avec sortie détenue par l’appelant | [API](docs/STDLIB.md#stdencodinghex) |
 | `std::encoding::binary` | Lecture/écriture de primitifs, ordre little-endian/big-endian explicite et tampons fournis par l’appelant | [API binaire](docs/BINARY_AND_TIME_API-fr.md) |
-| `std::time`, `std::time::asyn` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
+| `std::time`, `std::time::sync` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::compression::{gzip, zstd}` | Codecs natifs bornés, traitement en flux et dictionnaires | [Compression](docs/COMPRESSION.md) |
 | `std::env` | Arguments du processus tout en conservant un `main` sans paramètres | [API](docs/STDLIB.md#stdenv) |
 

@@ -45,7 +45,7 @@ This writes `01 02 03 04`, then reads those bytes as little-endian, producing
 `67305985`. Struct serialization remains separate: native padding/layout does
 not silently define a disk format. There is no hidden output allocation.
 
-## `std::time`
+## Shared time values — `std::time`
 
 `Duration` stores a nonnegative span in nanoseconds. Construct it with
 `Duration::from_nanos(u64)`, `from_millis(u64)` or `from_secs(u64)`;
@@ -56,8 +56,11 @@ implicit Copy category.
 `Instant::now() -> Result<Instant, Error>` reads a monotonic clock.
 `instant.after(duration) -> Instant` constructs a deadline, and
 `instant.elapsed() -> Result<Duration, Error>` measures elapsed time.
+`instant.remaining()` returns the span until a deadline, saturating at zero.
 These timestamps have no wall-clock epoch or portable serialization meaning.
 The bounded nanosecond representation and native clock resolution apply.
+
+## Blocking waits — `std::time::sync`
 
 `Timer::after(duration) -> Result<Timer, Error>` or `Timer::at(instant) -> Timer`
 constructs a deadline. `timer.wait() -> Result<(), Error>` blocks the calling
@@ -72,7 +75,7 @@ avoids overflowing the fractional multiplication. Long spans/timestamps still
 must fit the `u64` nanosecond representation. Errors are `ClockFailure`,
 `WaitFailure`, and `LaunchFailed` (for async worker creation).
 
-## `std::time::asyn`
+## Async waits — `std::time`
 
 `sleep(duration)` and `Timer::wait(&self)` are async functions returning
 `Result<(), std::time::Error>`. `Timer::after` and `Timer::at` construct the async
@@ -80,10 +83,10 @@ wrapper with the same deadline meaning as their blocking counterparts.
 
 ```rust
 use std::time::Duration;
-use std::time::asyn;
+use std::time;
 
 async fn work() -> i64 {
-    match asyn::sleep(Duration::from_millis(2)).await {
+    match time::sleep(Duration::from_millis(2)).await {
         Ok(()) => { 42 },
         Err(error) => { drop(error); -1 },
     }

@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Explicit blocking waits using shared monotonic time values.
+use std::time::{Duration, Instant, Error};
+use std::sys::time::pause;
+
+/// A reusable monotonic deadline; waiting does not consume it.
+pub struct Timer {
+    /// Absolute monotonic timestamp of the deadline.
+    deadline: Instant,
+}
+impl Timer {
+    /// Creates a timer that becomes ready after the given span.
+    fn after(duration: Duration) -> Result<Timer, Error> {
+        let now = Instant::now()?;
+        let deadline = now.after(duration);
+        Ok(Timer { deadline: deadline })
+    }
+    /// Creates a timer for an existing monotonic deadline.
+    fn at(deadline: Instant) -> Timer { Timer { deadline: deadline } }
+    /// Blocks this thread until the deadline, retrying interruptions and early wakes.
+    fn wait(&self) -> Result<(), Error> {
+        loop {
+            let deadline = &(*self).deadline;
+            let span = deadline.remaining()?;
+            let remaining = span.as_nanos();
+            if copy(remaining) == 0 { return Ok(()); }
+            let chunk: u64 = if copy(remaining) > 60000000000 { 60000000000 } else { remaining };
+            if pause(chunk) != 0 { return Err(Error.WaitFailure); }
+        };
+        Err(Error.WaitFailure)
+    }
+}
+
+/// Blocks the current thread for at least the given monotonic span.
+pub fn sleep(duration: Duration) -> Result<(), Error> {
+    let timer = Timer::after(duration)?;
+    timer.wait()
+}

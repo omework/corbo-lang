@@ -10,8 +10,10 @@ Server acceptance, scheduling, routing and application policy belong in a
 separate implementation package. An echo server is the intended first consumer;
 this document specifies parsing, not that server or final serialization APIs.
 
-The asynchronous counterpart is planned under `std::net::asyn::http`; its detailed
-signatures remain a later API step. Neither variant introduces a trait.
+These parser functions are synchronous computations over their reader contract.
+An async-reader adapter is not implemented or implied by the async-default
+transport convention. A future async parser API needs its own explicit contract;
+no trait or implicit sync/async dispatch is introduced.
 
 ## Reader contract and parsing functions
 

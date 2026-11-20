@@ -1,13 +1,17 @@
 # TCP and UDP sockets
 
-For the accepted, not-yet-implemented HTTP/1.1 parsing building blocks above
-these transports, see [HTTP parsing design](HTTP.md). Transport APIs below are
-separate from that planned package.
+For the HTTP/1.1 parsing building blocks above these transports, see
+[HTTP parsing](HTTP.md). Parsers remain synchronous computations; they do not
+change the transport namespace convention.
+
+`std::net::{tcp, udp}` are async by default; `std::net::sync::{tcp, udp}`
+are blocking. Endpoint accessors, bind and UDP connect keep their existing
+synchronous setup behavior. Blocking-only TLS lives in `std::net::sync::tls`.
 
 ## Blocking API
 
-The Rust compiler provides the blocking IPv4 APIs in `std::net::tcp`
-and `std::net::udp`. The caller supplies data buffers. The blocking
+The STD provides the blocking IPv4 APIs in `std::net::sync::tcp`
+and `std::net::sync::udp`. The caller supplies data buffers. The blocking
 implementations use the address, backlog, error, and operation contracts
 described below.
 
@@ -30,7 +34,7 @@ driver, pass `-lws2_32`.
 ## API contracts
 
 The async API is available in
-`std::net::asyn::tcp` and `std::net::asyn::udp`, each with its own
+`std::net::tcp` and `std::net::udp`, each with its own
 `Connection` and `Listener` types. The four modules use
 `std::net::SocketError`.
 
@@ -76,10 +80,10 @@ TCP exposes `connect` as a function of the protocol module in both APIs.
 The result contains a connection from that module.
 
 ```rust
-// std::net::tcp
+// std::net::sync::tcp
 pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
 
-// std::net::asyn::tcp
+// std::net::tcp
 pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError>
 ```
 
@@ -183,8 +187,7 @@ task completion, including notifications that arrive before parking.
 [ConnectEx](https://learn.microsoft.com/en-us/windows/win32/api/mswsock/nf-mswsock-lpfn_connectex)
 · [AcceptEx](https://learn.microsoft.com/en-us/windows/win32/api/mswsock/nf-mswsock-acceptex)
 
-The Rust compiler builds the async modules. The self-hosted `corboc`
-builds the typed blocking network witness, including
+The active self-hosted `corboc` builds both variants, including
 `SocketAddr::parse(&str)` and the `Option<i32>` TCP backlog. See the
 cycle report for the environments exercised.
 [Validation report](cycles/CORE_COMPOSITION_CYCLE.md#async-tcp-udp-and-socket-wakeups)

@@ -85,4 +85,4 @@ utilisez une chaîne de compilation C pour la cible choisie.
 Une condition de cible peut combiner plusieurs comparaisons avec `&&` et `||`. La conjonction est prioritaire.
 Sur les cibles de largeur connue, `target.pointer_width` vaut `"32"` ou
 `"64"`. La bibliothèque standard combine l’OS, l’architecture et la
-largeur des pointeurs pour sélectionner l’ABI de `std::io::File`.
+largeur des pointeurs pour sélectionner l’ABI de `std::io::sync::File`.

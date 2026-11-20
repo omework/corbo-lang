@@ -24,7 +24,7 @@ deux ; flottants : représentation IEEE-754, sans conversion numérique.
 Aucune allocation de sortie cachée. La sérialisation de structs est distincte :
 le padding et le layout natifs ne constituent pas implicitement un format disque.
 
-## `std::time`
+## Valeurs communes — `std::time`
 
 `Duration::from_nanos`, `from_millis` et `from_secs` prennent des `u64` ;
 `as_nanos(&self)` renvoie la durée en nanosecondes. Les débordements suivent
@@ -33,6 +33,8 @@ l'arithmétique contrôlée existante. Ces objets suivent les moves ordinaires.
 `Instant::now() -> Result<Instant, Error>` lit une horloge monotone ;
 `after(duration)` produit une échéance et `elapsed()` renvoie une durée via
 `Result`. Il ne s'agit ni d'une date ni d'un timestamp portable.
+
+## Attentes bloquantes — `std::time::sync`
 
 `Timer::after(duration)` renvoie `Result<Timer, Error>` ; `Timer::at(instant)`
 construit une échéance absolue. `wait(&self) -> Result<(), Error>` bloque le
@@ -46,7 +48,7 @@ fractionnaire évite un produit 64 bits débordant ; durées et instants doivent
 toujours tenir en nanosecondes `u64`. Les erreurs sont `ClockFailure`,
 `WaitFailure` et `LaunchFailed` pour la création d'un worker async.
 
-## `std::time::asyn`
+## Attentes async — `std::time`
 
 `sleep(duration)` et `Timer::wait(&self)` sont async et renvoient
 `Result<(), std::time::Error>`. Les constructeurs `after` et `at` conservent le

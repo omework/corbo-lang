@@ -201,7 +201,7 @@ The examples are synchronized with their source and validated with `corboc`;
 - [Collections and pipelines](#collections-and-pipelines): [Vectors and extraction](#vector), [HashMap lookup, replacement and removal](#map), [UTF-8 text and caller-owned bytes](#text), [Bounded inline strings](#bounded-text), [Closures and explicit callable passing](#closures), [STD iterator pipelines](#iter).
 - [Generic code and packages](#generic-code-and-packages): [Contracts on generic structs](#generic), [Static structural type contracts](#contracts), [Packages, modules, visibility and aliases](#modules), [Conditional compilation](#target).
 - [Async and threads](#async-and-threads): [Futures, suspension and execution branches](#async), [Native threads and captured loans](#threads), [Blocking work from an async context](#blocking).
-- [STD in practice](#std-in-practice): [Files, errors and caller-provided buffers](#file), [Buffered I/O through structural contracts](#buffered), [Typed network endpoints and datagrams](#network), [Hashes and encodings with bounded output](#encoding), [Binary endianness](#binary), [Monotonic time](#time), [Async timers](#async-time), [Compression with an explicit workspace](#compression).
+- [STD in practice](#std-in-practice): [Async files](#async-file), [Blocking files, errors and caller-provided buffers](#file), [Buffered I/O through structural contracts](#buffered), [Typed network endpoints and datagrams](#network), [Hashes and encodings with bounded output](#encoding), [Binary endianness](#binary), [Monotonic time](#time), [Async timers](#async-time), [Compression with an explicit workspace](#compression).
 - [Native interop](#native-interop): [Unchecked C, typed operands and native assembly](#foreign).
 
 ### Basics
@@ -705,7 +705,7 @@ fn main() {
     // Two UTF-8 characters occupy four bytes, exactly our inline budget.
     let mut name = match String<4>::try_from("éé") {
         Ok(value) => { value },
-        Err(error) => { drop(error); return; },
+        Err(error) => { return; },
     };
 
     print(name.capacity());
@@ -714,7 +714,7 @@ fn main() {
     // Five bytes cannot fit. The previous content stays intact.
     match name.set("hello") {
         Ok(()) => { print(false); },
-        Err(error) => { drop(error); print(true); },
+        Err(error) => { print(true); },
     }
 
     print(name.len());
@@ -1027,6 +1027,51 @@ Output: `42`. [Complete package](examples/features/blocking/).
 
 ### STD in practice
 
+<a id="async-file"></a>
+
+#### Async files by default
+
+`std::io::File` awaits its operations. Modes, permissions and seek origins are shared with `std::io::sync::File`. Early closure before deletion is explicit; error values are cleaned up automatically at the end of their blocks.
+
+<!-- example: async_file -->
+```rust
+use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
+
+async fn round_trip() -> Result<usize, FileError> {
+    let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
+    let mut file = File::create(
+        &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
+    ).await?;
+
+    let bytes: [u8; 2] = [111, 107];
+    file.write(&bytes[..]).await?;
+    file.seek(SeekFrom.Start(0)).await?;
+
+    let mut output: [u8; 2] = [0; 2];
+    let count = file.read(&mut output[..]).await?;
+
+    // Release the open handle before deleting the path, including on Windows.
+    drop(file);
+    File::delete(&path[..]).await?;
+    Ok(count)
+}
+
+fn main() {
+    let execution = runtime::spawn(round_trip());
+    match execution.join() {
+        Ok(result) => {
+            match result {
+                Ok(count) => { print(count); },
+                Err(error) => { print(0); },
+            }
+        },
+        Err(error) => { print(-1); },
+    }
+}
+```
+
+Output: `2`. [Complete package](examples/features/async_file/).
+
 <a id="file"></a>
 
 #### Files, errors and caller-provided buffers
@@ -1035,17 +1080,18 @@ The caller chooses open mode, permissions and buffer size. Paths in this API are
 
 <!-- example: file -->
 ```rust
-use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
+use std::io::sync::{File, FileError};
+use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
     let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
     let bytes: [u8; 2] = [111, 107];
-    let written = file.write(&bytes[..])?;
-    drop(written);
-    drop(file.seek(SeekFrom.Start(0))?);
+    file.write(&bytes[..])?;
+    file.seek(SeekFrom.Start(0))?;
     let mut output: [u8; 2] = [0; 2];
     let count = file.read(&mut output[..])?;
+    // Close before deleting the file, including on Windows.
     drop(file);
     File::delete(&path[..])?;
     Ok(count)
@@ -1054,7 +1100,7 @@ fn run() -> Result<usize, FileError> {
 fn main() {
     match run() {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); print(0); },
+        Err(error) => { print(0); },
     }
 }
 ```
@@ -1069,8 +1115,9 @@ Buffered wrappers borrow the stream and scratch buffer explicitly. Call `flush()
 
 <!-- example: buffered -->
 ```rust
-use std::io::{File, FileMode, FilePerm};
-use std::io::buffered::BufWriter;
+use std::io::sync::{File};
+use std::io::{FileMode, FilePerm};
+use std::io::sync::buffered::BufWriter;
 
 fn main() {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
@@ -1111,7 +1158,7 @@ IPv4 address objects are passed to bind/connect. Port zero asks the OS for a loc
 <!-- example: network -->
 ```rust
 use std::net::ipv4::{Addr, SocketAddr};
-use std::net::udp::{Listener, connect};
+use std::net::sync::udp::{Listener, connect};
 use std::net::SocketError;
 
 fn exchange() -> Result<usize, SocketError> {
@@ -1192,7 +1239,7 @@ fn encode() -> Result<(), Error> {
 fn main() {
     match encode() {
         Ok(()) => {},
-        Err(error) => { drop(error); },
+        Err(error) => { },
     }
 }
 ```
@@ -1207,7 +1254,8 @@ Duration expresses a span; Instant reads a monotonic clock, and Timer waits for 
 
 <!-- example: time -->
 ```rust
-use std::time::{Duration, Instant, Timer, sleep, Error};
+use std::time::{Duration, Instant, Error};
+use std::time::sync::{Timer, sleep};
 
 fn wait() -> Result<(), Error> {
     let start = Instant::now()?;
@@ -1226,7 +1274,7 @@ fn wait() -> Result<(), Error> {
 fn main() {
     match wait() {
         Ok(()) => { print(1); },
-        Err(error) => { drop(error); },
+        Err(error) => { },
     }
 }
 ```
@@ -1242,7 +1290,7 @@ Async waits suspend the caller task while an existing blocking worker performs t
 <!-- example: async_time -->
 ```rust
 use std::time::{Duration, Error};
-use std::time::asyn::{sleep, Timer};
+use std::time::{sleep, Timer};
 
 async fn delayed_value() -> Result<i64, Error> {
     sleep(Duration::from_millis(2)).await?;
@@ -1261,10 +1309,10 @@ fn main() {
         Ok(result) => {
             match result {
                 Ok(value) => { print(value); },
-                Err(error) => { drop(error); },
+                Err(error) => { },
             }
         },
-        Err(error) => { drop(error); },
+        Err(error) => { },
     }
 }
 ```
@@ -1337,18 +1385,41 @@ collection algorithms live in the runtime; bounded `String<N>` is implemented
 in the STD. See the [collection API guide](docs/COLLECTIONS_API.md)
 for construction, element ownership, borrowing and cleanup.
 
+### Async I/O by default
+
+APIs that wait are async by default. Import blocking variants explicitly
+from `sync`:
+
+```rust
+use std::io::File;                    // File::open(...).await
+use std::io::sync::File as SyncFile;  // SyncFile::open(...)
+
+use std::net::tcp;                   // tcp::connect(...).await
+use std::net::sync::tcp as sync_tcp;  // sync_tcp::connect(...)
+
+use std::time::sleep;                // sleep(...).await
+use std::time::sync::sleep as sync_sleep;
+```
+
+`main` remains synchronous; `.await` requires an async body. Shared types stay
+common: modes/permissions in `std::io`, addresses in `std::net::ipv4`, and
+Duration/Instant in `std::time`. In-memory accessors, parsers, collections and
+cryptography remain synchronous computations. Async files and timers use
+blocking workers. The current TLS transport is blocking-only, under
+`std::net::sync::tls`; no async TLS implementation is implied.
+
 | Package | Main capabilities | Reference |
 | --- | --- | --- |
 | `std::{Pool, Vector, HashMap, String}` | Fixed-capacity pools, vectors, maps, growing UTF-8 strings and inline `String<N>` with a compile-time byte maximum | [Collections](docs/COLLECTIONS_API.md) · [Bounded strings](docs/UTF8_STRINGS.md#bounded-inline-utf-8-strings) |
 | `std::iter` | Iter, Map, Filter, Reduce and instance `collect` | [API](docs/STDLIB.md#stditer) |
-| `std::io`, `std::io::asyn` | File read/write, seek, stats, rename/delete and buffered streams | [API](docs/STDLIB.md#stdio) · [File guide](docs/FILE.md) |
-| `std::net::{tcp, udp}` and `std::net::asyn` | Typed IPv4 endpoints, sockets, partial TCP I/O and borrowed async halves | [Networking](docs/NETWORKING.md) |
+| `std::io`, `std::io::sync` | File read/write, seek, stats, rename/delete and buffered streams | [API](docs/STDLIB.md#stdio) · [File guide](docs/FILE.md) |
+| `std::net::{tcp, udp}`, `std::net::sync::{tcp, udp}` | Typed IPv4 endpoints, sockets, partial TCP I/O and borrowed async halves | [Networking](docs/NETWORKING.md) |
 | `std::net::http` | Request/response head parsing, configurable static limits and optional streaming bodies through a reader contract | [HTTP](docs/HTTP.md) |
-| `std::net::tls` | Native TLS 1.3 key schedule, records, handshake and X.509 validation; optional OpenSSL wrapper | [API](docs/STDLIB.md#stdnettls) |
+| `std::net::sync::tls` | Native TLS 1.3 key schedule, records, handshake and X.509 validation; optional OpenSSL wrapper | [API](docs/STDLIB.md#stdnetsynctls) |
 | `std::crypto` | AES-GCM/CBC, SHA families, HMAC/HKDF, Argon2id, random, P-256 and key containers | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER and PEM with caller-owned output | [API](docs/STDLIB.md#stdencodinghex) |
 | `std::encoding::binary` | Primitive reads/writes with explicit little-/big-endian byte order and caller-provided buffers | [Binary API](docs/BINARY_AND_TIME_API.md#stdencodingbinary) |
-| `std::time`, `std::time::asyn` | Monotonic Duration/Instant, sleep and reusable deadline timers; async waits use blocking workers | [Time API](docs/BINARY_AND_TIME_API.md#stdtime) |
+| `std::time`, `std::time::sync` | Monotonic Duration/Instant, sleep and reusable deadline timers; async waits use blocking workers | [Time API](docs/BINARY_AND_TIME_API.md) |
 | `std::compression::{gzip, zstd}` | Native bounded codecs, streaming and dictionary support | [Compression](docs/COMPRESSION.md) |
 | `std::env` | Process arguments while keeping `main` argument-free | [API](docs/STDLIB.md#stdenv) |
 

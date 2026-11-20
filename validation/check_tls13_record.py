@@ -15,8 +15,8 @@ import time
 from check_tls13_keys import ROOT, FRONTEND, FIXTURE, binding
 from check_tls13_handshake import published_port
 
-MODULE = "std::net::tls::record"
-LIBRARY = ROOT / "stdlib/src/net/tls/record/record.crb"
+MODULE = "std::net::sync::tls::record"
+LIBRARY = ROOT / "stdlib/src/net/sync/tls/record/record.crb"
 RECORDS = ROOT / "validation/fixtures/tls13-records-rfc8448-section3.json"
 ERRORS = ("BufferTooSmall", "RecordOverflow", "InvalidRecord", "AuthenticationFailed",
           "WrongDirection", "KeyLimit", "Closed", "Failed", "Transport", "Truncated")
@@ -158,7 +158,7 @@ def record_witness(keys, records):
 TCP_SOURCE = IMPORTS + f"""
 use {MODULE}::{{read_record, write_record}};
 use std::net::ipv4::{{Addr, SocketAddr}};
-use std::net::tcp::Listener;
+use std::net::sync::tcp::Listener;
 
 fn main() -> i32 {{
     let address = SocketAddr::new(Addr::new(127, 0, 0, 1), 0);
@@ -266,7 +266,7 @@ def compile_case(args, package, source, flags):
 
 def check_private(args, package):
     source = """
-use std::net::tls::record::RecordCipher;
+use std::net::sync::tls::record::RecordCipher;
 fn main() {
     let key: [u8; 16] = [0; 16];
     let iv: [u8; 12] = [0; 12];

@@ -1,3 +1,12 @@
+## API async par défaut
+
+- [x] Déplacer les API async dans les packages par défaut et les variantes bloquantes sous sync.
+- [x] Conserver les types communs, migrer les imports et reconstruire corboc.
+- [x] Mettre à jour les READMEs EN/FR, exemples et références générées.
+- [x] Valider les régressions ciblées et l’interopérabilité TLS ; Windows ARM64 compilé uniquement.
+
+[Rapport](cycles/ASYNC_DEFAULT_API_CYCLE.md).
+
 ## Chaînes bornées, binaire et temps (core + API STD)
 
 - [x] Parser les bornes littérales et spécialiser `String<N>` en stockage inline fixe.

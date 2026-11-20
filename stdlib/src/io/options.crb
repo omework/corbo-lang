@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Shared file metadata, permissions and modes for async and explicit sync I/O.
+
+    /// Holds the metadata returned by the file API, including its size.
+    pub struct FileStats {
+        /// File length reported by the platform in bytes.
+        size_bytes: u64,
+    }
+
+    impl FileStats {
+        /// Returns the file size in bytes captured by the stats operation.
+        fn size(&self) -> u64 { (*self).size_bytes }
+    }
+
+    /// Selects platform-default permissions or explicit permission bits for creation.
+    pub enum FilePerm {
+        /// Uses the documented platform default permissions for creation.
+        DefaultMode,
+        /// Requests explicit Unix-style permission bits; unsupported platform behavior is reported by the API.
+        Perm(u32),
+    }
+
+    /// Specifies a byte offset from the start, current position, or end of the file.
+    pub enum SeekFrom {
+        /// Seeks to the supplied absolute byte offset.
+        Start(i64),
+        /// Seeks by a signed byte displacement from the current position.
+        Current(i64),
+        /// Seeks by a signed byte displacement from the file end.
+        End(i64),
+    }
+
+    /// Provides the access modes and flags accepted by file open and create.
+    pub struct FileMode {
+    }
+
+    impl FileMode {
+        /// Opens the file for reading only.
+        const READ_ONLY: i64 = 0;
+        /// Opens the file for writing only.
+        const WRITE_ONLY: i64 = 1;
+        /// Allows both reading and writing.
+        const READ_WRITE: i64 = 2;
+        /// Requests that writes append to the file.
+        const APPEND: i64 = 4;
+        /// Requests that an existing file be truncated on open.
+        const TRUNCATE: i64 = 8;
+
+        /// Returns the mode for read-only access.
+        fn read_only() -> i64 { FileMode::READ_ONLY }
+        /// Returns the mode for write-only access.
+        fn write_only() -> i64 { FileMode::WRITE_ONLY }
+        /// Returns the mode for read and write access.
+        fn read_write() -> i64 { FileMode::READ_WRITE }
+        /// Returns the append flag to combine with a writable access mode.
+        fn append() -> i64 { FileMode::APPEND }
+        /// Returns the truncate flag to combine with a writable access mode.
+        fn truncate() -> i64 { FileMode::TRUNCATE }
+    }

@@ -1,14 +1,15 @@
-use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
+use std::io::sync::{File, FileError};
+use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
     let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
     let bytes: [u8; 2] = [111, 107];
-    let written = file.write(&bytes[..])?;
-    drop(written);
-    drop(file.seek(SeekFrom.Start(0))?);
+    file.write(&bytes[..])?;
+    file.seek(SeekFrom.Start(0))?;
     let mut output: [u8; 2] = [0; 2];
     let count = file.read(&mut output[..])?;
+    // Close before deleting the file, including on Windows.
     drop(file);
     File::delete(&path[..])?;
     Ok(count)
@@ -17,6 +18,6 @@ fn run() -> Result<usize, FileError> {
 fn main() {
     match run() {
         Ok(count) => { print(count); },
-        Err(error) => { drop(error); print(0); },
+        Err(error) => { print(0); },
     }
 }

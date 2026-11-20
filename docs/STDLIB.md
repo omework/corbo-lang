@@ -34,25 +34,25 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 - [`std::encoding::pem`](#stdencodingpem)
 - [`std::env`](#stdenv)
 - [`std::io`](#stdio)
-- [`std::io::asyn`](#stdioasyn)
-- [`std::io::asyn::buffered`](#stdioasynbuffered)
 - [`std::io::buffered`](#stdiobuffered)
+- [`std::io::sync`](#stdiosync)
+- [`std::io::sync::buffered`](#stdiosyncbuffered)
 - [`std::iter`](#stditer)
 - [`std::net`](#stdnet)
-- [`std::net::asyn::tcp`](#stdnetasyntcp)
-- [`std::net::asyn::udp`](#stdnetasynudp)
 - [`std::net::http`](#stdnethttp)
 - [`std::net::ipv4`](#stdnetipv4)
+- [`std::net::sync::tcp`](#stdnetsynctcp)
+- [`std::net::sync::tls`](#stdnetsynctls)
+- [`std::net::sync::tls::keys`](#stdnetsynctlskeys)
+- [`std::net::sync::tls::openssl`](#stdnetsynctlsopenssl)
+- [`std::net::sync::tls::record`](#stdnetsynctlsrecord)
+- [`std::net::sync::udp`](#stdnetsyncudp)
 - [`std::net::tcp`](#stdnettcp)
-- [`std::net::tls`](#stdnettls)
-- [`std::net::tls::keys`](#stdnettlskeys)
-- [`std::net::tls::openssl`](#stdnettlsopenssl)
-- [`std::net::tls::record`](#stdnettlsrecord)
 - [`std::net::udp`](#stdnetudp)
 - [`std::num`](#stdnum)
 - [`std::text`](#stdtext)
 - [`std::time`](#stdtime)
-- [`std::time::asyn`](#stdtimeasyn)
+- [`std::time::sync`](#stdtimesync)
 
 ## `std`
 
@@ -2984,296 +2984,13 @@ Returns the current process argument list supplied by the executable entry point
 
 ## `std::io`
 
-Portable blocking file I/O, open modes, permissions and seek origins.
-
-Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
-
-### `File`
-
-[file.crb:13](../stdlib/src/io/file.crb#L13)
-
-```rust
-pub struct File
-```
-
-Owns an open file and closes the platform handle when destroyed.
-
-Members:
-
-- [`inner`](../stdlib/src/io/file.crb#L15) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
-
-### `FileError`
-
-[file.crb:19](../stdlib/src/io/file.crb#L19)
-
-```rust
-pub enum FileError
-```
-
-Reports invalid path or options, or an error code from the operating system.
-
-Members:
-
-- [`InvalidPath`](../stdlib/src/io/file.crb#L21) (variant): The supplied path violates the platform path-input contract.
-- [`InvalidOptions`](../stdlib/src/io/file.crb#L23) (variant): The requested open-mode combination is invalid.
-- [`Os`](../stdlib/src/io/file.crb#L25) (variant): Preserves the native operating-system error code in code.
-- [`Os.code`](../stdlib/src/io/file.crb#L27) (implementation field): Native operating-system status code preserved by this error.
-
-### `FileStats`
-
-[file.crb:40](../stdlib/src/io/file.crb#L40)
-
-```rust
-pub struct FileStats
-```
-
-Holds the metadata returned by the file API, including its size.
-
-Members:
-
-- [`size_bytes`](../stdlib/src/io/file.crb#L42) (implementation field): File length reported by the platform in bytes.
-
-### `FileStats::size`
-
-[file.crb:47](../stdlib/src/io/file.crb#L47)
-
-```rust
-fn size(&self) -> u64
-```
-
-Returns the file size in bytes captured by the stats operation.
-
-### `FilePerm`
-
-[file.crb:51](../stdlib/src/io/file.crb#L51)
-
-```rust
-pub enum FilePerm
-```
-
-Selects platform-default permissions or explicit permission bits for creation.
-
-Members:
-
-- [`DefaultMode`](../stdlib/src/io/file.crb#L53) (variant): Uses the documented platform default permissions for creation.
-- [`Perm`](../stdlib/src/io/file.crb#L55) (variant): Requests explicit Unix-style permission bits; unsupported platform behavior is reported by the API.
-
-### `SeekFrom`
-
-[file.crb:59](../stdlib/src/io/file.crb#L59)
-
-```rust
-pub enum SeekFrom
-```
-
-Specifies a byte offset from the start, current position, or end of the file.
-
-Members:
-
-- [`Start`](../stdlib/src/io/file.crb#L61) (variant): Seeks to the supplied absolute byte offset.
-- [`Current`](../stdlib/src/io/file.crb#L63) (variant): Seeks by a signed byte displacement from the current position.
-- [`End`](../stdlib/src/io/file.crb#L65) (variant): Seeks by a signed byte displacement from the file end.
-
-### `FileMode`
-
-[file.crb:69](../stdlib/src/io/file.crb#L69)
-
-```rust
-pub struct FileMode
-```
-
-Provides the access modes and flags accepted by file open and create.
-
-### `FileMode::READ_ONLY`
-
-[file.crb:74](../stdlib/src/io/file.crb#L74)
-
-```rust
-const READ_ONLY: i64 = 0
-```
-
-Opens the file for reading only.
-
-### `FileMode::WRITE_ONLY`
-
-[file.crb:76](../stdlib/src/io/file.crb#L76)
-
-```rust
-const WRITE_ONLY: i64 = 1
-```
-
-Opens the file for writing only.
-
-### `FileMode::READ_WRITE`
-
-[file.crb:78](../stdlib/src/io/file.crb#L78)
-
-```rust
-const READ_WRITE: i64 = 2
-```
-
-Allows both reading and writing.
-
-### `FileMode::APPEND`
-
-[file.crb:80](../stdlib/src/io/file.crb#L80)
-
-```rust
-const APPEND: i64 = 4
-```
-
-Requests that writes append to the file.
-
-### `FileMode::TRUNCATE`
-
-[file.crb:82](../stdlib/src/io/file.crb#L82)
-
-```rust
-const TRUNCATE: i64 = 8
-```
-
-Requests that an existing file be truncated on open.
-
-### `FileMode::read_only`
-
-[file.crb:85](../stdlib/src/io/file.crb#L85)
-
-```rust
-fn read_only() -> i64
-```
-
-Returns the mode for read-only access.
-
-### `FileMode::write_only`
-
-[file.crb:87](../stdlib/src/io/file.crb#L87)
-
-```rust
-fn write_only() -> i64
-```
-
-Returns the mode for write-only access.
-
-### `FileMode::read_write`
-
-[file.crb:89](../stdlib/src/io/file.crb#L89)
-
-```rust
-fn read_write() -> i64
-```
-
-Returns the mode for read and write access.
-
-### `FileMode::append`
-
-[file.crb:91](../stdlib/src/io/file.crb#L91)
-
-```rust
-fn append() -> i64
-```
-
-Returns the append flag to combine with a writable access mode.
-
-### `FileMode::truncate`
-
-[file.crb:93](../stdlib/src/io/file.crb#L93)
-
-```rust
-fn truncate() -> i64
-```
-
-Returns the truncate flag to combine with a writable access mode.
-
-### `File::open`
-
-[file.crb:112](../stdlib/src/io/file.crb#L112)
-
-```rust
-fn open(path: &[u8], mode: i64) -> Result<File, FileError>
-```
-
-Opens an existing file with the requested access mode and flags. The path needs one trailing NUL.
-
-### `File::create`
-
-[file.crb:115](../stdlib/src/io/file.crb#L115)
-
-```rust
-fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
-```
-
-Opens or creates a file with the requested mode and creation permissions. The path needs one trailing NUL.
-
-### `File::read`
-
-[file.crb:127](../stdlib/src/io/file.crb#L127)
-
-```rust
-fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
-```
-
-Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
-
-### `File::write`
-
-[file.crb:136](../stdlib/src/io/file.crb#L136)
-
-```rust
-fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
-```
-
-Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-
-### `File::seek`
-
-[file.crb:145](../stdlib/src/io/file.crb#L145)
-
-```rust
-fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
-```
-
-Moves the file cursor relative to the supplied origin and returns its new absolute position.
-
-### `File::stats`
-
-[file.crb:163](../stdlib/src/io/file.crb#L163)
-
-```rust
-fn stats(&self) -> Result<FileStats, FileError>
-```
-
-Returns a snapshot of file metadata from its open handle.
-
-### `File::rename`
-
-[file.crb:172](../stdlib/src/io/file.crb#L172)
-
-```rust
-fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
-```
-
-Renames a file from the source path to the destination path using platform semantics.
-
-### `File::delete`
-
-[file.crb:180](../stdlib/src/io/file.crb#L180)
-
-```rust
-fn delete(path: &[u8]) -> Result<(), FileError>
-```
-
-Removes the file named by the supplied path.
-
-
-## `std::io::asyn`
-
 Asynchronous file operations dispatched to the runtime's blocking workers.
 
 Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
 
 ### `File`
 
-[file.crb:8](../stdlib/src/io/asyn/file.crb#L8)
+[file.crb:8](../stdlib/src/io/file.crb#L8)
 
 ```rust
 pub struct File
@@ -3283,11 +3000,11 @@ Owns a blocking file handle and exposes operations that await worker completion.
 
 Members:
 
-- [`inner`](../stdlib/src/io/asyn/file.crb#L10) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
+- [`inner`](../stdlib/src/io/file.crb#L10) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
 
 ### `FileError`
 
-[file.crb:14](../stdlib/src/io/asyn/file.crb#L14)
+[file.crb:14](../stdlib/src/io/file.crb#L14)
 
 ```rust
 pub enum FileError
@@ -3297,15 +3014,15 @@ Reports file errors or the runtime's failure to launch a worker.
 
 Members:
 
-- [`InvalidPath`](../stdlib/src/io/asyn/file.crb#L16) (variant): The supplied path violates the platform path-input contract.
-- [`InvalidOptions`](../stdlib/src/io/asyn/file.crb#L18) (variant): The requested open-mode combination is invalid.
-- [`Os`](../stdlib/src/io/asyn/file.crb#L20) (variant): Preserves the native operating-system error code in code.
-- [`Os.code`](../stdlib/src/io/asyn/file.crb#L22) (implementation field): Native operating-system status code preserved by this error.
-- [`LaunchFailed`](../stdlib/src/io/asyn/file.crb#L25) (variant): The runtime could not launch the blocking worker.
+- [`InvalidPath`](../stdlib/src/io/file.crb#L16) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/file.crb#L18) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/file.crb#L20) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/file.crb#L22) (implementation field): Native operating-system status code preserved by this error.
+- [`LaunchFailed`](../stdlib/src/io/file.crb#L25) (variant): The runtime could not launch the blocking worker.
 
 ### `File::open`
 
-[file.crb:89](../stdlib/src/io/asyn/file.crb#L89)
+[file.crb:89](../stdlib/src/io/file.crb#L89)
 
 ```rust
 async fn open(path: &[u8], mode: i64) -> Result<File, FileError>
@@ -3315,7 +3032,7 @@ Awaits opening an existing file with the selected mode. The path needs one trail
 
 ### `File::create`
 
-[file.crb:94](../stdlib/src/io/asyn/file.crb#L94)
+[file.crb:94](../stdlib/src/io/file.crb#L94)
 
 ```rust
 async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
@@ -3325,7 +3042,7 @@ Awaits opening or creating a file with the selected mode and permissions. The pa
 
 ### `File::read`
 
-[file.crb:99](../stdlib/src/io/asyn/file.crb#L99)
+[file.crb:99](../stdlib/src/io/file.crb#L99)
 
 ```rust
 async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
@@ -3335,7 +3052,7 @@ Awaits a read into the caller's buffer and returns the actual byte count.
 
 ### `File::write`
 
-[file.crb:115](../stdlib/src/io/asyn/file.crb#L115)
+[file.crb:115](../stdlib/src/io/file.crb#L115)
 
 ```rust
 async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
@@ -3345,7 +3062,7 @@ Awaits a write from the caller's buffer and returns the actual byte count.
 
 ### `File::seek`
 
-[file.crb:131](../stdlib/src/io/asyn/file.crb#L131)
+[file.crb:131](../stdlib/src/io/file.crb#L131)
 
 ```rust
 async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
@@ -3355,7 +3072,7 @@ Awaits moving the file cursor and returns the new absolute byte offset.
 
 ### `File::stats`
 
-[file.crb:146](../stdlib/src/io/asyn/file.crb#L146)
+[file.crb:146](../stdlib/src/io/file.crb#L146)
 
 ```rust
 async fn stats(&self) -> Result<FileStats, FileError>
@@ -3365,7 +3082,7 @@ Awaits a snapshot of the open file's metadata.
 
 ### `File::rename`
 
-[file.crb:161](../stdlib/src/io/asyn/file.crb#L161)
+[file.crb:161](../stdlib/src/io/file.crb#L161)
 
 ```rust
 async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
@@ -3375,7 +3092,7 @@ Awaits moving a filesystem entry to a different path.
 
 ### `File::delete`
 
-[file.crb:175](../stdlib/src/io/asyn/file.crb#L175)
+[file.crb:175](../stdlib/src/io/file.crb#L175)
 
 ```rust
 async fn delete(path: &[u8]) -> Result<(), FileError>
@@ -3384,139 +3101,177 @@ async fn delete(path: &[u8]) -> Result<(), FileError>
 Awaits removing a file by path.
 
 
-## `std::io::asyn::buffered`
+Shared file metadata, permissions and modes for async and explicit sync I/O.
 
-Asynchronous buffered byte streams with caller-provided storage.
+### `FileStats`
 
-Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
-
-### `BufferedError`
-
-[buffered.crb:8](../stdlib/src/io/asyn/buffered/buffered.crb#L8)
+[options.crb:5](../stdlib/src/io/options.crb#L5)
 
 ```rust
-pub enum BufferedError<E>
+pub struct FileStats
 ```
 
-Preserves the stream's error type and reports writes that make no progress.
+Holds the metadata returned by the file API, including its size.
 
 Members:
 
-- [`Stream`](../stdlib/src/io/asyn/buffered/buffered.crb#L10) (variant): Wraps the underlying stream error without changing its type.
-- [`Stream.error`](../stdlib/src/io/asyn/buffered/buffered.crb#L12) (implementation field): Underlying stream error retained with its original type.
-- [`WriteZero`](../stdlib/src/io/asyn/buffered/buffered.crb#L15) (variant): A nonempty write made no progress.
+- [`size_bytes`](../stdlib/src/io/options.crb#L7) (implementation field): File length reported by the platform in bytes.
 
-### `BufReader`
+### `FileStats::size`
 
-[buffered.crb:23](../stdlib/src/io/asyn/buffered/buffered.crb#L23)
+[options.crb:12](../stdlib/src/io/options.crb#L12)
 
 ```rust
-pub struct BufReader<T, E>
+fn size(&self) -> u64
 ```
 
-Reads ahead from a borrowed byte stream into a borrowed buffer.
+Returns the file size in bytes captured by the stats operation.
+
+### `FilePerm`
+
+[options.crb:16](../stdlib/src/io/options.crb#L16)
+
+```rust
+pub enum FilePerm
+```
+
+Selects platform-default permissions or explicit permission bits for creation.
 
 Members:
 
-- [`stream`](../stdlib/src/io/asyn/buffered/buffered.crb#L25) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
-- [`buffer`](../stdlib/src/io/asyn/buffered/buffered.crb#L27) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
-- [`start`](../stdlib/src/io/asyn/buffered/buffered.crb#L29) (implementation field): Offset of the next unread/unsent buffered byte.
-- [`end`](../stdlib/src/io/asyn/buffered/buffered.crb#L31) (implementation field): Exclusive end of the valid buffered byte range.
+- [`DefaultMode`](../stdlib/src/io/options.crb#L18) (variant): Uses the documented platform default permissions for creation.
+- [`Perm`](../stdlib/src/io/options.crb#L20) (variant): Requests explicit Unix-style permission bits; unsupported platform behavior is reported by the API.
 
-### `BufReader::new`
+### `SeekFrom`
 
-[buffered.crb:36](../stdlib/src/io/asyn/buffered/buffered.crb#L36)
+[options.crb:24](../stdlib/src/io/options.crb#L24)
 
 ```rust
-async fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+pub enum SeekFrom
 ```
 
-Borrows the constrained stream and buffer. An empty buffer uses direct reads.
-
-### `BufReader::from_tcp`
-
-[buffered.crb:41](../stdlib/src/io/asyn/buffered/buffered.crb#L41)
-
-```rust
-async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
-```
-
-Borrows the TCP connection and buffer. An empty buffer uses direct reads.
-
-### `BufReader::read`
-
-[buffered.crb:47](../stdlib/src/io/asyn/buffered/buffered.crb#L47)
-
-```rust
-async fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
-```
-
-Reads into the output, returning the bytes copied. Dropping the reader
-discards unread buffered bytes. The underlying stream has already consumed them.
-
-### `BufWriter`
-
-[buffered.crb:90](../stdlib/src/io/asyn/buffered/buffered.crb#L90)
-
-```rust
-pub struct BufWriter<T, E>
-```
-
-Holds pending output in a borrowed buffer. Call `flush()` to write it to the stream.
+Specifies a byte offset from the start, current position, or end of the file.
 
 Members:
 
-- [`stream`](../stdlib/src/io/asyn/buffered/buffered.crb#L92) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
-- [`buffer`](../stdlib/src/io/asyn/buffered/buffered.crb#L94) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
-- [`start`](../stdlib/src/io/asyn/buffered/buffered.crb#L96) (implementation field): Offset of the next unread/unsent buffered byte.
-- [`end`](../stdlib/src/io/asyn/buffered/buffered.crb#L98) (implementation field): Exclusive end of the valid buffered byte range.
+- [`Start`](../stdlib/src/io/options.crb#L26) (variant): Seeks to the supplied absolute byte offset.
+- [`Current`](../stdlib/src/io/options.crb#L28) (variant): Seeks by a signed byte displacement from the current position.
+- [`End`](../stdlib/src/io/options.crb#L30) (variant): Seeks by a signed byte displacement from the file end.
 
-### `BufWriter::new`
+### `FileMode`
 
-[buffered.crb:103](../stdlib/src/io/asyn/buffered/buffered.crb#L103)
-
-```rust
-async fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
-```
-
-Borrows the constrained stream and buffer. An empty buffer uses direct writes.
-
-### `BufWriter::from_tcp`
-
-[buffered.crb:108](../stdlib/src/io/asyn/buffered/buffered.crb#L108)
+[options.crb:34](../stdlib/src/io/options.crb#L34)
 
 ```rust
-async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+pub struct FileMode
 ```
 
-Borrows the TCP connection and buffer. An empty buffer uses direct writes.
+Provides the access modes and flags accepted by file open and create.
 
-### `BufWriter::write`
+### `FileMode::READ_ONLY`
 
-[buffered.crb:114](../stdlib/src/io/asyn/buffered/buffered.crb#L114)
+[options.crb:39](../stdlib/src/io/options.crb#L39)
 
 ```rust
-async fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
+const READ_ONLY: i64 = 0
 ```
 
-Accepts a prefix of the input and returns the number accepted.
-Flushes previously buffered bytes when the buffer is already full.
+Opens the file for reading only.
 
-### `BufWriter::flush`
+### `FileMode::WRITE_ONLY`
 
-[buffered.crb:154](../stdlib/src/io/asyn/buffered/buffered.crb#L154)
+[options.crb:41](../stdlib/src/io/options.crb#L41)
 
 ```rust
-async fn flush(&mut self) -> Result<(), BufferedError<E>>
+const WRITE_ONLY: i64 = 1
 ```
 
-Writes pending bytes to the stream. After an error, retrying starts at the
-first byte the stream has yet to accept. Destruction discards pending bytes.
+Opens the file for writing only.
+
+### `FileMode::READ_WRITE`
+
+[options.crb:43](../stdlib/src/io/options.crb#L43)
+
+```rust
+const READ_WRITE: i64 = 2
+```
+
+Allows both reading and writing.
+
+### `FileMode::APPEND`
+
+[options.crb:45](../stdlib/src/io/options.crb#L45)
+
+```rust
+const APPEND: i64 = 4
+```
+
+Requests that writes append to the file.
+
+### `FileMode::TRUNCATE`
+
+[options.crb:47](../stdlib/src/io/options.crb#L47)
+
+```rust
+const TRUNCATE: i64 = 8
+```
+
+Requests that an existing file be truncated on open.
+
+### `FileMode::read_only`
+
+[options.crb:50](../stdlib/src/io/options.crb#L50)
+
+```rust
+fn read_only() -> i64
+```
+
+Returns the mode for read-only access.
+
+### `FileMode::write_only`
+
+[options.crb:52](../stdlib/src/io/options.crb#L52)
+
+```rust
+fn write_only() -> i64
+```
+
+Returns the mode for write-only access.
+
+### `FileMode::read_write`
+
+[options.crb:54](../stdlib/src/io/options.crb#L54)
+
+```rust
+fn read_write() -> i64
+```
+
+Returns the mode for read and write access.
+
+### `FileMode::append`
+
+[options.crb:56](../stdlib/src/io/options.crb#L56)
+
+```rust
+fn append() -> i64
+```
+
+Returns the append flag to combine with a writable access mode.
+
+### `FileMode::truncate`
+
+[options.crb:58](../stdlib/src/io/options.crb#L58)
+
+```rust
+fn truncate() -> i64
+```
+
+Returns the truncate flag to combine with a writable access mode.
 
 
 ## `std::io::buffered`
 
-Buffered blocking byte streams with caller-provided storage.
+Asynchronous buffered byte streams with caller-provided storage.
 
 Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
 
@@ -3558,7 +3313,7 @@ Members:
 [buffered.crb:36](../stdlib/src/io/buffered/buffered.crb#L36)
 
 ```rust
-fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+async fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
 ```
 
 Borrows the constrained stream and buffer. An empty buffer uses direct reads.
@@ -3568,7 +3323,7 @@ Borrows the constrained stream and buffer. An empty buffer uses direct reads.
 [buffered.crb:41](../stdlib/src/io/buffered/buffered.crb#L41)
 
 ```rust
-fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
 ```
 
 Borrows the TCP connection and buffer. An empty buffer uses direct reads.
@@ -3578,7 +3333,7 @@ Borrows the TCP connection and buffer. An empty buffer uses direct reads.
 [buffered.crb:47](../stdlib/src/io/buffered/buffered.crb#L47)
 
 ```rust
-fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
+async fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
 ```
 
 Reads into the output, returning the bytes copied. Dropping the reader
@@ -3606,7 +3361,7 @@ Members:
 [buffered.crb:103](../stdlib/src/io/buffered/buffered.crb#L103)
 
 ```rust
-fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+async fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
 ```
 
 Borrows the constrained stream and buffer. An empty buffer uses direct writes.
@@ -3616,7 +3371,7 @@ Borrows the constrained stream and buffer. An empty buffer uses direct writes.
 [buffered.crb:108](../stdlib/src/io/buffered/buffered.crb#L108)
 
 ```rust
-fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
 ```
 
 Borrows the TCP connection and buffer. An empty buffer uses direct writes.
@@ -3624,6 +3379,254 @@ Borrows the TCP connection and buffer. An empty buffer uses direct writes.
 ### `BufWriter::write`
 
 [buffered.crb:114](../stdlib/src/io/buffered/buffered.crb#L114)
+
+```rust
+async fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
+```
+
+Accepts a prefix of the input and returns the number accepted.
+Flushes previously buffered bytes when the buffer is already full.
+
+### `BufWriter::flush`
+
+[buffered.crb:154](../stdlib/src/io/buffered/buffered.crb#L154)
+
+```rust
+async fn flush(&mut self) -> Result<(), BufferedError<E>>
+```
+
+Writes pending bytes to the stream. After an error, retrying starts at the
+first byte the stream has yet to accept. Destruction discards pending bytes.
+
+
+## `std::io::sync`
+
+Portable blocking file I/O, open modes, permissions and seek origins.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `File`
+
+[file.crb:13](../stdlib/src/io/sync/file.crb#L13)
+
+```rust
+pub struct File
+```
+
+Owns an open file and closes the platform handle when destroyed.
+
+Members:
+
+- [`inner`](../stdlib/src/io/sync/file.crb#L15) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
+
+### `FileError`
+
+[file.crb:19](../stdlib/src/io/sync/file.crb#L19)
+
+```rust
+pub enum FileError
+```
+
+Reports invalid path or options, or an error code from the operating system.
+
+Members:
+
+- [`InvalidPath`](../stdlib/src/io/sync/file.crb#L21) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/sync/file.crb#L23) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/sync/file.crb#L25) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/sync/file.crb#L27) (implementation field): Native operating-system status code preserved by this error.
+
+### `File::open`
+
+[file.crb:57](../stdlib/src/io/sync/file.crb#L57)
+
+```rust
+fn open(path: &[u8], mode: i64) -> Result<File, FileError>
+```
+
+Opens an existing file with the requested access mode and flags. The path needs one trailing NUL.
+
+### `File::create`
+
+[file.crb:60](../stdlib/src/io/sync/file.crb#L60)
+
+```rust
+fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
+```
+
+Opens or creates a file with the requested mode and creation permissions. The path needs one trailing NUL.
+
+### `File::read`
+
+[file.crb:72](../stdlib/src/io/sync/file.crb#L72)
+
+```rust
+fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
+```
+
+Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+
+### `File::write`
+
+[file.crb:81](../stdlib/src/io/sync/file.crb#L81)
+
+```rust
+fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
+```
+
+Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+
+### `File::seek`
+
+[file.crb:90](../stdlib/src/io/sync/file.crb#L90)
+
+```rust
+fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
+```
+
+Moves the file cursor relative to the supplied origin and returns its new absolute position.
+
+### `File::stats`
+
+[file.crb:108](../stdlib/src/io/sync/file.crb#L108)
+
+```rust
+fn stats(&self) -> Result<FileStats, FileError>
+```
+
+Returns a snapshot of file metadata from its open handle.
+
+### `File::rename`
+
+[file.crb:117](../stdlib/src/io/sync/file.crb#L117)
+
+```rust
+fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
+```
+
+Renames a file from the source path to the destination path using platform semantics.
+
+### `File::delete`
+
+[file.crb:125](../stdlib/src/io/sync/file.crb#L125)
+
+```rust
+fn delete(path: &[u8]) -> Result<(), FileError>
+```
+
+Removes the file named by the supplied path.
+
+
+## `std::io::sync::buffered`
+
+Buffered blocking byte streams with caller-provided storage.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `BufferedError`
+
+[buffered.crb:8](../stdlib/src/io/sync/buffered/buffered.crb#L8)
+
+```rust
+pub enum BufferedError<E>
+```
+
+Preserves the stream's error type and reports writes that make no progress.
+
+Members:
+
+- [`Stream`](../stdlib/src/io/sync/buffered/buffered.crb#L10) (variant): Wraps the underlying stream error without changing its type.
+- [`Stream.error`](../stdlib/src/io/sync/buffered/buffered.crb#L12) (implementation field): Underlying stream error retained with its original type.
+- [`WriteZero`](../stdlib/src/io/sync/buffered/buffered.crb#L15) (variant): A nonempty write made no progress.
+
+### `BufReader`
+
+[buffered.crb:23](../stdlib/src/io/sync/buffered/buffered.crb#L23)
+
+```rust
+pub struct BufReader<T, E>
+```
+
+Reads ahead from a borrowed byte stream into a borrowed buffer.
+
+Members:
+
+- [`stream`](../stdlib/src/io/sync/buffered/buffered.crb#L25) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+- [`buffer`](../stdlib/src/io/sync/buffered/buffered.crb#L27) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+- [`start`](../stdlib/src/io/sync/buffered/buffered.crb#L29) (implementation field): Offset of the next unread/unsent buffered byte.
+- [`end`](../stdlib/src/io/sync/buffered/buffered.crb#L31) (implementation field): Exclusive end of the valid buffered byte range.
+
+### `BufReader::new`
+
+[buffered.crb:36](../stdlib/src/io/sync/buffered/buffered.crb#L36)
+
+```rust
+fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+```
+
+Borrows the constrained stream and buffer. An empty buffer uses direct reads.
+
+### `BufReader::from_tcp`
+
+[buffered.crb:41](../stdlib/src/io/sync/buffered/buffered.crb#L41)
+
+```rust
+fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+```
+
+Borrows the TCP connection and buffer. An empty buffer uses direct reads.
+
+### `BufReader::read`
+
+[buffered.crb:47](../stdlib/src/io/sync/buffered/buffered.crb#L47)
+
+```rust
+fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
+```
+
+Reads into the output, returning the bytes copied. Dropping the reader
+discards unread buffered bytes. The underlying stream has already consumed them.
+
+### `BufWriter`
+
+[buffered.crb:90](../stdlib/src/io/sync/buffered/buffered.crb#L90)
+
+```rust
+pub struct BufWriter<T, E>
+```
+
+Holds pending output in a borrowed buffer. Call `flush()` to write it to the stream.
+
+Members:
+
+- [`stream`](../stdlib/src/io/sync/buffered/buffered.crb#L92) (implementation field): Exclusively borrowed underlying stream; it must outlive this buffered wrapper.
+- [`buffer`](../stdlib/src/io/sync/buffered/buffered.crb#L94) (implementation field): Caller-owned mutable scratch storage borrowed for the wrapper lifetime.
+- [`start`](../stdlib/src/io/sync/buffered/buffered.crb#L96) (implementation field): Offset of the next unread/unsent buffered byte.
+- [`end`](../stdlib/src/io/sync/buffered/buffered.crb#L98) (implementation field): Exclusive end of the valid buffered byte range.
+
+### `BufWriter::new`
+
+[buffered.crb:103](../stdlib/src/io/sync/buffered/buffered.crb#L103)
+
+```rust
+fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+```
+
+Borrows the constrained stream and buffer. An empty buffer uses direct writes.
+
+### `BufWriter::from_tcp`
+
+[buffered.crb:108](../stdlib/src/io/sync/buffered/buffered.crb#L108)
+
+```rust
+fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+```
+
+Borrows the TCP connection and buffer. An empty buffer uses direct writes.
+
+### `BufWriter::write`
+
+[buffered.crb:114](../stdlib/src/io/sync/buffered/buffered.crb#L114)
 
 ```rust
 fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
@@ -3634,7 +3637,7 @@ Flushes previously buffered bytes when the buffer is already full.
 
 ### `BufWriter::flush`
 
-[buffered.crb:154](../stdlib/src/io/buffered/buffered.crb#L154)
+[buffered.crb:154](../stdlib/src/io/sync/buffered/buffered.crb#L154)
 
 ```rust
 fn flush(&mut self) -> Result<(), BufferedError<E>>
@@ -3887,312 +3890,6 @@ pub fn datagram(size: u64, peer: u64) -> Datagram
 ```
 
 Creates metadata for the byte count and sender returned by a receive operation.
-
-
-## `std::net::asyn::tcp`
-
-Asynchronous IPv4 TCP connections, listeners and borrowed stream halves.
-
-Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
-
-### `Connection`
-
-[socket.crb:12](../stdlib/src/net/asyn/tcp/socket.crb#L12)
-
-```rust
-pub struct Connection
-```
-
-Owns the socket used by asynchronous TCP reads and writes.
-
-Members:
-
-- [`__din_package_socket`](../stdlib/src/net/asyn/tcp/socket.crb#L14) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/asyn/tcp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-- [`remote_address`](../stdlib/src/net/asyn/tcp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
-- [`read_descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L20) (implementation field): Descriptor view reserved for the read half; the connection retains closure responsibility.
-- [`write_descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L22) (implementation field): Descriptor view reserved for the write half; the connection retains closure responsibility.
-
-### `ReadHalf`
-
-[socket.crb:26](../stdlib/src/net/asyn/tcp/socket.crb#L26)
-
-```rust
-pub struct ReadHalf
-```
-
-Borrows the portion of a TCP connection needed to read without owning its socket.
-
-Members:
-
-- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L28) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
-
-### `WriteHalf`
-
-[socket.crb:32](../stdlib/src/net/asyn/tcp/socket.crb#L32)
-
-```rust
-pub struct WriteHalf
-```
-
-Borrows the portion of a TCP connection needed to write without owning its socket.
-
-Members:
-
-- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L34) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
-
-### `ReadHalf::read`
-
-[socket.crb:39](../stdlib/src/net/asyn/tcp/socket.crb#L39)
-
-```rust
-async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
-
-### `WriteHalf::write`
-
-[socket.crb:46](../stdlib/src/net/asyn/tcp/socket.crb#L46)
-
-```rust
-async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Awaits a write from the borrowed slice and returns the actual byte count.
-
-### `Listener`
-
-[socket.crb:52](../stdlib/src/net/asyn/tcp/socket.crb#L52)
-
-```rust
-pub struct Listener
-```
-
-Owns a nonblocking listening socket for asynchronous accepts.
-
-Members:
-
-- [`__din_package_socket`](../stdlib/src/net/asyn/tcp/socket.crb#L54) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/asyn/tcp/socket.crb#L56) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-
-### `connect`
-
-[socket.crb:77](../stdlib/src/net/asyn/tcp/socket.crb#L77)
-
-```rust
-pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError>
-```
-
-Awaits a nonblocking TCP connection to the supplied endpoint.
-
-### `Connection::split`
-
-[socket.crb:87](../stdlib/src/net/asyn/tcp/socket.crb#L87)
-
-```rust
-fn split(&mut self) -> (ReadHalf, WriteHalf)
-```
-
-Borrows separate read and write views from the connection, which still owns the socket.
-
-### `Connection::addr`
-
-[socket.crb:94](../stdlib/src/net/asyn/tcp/socket.crb#L94)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Connection::peer`
-
-[socket.crb:100](../stdlib/src/net/asyn/tcp/socket.crb#L100)
-
-```rust
-fn peer(&self) -> SocketAddr
-```
-
-Returns the remote IPv4 address and port associated with the connection.
-
-### `Connection::write`
-
-[socket.crb:106](../stdlib/src/net/asyn/tcp/socket.crb#L106)
-
-```rust
-async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Awaits a write from the borrowed slice and returns the actual byte count.
-
-### `Connection::read`
-
-[socket.crb:113](../stdlib/src/net/asyn/tcp/socket.crb#L113)
-
-```rust
-async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
-
-### `Listener::bind`
-
-[socket.crb:121](../stdlib/src/net/asyn/tcp/socket.crb#L121)
-
-```rust
-fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
-```
-
-Binds a TCP listener and prepares its native socket for asynchronous accepts.
-
-### `Listener::addr`
-
-[socket.crb:141](../stdlib/src/net/asyn/tcp/socket.crb#L141)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Listener::accept`
-
-[socket.crb:147](../stdlib/src/net/asyn/tcp/socket.crb#L147)
-
-```rust
-async fn accept(&mut self) -> Result<Connection, SocketError>
-```
-
-Awaits an incoming TCP connection and returns its owned socket wrapper.
-
-
-## `std::net::asyn::udp`
-
-Asynchronous IPv4 UDP I/O with synchronous socket setup.
-
-Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
-
-### `Connection`
-
-[socket.crb:12](../stdlib/src/net/asyn/udp/socket.crb#L12)
-
-```rust
-pub struct Connection
-```
-
-Owns a UDP socket prepared for asynchronous I/O with an associated peer.
-
-Members:
-
-- [`__din_package_socket`](../stdlib/src/net/asyn/udp/socket.crb#L14) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-- [`remote_address`](../stdlib/src/net/asyn/udp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
-
-### `Listener`
-
-[socket.crb:22](../stdlib/src/net/asyn/udp/socket.crb#L22)
-
-```rust
-pub struct Listener
-```
-
-Owns a bound UDP socket prepared for asynchronous addressed I/O.
-
-Members:
-
-- [`__din_package_socket`](../stdlib/src/net/asyn/udp/socket.crb#L24) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L26) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-
-### `connect`
-
-[socket.crb:30](../stdlib/src/net/asyn/udp/socket.crb#L30)
-
-```rust
-pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
-```
-
-Associates a UDP socket with a peer and prepares it for asynchronous I/O.
-
-### `Connection::addr`
-
-[socket.crb:47](../stdlib/src/net/asyn/udp/socket.crb#L47)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Connection::peer`
-
-[socket.crb:53](../stdlib/src/net/asyn/udp/socket.crb#L53)
-
-```rust
-fn peer(&self) -> SocketAddr
-```
-
-Returns the remote IPv4 address and port associated with the connection.
-
-### `Connection::send`
-
-[socket.crb:59](../stdlib/src/net/asyn/udp/socket.crb#L59)
-
-```rust
-async fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Awaits transmission of one complete datagram to the connected peer, including an empty datagram.
-
-### `Connection::recv`
-
-[socket.crb:66](../stdlib/src/net/asyn/udp/socket.crb#L66)
-
-```rust
-async fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Awaits one datagram from the connected peer. An oversized payload is consumed and reported.
-
-### `Listener::bind`
-
-[socket.crb:78](../stdlib/src/net/asyn/udp/socket.crb#L78)
-
-```rust
-fn bind(address: SocketAddr) -> Result<Listener, SocketError>
-```
-
-Binds the supplied endpoint and prepares the socket for asynchronous I/O.
-
-### `Listener::addr`
-
-[socket.crb:94](../stdlib/src/net/asyn/udp/socket.crb#L94)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Listener::recv`
-
-[socket.crb:100](../stdlib/src/net/asyn/udp/socket.crb#L100)
-
-```rust
-async fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
-```
-
-Awaits one datagram and its sender address. An oversized payload is consumed and reported.
-
-### `Listener::send`
-
-[socket.crb:106](../stdlib/src/net/asyn/udp/socket.crb#L106)
-
-```rust
-async fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
-```
-
-Awaits transmission of one complete datagram to the supplied destination, including an empty datagram.
 
 
 ## `std::net::http`
@@ -4685,7 +4382,7 @@ pub fn from_parts(ip: u32, port: u16) -> SocketAddr
 Constructs a socket endpoint from packed IPv4 bits and a port.
 
 
-## `std::net::tcp`
+## `std::net::sync::tcp`
 
 Blocking IPv4 TCP connections and listeners over the platform socket API.
 
@@ -4693,7 +4390,7 @@ Available when `target.os == "linux" && target.arch == "x86_64" && target.pointe
 
 ### `Connection`
 
-[socket.crb:10](../stdlib/src/net/tcp/socket.crb#L10)
+[socket.crb:10](../stdlib/src/net/sync/tcp/socket.crb#L10)
 
 ```rust
 pub struct Connection
@@ -4703,13 +4400,13 @@ Owns a connected IPv4 TCP socket.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L12) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/tcp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-- [`remote_address`](../stdlib/src/net/tcp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
+- [`__din_package_socket`](../stdlib/src/net/sync/tcp/socket.crb#L12) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/sync/tcp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/sync/tcp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
 
 ### `Listener`
 
-[socket.crb:20](../stdlib/src/net/tcp/socket.crb#L20)
+[socket.crb:20](../stdlib/src/net/sync/tcp/socket.crb#L20)
 
 ```rust
 pub struct Listener
@@ -4719,12 +4416,12 @@ Owns a TCP listening socket and accepts incoming connections.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/tcp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`__din_package_socket`](../stdlib/src/net/sync/tcp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/sync/tcp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 
 ### `connect`
 
-[socket.crb:41](../stdlib/src/net/tcp/socket.crb#L41)
+[socket.crb:41](../stdlib/src/net/sync/tcp/socket.crb#L41)
 
 ```rust
 pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
@@ -4734,7 +4431,7 @@ Establishes a blocking TCP connection to the supplied endpoint.
 
 ### `Connection::addr`
 
-[socket.crb:51](../stdlib/src/net/tcp/socket.crb#L51)
+[socket.crb:51](../stdlib/src/net/sync/tcp/socket.crb#L51)
 
 ```rust
 fn addr(&self) -> SocketAddr
@@ -4744,7 +4441,7 @@ Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Connection::peer`
 
-[socket.crb:57](../stdlib/src/net/tcp/socket.crb#L57)
+[socket.crb:57](../stdlib/src/net/sync/tcp/socket.crb#L57)
 
 ```rust
 fn peer(&self) -> SocketAddr
@@ -4754,7 +4451,7 @@ Returns the remote IPv4 address and port associated with the connection.
 
 ### `Connection::write`
 
-[socket.crb:63](../stdlib/src/net/tcp/socket.crb#L63)
+[socket.crb:63](../stdlib/src/net/sync/tcp/socket.crb#L63)
 
 ```rust
 fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
@@ -4764,7 +4461,7 @@ Writes bytes from the caller's slice and returns the number accepted, which may 
 
 ### `Connection::read`
 
-[socket.crb:70](../stdlib/src/net/tcp/socket.crb#L70)
+[socket.crb:70](../stdlib/src/net/sync/tcp/socket.crb#L70)
 
 ```rust
 fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
@@ -4774,7 +4471,7 @@ Reads into the caller's slice and returns the bytes copied. An empty buffer retu
 
 ### `Listener::bind`
 
-[socket.crb:78](../stdlib/src/net/tcp/socket.crb#L78)
+[socket.crb:78](../stdlib/src/net/sync/tcp/socket.crb#L78)
 
 ```rust
 fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
@@ -4784,7 +4481,7 @@ Binds and listens at the supplied endpoint. Use port zero for an assigned port a
 
 ### `Listener::addr`
 
-[socket.crb:95](../stdlib/src/net/tcp/socket.crb#L95)
+[socket.crb:95](../stdlib/src/net/sync/tcp/socket.crb#L95)
 
 ```rust
 fn addr(&self) -> SocketAddr
@@ -4794,7 +4491,7 @@ Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Listener::accept`
 
-[socket.crb:101](../stdlib/src/net/tcp/socket.crb#L101)
+[socket.crb:101](../stdlib/src/net/sync/tcp/socket.crb#L101)
 
 ```rust
 fn accept(&mut self) -> Result<Connection, SocketError>
@@ -4803,13 +4500,13 @@ fn accept(&mut self) -> Result<Connection, SocketError>
 Blocks until it can return an owned accepted TCP connection or an error.
 
 
-## `std::net::tls`
+## `std::net::sync::tls`
 
 TLS 1.3 handshake framing, extensions and Certificate message encoding.
 
 ### `Certificate`
 
-[codec.crb:287](../stdlib/src/net/tls/codec.crb#L287)
+[codec.crb:287](../stdlib/src/net/sync/tls/codec.crb#L287)
 
 ```rust
 pub struct Certificate
@@ -4819,14 +4516,14 @@ Stores the byte ranges of a parsed TLS Certificate message in the caller's input
 
 Members:
 
-- [`context_size`](../stdlib/src/net/tls/codec.crb#L289) (implementation field): Byte length of the TLS Certificate request context.
-- [`entries`](../stdlib/src/net/tls/codec.crb#L291) (implementation field): Number of parsed certificate-list entries.
-- [`der_ranges`](../stdlib/src/net/tls/codec.crb#L293) (implementation field): Start/end offsets of the bounded certificate DER entries.
-- [`extension_ranges`](../stdlib/src/net/tls/codec.crb#L295) (implementation field): Start/end offsets of each certificate entry's extensions.
+- [`context_size`](../stdlib/src/net/sync/tls/codec.crb#L289) (implementation field): Byte length of the TLS Certificate request context.
+- [`entries`](../stdlib/src/net/sync/tls/codec.crb#L291) (implementation field): Number of parsed certificate-list entries.
+- [`der_ranges`](../stdlib/src/net/sync/tls/codec.crb#L293) (implementation field): Start/end offsets of the bounded certificate DER entries.
+- [`extension_ranges`](../stdlib/src/net/sync/tls/codec.crb#L295) (implementation field): Start/end offsets of each certificate entry's extensions.
 
 ### `Certificate::from_message`
 
-[codec.crb:334](../stdlib/src/net/tls/codec.crb#L334)
+[codec.crb:334](../stdlib/src/net/sync/tls/codec.crb#L334)
 
 ```rust
 fn from_message(input: &[u8]) -> Result<Certificate, HandshakeError>
@@ -4836,7 +4533,7 @@ Parses a complete TLS Certificate handshake message and records the ranges in it
 
 ### `Certificate::context_length`
 
-[codec.crb:348](../stdlib/src/net/tls/codec.crb#L348)
+[codec.crb:348](../stdlib/src/net/sync/tls/codec.crb#L348)
 
 ```rust
 fn context_length(&self) -> u64
@@ -4846,7 +4543,7 @@ Returns the request context length in bytes.
 
 ### `Certificate::context_range`
 
-[codec.crb:351](../stdlib/src/net/tls/codec.crb#L351)
+[codec.crb:351](../stdlib/src/net/sync/tls/codec.crb#L351)
 
 ```rust
 fn context_range(&self) -> (u64, u64)
@@ -4856,7 +4553,7 @@ Returns the start and exclusive end of the request context.
 
 ### `Certificate::count`
 
-[codec.crb:356](../stdlib/src/net/tls/codec.crb#L356)
+[codec.crb:356](../stdlib/src/net/sync/tls/codec.crb#L356)
 
 ```rust
 fn count(&self) -> u64
@@ -4866,7 +4563,7 @@ Returns the number of certificate entries in the handshake message.
 
 ### `Certificate::der_range`
 
-[codec.crb:359](../stdlib/src/net/tls/codec.crb#L359)
+[codec.crb:359](../stdlib/src/net/sync/tls/codec.crb#L359)
 
 ```rust
 fn der_range(&self, index: u64) -> (u64, u64)
@@ -4876,7 +4573,7 @@ Returns the start and exclusive end of the DER bytes for an entry.
 
 ### `Certificate::extensions_range`
 
-[codec.crb:365](../stdlib/src/net/tls/codec.crb#L365)
+[codec.crb:365](../stdlib/src/net/sync/tls/codec.crb#L365)
 
 ```rust
 fn extensions_range(&self, index: u64) -> (u64, u64)
@@ -4886,7 +4583,7 @@ Returns the start and exclusive end of the encoded extensions for an entry.
 
 ### `Certificate::supports_server_certificate`
 
-[codec.crb:371](../stdlib/src/net/tls/codec.crb#L371)
+[codec.crb:371](../stdlib/src/net/sync/tls/codec.crb#L371)
 
 ```rust
 fn supports_server_certificate(&self) -> bool
@@ -4896,7 +4593,7 @@ Checks the request context and entry extensions for the supported server profile
 
 ### `Certificate::server_key`
 
-[codec.crb:384](../stdlib/src/net/tls/codec.crb#L384)
+[codec.crb:384](../stdlib/src/net/sync/tls/codec.crb#L384)
 
 ```rust
 fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64) -> Result<X509PublicKey, HandshakeError>
@@ -4911,7 +4608,7 @@ Available when `target.os == "linux" && target.arch == "x86_64" && target.pointe
 
 ### `Session`
 
-[handshake.crb:14](../stdlib/src/net/tls/handshake.crb#L14)
+[handshake.crb:14](../stdlib/src/net/sync/tls/handshake.crb#L14)
 
 ```rust
 pub struct Session
@@ -4921,12 +4618,12 @@ Holds the read and write ciphers established by a successful TLS handshake.
 
 Members:
 
-- [`reader`](../stdlib/src/net/tls/handshake.crb#L16) (implementation field): Owned inbound record cipher established by the handshake.
-- [`writer`](../stdlib/src/net/tls/handshake.crb#L18) (implementation field): Owned outbound record cipher established by the handshake.
+- [`reader`](../stdlib/src/net/sync/tls/handshake.crb#L16) (implementation field): Owned inbound record cipher established by the handshake.
+- [`writer`](../stdlib/src/net/sync/tls/handshake.crb#L18) (implementation field): Owned outbound record cipher established by the handshake.
 
 ### `Session::write_application`
 
-[handshake.crb:23](../stdlib/src/net/tls/handshake.crb#L23)
+[handshake.crb:23](../stdlib/src/net/sync/tls/handshake.crb#L23)
 
 ```rust
 fn write_application(&mut self, socket: &mut Connection, content: &[u8], fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError>
@@ -4936,7 +4633,7 @@ Protects and sends an application record on the original TCP connection.
 
 ### `Session::read_application`
 
-[handshake.crb:35](../stdlib/src/net/tls/handshake.crb#L35)
+[handshake.crb:35](../stdlib/src/net/sync/tls/handshake.crb#L35)
 
 ```rust
 fn read_application(&mut self, socket: &mut Connection, wire: &mut [u8], output: &mut [u8]) -> Result<u64, HandshakeError>
@@ -4946,7 +4643,7 @@ Receives and authenticates an application record, or returns zero on authenticat
 
 ### `Session::shutdown`
 
-[handshake.crb:55](../stdlib/src/net/tls/handshake.crb#L55)
+[handshake.crb:55](../stdlib/src/net/sync/tls/handshake.crb#L55)
 
 ```rust
 fn shutdown(&mut self, socket: &mut Connection, fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError>
@@ -4956,7 +4653,7 @@ Sends the authenticated TLS close_notify alert.
 
 ### `client_handshake`
 
-[handshake.crb:167](../stdlib/src/net/tls/handshake.crb#L167)
+[handshake.crb:167](../stdlib/src/net/sync/tls/handshake.crb#L167)
 
 ```rust
 pub fn client_handshake(socket: &mut Connection, pin: &[u8], peer_key: &PublicKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
@@ -4966,7 +4663,7 @@ Runs the client handshake using a configured leaf certificate and public key pin
 
 ### `client_handshake_x509`
 
-[handshake.crb:178](../stdlib/src/net/tls/handshake.crb#L178)
+[handshake.crb:178](../stdlib/src/net/sync/tls/handshake.crb#L178)
 
 ```rust
 pub fn client_handshake_x509(socket: &mut Connection, hostname: &[u8], anchor: &[u8], now: i64, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
@@ -4976,7 +4673,7 @@ Runs the client handshake with an explicit trust anchor and DNS identity check.
 
 ### `server_handshake`
 
-[handshake.crb:360](../stdlib/src/net/tls/handshake.crb#L360)
+[handshake.crb:360](../stdlib/src/net/sync/tls/handshake.crb#L360)
 
 ```rust
 pub fn server_handshake(socket: &mut Connection, certificate: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
@@ -4986,7 +4683,7 @@ Runs the server handshake with one DER certificate and its signing key.
 
 ### `server_handshake_chain`
 
-[handshake.crb:368](../stdlib/src/net/tls/handshake.crb#L368)
+[handshake.crb:368](../stdlib/src/net/sync/tls/handshake.crb#L368)
 
 ```rust
 pub fn server_handshake_chain(socket: &mut Connection, chain: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
@@ -4999,7 +4696,7 @@ Handshake message transport across TCP and TLS record boundaries.
 
 ### `HandshakeError`
 
-[transport.crb:5](../stdlib/src/net/tls/transport.crb#L5)
+[transport.crb:5](../stdlib/src/net/sync/tls/transport.crb#L5)
 
 ```rust
 pub enum HandshakeError
@@ -5009,20 +4706,20 @@ Reports TLS handshake framing, negotiation, authentication or I/O failures.
 
 Members:
 
-- [`BufferTooSmall`](../stdlib/src/net/tls/transport.crb#L7) (variant): The caller-provided output buffer cannot hold the result.
-- [`Transport`](../stdlib/src/net/tls/transport.crb#L9) (variant): The underlying TCP transport operation failed.
-- [`Protocol`](../stdlib/src/net/tls/transport.crb#L11) (variant): The handshake message or negotiation violates the supported TLS profile.
-- [`Authentication`](../stdlib/src/net/tls/transport.crb#L13) (variant): The peer's handshake authentication failed.
-- [`Crypto`](../stdlib/src/net/tls/transport.crb#L15) (variant): An underlying cryptographic operation failed.
+- [`BufferTooSmall`](../stdlib/src/net/sync/tls/transport.crb#L7) (variant): The caller-provided output buffer cannot hold the result.
+- [`Transport`](../stdlib/src/net/sync/tls/transport.crb#L9) (variant): The underlying TCP transport operation failed.
+- [`Protocol`](../stdlib/src/net/sync/tls/transport.crb#L11) (variant): The handshake message or negotiation violates the supported TLS profile.
+- [`Authentication`](../stdlib/src/net/sync/tls/transport.crb#L13) (variant): The peer's handshake authentication failed.
+- [`Crypto`](../stdlib/src/net/sync/tls/transport.crb#L15) (variant): An underlying cryptographic operation failed.
 
 
-## `std::net::tls::keys`
+## `std::net::sync::tls::keys`
 
 TLS 1.3 SHA-256 transcript and key schedule for TLS_AES_128_GCM_SHA256.
 
 ### `KeyError`
 
-[keys.crb:7](../stdlib/src/net/tls/keys/keys.crb#L7)
+[keys.crb:7](../stdlib/src/net/sync/tls/keys/keys.crb#L7)
 
 ```rust
 pub enum KeyError
@@ -5032,15 +4729,15 @@ Reports an invalid key schedule input, hash failure or output length error.
 
 Members:
 
-- [`InvalidLabel`](../stdlib/src/net/tls/keys/keys.crb#L9) (variant): The TLS HKDF label exceeds its encoded length limit.
-- [`InvalidContext`](../stdlib/src/net/tls/keys/keys.crb#L11) (variant): The TLS HKDF context exceeds its encoded length limit.
-- [`InvalidSecret`](../stdlib/src/net/tls/keys/keys.crb#L13) (variant): The supplied TLS secret has an invalid size.
-- [`OutputTooLong`](../stdlib/src/net/tls/keys/keys.crb#L15) (variant): Requested output exceeds the derivation's algorithmic limit.
-- [`HashFailed`](../stdlib/src/net/tls/keys/keys.crb#L17) (variant): The underlying transcript/HMAC operation failed.
+- [`InvalidLabel`](../stdlib/src/net/sync/tls/keys/keys.crb#L9) (variant): The TLS HKDF label exceeds its encoded length limit.
+- [`InvalidContext`](../stdlib/src/net/sync/tls/keys/keys.crb#L11) (variant): The TLS HKDF context exceeds its encoded length limit.
+- [`InvalidSecret`](../stdlib/src/net/sync/tls/keys/keys.crb#L13) (variant): The supplied TLS secret has an invalid size.
+- [`OutputTooLong`](../stdlib/src/net/sync/tls/keys/keys.crb#L15) (variant): Requested output exceeds the derivation's algorithmic limit.
+- [`HashFailed`](../stdlib/src/net/sync/tls/keys/keys.crb#L17) (variant): The underlying transcript/HMAC operation failed.
 
 ### `Traffic`
 
-[keys.crb:21](../stdlib/src/net/tls/keys/keys.crb#L21)
+[keys.crb:21](../stdlib/src/net/sync/tls/keys/keys.crb#L21)
 
 ```rust
 pub enum Traffic
@@ -5050,14 +4747,14 @@ Selects the role and handshake or application phase of a traffic secret.
 
 Members:
 
-- [`ClientHandshake`](../stdlib/src/net/tls/keys/keys.crb#L23) (variant): Selects client handshake traffic secrets.
-- [`ServerHandshake`](../stdlib/src/net/tls/keys/keys.crb#L25) (variant): Selects server handshake traffic secrets.
-- [`ClientApplication`](../stdlib/src/net/tls/keys/keys.crb#L27) (variant): Selects client application traffic secrets.
-- [`ServerApplication`](../stdlib/src/net/tls/keys/keys.crb#L29) (variant): Selects server application traffic secrets.
+- [`ClientHandshake`](../stdlib/src/net/sync/tls/keys/keys.crb#L23) (variant): Selects client handshake traffic secrets.
+- [`ServerHandshake`](../stdlib/src/net/sync/tls/keys/keys.crb#L25) (variant): Selects server handshake traffic secrets.
+- [`ClientApplication`](../stdlib/src/net/sync/tls/keys/keys.crb#L27) (variant): Selects client application traffic secrets.
+- [`ServerApplication`](../stdlib/src/net/sync/tls/keys/keys.crb#L29) (variant): Selects server application traffic secrets.
 
 ### `Transcript`
 
-[keys.crb:33](../stdlib/src/net/tls/keys/keys.crb#L33)
+[keys.crb:33](../stdlib/src/net/sync/tls/keys/keys.crb#L33)
 
 ```rust
 pub struct Transcript
@@ -5067,11 +4764,11 @@ Accumulates the ordered handshake bytes in a streaming SHA-256 state.
 
 Members:
 
-- [`hash`](../stdlib/src/net/tls/keys/keys.crb#L35) (implementation field): Streaming handshake transcript hash; record headers are not appended.
+- [`hash`](../stdlib/src/net/sync/tls/keys/keys.crb#L35) (implementation field): Streaming handshake transcript hash; record headers are not appended.
 
 ### `Transcript::new`
 
-[keys.crb:40](../stdlib/src/net/tls/keys/keys.crb#L40)
+[keys.crb:40](../stdlib/src/net/sync/tls/keys/keys.crb#L40)
 
 ```rust
 fn new() -> Transcript
@@ -5081,7 +4778,7 @@ Starts an empty handshake transcript.
 
 ### `Transcript::append`
 
-[keys.crb:48](../stdlib/src/net/tls/keys/keys.crb#L48)
+[keys.crb:48](../stdlib/src/net/sync/tls/keys/keys.crb#L48)
 
 ```rust
 fn append(&mut self, message: &[u8]) -> Result<(), KeyError>
@@ -5091,7 +4788,7 @@ Adds handshake bytes in protocol order without record headers.
 
 ### `Transcript::digest`
 
-[keys.crb:58](../stdlib/src/net/tls/keys/keys.crb#L58)
+[keys.crb:58](../stdlib/src/net/sync/tls/keys/keys.crb#L58)
 
 ```rust
 fn digest(&self) -> [u8; 32]
@@ -5101,7 +4798,7 @@ Returns a snapshot of the current transcript hash.
 
 ### `hkdf_expand_label`
 
-[keys.crb:79](../stdlib/src/net/tls/keys/keys.crb#L79)
+[keys.crb:79](../stdlib/src/net/sync/tls/keys/keys.crb#L79)
 
 ```rust
 pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8], output: &mut [u8]) -> Result<(), KeyError>
@@ -5111,7 +4808,7 @@ Derives output using the TLS 1.3 label prefix and serialized length and context.
 
 ### `early_secret`
 
-[keys.crb:140](../stdlib/src/net/tls/keys/keys.crb#L140)
+[keys.crb:140](../stdlib/src/net/sync/tls/keys/keys.crb#L140)
 
 ```rust
 pub fn early_secret() -> Result<[u8; 32], KeyError>
@@ -5121,7 +4818,7 @@ Derives the initial TLS early secret without a configured PSK.
 
 ### `derive_secret`
 
-[keys.crb:146](../stdlib/src/net/tls/keys/keys.crb#L146)
+[keys.crb:146](../stdlib/src/net/sync/tls/keys/keys.crb#L146)
 
 ```rust
 pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError>
@@ -5131,7 +4828,7 @@ Derives a 32-byte secret from the given label and transcript hash.
 
 ### `derived_secret`
 
-[keys.crb:154](../stdlib/src/net/tls/keys/keys.crb#L154)
+[keys.crb:154](../stdlib/src/net/sync/tls/keys/keys.crb#L154)
 
 ```rust
 pub fn derived_secret(secret: &[u8]) -> Result<[u8; 32], KeyError>
@@ -5141,7 +4838,7 @@ Derives the intermediate secret used as salt for the next extraction step.
 
 ### `handshake_secret`
 
-[keys.crb:166](../stdlib/src/net/tls/keys/keys.crb#L166)
+[keys.crb:166](../stdlib/src/net/sync/tls/keys/keys.crb#L166)
 
 ```rust
 pub fn handshake_secret(early: &[u8], shared: &[u8]) -> Result<[u8; 32], KeyError>
@@ -5151,7 +4848,7 @@ Mixes the ECDHE shared secret into the key schedule.
 
 ### `master_secret`
 
-[keys.crb:177](../stdlib/src/net/tls/keys/keys.crb#L177)
+[keys.crb:177](../stdlib/src/net/sync/tls/keys/keys.crb#L177)
 
 ```rust
 pub fn master_secret(handshake: &[u8]) -> Result<[u8; 32], KeyError>
@@ -5161,7 +4858,7 @@ Derives the master secret for application traffic and subsequent derivations.
 
 ### `traffic_secret`
 
-[keys.crb:188](../stdlib/src/net/tls/keys/keys.crb#L188)
+[keys.crb:188](../stdlib/src/net/sync/tls/keys/keys.crb#L188)
 
 ```rust
 pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) -> Result<[u8; 32], KeyError>
@@ -5171,7 +4868,7 @@ Derives the requested client or server traffic secret for the selected phase.
 
 ### `aes128_key`
 
-[keys.crb:202](../stdlib/src/net/tls/keys/keys.crb#L202)
+[keys.crb:202](../stdlib/src/net/sync/tls/keys/keys.crb#L202)
 
 ```rust
 pub fn aes128_key(traffic: &[u8]) -> Result<[u8; 16], KeyError>
@@ -5181,7 +4878,7 @@ Derives the 16-byte record encryption key from a traffic secret.
 
 ### `traffic_iv`
 
-[keys.crb:214](../stdlib/src/net/tls/keys/keys.crb#L214)
+[keys.crb:214](../stdlib/src/net/sync/tls/keys/keys.crb#L214)
 
 ```rust
 pub fn traffic_iv(traffic: &[u8]) -> Result<[u8; 12], KeyError>
@@ -5191,7 +4888,7 @@ Derives the 12-byte static record IV from a traffic secret.
 
 ### `finished_key`
 
-[keys.crb:226](../stdlib/src/net/tls/keys/keys.crb#L226)
+[keys.crb:226](../stdlib/src/net/sync/tls/keys/keys.crb#L226)
 
 ```rust
 pub fn finished_key(handshake_traffic: &[u8]) -> Result<[u8; 32], KeyError>
@@ -5201,7 +4898,7 @@ Derives the key for Finished authentication.
 
 ### `finished_verify_data`
 
-[keys.crb:234](../stdlib/src/net/tls/keys/keys.crb#L234)
+[keys.crb:234](../stdlib/src/net/sync/tls/keys/keys.crb#L234)
 
 ```rust
 pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError>
@@ -5211,7 +4908,7 @@ Computes Finished verify_data over the transcript before Finished.
 
 ### `verify_finished`
 
-[keys.crb:248](../stdlib/src/net/tls/keys/keys.crb#L248)
+[keys.crb:248](../stdlib/src/net/sync/tls/keys/keys.crb#L248)
 
 ```rust
 pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], received: &[u8]) -> Result<bool, KeyError>
@@ -5220,7 +4917,7 @@ pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], receive
 Checks received verify_data against the expected Finished authentication value.
 
 
-## `std::net::tls::openssl`
+## `std::net::sync::tls::openssl`
 
 Blocking TLS connection wrapper over the OpenSSL backend.
 
@@ -5228,7 +4925,7 @@ Available when `target.os == "macos" && target.arch == "aarch64"`.
 
 ### `TlsError`
 
-[connection.crb:9](../stdlib/src/net/tls/openssl/connection.crb#L9)
+[connection.crb:9](../stdlib/src/net/sync/tls/openssl/connection.crb#L9)
 
 ```rust
 pub enum TlsError
@@ -5238,15 +4935,15 @@ Reports context, handshake, peer verification or TLS I/O failures.
 
 Members:
 
-- [`InvalidInput`](../stdlib/src/net/tls/openssl/connection.crb#L11) (variant): Input does not meet this TLS backend's parameter contract.
-- [`ConfigurationFailed`](../stdlib/src/net/tls/openssl/connection.crb#L13) (variant): The TLS backend could not construct its configuration.
-- [`PeerVerificationFailed`](../stdlib/src/net/tls/openssl/connection.crb#L15) (variant): The peer certificate/identity verification failed.
-- [`HandshakeFailed`](../stdlib/src/net/tls/openssl/connection.crb#L17) (variant): The TLS handshake failed.
-- [`TransportFailed`](../stdlib/src/net/tls/openssl/connection.crb#L19) (variant): The TLS backend reported an underlying transport failure.
+- [`InvalidInput`](../stdlib/src/net/sync/tls/openssl/connection.crb#L11) (variant): Input does not meet this TLS backend's parameter contract.
+- [`ConfigurationFailed`](../stdlib/src/net/sync/tls/openssl/connection.crb#L13) (variant): The TLS backend could not construct its configuration.
+- [`PeerVerificationFailed`](../stdlib/src/net/sync/tls/openssl/connection.crb#L15) (variant): The peer certificate/identity verification failed.
+- [`HandshakeFailed`](../stdlib/src/net/sync/tls/openssl/connection.crb#L17) (variant): The TLS handshake failed.
+- [`TransportFailed`](../stdlib/src/net/sync/tls/openssl/connection.crb#L19) (variant): The TLS backend reported an underlying transport failure.
 
 ### `Connection`
 
-[connection.crb:23](../stdlib/src/net/tls/openssl/connection.crb#L23)
+[connection.crb:23](../stdlib/src/net/sync/tls/openssl/connection.crb#L23)
 
 ```rust
 pub struct Connection
@@ -5256,13 +4953,13 @@ Owns the TLS session and its underlying TCP connection.
 
 Members:
 
-- [`socket`](../stdlib/src/net/tls/openssl/connection.crb#L25) (implementation field): Owned underlying TCP connection; it outlives the TLS session cleanup.
-- [`session`](../stdlib/src/net/tls/openssl/connection.crb#L27) (implementation field): Owned native OpenSSL session address; used only by this optional backend.
-- [`failed`](../stdlib/src/net/tls/openssl/connection.crb#L29) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`socket`](../stdlib/src/net/sync/tls/openssl/connection.crb#L25) (implementation field): Owned underlying TCP connection; it outlives the TLS session cleanup.
+- [`session`](../stdlib/src/net/sync/tls/openssl/connection.crb#L27) (implementation field): Owned native OpenSSL session address; used only by this optional backend.
+- [`failed`](../stdlib/src/net/sync/tls/openssl/connection.crb#L29) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
 
 ### `connect`
 
-[connection.crb:33](../stdlib/src/net/tls/openssl/connection.crb#L33)
+[connection.crb:33](../stdlib/src/net/sync/tls/openssl/connection.crb#L33)
 
 ```rust
 pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) -> Result<Connection, TlsError>
@@ -5272,7 +4969,7 @@ Consumes a connected TCP socket and performs TLS with a NUL-terminated hostname 
 
 ### `accept`
 
-[connection.crb:56](../stdlib/src/net/tls/openssl/connection.crb#L56)
+[connection.crb:56](../stdlib/src/net/sync/tls/openssl/connection.crb#L56)
 
 ```rust
 pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) -> Result<Connection, TlsError>
@@ -5282,7 +4979,7 @@ Consumes a connected TCP socket and performs TLS with NUL-terminated certificate
 
 ### `Connection::read`
 
-[connection.crb:77](../stdlib/src/net/tls/openssl/connection.crb#L77)
+[connection.crb:77](../stdlib/src/net/sync/tls/openssl/connection.crb#L77)
 
 ```rust
 fn read(&mut self, destination: &mut [u8]) -> Result<usize, TlsError>
@@ -5292,7 +4989,7 @@ Reads authenticated application data into the caller's slice.
 
 ### `Connection::write`
 
-[connection.crb:90](../stdlib/src/net/tls/openssl/connection.crb#L90)
+[connection.crb:90](../stdlib/src/net/sync/tls/openssl/connection.crb#L90)
 
 ```rust
 fn write(&mut self, source: &[u8]) -> Result<usize, TlsError>
@@ -5302,7 +4999,7 @@ Sends application bytes and returns the count accepted by the TLS session.
 
 ### `Connection::close`
 
-[connection.crb:104](../stdlib/src/net/tls/openssl/connection.crb#L104)
+[connection.crb:104](../stdlib/src/net/sync/tls/openssl/connection.crb#L104)
 
 ```rust
 fn close(self: Connection) -> Result<(), TlsError>
@@ -5312,7 +5009,7 @@ Consumes the connection and requests a TLS shutdown.
 
 ### `Connection::drop`
 
-[connection.crb:111](../stdlib/src/net/tls/openssl/connection.crb#L111)
+[connection.crb:111](../stdlib/src/net/sync/tls/openssl/connection.crb#L111)
 
 ```rust
 fn drop(&mut self)
@@ -5321,13 +5018,13 @@ fn drop(&mut self)
 Frees the OpenSSL session before the underlying TCP connection is destroyed.
 
 
-## `std::net::tls::record`
+## `std::net::sync::tls::record`
 
 TLS 1.3 record framing, authenticated encryption and blocking TCP transport.
 
 ### `HANDSHAKE`
 
-[record.crb:7](../stdlib/src/net/tls/record/record.crb#L7)
+[record.crb:7](../stdlib/src/net/sync/tls/record/record.crb#L7)
 
 ```rust
 pub const HANDSHAKE: u8 = 22
@@ -5337,7 +5034,7 @@ TLS handshake content type.
 
 ### `APPLICATION_DATA`
 
-[record.crb:9](../stdlib/src/net/tls/record/record.crb#L9)
+[record.crb:9](../stdlib/src/net/sync/tls/record/record.crb#L9)
 
 ```rust
 pub const APPLICATION_DATA: u8 = 23
@@ -5347,7 +5044,7 @@ TLS application data content type.
 
 ### `ALERT`
 
-[record.crb:11](../stdlib/src/net/tls/record/record.crb#L11)
+[record.crb:11](../stdlib/src/net/sync/tls/record/record.crb#L11)
 
 ```rust
 pub const ALERT: u8 = 21
@@ -5357,7 +5054,7 @@ TLS alert content type.
 
 ### `CHANGE_CIPHER_SPEC`
 
-[record.crb:13](../stdlib/src/net/tls/record/record.crb#L13)
+[record.crb:13](../stdlib/src/net/sync/tls/record/record.crb#L13)
 
 ```rust
 pub const CHANGE_CIPHER_SPEC: u8 = 20
@@ -5367,7 +5064,7 @@ TLS compatibility ChangeCipherSpec content type.
 
 ### `Error`
 
-[record.crb:33](../stdlib/src/net/tls/record/record.crb#L33)
+[record.crb:33](../stdlib/src/net/sync/tls/record/record.crb#L33)
 
 ```rust
 pub enum Error
@@ -5377,20 +5074,20 @@ Reports TLS framing, size, authentication, cipher state or transport failures.
 
 Members:
 
-- [`BufferTooSmall`](../stdlib/src/net/tls/record/record.crb#L35) (variant): The caller-provided output buffer cannot hold the result.
-- [`RecordOverflow`](../stdlib/src/net/tls/record/record.crb#L37) (variant): The record exceeds the supported TLS size limit.
-- [`InvalidRecord`](../stdlib/src/net/tls/record/record.crb#L39) (variant): The TLS record encoding or content type is invalid.
-- [`AuthenticationFailed`](../stdlib/src/net/tls/record/record.crb#L41) (variant): Authentication failed; the operation must not expose unauthenticated plaintext.
-- [`WrongDirection`](../stdlib/src/net/tls/record/record.crb#L43) (variant): The cipher was used for the opposite traffic direction.
-- [`KeyLimit`](../stdlib/src/net/tls/record/record.crb#L45) (variant): The traffic key's record sequence limit has been reached.
-- [`Closed`](../stdlib/src/net/tls/record/record.crb#L47) (variant): This traffic direction is already closed.
-- [`Failed`](../stdlib/src/net/tls/record/record.crb#L49) (variant): The cipher is in a sticky failed state.
-- [`Transport`](../stdlib/src/net/tls/record/record.crb#L51) (variant): The underlying TCP transport operation failed.
-- [`Truncated`](../stdlib/src/net/tls/record/record.crb#L53) (variant): The transport closed before the complete record arrived.
+- [`BufferTooSmall`](../stdlib/src/net/sync/tls/record/record.crb#L35) (variant): The caller-provided output buffer cannot hold the result.
+- [`RecordOverflow`](../stdlib/src/net/sync/tls/record/record.crb#L37) (variant): The record exceeds the supported TLS size limit.
+- [`InvalidRecord`](../stdlib/src/net/sync/tls/record/record.crb#L39) (variant): The TLS record encoding or content type is invalid.
+- [`AuthenticationFailed`](../stdlib/src/net/sync/tls/record/record.crb#L41) (variant): Authentication failed; the operation must not expose unauthenticated plaintext.
+- [`WrongDirection`](../stdlib/src/net/sync/tls/record/record.crb#L43) (variant): The cipher was used for the opposite traffic direction.
+- [`KeyLimit`](../stdlib/src/net/sync/tls/record/record.crb#L45) (variant): The traffic key's record sequence limit has been reached.
+- [`Closed`](../stdlib/src/net/sync/tls/record/record.crb#L47) (variant): This traffic direction is already closed.
+- [`Failed`](../stdlib/src/net/sync/tls/record/record.crb#L49) (variant): The cipher is in a sticky failed state.
+- [`Transport`](../stdlib/src/net/sync/tls/record/record.crb#L51) (variant): The underlying TCP transport operation failed.
+- [`Truncated`](../stdlib/src/net/sync/tls/record/record.crb#L53) (variant): The transport closed before the complete record arrived.
 
 ### `Record`
 
-[record.crb:57](../stdlib/src/net/tls/record/record.crb#L57)
+[record.crb:57](../stdlib/src/net/sync/tls/record/record.crb#L57)
 
 ```rust
 pub struct Record
@@ -5400,13 +5097,13 @@ Describes authenticated content and closure status after opening a record.
 
 Members:
 
-- [`content_type`](../stdlib/src/net/tls/record/record.crb#L59) (implementation field): Authenticated inner TLS content type.
-- [`length`](../stdlib/src/net/tls/record/record.crb#L61) (implementation field): Number of authenticated plaintext bytes.
-- [`closing`](../stdlib/src/net/tls/record/record.crb#L63) (implementation field): Whether this record contains authenticated close_notify.
+- [`content_type`](../stdlib/src/net/sync/tls/record/record.crb#L59) (implementation field): Authenticated inner TLS content type.
+- [`length`](../stdlib/src/net/sync/tls/record/record.crb#L61) (implementation field): Number of authenticated plaintext bytes.
+- [`closing`](../stdlib/src/net/sync/tls/record/record.crb#L63) (implementation field): Whether this record contains authenticated close_notify.
 
 ### `Record::kind`
 
-[record.crb:68](../stdlib/src/net/tls/record/record.crb#L68)
+[record.crb:68](../stdlib/src/net/sync/tls/record/record.crb#L68)
 
 ```rust
 fn kind(&self) -> u8
@@ -5416,7 +5113,7 @@ Returns the authenticated inner content type.
 
 ### `Record::len`
 
-[record.crb:70](../stdlib/src/net/tls/record/record.crb#L70)
+[record.crb:70](../stdlib/src/net/sync/tls/record/record.crb#L70)
 
 ```rust
 fn len(&self) -> u64
@@ -5426,7 +5123,7 @@ Returns the number of content bytes in the plaintext buffer.
 
 ### `Record::is_close_notify`
 
-[record.crb:72](../stdlib/src/net/tls/record/record.crb#L72)
+[record.crb:72](../stdlib/src/net/sync/tls/record/record.crb#L72)
 
 ```rust
 fn is_close_notify(&self) -> bool
@@ -5436,7 +5133,7 @@ Reports whether the authenticated record closes the receive direction.
 
 ### `RecordCipher`
 
-[record.crb:76](../stdlib/src/net/tls/record/record.crb#L76)
+[record.crb:76](../stdlib/src/net/sync/tls/record/record.crb#L76)
 
 ```rust
 pub struct RecordCipher
@@ -5446,15 +5143,15 @@ Holds the key, IV, sequence and state for one record direction.
 
 Members:
 
-- [`aes`](../stdlib/src/net/tls/record/record.crb#L78) (implementation field): Owned AES-GCM key schedule for this traffic direction.
-- [`iv`](../stdlib/src/net/tls/record/record.crb#L80) (implementation field): Per-direction IV used with the record sequence number.
-- [`sequence`](../stdlib/src/net/tls/record/record.crb#L82) (implementation field): Next record sequence number; key limits are checked before further use.
-- [`sending`](../stdlib/src/net/tls/record/record.crb#L84) (implementation field): True for a writer, false for a reader; direction-specific operations validate it.
-- [`status`](../stdlib/src/net/tls/record/record.crb#L86) (implementation field): Internal cipher state encoding active, closed or failed operation.
+- [`aes`](../stdlib/src/net/sync/tls/record/record.crb#L78) (implementation field): Owned AES-GCM key schedule for this traffic direction.
+- [`iv`](../stdlib/src/net/sync/tls/record/record.crb#L80) (implementation field): Per-direction IV used with the record sequence number.
+- [`sequence`](../stdlib/src/net/sync/tls/record/record.crb#L82) (implementation field): Next record sequence number; key limits are checked before further use.
+- [`sending`](../stdlib/src/net/sync/tls/record/record.crb#L84) (implementation field): True for a writer, false for a reader; direction-specific operations validate it.
+- [`status`](../stdlib/src/net/sync/tls/record/record.crb#L86) (implementation field): Internal cipher state encoding active, closed or failed operation.
 
 ### `RecordCipher::writer`
 
-[record.crb:182](../stdlib/src/net/tls/record/record.crb#L182)
+[record.crb:182](../stdlib/src/net/sync/tls/record/record.crb#L182)
 
 ```rust
 fn writer(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher
@@ -5464,7 +5161,7 @@ Creates an outbound record cipher from a traffic key and static IV.
 
 ### `RecordCipher::reader`
 
-[record.crb:184](../stdlib/src/net/tls/record/record.crb#L184)
+[record.crb:184](../stdlib/src/net/sync/tls/record/record.crb#L184)
 
 ```rust
 fn reader(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher
@@ -5474,7 +5171,7 @@ Creates an inbound record cipher from a traffic key and static IV.
 
 ### `RecordCipher::seal`
 
-[record.crb:188](../stdlib/src/net/tls/record/record.crb#L188)
+[record.crb:188](../stdlib/src/net/sync/tls/record/record.crb#L188)
 
 ```rust
 fn seal(&mut self, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error>
@@ -5484,7 +5181,7 @@ Encrypts one TLS record into caller-owned wire storage with optional padding.
 
 ### `RecordCipher::open`
 
-[record.crb:225](../stdlib/src/net/tls/record/record.crb#L225)
+[record.crb:225](../stdlib/src/net/sync/tls/record/record.crb#L225)
 
 ```rust
 fn open(&mut self, wire: &[u8], plaintext: &mut [u8]) -> Result<Record, Error>
@@ -5494,7 +5191,7 @@ Authenticates and decrypts a complete TLS record into caller-owned storage.
 
 ### `RecordCipher::seal_close_notify`
 
-[record.crb:275](../stdlib/src/net/tls/record/record.crb#L275)
+[record.crb:275](../stdlib/src/net/sync/tls/record/record.crb#L275)
 
 ```rust
 fn seal_close_notify(&mut self, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error>
@@ -5504,7 +5201,7 @@ Builds a protected close_notify record and closes the write direction.
 
 ### `encode_plaintext`
 
-[record.crb:292](../stdlib/src/net/tls/record/record.crb#L292)
+[record.crb:292](../stdlib/src/net/sync/tls/record/record.crb#L292)
 
 ```rust
 pub fn encode_plaintext(kind: u8, initial_client_hello: bool, content: &[u8], wire: &mut [u8]) -> Result<usize, Error>
@@ -5514,7 +5211,7 @@ Writes a cleartext TLS record for a supported handshake message.
 
 ### `decode_plaintext`
 
-[record.crb:308](../stdlib/src/net/tls/record/record.crb#L308)
+[record.crb:308](../stdlib/src/net/sync/tls/record/record.crb#L308)
 
 ```rust
 pub fn decode_plaintext(wire: &[u8]) -> Result<Record, Error>
@@ -5526,7 +5223,7 @@ Available when `target.os == "linux" && target.arch == "x86_64" && target.pointe
 
 ### `read_record`
 
-[record.crb:347](../stdlib/src/net/tls/record/record.crb#L347)
+[record.crb:347](../stdlib/src/net/sync/tls/record/record.crb#L347)
 
 ```rust
 pub fn read_record(socket: &mut Connection, wire: &mut [u8]) -> Result<usize, Error>
@@ -5536,7 +5233,7 @@ Reads one full framed record, handling partial TCP reads.
 
 ### `write_record`
 
-[record.crb:365](../stdlib/src/net/tls/record/record.crb#L365)
+[record.crb:365](../stdlib/src/net/sync/tls/record/record.crb#L365)
 
 ```rust
 pub fn write_record(socket: &mut Connection, wire: &[u8]) -> Result<(), Error>
@@ -5546,7 +5243,7 @@ Writes all record bytes, handling short TCP writes.
 
 ### `RecordCipher::send_record`
 
-[record.crb:386](../stdlib/src/net/tls/record/record.crb#L386)
+[record.crb:386](../stdlib/src/net/sync/tls/record/record.crb#L386)
 
 ```rust
 fn send_record(&mut self, socket: &mut Connection, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error>
@@ -5556,7 +5253,7 @@ Protects and sends one record using the caller's wire and scratch buffers.
 
 ### `RecordCipher::receive_record`
 
-[record.crb:403](../stdlib/src/net/tls/record/record.crb#L403)
+[record.crb:403](../stdlib/src/net/sync/tls/record/record.crb#L403)
 
 ```rust
 fn receive_record(&mut self, socket: &mut Connection, wire: &mut [u8], plaintext: &mut [u8]) -> Result<Record, Error>
@@ -5566,7 +5263,7 @@ Reads and authenticates one TLS record using caller-owned buffers.
 
 ### `RecordCipher::close_notify`
 
-[record.crb:422](../stdlib/src/net/tls/record/record.crb#L422)
+[record.crb:422](../stdlib/src/net/sync/tls/record/record.crb#L422)
 
 ```rust
 fn close_notify(&mut self, socket: &mut Connection, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error>
@@ -5575,7 +5272,7 @@ fn close_notify(&mut self, socket: &mut Connection, scratch: &mut [u8], wire: &m
 Sends a protected closure alert over TCP and marks the write direction closed.
 
 
-## `std::net::udp`
+## `std::net::sync::udp`
 
 Blocking IPv4 UDP sockets for connected or addressed datagram I/O.
 
@@ -5583,7 +5280,7 @@ Available when `target.os == "linux" && target.arch == "x86_64" && target.pointe
 
 ### `Connection`
 
-[socket.crb:10](../stdlib/src/net/udp/socket.crb#L10)
+[socket.crb:10](../stdlib/src/net/sync/udp/socket.crb#L10)
 
 ```rust
 pub struct Connection
@@ -5593,13 +5290,13 @@ Owns a UDP socket associated with one remote endpoint.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L12) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/udp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-- [`remote_address`](../stdlib/src/net/udp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
+- [`__din_package_socket`](../stdlib/src/net/sync/udp/socket.crb#L12) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/sync/udp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/sync/udp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
 
 ### `Listener`
 
-[socket.crb:20](../stdlib/src/net/udp/socket.crb#L20)
+[socket.crb:20](../stdlib/src/net/sync/udp/socket.crb#L20)
 
 ```rust
 pub struct Listener
@@ -5609,12 +5306,12 @@ Owns a bound UDP socket that can receive from and send to arbitrary endpoints.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/udp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`__din_package_socket`](../stdlib/src/net/sync/udp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/sync/udp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 
 ### `connect`
 
-[socket.crb:28](../stdlib/src/net/udp/socket.crb#L28)
+[socket.crb:28](../stdlib/src/net/sync/udp/socket.crb#L28)
 
 ```rust
 pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
@@ -5624,7 +5321,7 @@ Associates a UDP socket with the specified peer without a transport handshake.
 
 ### `Connection::addr`
 
-[socket.crb:42](../stdlib/src/net/udp/socket.crb#L42)
+[socket.crb:42](../stdlib/src/net/sync/udp/socket.crb#L42)
 
 ```rust
 fn addr(&self) -> SocketAddr
@@ -5634,7 +5331,7 @@ Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Connection::peer`
 
-[socket.crb:48](../stdlib/src/net/udp/socket.crb#L48)
+[socket.crb:48](../stdlib/src/net/sync/udp/socket.crb#L48)
 
 ```rust
 fn peer(&self) -> SocketAddr
@@ -5644,7 +5341,7 @@ Returns the remote IPv4 address and port associated with the connection.
 
 ### `Connection::send`
 
-[socket.crb:54](../stdlib/src/net/udp/socket.crb#L54)
+[socket.crb:54](../stdlib/src/net/sync/udp/socket.crb#L54)
 
 ```rust
 fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
@@ -5654,7 +5351,7 @@ Sends a complete datagram to the connected peer, including an empty datagram.
 
 ### `Connection::recv`
 
-[socket.crb:61](../stdlib/src/net/udp/socket.crb#L61)
+[socket.crb:61](../stdlib/src/net/sync/udp/socket.crb#L61)
 
 ```rust
 fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
@@ -5664,7 +5361,7 @@ Receives one datagram from the connected peer. An oversized payload is consumed 
 
 ### `Listener::bind`
 
-[socket.crb:73](../stdlib/src/net/udp/socket.crb#L73)
+[socket.crb:73](../stdlib/src/net/sync/udp/socket.crb#L73)
 
 ```rust
 fn bind(address: SocketAddr) -> Result<Listener, SocketError>
@@ -5674,7 +5371,7 @@ Binds a UDP socket to the supplied local endpoint. Use port zero for an assigned
 
 ### `Listener::addr`
 
-[socket.crb:86](../stdlib/src/net/udp/socket.crb#L86)
+[socket.crb:86](../stdlib/src/net/sync/udp/socket.crb#L86)
 
 ```rust
 fn addr(&self) -> SocketAddr
@@ -5684,7 +5381,7 @@ Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Listener::recv`
 
-[socket.crb:92](../stdlib/src/net/udp/socket.crb#L92)
+[socket.crb:92](../stdlib/src/net/sync/udp/socket.crb#L92)
 
 ```rust
 fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
@@ -5694,13 +5391,319 @@ Receives one datagram with sender metadata. An oversized payload is consumed and
 
 ### `Listener::send`
 
-[socket.crb:98](../stdlib/src/net/udp/socket.crb#L98)
+[socket.crb:98](../stdlib/src/net/sync/udp/socket.crb#L98)
 
 ```rust
 fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
 ```
 
 Sends a complete datagram to the supplied destination, including an empty datagram.
+
+
+## `std::net::tcp`
+
+Asynchronous IPv4 TCP connections, listeners and borrowed stream halves.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Connection`
+
+[socket.crb:12](../stdlib/src/net/tcp/socket.crb#L12)
+
+```rust
+pub struct Connection
+```
+
+Owns the socket used by asynchronous TCP reads and writes.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L14) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/tcp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/tcp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
+- [`read_descriptor`](../stdlib/src/net/tcp/socket.crb#L20) (implementation field): Descriptor view reserved for the read half; the connection retains closure responsibility.
+- [`write_descriptor`](../stdlib/src/net/tcp/socket.crb#L22) (implementation field): Descriptor view reserved for the write half; the connection retains closure responsibility.
+
+### `ReadHalf`
+
+[socket.crb:26](../stdlib/src/net/tcp/socket.crb#L26)
+
+```rust
+pub struct ReadHalf
+```
+
+Borrows the portion of a TCP connection needed to read without owning its socket.
+
+Members:
+
+- [`descriptor`](../stdlib/src/net/tcp/socket.crb#L28) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
+
+### `WriteHalf`
+
+[socket.crb:32](../stdlib/src/net/tcp/socket.crb#L32)
+
+```rust
+pub struct WriteHalf
+```
+
+Borrows the portion of a TCP connection needed to write without owning its socket.
+
+Members:
+
+- [`descriptor`](../stdlib/src/net/tcp/socket.crb#L34) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
+
+### `ReadHalf::read`
+
+[socket.crb:39](../stdlib/src/net/tcp/socket.crb#L39)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+
+### `WriteHalf::write`
+
+[socket.crb:46](../stdlib/src/net/tcp/socket.crb#L46)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Awaits a write from the borrowed slice and returns the actual byte count.
+
+### `Listener`
+
+[socket.crb:52](../stdlib/src/net/tcp/socket.crb#L52)
+
+```rust
+pub struct Listener
+```
+
+Owns a nonblocking listening socket for asynchronous accepts.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L54) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/tcp/socket.crb#L56) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+
+### `connect`
+
+[socket.crb:77](../stdlib/src/net/tcp/socket.crb#L77)
+
+```rust
+pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError>
+```
+
+Awaits a nonblocking TCP connection to the supplied endpoint.
+
+### `Connection::split`
+
+[socket.crb:87](../stdlib/src/net/tcp/socket.crb#L87)
+
+```rust
+fn split(&mut self) -> (ReadHalf, WriteHalf)
+```
+
+Borrows separate read and write views from the connection, which still owns the socket.
+
+### `Connection::addr`
+
+[socket.crb:94](../stdlib/src/net/tcp/socket.crb#L94)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:100](../stdlib/src/net/tcp/socket.crb#L100)
+
+```rust
+fn peer(&self) -> SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::write`
+
+[socket.crb:106](../stdlib/src/net/tcp/socket.crb#L106)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Awaits a write from the borrowed slice and returns the actual byte count.
+
+### `Connection::read`
+
+[socket.crb:113](../stdlib/src/net/tcp/socket.crb#L113)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+
+### `Listener::bind`
+
+[socket.crb:121](../stdlib/src/net/tcp/socket.crb#L121)
+
+```rust
+fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
+```
+
+Binds a TCP listener and prepares its native socket for asynchronous accepts.
+
+### `Listener::addr`
+
+[socket.crb:141](../stdlib/src/net/tcp/socket.crb#L141)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Listener::accept`
+
+[socket.crb:147](../stdlib/src/net/tcp/socket.crb#L147)
+
+```rust
+async fn accept(&mut self) -> Result<Connection, SocketError>
+```
+
+Awaits an incoming TCP connection and returns its owned socket wrapper.
+
+
+## `std::net::udp`
+
+Asynchronous IPv4 UDP I/O with synchronous socket setup.
+
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
+
+### `Connection`
+
+[socket.crb:12](../stdlib/src/net/udp/socket.crb#L12)
+
+```rust
+pub struct Connection
+```
+
+Owns a UDP socket prepared for asynchronous I/O with an associated peer.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L14) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/udp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`remote_address`](../stdlib/src/net/udp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
+
+### `Listener`
+
+[socket.crb:22](../stdlib/src/net/udp/socket.crb#L22)
+
+```rust
+pub struct Listener
+```
+
+Owns a bound UDP socket prepared for asynchronous addressed I/O.
+
+Members:
+
+- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L24) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/udp/socket.crb#L26) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+
+### `connect`
+
+[socket.crb:30](../stdlib/src/net/udp/socket.crb#L30)
+
+```rust
+pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
+```
+
+Associates a UDP socket with a peer and prepares it for asynchronous I/O.
+
+### `Connection::addr`
+
+[socket.crb:47](../stdlib/src/net/udp/socket.crb#L47)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:53](../stdlib/src/net/udp/socket.crb#L53)
+
+```rust
+fn peer(&self) -> SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::send`
+
+[socket.crb:59](../stdlib/src/net/udp/socket.crb#L59)
+
+```rust
+async fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+```
+
+Awaits transmission of one complete datagram to the connected peer, including an empty datagram.
+
+### `Connection::recv`
+
+[socket.crb:66](../stdlib/src/net/udp/socket.crb#L66)
+
+```rust
+async fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
+```
+
+Awaits one datagram from the connected peer. An oversized payload is consumed and reported.
+
+### `Listener::bind`
+
+[socket.crb:78](../stdlib/src/net/udp/socket.crb#L78)
+
+```rust
+fn bind(address: SocketAddr) -> Result<Listener, SocketError>
+```
+
+Binds the supplied endpoint and prepares the socket for asynchronous I/O.
+
+### `Listener::addr`
+
+[socket.crb:94](../stdlib/src/net/udp/socket.crb#L94)
+
+```rust
+fn addr(&self) -> SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Listener::recv`
+
+[socket.crb:100](../stdlib/src/net/udp/socket.crb#L100)
+
+```rust
+async fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
+```
+
+Awaits one datagram and its sender address. An oversized payload is consumed and reported.
+
+### `Listener::send`
+
+[socket.crb:106](../stdlib/src/net/udp/socket.crb#L106)
+
+```rust
+async fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
+```
+
+Awaits transmission of one complete datagram to the supplied destination, including an empty datagram.
 
 
 ## `std::num`
@@ -5899,69 +5902,19 @@ fn elapsed(&self) -> Result<Duration, Error>
 
 Measures time since this instant, saturating a backward platform reading at zero.
 
-### `Timer`
+### `Instant::remaining`
 
-[time.crb:57](../stdlib/src/time/time.crb#L57)
-
-```rust
-pub struct Timer
-```
-
-A reusable monotonic deadline; waiting does not consume it.
-
-Members:
-
-- [`deadline`](../stdlib/src/time/time.crb#L59) (implementation field): Absolute monotonic timestamp of the deadline.
-
-### `Timer::after`
-
-[time.crb:63](../stdlib/src/time/time.crb#L63)
+[time.crb:55](../stdlib/src/time/time.crb#L55)
 
 ```rust
-fn after(duration: Duration) -> Result<Timer, Error>
+fn remaining(&self) -> Result<Duration, Error>
 ```
 
-Creates a timer that becomes ready after the given span.
-
-### `Timer::at`
-
-[time.crb:69](../stdlib/src/time/time.crb#L69)
-
-```rust
-fn at(deadline: Instant) -> Timer
-```
-
-Creates a timer for an existing monotonic deadline.
-
-### `Timer::wait`
-
-[time.crb:71](../stdlib/src/time/time.crb#L71)
-
-```rust
-fn wait(&self) -> Result<(), Error>
-```
-
-Blocks this thread until the deadline, retrying interruptions and early wakes.
+Measures the remaining span until this instant, saturating past deadlines at zero.
 
 ### `sleep`
 
-[time.crb:86](../stdlib/src/time/time.crb#L86)
-
-```rust
-pub fn sleep(duration: Duration) -> Result<(), Error>
-```
-
-Blocks the current thread for at least the given monotonic span.
-
-
-## `std::time::asyn`
-
-Deadline waits on existing blocking workers; caller tasks suspend at await.
-A pending wait uses one blocking worker, not an executor/poller thread.
-
-### `sleep`
-
-[asyn.crb:12](../stdlib/src/time/asyn/asyn.crb#L12)
+[time.crb:73](../stdlib/src/time/time.crb#L73)
 
 ```rust
 pub async fn sleep(duration: Duration) -> Result<(), Error>
@@ -5971,7 +5924,7 @@ Suspends this task for a span without blocking an executor thread.
 
 ### `Timer`
 
-[asyn.crb:21](../stdlib/src/time/asyn/asyn.crb#L21)
+[time.crb:82](../stdlib/src/time/time.crb#L82)
 
 ```rust
 pub struct Timer
@@ -5981,11 +5934,11 @@ Owns a reusable deadline whose waits suspend the calling task.
 
 Members:
 
-- [`inner`](../stdlib/src/time/asyn/asyn.crb#L23) (implementation field): Shared deadline state borrowed until the worker wait completes.
+- [`inner`](../stdlib/src/time/time.crb#L84) (implementation field): Shared deadline state borrowed until the worker wait completes.
 
 ### `Timer::after`
 
-[asyn.crb:27](../stdlib/src/time/asyn/asyn.crb#L27)
+[time.crb:88](../stdlib/src/time/time.crb#L88)
 
 ```rust
 fn after(duration: Duration) -> Result<Timer, Error>
@@ -5995,7 +5948,7 @@ Creates an asynchronous timer after the supplied span.
 
 ### `Timer::at`
 
-[asyn.crb:32](../stdlib/src/time/asyn/asyn.crb#L32)
+[time.crb:93](../stdlib/src/time/time.crb#L93)
 
 ```rust
 fn at(deadline: Instant) -> Timer
@@ -6005,10 +5958,69 @@ Creates an asynchronous timer at an existing monotonic instant.
 
 ### `Timer::wait`
 
-[asyn.crb:37](../stdlib/src/time/asyn/asyn.crb#L37)
+[time.crb:98](../stdlib/src/time/time.crb#L98)
 
 ```rust
 async fn wait(&self) -> Result<(), Error>
 ```
 
 Suspends until the deadline; the timer outlives its borrowed worker wait.
+
+
+## `std::time::sync`
+
+Explicit blocking waits using shared monotonic time values.
+
+### `Timer`
+
+[sync.crb:7](../stdlib/src/time/sync/sync.crb#L7)
+
+```rust
+pub struct Timer
+```
+
+A reusable monotonic deadline; waiting does not consume it.
+
+Members:
+
+- [`deadline`](../stdlib/src/time/sync/sync.crb#L9) (implementation field): Absolute monotonic timestamp of the deadline.
+
+### `Timer::after`
+
+[sync.crb:13](../stdlib/src/time/sync/sync.crb#L13)
+
+```rust
+fn after(duration: Duration) -> Result<Timer, Error>
+```
+
+Creates a timer that becomes ready after the given span.
+
+### `Timer::at`
+
+[sync.crb:19](../stdlib/src/time/sync/sync.crb#L19)
+
+```rust
+fn at(deadline: Instant) -> Timer
+```
+
+Creates a timer for an existing monotonic deadline.
+
+### `Timer::wait`
+
+[sync.crb:21](../stdlib/src/time/sync/sync.crb#L21)
+
+```rust
+fn wait(&self) -> Result<(), Error>
+```
+
+Blocks this thread until the deadline, retrying interruptions and early wakes.
+
+### `sleep`
+
+[sync.crb:35](../stdlib/src/time/sync/sync.crb#L35)
+
+```rust
+pub fn sleep(duration: Duration) -> Result<(), Error>
+```
+
+Blocks the current thread for at least the given monotonic span.

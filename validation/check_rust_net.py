@@ -13,8 +13,8 @@ from check_rust_assembly import FRONTEND
 from check_crust_bootstrap import ROOT
 
 PROGRAM = """
-use std::net::tcp;
-use std::net::udp;
+use std::net::sync::tcp;
+use std::net::sync::udp;
 use std::net::SocketError;
 use std::net::ipv4::{Addr, SocketAddr};
 
@@ -323,9 +323,9 @@ def main():
                     exercise([*args.runner, executable], tcp_server, udp_peer)
                 print(f"{args.target or 'host'} {opt}: {'linked' if args.compile_only else 'TCP and UDP traces matched'}")
         for source in (
-            "use std::net::tcp::Connection; fn main() { let forged = Connection {}; drop(forged); }",
-            "use std::net::udp::Listener; fn main() { let mut p = pool<Listener>(1); let forged = p.new(); drop(forged); }",
-            "use std::net::tcp::Connection; struct Wrapper { connection: Connection } "
+            "use std::net::sync::tcp::Connection; fn main() { let forged = Connection {}; drop(forged); }",
+            "use std::net::sync::udp::Listener; fn main() { let mut p = pool<Listener>(1); let forged = p.new(); drop(forged); }",
+            "use std::net::sync::tcp::Connection; struct Wrapper { connection: Connection } "
             "fn main() { let mut p = pool<Wrapper>(1); let forged = p.new(); drop(forged); }",
         ):
             entry.write_text(source)

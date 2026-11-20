@@ -21,7 +21,7 @@ each suite. The fixture directory contains the NIST archives
 `din-nist-gcm.zip`, `din-nist-sha-byte.zip`, `din-nist-sha3-byte.zip`, and
 `din-nist-shake-byte.zip`, plus `din-wycheproof-hkdf384.json` from the
 pinned corpus linked below. The SHA-384/512, SHA-3, and SHAKE suites
-read their fixtures through `std::io::File` with both compilers on Linux
+read their fixtures through `std::io::sync::File` with both compilers on Linux
 and Windows x86-64.
 
 Both compilers completed the client and server handshake against
@@ -74,7 +74,7 @@ provided by the caller.
 | `x509::Certificate` | `to_der(original_der, output)` keeps the original signed bytes | `to_pem(original_der, output)` wraps the original DER in a CERTIFICATE block |
 
 Use the returned length to write only the serialized prefix with
-`std::io::File`. The certificate methods verify that the original DER
+`std::io::sync::File`. The certificate methods verify that the original DER
 matches the certificate fingerprint before writing. Private key output is
 unencrypted. The caller supplies storage and decides how to protect it.
 
@@ -174,7 +174,7 @@ temporary secrets. P-256 execution evidence currently covers macOS ARM64.
 
 ### Native key derivation
 
-`std::net::tls::keys` implements the SHA-256 key schedule for
+`std::net::sync::tls::keys` implements the SHA-256 key schedule for
 `TLS_AES_128_GCM_SHA256`. It links independently of the OpenSSL wrapper.
 
 - `Transcript::append` takes handshake bytes in wire order, including
@@ -199,7 +199,7 @@ python3 validation/check_tls13_keys.py --corboc /path/to/corboc
 
 ### Native record layer
 
-`std::net::tls::record` encodes the cleartext handshake records
+`std::net::sync::tls::record` encodes the cleartext handshake records
 and protects records with AES-128-GCM. It borrows buffers from the caller.
 Allocate up to 16,406 bytes for a complete protected wire record and
 16,385 bytes for scratch or decrypted content. Smaller buffers are valid
@@ -232,7 +232,7 @@ python3 validation/check_tls13_record.py --tcp --corboc /path/to/corboc
 
 ### Native blocking handshake
 
-`std::net::tls` provides `client_handshake_x509` and
+`std::net::sync::tls` provides `client_handshake_x509` and
 `server_handshake_chain` for a full TLS 1.3 handshake with P-256 ECDHE,
 `ecdsa_secp256r1_sha256`, and `TLS_AES_128_GCM_SHA256`.
 Both functions borrow an established TCP connection and three buffers.
@@ -615,10 +615,10 @@ python3 validation/check_argon2id.py --corboc /path/to/corboc
 
 ## OpenSSL TLS backend
 
-`std::net::tls::openssl` provides blocking TLS 1.3 over
-`std::net::tcp`. This implementation uses OpenSSL 3 on macOS ARM64.
+`std::net::sync::tls::openssl` provides blocking TLS 1.3 over
+`std::net::sync::tcp`. This implementation uses OpenSSL 3 on macOS ARM64.
 The Rust-built compiler links the provider when the package imports
-`std::net::tls::openssl`. Set `DIN_OPENSSL_LIB_DIR` if the library directory is
+`std::net::sync::tls::openssl`. Set `DIN_OPENSSL_LIB_DIR` if the library directory is
 outside the linker's search path.
 
 ```sh
@@ -630,8 +630,8 @@ For `emit-c` builds, pass `-lssl -lcrypto` to the C linker and add the
 provider directory with `-L` as needed.
 
 ```rust
-use std::net::tls::openssl as tls;
-use std::net::tcp;
+use std::net::sync::tls::openssl as tls;
+use std::net::sync::tcp;
 
 fn secure(
     socket: tcp::Connection,

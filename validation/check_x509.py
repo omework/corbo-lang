@@ -161,7 +161,7 @@ fn result_code(chain: &[u8], anchor: &[u8], name: &[u8], now: i64) -> i32 {
 def typed_certificates(args, package, leaf, issuer, signature, now, flags):
     helpers = """
 use std::crypto::x509::{Certificate as X509Certificate, PublicKey as X509PublicKey};
-use std::net::tls::Certificate as TlsCertificate;
+use std::net::sync::tls::Certificate as TlsCertificate;
 """
     body = "\n".join((binding("issuer_der", issuer.der), binding("name", b"LOCALHOST"),
                      binding("signed_message", b"Din certificate test"), binding("signature", signature)))
@@ -256,7 +256,7 @@ def private_layouts(args, package):
     for module, name, field in (
         ("std::crypto::x509", "Certificate", "fingerprint"),
         ("std::crypto::x509", "PublicKey", "p256"),
-        ("std::net::tls", "Certificate", "der_ranges"),
+        ("std::net::sync::tls", "Certificate", "der_ranges"),
     ):
         (package / "src/main.crb").write_text(f"""
 use {module}::{name};

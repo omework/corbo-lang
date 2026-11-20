@@ -4000,3 +4000,10 @@ et de disposition inline passent sur macOS x86-64, Linux ARM64/x86-64 et Windows
 x86-64 ; Windows ARM64 est compilé uniquement. L’auto-reconstruction produit un
 C identique aux générations 2 et 3. Pas d’audit indépendant ni de preuve générale.
 [Rapport détaillé](cycles/BINARY_TIME_BOUNDED_CYCLE.md).
+
+## API async par défaut
+
+Aucune nouvelle règle. Régressions ciblées des emprunts File/buffered, durée de
+vie de split TCP et confidentialité/refus TLS conservées avec les nouveaux
+imports. Témoins sur macOS, Linux et Windows x86-64 ; Windows ARM64 compilé
+uniquement. Voir le [rapport](cycles/ASYNC_DEFAULT_API_CYCLE.md).

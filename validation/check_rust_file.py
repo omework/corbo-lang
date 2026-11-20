@@ -1,4 +1,4 @@
-"""Build and exercise the packaged std::io::File API on a supported target."""
+"""Build and exercise the packaged std::io::sync::File API on a supported target."""
 import argparse
 from pathlib import Path
 import os
@@ -12,7 +12,8 @@ import tempfile
 from check_rust_assembly import FRONTEND, LINUX64
 
 PROGRAM = """
-use std::io::{File, FileError, FileMode};
+use std::io::sync::{File, FileError};
+use std::io::{FileMode};
 
 fn main() {
     let path: [u8; 7] = [105, 110, 46, 116, 120, 116, 0];
@@ -165,14 +166,14 @@ def main():
             assert "crust_file_open(" not in selected.stdout
 
         refusals = [
-            (LINUX64, "use std::io::File; fn main() { let f = File { fd: 0 }; drop(f); }",
+            (LINUX64, "use std::io::sync::File; fn main() { let f = File { fd: 0 }; drop(f); }",
              "représentation privée"),
-            (LINUX64, "use std::io::File; fn main() { let mut p = pool<File>(1); let f = p.new(); drop(f); }",
+            (LINUX64, "use std::io::sync::File; fn main() { let mut p = pool<File>(1); let f = p.new(); drop(f); }",
              "représentation privée"),
             (LINUX64, "use std::sys::unix::linux::x86_64::close; fn main() {}",
              "private platform component"),
-            ("aarch64-unknown-linux-gnu", PROGRAM, "unknown import or component std::io::File"),
-            ("x86_64-unknown-linux-gnux32", PROGRAM, "unknown import or component std::io::File"),
+            ("aarch64-unknown-linux-gnu", PROGRAM, "unknown import or component std::io::sync::File"),
+            ("x86_64-unknown-linux-gnux32", PROGRAM, "unknown import or component std::io::sync::File"),
             (LINUX64, "fn main() { let b: [u8; 1] = [0]; let s = &mut b[..]; print(s.len()); }",
              "tableau mutable attendu"),
             (LINUX64, "fn main() { let mut b: [u8; 1] = [0]; let s = &mut b[..]; print(b[0]); print(s.len()); }",
