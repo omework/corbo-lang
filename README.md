@@ -143,7 +143,23 @@ corboc build
 ./build/feature_demo
 ```
 
-It prints `42`. To create your own package, put its name in `package.toml`:
+It prints `42`. To create a package in your working directory:
+
+```sh
+corboc new my_package
+cd my_package
+corboc build
+./build/my_package
+```
+
+The scaffold includes `package.toml`, an empty `src/main.crb`, `.gitignore` and
+a README. Edit `src/main.crb` to add your program. Existing paths are never
+overwritten, and Git is not initialized. Package names use letters, digits
+and underscores, starting with a letter or underscore; `std` and `runtime`
+are reserved.
+
+You can also create the manifest manually:
+
 
 <!-- example-file: modules/package.toml -->
 ```toml

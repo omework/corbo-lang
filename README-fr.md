@@ -143,7 +143,23 @@ corboc build
 ./build/feature_demo
 ```
 
-Il affiche `42`. Pour créer votre propre paquet, indiquez son nom dans `package.toml` :
+Il affiche `42`. Pour créer un paquet dans votre répertoire de travail :
+
+```sh
+corboc new my_package
+cd my_package
+corboc build
+./build/my_package
+```
+
+Le squelette comprend `package.toml`, un `src/main.crb` vide, `.gitignore` et
+un README. Ajoutez votre programme dans `src/main.crb`. Aucun chemin existant
+n’est écrasé et Git n’est pas initialisé. Les noms utilisent des lettres,
+chiffres et underscores, avec une lettre ou un underscore au début ; `std` et
+`runtime` sont réservés.
+
+Vous pouvez aussi créer le manifeste manuellement :
+
 
 <!-- example-file: modules/package.toml -->
 ```toml
