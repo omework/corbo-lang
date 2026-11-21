@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Blocking mutexes with native-thread-bound guards.
-use std::sys::mutex as native;
 
 /// Owns a value and a stable native synchronization resource.
 #(type: T)
@@ -13,21 +12,21 @@ pub struct Mutex<T> {
 impl Mutex<T> {
     /// Takes ownership of the payload and constructs its synchronization resource.
     fn new(value: T) -> Mutex<T> {
-        let raw = native::create(false);
+        let raw = mutex_create_binding(false);
         Mutex { raw: raw, value: value }
     }
     /// Blocks this thread until it acquires the native mutex.
     #(lock: on=self, through_result=true)
     fn lock(&self) -> MutexGuard<T> {
         let raw = (*self).raw;
-        native::acquire(copy(raw));
+        mutex_acquire_binding(copy(raw));
         // Native lock ownership permits this tracked interior-mutable borrow.
         @unchecked {
             return MutexGuard { raw: raw, data: &mut (*self).value };
         }
     }
     /// Destroys unlocked native state; checked borrows keep active guards/waiters alive.
-    fn drop(&mut self) { let raw = (*self).raw; native::destroy(raw); }
+    fn drop(&mut self) { let raw = (*self).raw; mutex_destroy_binding(raw); }
 }
 
 /// Holds the lock until destruction and borrows its owner's payload.
@@ -45,5 +44,19 @@ impl MutexGuard<T> {
     /// Reborrows the protected value with mutation permission.
     fn get_mut(&mut self) -> &mut T { &mut *(*self).data }
     /// Releases ownership before the guard's reference fields are discarded.
-    fn drop(&mut self) { let raw = (*self).raw; native::release(raw); }
+    fn drop(&mut self) { let raw = (*self).raw; mutex_release_binding(raw); }
 }
+
+// Private bridge: raw resource identities are not a public checked API.
+/// Private binding: allocates stable native state for the selected blocking or asynchronous policy.
+fn mutex_create_binding(asynchronous: bool) -> usize {
+    let mut raw: usize = 0;
+    @unchecked { @c { ${raw}=mutex_create(${asynchronous}); } }
+    raw
+}
+/// Private binding: acquires the synchronous native mutex on this thread.
+fn mutex_acquire_binding(raw: usize) { @unchecked { @c { mutex_acquire(${raw}); } } }
+/// Private binding: releases a native-thread guard or an asynchronous logical guard.
+fn mutex_release_binding(raw: usize) { @unchecked { @c { mutex_release(${raw}); } } }
+/// Private binding: destroys native state once no guard or pending lock future can use it.
+fn mutex_destroy_binding(raw: usize) { @unchecked { @c { mutex_destroy(${raw}); } } }

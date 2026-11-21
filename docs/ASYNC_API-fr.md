@@ -41,3 +41,7 @@ nettoie les champs. La réentrée avec une garde encore détenue est refusée pa
 l'analyse des contrats existants.
 
 [Rapport de validation](cycles/SYNC_DEFAULT_MUTEX_CYCLE.md).
+
+Les fonctions brutes de gestion des identifiants natifs restent privées à la
+STD. Une implémentation externe d’un type public n’obtient pas l’accès à ses
+champs privés.

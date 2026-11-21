@@ -290,7 +290,7 @@ Blocking mutexes with native-thread-bound guards.
 
 ### `Mutex`
 
-[mutex.crb:7](../stdlib/src/mutex.crb#L7)
+[mutex.crb:6](../stdlib/src/mutex.crb#L6)
 
 ```rust
 pub struct Mutex<T>
@@ -300,12 +300,12 @@ Owns a value and a stable native synchronization resource.
 
 Members:
 
-- [`raw`](../stdlib/src/mutex.crb#L9) (implementation field): Native synchronization handle; never copied as a native mutex object.
-- [`value`](../stdlib/src/mutex.crb#L11) (implementation field): Owned payload cleaned after the mutex's own destructor.
+- [`raw`](../stdlib/src/mutex.crb#L8) (implementation field): Native synchronization handle; never copied as a native mutex object.
+- [`value`](../stdlib/src/mutex.crb#L10) (implementation field): Owned payload cleaned after the mutex's own destructor.
 
 ### `Mutex::new`
 
-[mutex.crb:15](../stdlib/src/mutex.crb#L15)
+[mutex.crb:14](../stdlib/src/mutex.crb#L14)
 
 ```rust
 fn new(value: T) -> Mutex<T>
@@ -315,7 +315,7 @@ Takes ownership of the payload and constructs its synchronization resource.
 
 ### `Mutex::lock`
 
-[mutex.crb:21](../stdlib/src/mutex.crb#L21)
+[mutex.crb:20](../stdlib/src/mutex.crb#L20)
 
 ```rust
 fn lock(&self) -> MutexGuard<T>
@@ -325,7 +325,7 @@ Blocks this thread until it acquires the native mutex.
 
 ### `Mutex::drop`
 
-[mutex.crb:30](../stdlib/src/mutex.crb#L30)
+[mutex.crb:29](../stdlib/src/mutex.crb#L29)
 
 ```rust
 fn drop(&mut self)
@@ -335,7 +335,7 @@ Destroys unlocked native state; checked borrows keep active guards/waiters alive
 
 ### `MutexGuard`
 
-[mutex.crb:36](../stdlib/src/mutex.crb#L36)
+[mutex.crb:35](../stdlib/src/mutex.crb#L35)
 
 ```rust
 pub struct MutexGuard<T>
@@ -345,12 +345,12 @@ Holds the lock until destruction and borrows its owner's payload.
 
 Members:
 
-- [`raw`](../stdlib/src/mutex.crb#L38) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
-- [`data`](../stdlib/src/mutex.crb#L40) (implementation field): Mutable payload access under the retained lock contract.
+- [`raw`](../stdlib/src/mutex.crb#L37) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
+- [`data`](../stdlib/src/mutex.crb#L39) (implementation field): Mutable payload access under the retained lock contract.
 
 ### `MutexGuard::get`
 
-[mutex.crb:44](../stdlib/src/mutex.crb#L44)
+[mutex.crb:43](../stdlib/src/mutex.crb#L43)
 
 ```rust
 fn get(&self) -> &T
@@ -360,7 +360,7 @@ Borrows the protected value for reading.
 
 ### `MutexGuard::get_mut`
 
-[mutex.crb:46](../stdlib/src/mutex.crb#L46)
+[mutex.crb:45](../stdlib/src/mutex.crb#L45)
 
 ```rust
 fn get_mut(&mut self) -> &mut T
@@ -370,7 +370,7 @@ Reborrows the protected value with mutation permission.
 
 ### `MutexGuard::drop`
 
-[mutex.crb:48](../stdlib/src/mutex.crb#L48)
+[mutex.crb:47](../stdlib/src/mutex.crb#L47)
 
 ```rust
 fn drop(&mut self)
@@ -385,7 +385,7 @@ Task-owned FIFO mutexes; waiting parks a task and guards may cross workers.
 
 ### `Mutex`
 
-[mutex.crb:7](../stdlib/src/asyn/mutex.crb#L7)
+[mutex.crb:6](../stdlib/src/asyn/mutex.crb#L6)
 
 ```rust
 pub struct Mutex<T>
@@ -395,12 +395,12 @@ Owns a value and a stable native synchronization resource.
 
 Members:
 
-- [`raw`](../stdlib/src/asyn/mutex.crb#L9) (implementation field): Native synchronization handle; never copied as a native mutex object.
-- [`value`](../stdlib/src/asyn/mutex.crb#L11) (implementation field): Owned payload cleaned after the mutex's own destructor.
+- [`raw`](../stdlib/src/asyn/mutex.crb#L8) (implementation field): Native synchronization handle; never copied as a native mutex object.
+- [`value`](../stdlib/src/asyn/mutex.crb#L10) (implementation field): Owned payload cleaned after the mutex's own destructor.
 
 ### `Mutex::new`
 
-[mutex.crb:15](../stdlib/src/asyn/mutex.crb#L15)
+[mutex.crb:14](../stdlib/src/asyn/mutex.crb#L14)
 
 ```rust
 fn new(value: T) -> Mutex<T>
@@ -410,7 +410,7 @@ Takes ownership of the payload and constructs its synchronization resource.
 
 ### `Mutex::lock`
 
-[mutex.crb:21](../stdlib/src/asyn/mutex.crb#L21)
+[mutex.crb:20](../stdlib/src/asyn/mutex.crb#L20)
 
 ```rust
 async fn lock(&self) -> MutexGuard<T>
@@ -420,7 +420,7 @@ Suspends until logical ownership is handed to this task.
 
 ### `Mutex::drop`
 
-[mutex.crb:30](../stdlib/src/asyn/mutex.crb#L30)
+[mutex.crb:29](../stdlib/src/asyn/mutex.crb#L29)
 
 ```rust
 fn drop(&mut self)
@@ -430,7 +430,7 @@ Destroys unlocked native state; checked borrows keep active guards/waiters alive
 
 ### `MutexGuard`
 
-[mutex.crb:36](../stdlib/src/asyn/mutex.crb#L36)
+[mutex.crb:35](../stdlib/src/asyn/mutex.crb#L35)
 
 ```rust
 pub struct MutexGuard<T>
@@ -440,12 +440,12 @@ Holds the lock until destruction and borrows its owner's payload.
 
 Members:
 
-- [`raw`](../stdlib/src/asyn/mutex.crb#L38) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
-- [`data`](../stdlib/src/asyn/mutex.crb#L40) (implementation field): Mutable payload access under the retained lock contract.
+- [`raw`](../stdlib/src/asyn/mutex.crb#L37) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
+- [`data`](../stdlib/src/asyn/mutex.crb#L39) (implementation field): Mutable payload access under the retained lock contract.
 
 ### `MutexGuard::get`
 
-[mutex.crb:44](../stdlib/src/asyn/mutex.crb#L44)
+[mutex.crb:43](../stdlib/src/asyn/mutex.crb#L43)
 
 ```rust
 fn get(&self) -> &T
@@ -455,7 +455,7 @@ Borrows the protected value for reading.
 
 ### `MutexGuard::get_mut`
 
-[mutex.crb:46](../stdlib/src/asyn/mutex.crb#L46)
+[mutex.crb:45](../stdlib/src/asyn/mutex.crb#L45)
 
 ```rust
 fn get_mut(&mut self) -> &mut T
@@ -465,7 +465,7 @@ Reborrows the protected value with mutation permission.
 
 ### `MutexGuard::drop`
 
-[mutex.crb:48](../stdlib/src/asyn/mutex.crb#L48)
+[mutex.crb:47](../stdlib/src/asyn/mutex.crb#L47)
 
 ```rust
 fn drop(&mut self)

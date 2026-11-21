@@ -19,9 +19,14 @@ specific general compiler mechanisms exposed by these APIs. Rust frontend frozen
   FIFO async task ownership, parking, root wakeup, handoff and waiter cleanup
   in the Corbo runtime, with a matching retained C reference implementation.
   Async acquisition does not spin or occupy a blocking worker.
+- Keep raw mutex create/wait/release bindings private to the STD; checked
+  callers cannot import the resource-identity bridge.
 - Preserve opaque layouts across generic specialization using an original
   package-file identity. `LayoutVisibility.origin` and `StaticNode.private_origin`
-  describe lexical visibility, not value provenance or ownership. Sibling STD
+  describe lexical visibility, not value provenance or ownership. A sparse
+  specialization-origin map records which file authored each generated impl;
+  implementing a public STD type does not confer private-field access. Private
+  declaration ranges exclude foreign implementations. Sibling STD
   implementations can construct their guards without exposing fields to users.
 - Reuse general per-field result/capture summaries for async record results,
   shared record parameters and stored-reference forwarding. Accept record
@@ -42,11 +47,11 @@ specific general compiler mechanisms exposed by these APIs. Rust frontend frozen
 - The same three generated programs execute with matching output on Linux
   x86-64 (Docker), macOS x86-64 and Windows x86-64 (Wine). Windows ARM64 builds;
   execution remains deferred by the existing user decision.
-- Eight refusal programs cover same-object re-entry, owner/guard destruction
+- Ten refusal programs cover same-object re-entry, owner/guard destruction
   with live dependents, native guard transfer, native guard retained across
-  suspension, concurrent mutable sharing of a guard, private guard construction,
-  and attempted checked interior mutation. The last is conservatively unsupported;
-  the others are rejected with the appropriate rule/contract diagnostics.
+  suspension, concurrent mutable sharing of a guard, private guard construction, external-implementation field access, private
+  raw-helper import, and attempted checked interior mutation. The last is conservatively unsupported;
+  the others are rejected with rule, contract or import-visibility diagnostics.
 - One independent C witness runs against both runtime implementations: 3,000
   contended native writes, FIFO queueing, removal of an interior waiter, dropped
   handoff forwarding, re-acquisition and async unlock by another native thread.

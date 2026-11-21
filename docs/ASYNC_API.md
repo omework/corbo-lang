@@ -52,3 +52,7 @@ mutex destruction occurs before payload field cleanup. Recursive acquisition
 while retaining a guard is rejected by the existing lock contract analysis.
 
 [Validation report](cycles/SYNC_DEFAULT_MUTEX_CYCLE.md).
+
+Raw resource-identity bindings are private STD implementation details; they
+are not a public checked API. External implementations of public STD types
+do not gain access to their private layouts.
