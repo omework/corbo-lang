@@ -197,6 +197,18 @@ corboc build -o my-program
 corboc build ./my-package -o my-program
 ```
 
+Check the package without generating C or a binary:
+
+```sh
+corboc check
+corboc check path/to/package --watch
+```
+
+`--watch` checks immediately, then rechecks after saves to project `.crb` files
+and manifests. It stays alive after errors and ignores generated directories.
+Dependencies outside the project are not watched. Stop with Ctrl-C. Existing
+verifier diagnostics are retained; each pass checks the complete package.
+
 The filename policy adds `.exe` on Windows. The native `build` driver currently
 supports macOS ARM64; other native build drivers remain to be implemented.
 The installed compiler finds its matching STD under `share/corbo/stdlib/src`.

@@ -191,6 +191,20 @@ corboc build -o my-program
 corboc build ./my-package -o my-program
 ```
 
+Pour vérifier le paquet sans générer de C ni de binaire :
+
+```sh
+corboc check
+corboc check chemin/du/paquet --watch
+```
+
+`--watch` vérifie immédiatement, puis relance après les sauvegardes des fichiers
+`.crb` et des manifestes du projet. Il reste actif après une erreur et ignore les
+répertoires de génération. Les dépendances externes au projet ne sont pas
+surveillées. Arrêt avec Ctrl-C. Les diagnostics actuels du vérificateur sont
+conservés ; l’analyse porte sur le paquet entier à chaque passage.
+
+
 La convention de nommage ajoute `.exe` sous Windows. Le pilote natif de `build` prend actuellement en charge macOS ARM64 ; les autres pilotes natifs restent à implémenter. Le compilateur installé retrouve sa STD correspondante dans `share/corbo/stdlib/src`. Les [ressources pour éditeurs](ide/README.md) fournissent la coloration des fichiers `.crb` dans Vim, Neovim et VS Code.
 
 <a id="language-and-std-examples"></a>
