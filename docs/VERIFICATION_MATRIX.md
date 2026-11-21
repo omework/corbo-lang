@@ -4996,3 +4996,15 @@ UBSan, ten rejections and three retained-lock regressions are recorded in the
 compiler repository (`docs/OBJECT_LOCK_CYCLE.md`). The actual-lock three-thread
 fixture executes on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64 under Wine.
 Windows ARM64 compiles only. No automatic locking code or general safety proof.
+
+## Thread transfer eligibility (TR1)
+
+Five accepted executions under O1/fatal UBSan cover ordinary moves, local closure
+calls, default transfer eligibility, fresh worker-local resources and cleanup
+before async suspension. Fourteen static refusals cover direct/structural moves,
+closures, generic wrappers, arrays, selected fields, nested async state/results
+and malformed annotation placement. The existing object-lock runner also passes
+(six executions, ten refusals). Evidence is retained in the compiler repository
+under `validation/thread-transfer-results.json` and `docs/THREAD_TRANSFER_CYCLE.md`.
+This changes target-independent analysis; platform runtime backends are unchanged
+and were not replayed. Windows ARM64 execution remains deferred.

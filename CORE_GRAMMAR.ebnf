@@ -13,7 +13,10 @@ condition_cible     = conjonction_cible, { "||", conjonction_cible } ;
 conjonction_cible   = test_cible, { "&&", test_cible } ;
 test_cible          = "target", ".", ( "os" | "family" | "arch" | "pointer_width" ), "==", texte ;
 declaration         = [ "pub" ], ( fonction | fonction_externe | structure | enumeration | constante )
-                    | contrat_type, { contrat_type }, "pub", ( corps_structure | corps_enumeration )
+                    | ( contrat_type | contrat_lock_objet | annotation_thread ),
+                      { contrat_type | contrat_lock_objet | annotation_thread }, "pub", corps_structure
+                    | ( contrat_type | annotation_thread ), { contrat_type | annotation_thread },
+                      "pub", corps_enumeration
                     | constante_configurable
                     | implementation ;
 importation         = "use", chemin, "::",
@@ -39,11 +42,11 @@ parametres_externes = parametre_externe, { ",", parametre_externe }, [ "," ] ;
 parametre_externe   = identifiant, ":", primitif ;
 resultat_externe    = primitif | "Void" | "(", ")" ;
 
-structure           = { contrat_type | contrat_lock_objet }, corps_structure ;
+structure           = { contrat_type | contrat_lock_objet | annotation_thread }, corps_structure ;
 corps_structure     = "struct", identifiant, [ parametres_generiques ],
                       "{", [ champs_types ], "}" ;
 parametres_generiques = "<", identifiant, { ",", identifiant }, [ "," ], ">" ;
-enumeration         = { contrat_type }, corps_enumeration ;
+enumeration         = { contrat_type | annotation_thread }, corps_enumeration ;
 corps_enumeration    = "enum", identifiant, [ parametres_generiques ], "{",
                       variante, { ",", variante }, [ "," ], "}" ;
 variante            = identifiant, [ "{", [ champs_types ], "}"
@@ -68,6 +71,7 @@ signature_methode   = "fn", ( identifiant | "addr" ), "(",
                       [ "->", type ] ;
 receveur            = "&", [ "mut" ], "self"
                     | [ "mut" ], "self", ":", type ;
+annotation_thread   = "#", "(", "thread", ":", "transfer", "=", "false", ")" ;
 contrat_lock_objet  = "#", "(", "lock", ")" ;
 contrat_lock        = "#", "(", "lock", ":", "on", "=", "self",
                       [ ",", "through_result", "=", "true" ], ")" ;
@@ -344,3 +348,8 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    Explicit through_result=true may extend protection into a returned guard.
    Checked direct/indirect same-object reacquisition is rejected. These are
    trusted effect contracts: the compiler does not generate locking code. *)
+
+(* A single #(thread: transfer=false) marks a struct or enum as not movable
+   across threads. Absence means eligible unless owned components restrict it.
+   Owned fields, closure capture records and suspended async state propagate
+   the restriction. Same-thread moves remain ordinary moves. See TR1. *)

@@ -442,6 +442,12 @@ same-object re-entry through method or helper calls. The developer supplies the
 actual locking implementation; the annotation generates no locking code. See
 [MT9–MT11](docs/ASYNC_MULTITHREAD_RULES.md).
 
+Types can move to another thread by default. `#(thread: transfer=false)` on a
+struct or enum forbids that crossing and propagates through owned fields,
+closure captures and retained async state. Moves within the same thread remain
+valid. Lifetime and synchronization checks remain separate. See
+[thread transfer eligibility](docs/THREAD_TRANSFER.md).
+
 <!-- example: borrows -->
 ```rust
 fn increment(value: &mut i64) {

@@ -394,3 +394,15 @@ synchronisation. Voir [MA1–MA6](MUTABLE_ACCESS-fr.md).
 ## Contrats de verrou objet (MT11)
 
 Un `#(lock)` sur une struct est représenté par son nœud d’annotation ; les méthodes conservent leur visibilité `pub`. Le contrat effectif du receveur est déduit de cette déclaration avant l’analyse des accès et conservé par spécialisation. Les appels associent les paramètres formels aux racines des receveurs effectifs, via les helpers privés et fonctions libres. Aucun nom de type concret ne fournit de fait de protection et aucun verrou runtime n’est généré.
+
+## Représentation du déplacement entre threads (TR1)
+
+Un nœud d’annotation `thread` possède la propriété `transfer=false`. Un résumé
+monotone distinct associe déclarations nominales concrètes, champs possédés,
+liaisons et états d’exécution à l’annotation restrictive d’origine, ou à zéro
+si aucune restriction n’est trouvée. Les liens de possession et de liaison
+propagent le fait ; les références conservent leurs dépendances de validité et
+protection séparées. Les captures de closure réutilisent les champs de leur
+struct générée. Les états async incluent captures possédées, locaux retenus aux
+suspensions et résultats. Le lancement d’une branche consulte ces faits sans
+modifier les résumés de possession, durée de vie ou verrou.

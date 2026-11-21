@@ -1403,3 +1403,9 @@ be refused; this refusal is not a missing feature.
 - [x] Implement checked direct/transitive re-entry rejection with symbolic receiver identity.
 
 - [x] Six accepted programs executed under fatal UBSan; ten invalid forms rejected.
+
+## Thread transfer eligibility (TR1)
+
+- [x] `#(thread: transfer=false)` : grammar, parser and specification.
+- [x] Separate structural summaries for owned fields, closure captures and async state.
+- [x] Five fatal-UBSan executions and fourteen refusals; existing object-lock regressions pass.

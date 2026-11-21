@@ -1524,3 +1524,7 @@ declared in `runtime/corbo_runtime.h`. Program-specific declarations and operand
 type aliases are emitted before foreign statements; requested headers follow
 the generated type declarations. See [the foreign-C interface](FOREIGN_C.md)
 for naming, library linkage and the developer's responsibilities.
+
+## Thread transfer eligibility (TR1)
+
+See [thread transfer](THREAD_TRANSFER.md).

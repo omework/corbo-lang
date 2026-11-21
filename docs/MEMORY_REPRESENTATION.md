@@ -428,3 +428,14 @@ supply synchronization proof. See [MA1–MA6](MUTABLE_ACCESS.md).
 ## Object-level lock contracts (MT11)
 
 A bare `#(lock)` on a struct is represented by its annotation node; method nodes retain `pub` visibility. Effective receiver contracts are derived from that declaration before access analysis and are preserved by specialization. Call analysis maps formal parameters to actual receiver roots through private helpers and free functions. No concrete type name supplies a protection fact, and no runtime lock is generated.
+
+## Thread transfer representation (TR1)
+
+A `thread` annotation node owns a `transfer=false` property node. A separate
+monotone summary maps each concrete nominal declaration, owned field, binding
+and execution state to the originating restriction annotation, or zero when no
+restriction is found. Owned-child and binding edges propagate the fact; references
+retain separate validity/protection edges. Generated closure capture records use
+the same field representation. Async summaries include owned captures, retained
+locals at suspension and results. Branch launches query these facts without
+changing ownership, lifetime or lock summaries.

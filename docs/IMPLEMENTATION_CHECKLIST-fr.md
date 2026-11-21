@@ -1105,3 +1105,9 @@ consignées. Une perdante de Select conservant un handle lancé non attendu doit
 - [x] Refuser les réentrées checked directes/transitives à partir de l’identité symbolique du receveur.
 
 - [x] Six programmes acceptés exécutés sous UBSan fatal ; dix programmes invalides refusés.
+
+## Déplacement entre threads (TR1)
+
+- [x] `#(thread: transfer=false)` : grammaire, parseur et spécification.
+- [x] Résumés structurels séparés pour les champs possédés, captures de closure et états async.
+- [x] Cinq exécutions UBSan fatales et quatorze refus ; régressions des verrous objet inchangées.

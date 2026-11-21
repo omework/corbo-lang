@@ -1427,3 +1427,7 @@ Le point d’entrée reste `fn main()`. `std::env::args()` retourne
 arguments est immuable et vit aussi longtemps que le processus.
 Un argument Unicode invalide produit `InvalidUtf8`. Un échec
 d’acquisition des arguments produit `Unavailable`.
+
+## Déplacement entre threads (TR1)
+
+Voir [les restrictions de thread](THREAD_TRANSFER-fr.md).

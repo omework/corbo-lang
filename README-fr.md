@@ -452,6 +452,13 @@ y compris via des helpers. Le développeur fournit le verrouillage effectif ;
 l’annotation ne génère aucun code de verrou. Voir
 [MT9–MT11](docs/ASYNC_MULTITHREAD_RULES-fr.md).
 
+Par défaut, les types peuvent être déplacés vers un autre thread.
+`#(thread: transfer=false)` sur une struct ou enum interdit ce passage et se
+propage par les champs possédés, captures de closure et états async retenus.
+Les moves dans le même thread restent valides. Durées de vie et synchronisation
+restent des contrôles distincts. Voir
+[les déplacements entre threads](docs/THREAD_TRANSFER-fr.md).
+
 <!-- example: borrows -->
 ```rust
 fn increment(value: &mut i64) {

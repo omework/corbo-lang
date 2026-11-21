@@ -4035,3 +4035,15 @@ dix refus et trois régressions de gardes sont consignés dans le dépôt compil
 s’exécute sur macOS ARM64/x86-64, Linux x86-64 et Windows x86-64 sous Wine.
 Windows ARM64 est compilé seulement. Aucun verrouillage automatique ni preuve
 générale de sûreté n’est revendiqué.
+
+## Déplacement entre threads (TR1)
+
+Cinq exécutions O1/UBSan fatal couvrent les moves ordinaires, closures locales,
+transferts par défaut, ressources créées dans le worker et nettoyage avant
+suspension. Quatorze refus couvrent moves directs/structurels, closures, wrappers
+génériques, tableaux, champs sélectionnés, états/résultats async imbriqués et
+annotations mal placées. Le runner des verrous objet reste vert (six exécutions,
+dix refus). Résultats dans le dépôt compilateur :
+`validation/thread-transfer-results.json` et `docs/THREAD_TRANSFER_CYCLE.md`.
+L’analyse est indépendante de la cible ; les backends runtime n’ont pas changé
+et n’ont pas été rejoués. Exécution Windows ARM64 toujours différée.
