@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Synchronous thread-owned guards and asynchronous FIFO task ownership.
+
+/// Creates stable native state without copying an initialized native lock on Corbo moves.
+fn mutex_create(asynchronous:bool)->usize {
+    let raw=mutex_allocate(asynchronous);
+    if copy(raw)==0 { os_abort(); }
+    raw
+}
+/// Acquires the blocking variant; the guard is bound to this native thread.
+fn mutex_acquire(raw:usize) { mutex_native_lock(raw); }
+
+/// Publishes one reserved waiter and wakes its root; caller holds task_lock.
+fn mutex_handoff(raw:usize) {
+    let next=g_mutex_head(copy(raw));
+    s_mutex_reservation(copy(raw),copy(next));
+    if copy(next)==0 { s_mutex_held(raw,false); return; }
+    s_mutex_head(copy(raw),g_mutex_next(copy(next)));
+    if g_mutex_head(copy(raw))==0 { s_mutex_tail(copy(raw),0); }
+    s_mutex_next(copy(next),0);
+    s_mutex_reserved(copy(next),true);
+    let parent=g_Task_root(copy(next));
+    let root:usize=if copy(parent)!=0 { parent } else { copy(next) };
+    s_Task_waiting(copy(root),false);
+    if g_Task_parked(copy(root)) {
+        s_Task_parked(copy(root),false);
+        if !g_Task_blocking(copy(root)) { task_enqueue(root); }
+    }
+    broadcast();
+}
+
+/// Polls once: acquire, consume a handoff, or park the root without a lost wakeup.
+fn mutex_poll(child:usize,raw:usize)->bool {
+    lock();
+    if g_mutex_owner(copy(child))==raw && g_mutex_reserved(copy(child)) {
+        if g_mutex_reservation(copy(raw))!=child { os_abort(); }
+        s_mutex_reservation(copy(raw),0);
+        s_mutex_owner(copy(child),0);
+        s_mutex_reserved(copy(child),false);
+        unlock();
+        return true;
+    }
+    if !g_mutex_held(copy(raw)) {
+        s_mutex_held(copy(raw),true);
+        unlock();
+        return true;
+    }
+    if g_mutex_owner(copy(child))==0 {
+        s_mutex_owner(copy(child),copy(raw));
+        s_mutex_next(copy(child),0);
+        let tail=g_mutex_tail(copy(raw));
+        if copy(tail)!=0 { s_mutex_next(tail,copy(child)); }
+        else { s_mutex_head(copy(raw),copy(child)); }
+        s_mutex_tail(copy(raw),copy(child));
+    }
+    let parent=g_Task_root(copy(child));
+    let root:usize=if copy(parent)!=0 { parent } else { copy(child) };
+    s_Task_waiting(root,true);
+    unlock();
+    false
+}
+
+/// Releases a guard; async ownership can finish on a different worker thread.
+fn mutex_release(raw:usize) {
+    if !g_mutex_asynchronous(copy(raw)) { mutex_native_unlock(raw); return; }
+    lock();
+    if !g_mutex_held(copy(raw)) || g_mutex_reservation(copy(raw))!=0 { os_abort(); }
+    mutex_handoff(raw);
+    unlock();
+}
+
+/// Unlinks dropped waiting state or hands an abandoned reservation to its successor.
+fn mutex_detach(child:usize) {
+    let raw=g_mutex_owner(copy(child));
+    if copy(raw)==0 { return; }
+    lock();
+    if g_mutex_reservation(copy(raw))==child {
+        s_mutex_reservation(copy(raw),0);
+        mutex_handoff(copy(raw));
+    } else {
+        let mut previous:usize=0;
+        let mut current=g_mutex_head(copy(raw));
+        while copy(current)!=0 && current!=child {
+            previous=copy(current);
+            current=g_mutex_next(copy(current));
+        }
+        if copy(current)!=0 {
+            let next=g_mutex_next(copy(current));
+            if copy(previous)==0 { s_mutex_head(copy(raw),copy(next)); }
+            else { s_mutex_next(copy(previous),copy(next)); }
+            if g_mutex_tail(copy(raw))==current { s_mutex_tail(copy(raw),previous); }
+        }
+    }
+    s_mutex_owner(copy(child),0);
+    s_mutex_next(copy(child),0);
+    s_mutex_reserved(child,false);
+    unlock();
+}
+
+/// Destroys the underlying resource after checked guard/waiter lifetimes have ended.
+fn mutex_destroy(raw:usize) {
+    if g_mutex_asynchronous(copy(raw)) {
+        lock();
+        if g_mutex_held(copy(raw)) || g_mutex_head(copy(raw))!=0 || g_mutex_reservation(copy(raw))!=0 { os_abort(); }
+        unlock();
+    }
+    mutex_native_destroy(raw);
+}

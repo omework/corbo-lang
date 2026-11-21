@@ -2,8 +2,8 @@
 
 # File and inline assembly
 
-File I/O is async by default (`std::io::File`); blocking file I/O is explicit
-(`std::io::sync::File`). FileMode, FilePerm, FileStats and SeekFrom remain in
+File I/O is synchronous by default (`std::io::File`); asynchronous I/O is explicit
+(`std::io::asyn::File`). FileMode, FilePerm, FileStats and SeekFrom remain in
 `std::io`. Async operations run on blocking workers.
 
 
@@ -11,7 +11,7 @@ The Rust frontend and C backend implement `@unchecked`, `addr`, and
 target-sized `usize`. `@asm` supports Linux x86-64 and macOS and Windows on x86-64 and ARM64. Integer `mov` operands are lowered to Intel memory operands or ARM64 loads and stores.
 An assembly block must occur inside `@unchecked`.
 
-The standard library exports the same `std::io::sync::File` and `FileError`
+The standard library exports the same `std::io::File` and `FileError`
 on Linux x86-64, macOS, and Windows. Target conditions select the private
 platform type. The Unix type owns a POSIX descriptor. The Windows type owns
 a native `HANDLE` from `CreateFileW`, reads with `ReadFile`, and closes it with `CloseHandle`. The path is converted from UTF-8 to UTF-16 in bounded stack storage.
@@ -60,7 +60,7 @@ the resulting handle before returning it. A filesystem that reports a
 broader Unix mode or a different Windows ACL causes creation to return
 an OS error. An error from that check can leave an empty file at the path.
 
-`std::io::File` exposes the same operations with `.await`. It runs file
+`std::io::asyn::File` exposes the same operations with `.await`. It runs file
 operations on the runtime's blocking workers. Its `FileError` adds
 `LaunchFailed`. Pending operations keep the file and any borrowed buffer or
 path alive until completion. `FileStats` is shared by the two APIs and lives
@@ -132,7 +132,7 @@ The buffer length is the read budget. An empty buffer and end of file both
 return `Ok(0)`.
 
 ```rust
-use std::io::sync::{File, FileError};
+use std::io::{File, FileError};
 use std::io::{FileMode};
 
 fn main() {
@@ -166,7 +166,7 @@ fn main() {
 }
 ```
 
-The [blocking API](../stdlib/src/io/sync/file.crb) and
+The [blocking API](../stdlib/src/io/file.crb) and
 [Unix File](../stdlib/src/sys/unix/file.crb) and
 [Linux x86-64 syscalls](../stdlib/src/sys/unix/linux/x86_64/file.crb)
 are written in Corbo. [Windows File](../stdlib/src/sys/win/file.crb)
@@ -175,8 +175,8 @@ owns its handle and uses the [Win32 assembly backend](../stdlib/src/sys/win/nati
 
 ## Persistence and explicit tail repair
 
-Both File APIs expose `sync_all()` and `truncate(length: u64)`. The default
-async API runs them on its existing blocking workers; the explicit sync API
+Both File APIs expose `sync_all()` and `truncate(length: u64)`. The explicit
+async API runs them on blocking workers; the default synchronous API
 executes them directly. Lengths above `i64::MAX` return `InvalidOptions` before
 calling the OS. A failed truncation is returned as an error. The current cursor
 is preserved even when it lies beyond the new end.

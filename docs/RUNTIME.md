@@ -17,6 +17,8 @@ Regenerate with `python3 scripts/stdlib_docs.py --runtime > docs/RUNTIME.md`.
 - [`runtime::completion_primitives`](#runtimecompletion_primitives)
 - [`runtime::memory`](#runtimememory)
 - [`runtime::metrics`](#runtimemetrics)
+- [`runtime::mutex`](#runtimemutex)
+- [`runtime::mutex_primitives`](#runtimemutex_primitives)
 - [`runtime::primitives`](#runtimeprimitives)
 - [`runtime::readiness`](#runtimereadiness)
 - [`runtime::reclaim`](#runtimereclaim)
@@ -886,6 +888,296 @@ fn corbo_memory_stats(out:usize)
 ```
 
 Samples atomic counters; concurrent fields may describe adjacent instants.
+
+
+## `runtime::mutex`
+
+Synchronous thread-owned guards and asynchronous FIFO task ownership.
+
+### `mutex_create`
+
+[mutex.crb:5](../runtime/corbo/mutex.crb#L5)
+
+```rust
+fn mutex_create(asynchronous:bool)->usize
+```
+
+Creates stable native state without copying an initialized native lock on Corbo moves.
+
+### `mutex_acquire`
+
+[mutex.crb:11](../runtime/corbo/mutex.crb#L11)
+
+```rust
+fn mutex_acquire(raw:usize)
+```
+
+Acquires the blocking variant; the guard is bound to this native thread.
+
+### `mutex_handoff`
+
+[mutex.crb:14](../runtime/corbo/mutex.crb#L14)
+
+```rust
+fn mutex_handoff(raw:usize)
+```
+
+Publishes one reserved waiter and wakes its root; caller holds task_lock.
+
+### `mutex_poll`
+
+[mutex.crb:33](../runtime/corbo/mutex.crb#L33)
+
+```rust
+fn mutex_poll(child:usize,raw:usize)->bool
+```
+
+Polls once: acquire, consume a handoff, or park the root without a lost wakeup.
+
+### `mutex_release`
+
+[mutex.crb:64](../runtime/corbo/mutex.crb#L64)
+
+```rust
+fn mutex_release(raw:usize)
+```
+
+Releases a guard; async ownership can finish on a different worker thread.
+
+### `mutex_detach`
+
+[mutex.crb:73](../runtime/corbo/mutex.crb#L73)
+
+```rust
+fn mutex_detach(child:usize)
+```
+
+Unlinks dropped waiting state or hands an abandoned reservation to its successor.
+
+### `mutex_destroy`
+
+[mutex.crb:101](../runtime/corbo/mutex.crb#L101)
+
+```rust
+fn mutex_destroy(raw:usize)
+```
+
+Destroys the underlying resource after checked guard/waiter lifetimes have ended.
+
+
+## `runtime::mutex_primitives`
+
+Typed native mutex operations and accesses to stable scheduler-owned wait records.
+
+### `mutex_allocate`
+
+[mutex_primitives.crb:5](../runtime/corbo/mutex_primitives.crb#L5)
+
+```rust
+fn mutex_allocate(asynchronous:bool)->usize
+```
+
+Allocates stable native mutex metadata; constructor failure is reported as zero.
+
+### `size_mutex_state`
+
+[mutex_primitives.crb:18](../runtime/corbo/mutex_primitives.crb#L18)
+
+```rust
+fn size_mutex_state()->usize
+```
+
+Returns the exact native metadata extent on this platform.
+
+### `mutex_native_lock`
+
+[mutex_primitives.crb:24](../runtime/corbo/mutex_primitives.crb#L24)
+
+```rust
+fn mutex_native_lock(raw:usize)
+```
+
+Blocks on a native mutex and records the acquiring thread for guard cleanup.
+
+### `mutex_native_unlock`
+
+[mutex_primitives.crb:31](../runtime/corbo/mutex_primitives.crb#L31)
+
+```rust
+fn mutex_native_unlock(raw:usize)
+```
+
+Releases a synchronous guard only on its acquiring thread.
+
+### `mutex_native_destroy`
+
+[mutex_primitives.crb:38](../runtime/corbo/mutex_primitives.crb#L38)
+
+```rust
+fn mutex_native_destroy(raw:usize)
+```
+
+Destroys unlocked native metadata after all guard/waiter references have ended.
+
+### `g_mutex_head`
+
+[mutex_primitives.crb:48](../runtime/corbo/mutex_primitives.crb#L48)
+
+```rust
+fn g_mutex_head(raw:usize)->usize
+```
+
+Reads CorboMutexState.head; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_head`
+
+[mutex_primitives.crb:54](../runtime/corbo/mutex_primitives.crb#L54)
+
+```rust
+fn s_mutex_head(raw:usize,value:usize)
+```
+
+Updates CorboMutexState.head; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_tail`
+
+[mutex_primitives.crb:59](../runtime/corbo/mutex_primitives.crb#L59)
+
+```rust
+fn g_mutex_tail(raw:usize)->usize
+```
+
+Reads CorboMutexState.tail; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_tail`
+
+[mutex_primitives.crb:65](../runtime/corbo/mutex_primitives.crb#L65)
+
+```rust
+fn s_mutex_tail(raw:usize,value:usize)
+```
+
+Updates CorboMutexState.tail; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_reservation`
+
+[mutex_primitives.crb:70](../runtime/corbo/mutex_primitives.crb#L70)
+
+```rust
+fn g_mutex_reservation(raw:usize)->usize
+```
+
+Reads CorboMutexState.reservation; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_reservation`
+
+[mutex_primitives.crb:76](../runtime/corbo/mutex_primitives.crb#L76)
+
+```rust
+fn s_mutex_reservation(raw:usize,value:usize)
+```
+
+Updates CorboMutexState.reservation; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_held`
+
+[mutex_primitives.crb:81](../runtime/corbo/mutex_primitives.crb#L81)
+
+```rust
+fn g_mutex_held(raw:usize)->bool
+```
+
+Reads CorboMutexState.held; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_held`
+
+[mutex_primitives.crb:87](../runtime/corbo/mutex_primitives.crb#L87)
+
+```rust
+fn s_mutex_held(raw:usize,value:bool)
+```
+
+Updates CorboMutexState.held; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_asynchronous`
+
+[mutex_primitives.crb:92](../runtime/corbo/mutex_primitives.crb#L92)
+
+```rust
+fn g_mutex_asynchronous(raw:usize)->bool
+```
+
+Reads CorboMutexState.asynchronous; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_asynchronous`
+
+[mutex_primitives.crb:98](../runtime/corbo/mutex_primitives.crb#L98)
+
+```rust
+fn s_mutex_asynchronous(raw:usize,value:bool)
+```
+
+Updates CorboMutexState.asynchronous; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_next`
+
+[mutex_primitives.crb:103](../runtime/corbo/mutex_primitives.crb#L103)
+
+```rust
+fn g_mutex_next(raw:usize)->usize
+```
+
+Reads Task.mutex_next; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_next`
+
+[mutex_primitives.crb:109](../runtime/corbo/mutex_primitives.crb#L109)
+
+```rust
+fn s_mutex_next(raw:usize,value:usize)
+```
+
+Updates Task.mutex_next; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_owner`
+
+[mutex_primitives.crb:114](../runtime/corbo/mutex_primitives.crb#L114)
+
+```rust
+fn g_mutex_owner(raw:usize)->usize
+```
+
+Reads Task.mutex_owner; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_owner`
+
+[mutex_primitives.crb:120](../runtime/corbo/mutex_primitives.crb#L120)
+
+```rust
+fn s_mutex_owner(raw:usize,value:usize)
+```
+
+Updates Task.mutex_owner; caller holds the scheduler lock for shared queue fields.
+
+### `g_mutex_reserved`
+
+[mutex_primitives.crb:125](../runtime/corbo/mutex_primitives.crb#L125)
+
+```rust
+fn g_mutex_reserved(raw:usize)->bool
+```
+
+Reads Task.mutex_reserved; caller holds the scheduler lock for shared queue fields.
+
+### `s_mutex_reserved`
+
+[mutex_primitives.crb:131](../runtime/corbo/mutex_primitives.crb#L131)
+
+```rust
+fn s_mutex_reserved(raw:usize,value:bool)
+```
+
+Updates Task.mutex_reserved; caller holds the scheduler lock for shared queue fields.
 
 
 ## `runtime::primitives`
@@ -5242,7 +5534,7 @@ Cleans an untaken result or inactive captures, releases frame storage, and unmap
 
 ### `task_abandoned`
 
-[values.crb:69](../runtime/corbo/values.crb#L69)
+[values.crb:70](../runtime/corbo/values.crb#L70)
 
 ```rust
 fn task_abandoned(task:usize)
@@ -5252,7 +5544,7 @@ Releases a completed abandoned task, including its untaken result.
 
 ### `start_task`
 
-[values.crb:73](../runtime/corbo/values.crb#L73)
+[values.crb:74](../runtime/corbo/values.crb#L74)
 
 ```rust
 fn start_task(value:usize)
@@ -5262,7 +5554,7 @@ Schedules a TaskValue using its poll function and the abandoned-task cleanup cal
 
 ### `discard_handle`
 
-[values.crb:77](../runtime/corbo/values.crb#L77)
+[values.crb:78](../runtime/corbo/values.crb#L78)
 
 ```rust
 fn discard_handle(value:usize)
@@ -5272,7 +5564,7 @@ Marks an active execution abandoned or releases a completed one; native executio
 
 ### `join_task`
 
-[values.crb:97](../runtime/corbo/values.crb#L97)
+[values.crb:98](../runtime/corbo/values.crb#L98)
 
 ```rust
 fn join_task(out:usize,value:usize)
@@ -5282,7 +5574,7 @@ Waits for completion, writes a scalar completion descriptor to out and releases 
 
 ### `join_task_into`
 
-[values.crb:109](../runtime/corbo/values.crb#L109)
+[values.crb:110](../runtime/corbo/values.crb#L110)
 
 ```rust
 fn join_task_into(value:usize,out:usize,bytes:usize)->bool
@@ -5292,7 +5584,7 @@ Waits for completion and moves a successful aggregate payload into caller storag
 
 ### `discard_future`
 
-[values.crb:124](../runtime/corbo/values.crb#L124)
+[values.crb:125](../runtime/corbo/values.crb#L125)
 
 ```rust
 fn discard_future(value:usize)
@@ -5315,6 +5607,36 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`corbo_socket_complete`](../runtime/async/completion.c.inc#L59): Submits or observes one operation-specific completion request and coordinates its task wakeup without sharing request state.
 
+### `runtime/async/mutex.c.inc`
+
+- [`CorboMutexState`](../runtime/async/mutex.c.inc#L6): Native mutex storage; its address remains stable until the owner is destroyed.
+
+- [`gate`](../runtime/async/mutex.c.inc#L8): gate: native mutex, held through synchronous guard ownership only.
+
+- [`owner`](../runtime/async/mutex.c.inc#L10): owner: thread which acquired the synchronous guard.
+
+- [`asynchronous`](../runtime/async/mutex.c.inc#L12): asynchronous: chooses logical task ownership instead of native guard ownership.
+
+- [`held`](../runtime/async/mutex.c.inc#L14): held: logical async lock state, protected by task_lock.
+
+- [`head,tail`](../runtime/async/mutex.c.inc#L16): head: first queued waiter. tail: FIFO insertion point.
+
+- [`reservation`](../runtime/async/mutex.c.inc#L18): reservation: waiter receiving a release-to-next handoff.
+
+- [`mutex_create`](../runtime/async/mutex.c.inc#L21): Creates stable OS-backed mutex metadata; no native lock is moved.
+
+- [`mutex_acquire`](../runtime/async/mutex.c.inc#L32): Acquires a blocking native-thread-bound guard.
+
+- [`mutex_handoff`](../runtime/async/mutex.c.inc#L34): Reserves the FIFO successor; caller holds task_lock.
+
+- [`mutex_poll`](../runtime/async/mutex.c.inc#L40): Acquires or parks one persistent task wait record.
+
+- [`mutex_release`](../runtime/async/mutex.c.inc#L48): Releases native-thread ownership or hands logical ownership to a waiter.
+
+- [`mutex_detach`](../runtime/async/mutex.c.inc#L53): Removes a pending wait before its frame storage is reclaimed.
+
+- [`mutex_destroy`](../runtime/async/mutex.c.inc#L59): Destroys unlocked metadata only after its guards and waiters have ended.
+
 ### `runtime/async/readiness.c.inc`
 
 - [`socket_interest`](../runtime/async/readiness.c.inc#L12): Combines active reader/writer interests for one socket generation; caller holds the scheduler lock.
@@ -5331,55 +5653,63 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 ### `runtime/async/scheduler.c.inc`
 
-- [`Task`](../runtime/async/scheduler.c.inc#L8): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
+- [`task_publish`](../runtime/async/scheduler.c.inc#L6): Publishes completion and wakes or enqueues a waiting root exactly through the locked scheduler transition.
 
-- [`Task`](../runtime/async/scheduler.c.inc#L10): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
+- [`task_await`](../runtime/async/scheduler.c.inc#L20): Registers the current root as child's waiter if unfinished; returns whether completion was already visible under the lock.
 
-- [`pc`](../runtime/async/scheduler.c.inc#L12): pc: resume-state program counter.
+- [`task_poll_worker`](../runtime/async/scheduler.c.inc#L33): Consumes queued tasks, polls outside the lock, then publishes, parks or requeues them; releases its thread-local stack on exit.
 
-- [`poll`](../runtime/async/scheduler.c.inc#L14): poll: typed poll/clear callback.
+- [`task_spawn_with`](../runtime/async/scheduler.c.inc#L63): Initializes a task and starts poll workers once; enqueues it or records launch failure and clears captures if no worker starts.
 
-- [`next`](../runtime/async/scheduler.c.inc#L16): next: ready-queue next link.
+- [`task_spawn`](../runtime/async/scheduler.c.inc#L85): Schedules a task without an abandonment callback; its caller must preserve the frame through completion.
 
-- [`failed`](../runtime/async/scheduler.c.inc#L18): failed: launch-failure flag.
+- [`task_join`](../runtime/async/scheduler.c.inc#L89): Blocks the current thread on the scheduler condition until the task is done.
 
-- [`done`](../runtime/async/scheduler.c.inc#L20): done: completion-publication flag.
+- [`task_end`](../runtime/async/scheduler.c.inc#L95): Drains active scheduled tasks, signals shutdown and joins every poll worker.
 
-- [`abandoned`](../runtime/async/scheduler.c.inc#L22): abandoned: worker-owned final-cleanup flag.
+### `runtime/async/task_header.c.inc`
 
-- [`discard`](../runtime/async/scheduler.c.inc#L24): discard: typed abandoned-task cleanup callback.
+- [`Task`](../runtime/async/task_header.c.inc#L8): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
 
-- [`root,waiter`](../runtime/async/scheduler.c.inc#L26): root: outer polling-root link. waiter: dependent polling-root link.
+- [`Task`](../runtime/async/task_header.c.inc#L10): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
 
-- [`io_ready,io_registered`](../runtime/async/scheduler.c.inc#L28): io_ready: readiness-publication flag. io_registered: active-wait registration flag.
+- [`pc`](../runtime/async/task_header.c.inc#L12): pc: resume-state program counter.
 
-- [`io_socket`](../runtime/async/scheduler.c.inc#L30): io_socket: native socket identifier.
+- [`poll`](../runtime/async/task_header.c.inc#L14): poll: typed poll/clear callback.
 
-- [`io_write`](../runtime/async/scheduler.c.inc#L32): io_write: write-interest selector.
+- [`next`](../runtime/async/task_header.c.inc#L16): next: ready-queue next link.
 
-- [`io_next`](../runtime/async/scheduler.c.inc#L34): io_next: intrusive readiness-waiter link.
+- [`failed`](../runtime/async/task_header.c.inc#L18): failed: launch-failure flag.
 
-- [`io_token`](../runtime/async/scheduler.c.inc#L36): io_token: readiness-generation token.
+- [`done`](../runtime/async/task_header.c.inc#L20): done: completion-publication flag.
 
-- [`io_error`](../runtime/async/scheduler.c.inc#L38): io_error: recorded platform I/O status.
+- [`abandoned`](../runtime/async/task_header.c.inc#L22): abandoned: worker-owned final-cleanup flag.
 
-- [`waiting,parked,blocking`](../runtime/async/scheduler.c.inc#L40): waiting: dependency-wait predicate. parked: removed-from-ready-queue flag. blocking: dedicated blocking-worker flag.
+- [`discard`](../runtime/async/task_header.c.inc#L24): discard: typed abandoned-task cleanup callback.
 
-- [`task_enqueue`](../runtime/async/scheduler.c.inc#L52): Links a task at the queue tail; caller holds the scheduler lock and the task is not already queued.
+- [`root,waiter`](../runtime/async/task_header.c.inc#L26): root: outer polling-root link. waiter: dependent polling-root link.
 
-- [`task_publish`](../runtime/async/scheduler.c.inc#L59): Publishes completion and wakes or enqueues a waiting root exactly through the locked scheduler transition.
+- [`io_ready,io_registered`](../runtime/async/task_header.c.inc#L28): io_ready: readiness-publication flag. io_registered: active-wait registration flag.
 
-- [`task_await`](../runtime/async/scheduler.c.inc#L73): Registers the current root as child's waiter if unfinished; returns whether completion was already visible under the lock.
+- [`io_socket`](../runtime/async/task_header.c.inc#L30): io_socket: native socket identifier.
 
-- [`task_poll_worker`](../runtime/async/scheduler.c.inc#L86): Consumes queued tasks, polls outside the lock, then publishes, parks or requeues them; releases its thread-local stack on exit.
+- [`io_write`](../runtime/async/task_header.c.inc#L32): io_write: write-interest selector.
 
-- [`task_spawn_with`](../runtime/async/scheduler.c.inc#L116): Initializes a task and starts poll workers once; enqueues it or records launch failure and clears captures if no worker starts.
+- [`io_next`](../runtime/async/task_header.c.inc#L34): io_next: intrusive readiness-waiter link.
 
-- [`task_spawn`](../runtime/async/scheduler.c.inc#L138): Schedules a task without an abandonment callback; its caller must preserve the frame through completion.
+- [`io_token`](../runtime/async/task_header.c.inc#L36): io_token: readiness-generation token.
 
-- [`task_join`](../runtime/async/scheduler.c.inc#L142): Blocks the current thread on the scheduler condition until the task is done.
+- [`io_error`](../runtime/async/task_header.c.inc#L38): io_error: recorded platform I/O status.
 
-- [`task_end`](../runtime/async/scheduler.c.inc#L148): Drains active scheduled tasks, signals shutdown and joins every poll worker.
+- [`waiting,parked,blocking`](../runtime/async/task_header.c.inc#L40): waiting: dependency-wait predicate. parked: removed-from-ready-queue flag. blocking: dedicated blocking-worker flag.
+
+- [`mutex_next`](../runtime/async/task_header.c.inc#L42): mutex_next: next waiter in a mutex FIFO, protected by task_lock.
+
+- [`mutex_owner`](../runtime/async/task_header.c.inc#L44): mutex_owner: logical async mutex currently retaining this waiter.
+
+- [`mutex_reserved`](../runtime/async/task_header.c.inc#L46): mutex_reserved: release handed this waiter the next acquisition.
+
+- [`task_enqueue`](../runtime/async/task_header.c.inc#L58): Links a task at the queue tail; caller holds the scheduler lock and the task is not already queued.
 
 ### `runtime/async/threads.c.inc`
 
@@ -5511,17 +5841,17 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`release_future`](../runtime/async/values.c.inc#L106): Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata.
 
-- [`task_abandoned`](../runtime/async/values.c.inc#L110): Releases a completed abandoned task, including its untaken result.
+- [`task_abandoned`](../runtime/async/values.c.inc#L111): Releases a completed abandoned task, including its untaken result.
 
-- [`start_task`](../runtime/async/values.c.inc#L112): Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
+- [`start_task`](../runtime/async/values.c.inc#L113): Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
 
-- [`discard_handle`](../runtime/async/values.c.inc#L114): Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
+- [`discard_handle`](../runtime/async/values.c.inc#L115): Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
 
-- [`join_task`](../runtime/async/values.c.inc#L119): Waits for completion, returns a scalar completion descriptor and releases consumed handle storage.
+- [`join_task`](../runtime/async/values.c.inc#L120): Waits for completion, returns a scalar completion descriptor and releases consumed handle storage.
 
-- [`join_task_into`](../runtime/async/values.c.inc#L122): Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
+- [`join_task_into`](../runtime/async/values.c.inc#L123): Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
 
-- [`discard_future`](../runtime/async/values.c.inc#L126): Destroys captures and storage of a nonempty inactive future descriptor.
+- [`discard_future`](../runtime/async/values.c.inc#L127): Destroys captures and storage of a nonempty inactive future descriptor.
 
 ### `runtime/collections/hashmap.c.inc`
 
@@ -5601,79 +5931,99 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`waiting,parked,blocking`](../runtime/corbo/corbo_runtime_abi.h#L63): waiting: dependency-wait predicate. parked: removed-from-ready-queue flag. blocking: dedicated blocking-worker flag.
 
-- [`TaskResult`](../runtime/corbo/corbo_runtime_abi.h#L75): Inline scalar result union; the generated frame contract determines the active member.
+- [`mutex_next`](../runtime/corbo/corbo_runtime_abi.h#L65): mutex_next: next waiter in a mutex FIFO, protected by task_lock.
 
-- [`k1`](../runtime/corbo/corbo_runtime_abi.h#L77): k1: Result storage for i32.
+- [`mutex_owner`](../runtime/corbo/corbo_runtime_abi.h#L67): mutex_owner: logical async mutex currently retaining this waiter.
 
-- [`k2`](../runtime/corbo/corbo_runtime_abi.h#L79): k2: Result storage for i64.
+- [`mutex_reserved`](../runtime/corbo/corbo_runtime_abi.h#L69): mutex_reserved: release handed this waiter the next acquisition.
 
-- [`k3`](../runtime/corbo/corbo_runtime_abi.h#L81): k3: Result storage for bool.
+- [`CorboMutexState`](../runtime/corbo/corbo_runtime_abi.h#L72): Native mutex storage; its address remains stable until the owner is destroyed.
 
-- [`k4`](../runtime/corbo/corbo_runtime_abi.h#L83): k4: Result storage for u8.
+- [`gate`](../runtime/corbo/corbo_runtime_abi.h#L74): gate: native mutex, held through synchronous guard ownership only.
 
-- [`k5`](../runtime/corbo/corbo_runtime_abi.h#L85): k5: Result storage for u16.
+- [`owner`](../runtime/corbo/corbo_runtime_abi.h#L76): owner: thread which acquired the synchronous guard.
 
-- [`k6`](../runtime/corbo/corbo_runtime_abi.h#L87): k6: Result storage for u32.
+- [`asynchronous`](../runtime/corbo/corbo_runtime_abi.h#L78): asynchronous: chooses logical task ownership instead of native guard ownership.
 
-- [`k7`](../runtime/corbo/corbo_runtime_abi.h#L89): k7: Result storage for u64.
+- [`held`](../runtime/corbo/corbo_runtime_abi.h#L80): held: logical async lock state, protected by task_lock.
 
-- [`k8`](../runtime/corbo/corbo_runtime_abi.h#L91): k8: Result storage for f32.
+- [`head,tail`](../runtime/corbo/corbo_runtime_abi.h#L82): head: first queued waiter. tail: FIFO insertion point.
 
-- [`k9`](../runtime/corbo/corbo_runtime_abi.h#L93): k9: Result storage for f64.
+- [`reservation`](../runtime/corbo/corbo_runtime_abi.h#L84): reservation: waiter receiving a release-to-next handoff.
 
-- [`ClassicStack`](../runtime/corbo/corbo_runtime_abi.h#L96): Saved thread-local fixed-stack mapping and region-scope context for task suspension/resumption.
+- [`TaskResult`](../runtime/corbo/corbo_runtime_abi.h#L96): Inline scalar result union; the generated frame contract determines the active member.
 
-- [`base`](../runtime/corbo/corbo_runtime_abi.h#L98): base: saved fixed-stack base.
+- [`k1`](../runtime/corbo/corbo_runtime_abi.h#L98): k1: Result storage for i32.
 
-- [`cursor,limit,committed,page_size,mapped_size`](../runtime/corbo/corbo_runtime_abi.h#L100): cursor: saved next free byte offset. limit: saved fixed-stack capacity. committed: saved committed-byte boundary. page_size: saved OS page size. mapped_size: saved mapping extent.
+- [`k2`](../runtime/corbo/corbo_runtime_abi.h#L100): k2: Result storage for i64.
 
-- [`band`](../runtime/corbo/corbo_runtime_abi.h#L102): band: saved region-scope link.
+- [`k3`](../runtime/corbo/corbo_runtime_abi.h#L102): k3: Result storage for bool.
 
-- [`metric_pools`](../runtime/corbo/corbo_runtime_abi.h#L104): metric_pools: suspended fixed-stack pool accounting chain.
+- [`k4`](../runtime/corbo/corbo_runtime_abi.h#L104): k4: Result storage for u8.
 
-- [`TaskState`](../runtime/corbo/corbo_runtime_abi.h#L107): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
+- [`k5`](../runtime/corbo/corbo_runtime_abi.h#L106): k5: Result storage for u16.
 
-- [`task`](../runtime/corbo/corbo_runtime_abi.h#L109): task: scheduler header at offset zero.
+- [`k6`](../runtime/corbo/corbo_runtime_abi.h#L108): k6: Result storage for u32.
 
-- [`value`](../runtime/corbo/corbo_runtime_abi.h#L111): value: inline scalar result storage.
+- [`k7`](../runtime/corbo/corbo_runtime_abi.h#L110): k7: Result storage for u64.
 
-- [`payload`](../runtime/corbo/corbo_runtime_abi.h#L113): payload: aggregate result address.
+- [`k8`](../runtime/corbo/corbo_runtime_abi.h#L112): k8: Result storage for f32.
 
-- [`region`](../runtime/corbo/corbo_runtime_abi.h#L115): region: frame-storage region link.
+- [`k9`](../runtime/corbo/corbo_runtime_abi.h#L114): k9: Result storage for f64.
 
-- [`own_region`](../runtime/corbo/corbo_runtime_abi.h#L117): own_region: separate region-descriptor ownership flag.
+- [`ClassicStack`](../runtime/corbo/corbo_runtime_abi.h#L117): Saved thread-local fixed-stack mapping and region-scope context for task suspension/resumption.
 
-- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L119): dispose: typed capture/result cleanup callback.
+- [`base`](../runtime/corbo/corbo_runtime_abi.h#L119): base: saved fixed-stack base.
 
-- [`classic`](../runtime/corbo/corbo_runtime_abi.h#L121): classic: suspended thread-local datastack context.
+- [`cursor,limit,committed,page_size,mapped_size`](../runtime/corbo/corbo_runtime_abi.h#L121): cursor: saved next free byte offset. limit: saved fixed-stack capacity. committed: saved committed-byte boundary. page_size: saved OS page size. mapped_size: saved mapping extent.
 
-- [`TaskValue`](../runtime/corbo/corbo_runtime_abi.h#L124): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
+- [`band`](../runtime/corbo/corbo_runtime_abi.h#L123): band: saved region-scope link.
 
-- [`state`](../runtime/corbo/corbo_runtime_abi.h#L126): state: execution frame address.
+- [`metric_pools`](../runtime/corbo/corbo_runtime_abi.h#L125): metric_pools: suspended fixed-stack pool accounting chain.
 
-- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L128): storage: owned backing-region link.
+- [`TaskState`](../runtime/corbo/corbo_runtime_abi.h#L128): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
 
-- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L130): poll: frame-specific poll callback.
+- [`task`](../runtime/corbo/corbo_runtime_abi.h#L130): task: scheduler header at offset zero.
 
-- [`native`](../runtime/corbo/corbo_runtime_abi.h#L132): native: native-worker ownership selector.
+- [`value`](../runtime/corbo/corbo_runtime_abi.h#L132): value: inline scalar result storage.
 
-- [`TaskCompletion`](../runtime/corbo/corbo_runtime_abi.h#L135): Success flag and inline scalar result moved out by join_task.
+- [`payload`](../runtime/corbo/corbo_runtime_abi.h#L134): payload: aggregate result address.
 
-- [`ok`](../runtime/corbo/corbo_runtime_abi.h#L137): ok: successful-launch/completion flag.
+- [`region`](../runtime/corbo/corbo_runtime_abi.h#L136): region: frame-storage region link.
 
-- [`value`](../runtime/corbo/corbo_runtime_abi.h#L139): value: moved scalar result bits.
+- [`own_region`](../runtime/corbo/corbo_runtime_abi.h#L138): own_region: separate region-descriptor ownership flag.
 
-- [`NativeBox`](../runtime/corbo/corbo_runtime_abi.h#L142): Worker metadata with its Region prefix at offset zero; abandonment can transfer final cleanup to the worker.
+- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L140): dispose: typed capture/result cleanup callback.
 
-- [`region`](../runtime/corbo/corbo_runtime_abi.h#L144): region: embedded frame region at offset zero.
+- [`classic`](../runtime/corbo/corbo_runtime_abi.h#L142): classic: suspended thread-local datastack context.
 
-- [`state`](../runtime/corbo/corbo_runtime_abi.h#L146): state: native frame address.
+- [`TaskValue`](../runtime/corbo/corbo_runtime_abi.h#L145): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
 
-- [`run`](../runtime/corbo/corbo_runtime_abi.h#L148): run: native frame run callback.
+- [`state`](../runtime/corbo/corbo_runtime_abi.h#L147): state: execution frame address.
 
-- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L150): abandoned: worker-owned cleanup flag.
+- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L149): storage: owned backing-region link.
 
-- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L152): dispose: capture/result cleanup callback.
+- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L151): poll: frame-specific poll callback.
+
+- [`native`](../runtime/corbo/corbo_runtime_abi.h#L153): native: native-worker ownership selector.
+
+- [`TaskCompletion`](../runtime/corbo/corbo_runtime_abi.h#L156): Success flag and inline scalar result moved out by join_task.
+
+- [`ok`](../runtime/corbo/corbo_runtime_abi.h#L158): ok: successful-launch/completion flag.
+
+- [`value`](../runtime/corbo/corbo_runtime_abi.h#L160): value: moved scalar result bits.
+
+- [`NativeBox`](../runtime/corbo/corbo_runtime_abi.h#L163): Worker metadata with its Region prefix at offset zero; abandonment can transfer final cleanup to the worker.
+
+- [`region`](../runtime/corbo/corbo_runtime_abi.h#L165): region: embedded frame region at offset zero.
+
+- [`state`](../runtime/corbo/corbo_runtime_abi.h#L167): state: native frame address.
+
+- [`run`](../runtime/corbo/corbo_runtime_abi.h#L169): run: native frame run callback.
+
+- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L171): abandoned: worker-owned cleanup flag.
+
+- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L173): dispose: capture/result cleanup callback.
 
 ### `runtime/corbo_runtime.h`
 

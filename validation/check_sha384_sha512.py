@@ -26,7 +26,7 @@ def nist_cases(source, width, stem):
 
 
 FILE_HELPERS = """
-use std::io::sync::{File};
+use std::io::{File};
 use std::io::{FileMode};
 
 fn print_bytes(bytes: &[u8]) {

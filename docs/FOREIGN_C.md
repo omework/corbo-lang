@@ -178,3 +178,13 @@ and [executed validation](cycles/CORE_EXTENSIONS_CYCLE.md).
 The compiler and its C-bridge regression fixtures are now maintained in
 [corboc](https://github.com/omework/corboc). The language-repository validation
 commands remain compatibility entry points; see [the repository boundary](COMPILER_REPOSITORY.md).
+
+## Trusted interior-mutability borrows
+
+`@unchecked` can also enclose a Corbo construction that forms `&mut` to a field
+through a shared reference. The STD mutex uses this only after native lock
+acquisition. Such a reference keeps its ordinary provenance and lifetime graph;
+the compiler does not verify that native locking actually occurred. Public
+mutex acquisition therefore uses `lock(&self)` while its guard exposes tracked
+mutable payload access. Code outside the trusted block still requires mutation
+permission. This does not relax the separate rule forbidding raw-address escape.

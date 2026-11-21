@@ -12,9 +12,9 @@ from tempfile import TemporaryDirectory
 from check_crust_bootstrap import FRONTEND
 
 IMPORTS = """
-use std::net::sync::tls::openssl as tls;
-use std::net::sync::tls::openssl::TlsError;
-use std::net::sync::tcp;
+use std::net::tls::openssl as tls;
+use std::net::tls::openssl::TlsError;
+use std::net::tcp;
 use std::net::ipv4::{Addr, SocketAddr};
 
 fn loopback(port: u16) -> SocketAddr {
@@ -217,9 +217,9 @@ def exercise_privacy(root):
     )
     subprocess.run([FRONTEND, "check", root], check=True)
     for program in (
-        "use std::net::sync::tcp::__din_package_socket; fn main() {}",
-        "use std::net::sync::tcp as tcp; fn main() { tcp::__din_package_socket(); }",
-        "use std::net::sync::tls::openssl::Connection; fn main() { let forged = Connection {}; drop(forged); }",
+        "use std::net::tcp::__din_package_socket; fn main() {}",
+        "use std::net::tcp as tcp; fn main() { tcp::__din_package_socket(); }",
+        "use std::net::tls::openssl::Connection; fn main() { let forged = Connection {}; drop(forged); }",
     ):
         (root / "src/main.crb").write_text(program)
         result = subprocess.run([FRONTEND, "check", root], capture_output=True)

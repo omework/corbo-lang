@@ -1,3 +1,15 @@
+## Synchronous defaults / shared-reference mutexes
+
+| Rules / mechanism | Executed evidence | Limits |
+| --- | --- | --- |
+| API paths / N1 | Six README programs and async buffered File/TCP | Existing signatures retained; no async TLS |
+| N4/N5/N8 | Per-field async results; three shared writers, scalar/aggregate guards, lifetime/re-entry refusals | Conservative cases remain; no safety proof |
+| N2/N6/N7 | Guard move, payload destruction, terminal compound/indexed cleanup; FIFO waiter detach/handoff | Focused observations only |
+| TR1 | Native guard transfer and suspension refused; async guard survives yield | Windows ARM64 compile-only |
+| Runtime / ABI | Both queue implementations and existing metrics ABI checks | macOS, Linux Docker, Windows Wine |
+
+[Evidence](cycles/SYNC_DEFAULT_MUTEX_CYCLE.md).
+
 ## Mutable references as mutation permission — focused compiler validation
 
 MA1–MA6 revise N5: `&mut` does not establish uniqueness. Corboc separates
@@ -1120,7 +1132,7 @@ O0/UBSan : 2,554 s, code 0. Final regression O2/UBSan : 83 methods,
 | Pools, nettoyage | Sources last and slots returned | Drop of pool before waiting refused; single destruction and reuse; 83 methods pass | P — independent audit carried over |
 | AS2/VE1–VE2, next deviation | A task should be able to borrow a Vector<A<Int>> | open-async-owned-vector-capture.crust/.log: refusal to both entries, length reading only | Not implemented on this case; next feature |
 
-Previous Lot: [full recursive link replacement](cycles/RECURSIVE_LINK_REPLACEMENT_CYCLE.md).
+Previous Lot: [full recursive link replacement](cycles/RECURSIVE_cycles/SYNC_DEFAULT_MUTEX_CYCLE.md_REPLACEMENT_CYCLE.md).
 Two methods: two native programs and four invalids at both entries.
 0/UBSan: 0.916 s, code 0. Regression: 49 methods, 30.432 s, code 0,
 fatal UBSan (O2 on the async harnesses, without O2 explicit on the former sync harnesses).

@@ -2,13 +2,13 @@
 //! Client and server handshake state machines for the blocking P-256 TLS 1.3 profile.
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
-    use std::net::sync::tcp::Connection;
+    use std::net::tcp::Connection;
     use std::crypto::p256::{EphemeralKey, SigningKey, PublicKey};
     use std::crypto::random::fill;
     use std::crypto::x509::{PublicKey as X509PublicKey, valid_dns_name};
-    use std::net::sync::tls::keys::{Transcript, Traffic, early_secret, handshake_secret,
+    use std::net::tls::keys::{Transcript, Traffic, early_secret, handshake_secret,
         master_secret, traffic_secret, aes128_key, traffic_iv, finished_verify_data, verify_finished};
-    use std::net::sync::tls::record::{RecordCipher, HANDSHAKE, APPLICATION_DATA};
+    use std::net::tls::record::{RecordCipher, HANDSHAKE, APPLICATION_DATA};
 
     /// Holds the read and write ciphers established by a successful TLS handshake.
     pub struct Session {

@@ -1,3 +1,12 @@
+## API synchrones et mutex (convention actuelle)
+
+Les chemins synchrones par défaut et leurs variantes `asyn` sont intégrés.
+Les gardes synchrones/asynchrones utilisent `lock(&self)`, avec mutation interne
+de confiance, nettoyage automatique et contrats de verrouillage ordinaires.
+Les validations ciblées macOS, Linux et Windows x86-64 sont exécutées ; Windows
+ARM64 reste compilé sans exécution. Cette convention remplace l'ancienne
+organisation async par défaut. [Rapport](cycles/SYNC_DEFAULT_MUTEX_CYCLE.md).
+
 ## Permission de mutation — validation ciblée
 
 MA1–MA6 remplace l’unicité implicite de `&mut`. Corboc sépare permissions,

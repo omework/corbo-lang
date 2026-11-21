@@ -1100,13 +1100,14 @@ Sortie : `42`. [Paquet complet](examples/features/blocking/).
 
 <a id="async-file"></a>
 
-#### Fichiers async par défaut
+#### Fichiers asynchrones explicites
 
-`std::io::File` utilise `.await` pour ses opérations. Les modes, permissions et origines de seek sont communs avec `std::io::sync::File`. Un bloc interne ferme le fichier avant la suppression du chemin ; les erreurs sont elles aussi détruites automatiquement à la sortie de leur bloc.
+`std::io::asyn::File` utilise `.await` pour ses opérations. Les modes, permissions et origines de seek sont communs avec `std::io::File`. Un bloc interne ferme le fichier avant la suppression du chemin ; les erreurs sont elles aussi détruites automatiquement à la sortie de leur bloc.
 
 <!-- example: async_file -->
 ```rust
-use std::io::{File, FileError, FileMode, FilePerm, SeekFrom};
+use std::io::{FileMode, FilePerm, SeekFrom};
+use std::io::asyn::{File, FileError};
 
 async fn round_trip() -> Result<usize, FileError> {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
@@ -1153,7 +1154,7 @@ L’appelant choisit le mode d’ouverture, les permissions et la taille du tamp
 
 <!-- example: file -->
 ```rust
-use std::io::sync::{File, FileError};
+use std::io::{File, FileError};
 use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
@@ -1191,9 +1192,9 @@ Les wrappers tamponnés empruntent explicitement le flux et le tampon de travail
 
 <!-- example: buffered -->
 ```rust
-use std::io::sync::File;
+use std::io::File;
 use std::io::{FileMode, FilePerm};
-use std::io::sync::buffered::BufWriter;
+use std::io::buffered::BufWriter;
 
 fn main() {
     let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
@@ -1241,7 +1242,7 @@ Les opérations `bind` et `connect` reçoivent des objets d’adresse IPv4. Le p
 <!-- example: network -->
 ```rust
 use std::net::ipv4::{Addr, SocketAddr};
-use std::net::sync::udp::{Listener, connect};
+use std::net::udp::{Listener, connect};
 use std::net::SocketError;
 
 fn exchange() -> Result<usize, SocketError> {
@@ -1340,7 +1341,7 @@ Sortie: `4, 16909060, 67305985`. [Paquet complet](examples/features/binary/).
 <!-- example: time -->
 ```rust
 use std::time::{Duration, Instant, Error};
-use std::time::sync::{Timer, sleep};
+use std::time::{Timer, sleep};
 
 fn wait() -> Result<(), Error> {
     let start = Instant::now()?;
@@ -1374,7 +1375,8 @@ L’attente suspend la tâche appelante. Un worker bloquant existant effectue l�
 
 <!-- example: async_time -->
 ```rust
-use std::time::{Duration, Error, sleep, Timer};
+use std::time::{Duration, Error};
+use std::time::asyn::{sleep, Timer};
 
 async fn delayed_value() -> Result<i64, Error> {
     sleep(Duration::from_millis(2)).await?;
@@ -1472,42 +1474,90 @@ Les [contrats du code externe](docs/FOREIGN_C.md) expliquent la sélection de ci
 
 Importez les types natifs de collections avec `use std::{Vector, HashMap, String};`. Leurs noms publics sont déclarés dans [collections.crb](stdlib/src/collections.crb). Les algorithmes des collections natives se trouvent dans le runtime ; `String<N>` bornée est implémentée dans la STD. Le [guide de l’API des collections](docs/COLLECTIONS_API.md) décrit la construction, la possession des éléments, les emprunts et le nettoyage.
 
-### I/O asynchrones par défaut
+### Gardes de mutex et acquisition partagée
 
-Les API qui attendent sont asynchrones par défaut. Les variantes bloquantes
-sont importées explicitement depuis `sync` :
+Les deux variantes acquièrent le verrou via `&self`. La garde libère le verrou
+à la sortie du bloc ; une garde asynchrone peut survivre à `yield`.
 
+<!-- example: mutex -->
 ```rust
-use std::io::File;                    // File::open(...).await
-use std::io::sync::File as SyncFile;  // SyncFile::open(...)
+use std::Mutex;
+use std::asyn::Mutex as AsyncMutex;
 
-use std::net::tcp;                   // tcp::connect(...).await
-use std::net::sync::tcp as sync_tcp;  // sync_tcp::connect(...)
+async fn async_value() -> i64 {
+    let mutex = AsyncMutex::new(10);
+    {
+        let mut guard = mutex.lock().await;
+        let target = guard.get_mut();
+        *target = 42;
+        yield;
+    }
+    let guard = mutex.lock().await;
+    let view = guard.get();
+    *view
+}
 
-use std::time::sleep;                // sleep(...).await
-use std::time::sync::sleep as sync_sleep;
+fn main() {
+    let mutex = Mutex::new(10);
+    {
+        let guard = mutex.lock();
+        let mut moved = guard;
+        let target = moved.get_mut();
+        *target = 42;
+    }
+    {
+        let guard = mutex.lock();
+        let view = guard.get();
+        print(*view);
+    }
+    let execution = runtime::spawn(async_value());
+    match execution.join() {
+        Ok(value) => { print(value); },
+        Err(_) => { print(-1); },
+    }
+}
 ```
 
-`main` reste synchrone ; `.await` exige un corps async. Les types partagés
-restent communs : modes/permissions dans `std::io`, adresses dans
-`std::net::ipv4`, Duration/Instant dans `std::time`. Les accès aux métadonnées
-en mémoire, les parseurs, les collections et la cryptographie restent des
-calculs synchrones. Les fichiers et les timers async utilisent des workers
-bloquants. Le transport TLS actuel est uniquement bloquant, sous
-`std::net::sync::tls` ; aucune variante TLS async n’est annoncée.
+Sortie : `42, 42`. [Paquet complet](examples/features/mutex/).
+
+### API synchrones et espaces `asyn` explicites
+
+Les chemins ordinaires exposent les API synchrones. Les variantes asynchrones
+se trouvent dans `std::io::asyn`, `std::net::asyn::{tcp, udp}` et
+`std::time::asyn`. Les options et permissions restent dans `std::io`, les
+adresses dans `std::net::ipv4`, Duration et Instant dans `std::time`.
+
+```rust
+use std::io::File;
+use std::io::asyn::File as AsyncFile;
+
+use std::net::tcp;
+use std::net::asyn::tcp as async_tcp;
+
+use std::time::sleep;
+use std::time::asyn::sleep as async_sleep;
+```
+
+`std::Mutex<T>` bloque le thread appelant. `std::asyn::Mutex<T>` suspend la tâche
+en attente ; sa garde peut reprendre sur un autre thread. Les deux proposent
+`new(value)`, `lock(&self)`, puis `get()` et `get_mut()` sur la garde.
+La destruction de la garde libère le verrou. Une garde synchrone porte
+`#(thread: transfer=false)` ; une garde asynchrone est transférable.
+Les contrats de verrouillage ordinaires s'appliquent à ces types.
 
 | Paquet | Fonctionnalités principales | Référence |
 | --- | --- | --- |
 | `std::{Pool, Vector, HashMap, String}` | Pools de capacité fixe, vecteurs, maps, chaînes UTF-8 grandissantes et `String<N>` inline avec un maximum en octets connu à la compilation | [Collections](docs/COLLECTIONS_API.md) · [Chaînes bornées](docs/UTF8_STRINGS-fr.md) |
 | `std::iter` | Iter, Map, Filter, Reduce et méthode d’instance `collect` | [API](docs/STDLIB.md#stditer) |
-| `std::io`, `std::io::sync` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
-| `std::net::{tcp, udp}`, `std::net::sync::{tcp, udp}` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
+| `std::Mutex`, `std::asyn::Mutex` | Acquisition par référence partagée, gardes détruites en fin de bloc et attente asynchrone suspendue | [API](docs/ASYNC_API.md#mutex-ownership) |
+| `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
+| `std::net::{tcp, udp}`, `std::net::asyn::{tcp, udp}` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
 | `std::net::http` | Analyse des en-têtes de requêtes/réponses, limites statiques configurables et corps optionnels en flux via un contrat de lecture | [HTTP](docs/HTTP.md) |
-| `std::net::sync::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnetsynctls) |
+| `std::net::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnettls) |
 | `std::crypto` | AES-GCM/CBC, familles SHA, HMAC/HKDF, Argon2id, aléa, P-256 et conteneurs de clés | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER et PEM avec sortie détenue par l’appelant | [API](docs/STDLIB.md#stdencodinghex) |
 | `std::encoding::binary` | Lecture/écriture de primitifs, ordre little-endian/big-endian explicite et tampons fournis par l’appelant | [API binaire](docs/BINARY_AND_TIME_API-fr.md) |
-| `std::time`, `std::time::sync` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
+| `std::time`, `std::time::asyn` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::compression::{gzip, zstd}` | Codecs natifs bornés, traitement en flux et dictionnaires | [Compression](docs/COMPRESSION.md) |
 | `runtime::metrics` | Compteurs atomiques des octets réservés, engagés et occupés des datastacks/régions | [Métriques](docs/RUNTIME_METRICS-fr.md) |
 | `std::env` | Arguments du processus tout en conservant un `main` sans paramètres | [API](docs/STDLIB.md#stdenv) |

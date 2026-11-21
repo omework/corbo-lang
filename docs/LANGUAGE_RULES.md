@@ -1511,6 +1511,14 @@ accesses, retained addresses or resource cleanup inside `@unchecked`.
 The developer remains responsible for those effects and the target C ABI.
 The braces of a foreign C block delimit its own C statement scope.
 
+A trusted Corbo implementation may create a mutable borrow of a record field
+through a shared reference inside `@unchecked`, for example after acquiring an
+interior-mutability lock. The reference retains its ordinary target/provenance
+and lifetime checks. This bypasses the shared-reference mutation-permission
+check at that borrow only; it does not create synchronization. The implementer
+must uphold the lock contract. The same borrow outside `@unchecked` remains
+refused. Native addresses still cannot escape their unchecked block.
+
 The compiler provides compatible C
 representations of the relevant concrete Corbo types and access to the C runtime
 library, including shared pools, datastacks and regions, automatically in `@c`.

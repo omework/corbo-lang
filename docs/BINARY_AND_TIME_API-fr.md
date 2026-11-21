@@ -34,7 +34,7 @@ l'arithmétique contrôlée existante. Ces objets suivent les moves ordinaires.
 `after(duration)` produit une échéance et `elapsed()` renvoie une durée via
 `Result`. Il ne s'agit ni d'une date ni d'un timestamp portable.
 
-## Attentes bloquantes — `std::time::sync`
+## Attentes bloquantes — `std::time`
 
 `Timer::after(duration)` renvoie `Result<Timer, Error>` ; `Timer::at(instant)`
 construit une échéance absolue. `wait(&self) -> Result<(), Error>` bloque le
@@ -48,7 +48,7 @@ fractionnaire évite un produit 64 bits débordant ; durées et instants doivent
 toujours tenir en nanosecondes `u64`. Les erreurs sont `ClockFailure`,
 `WaitFailure` et `LaunchFailed` pour la création d'un worker async.
 
-## Attentes async — `std::time`
+## Attentes async — `std::time::asyn`
 
 `sleep(duration)` et `Timer::wait(&self)` sont async et renvoient
 `Result<(), std::time::Error>`. Les constructeurs `after` et `at` conservent le

@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Async deadline waits using shared monotonic values.
+use std::time::{Duration, Instant, Error};
+
+use std::time::{Timer as BlockingTimer, sleep as blocking_sleep};
+
+/// Performs the blocking span on the worker selected by spawn_blocking.
+async fn sleep_worker(duration: Duration) -> Result<(), Error> { blocking_sleep(duration) }
+/// Performs the blocking deadline wait on the selected worker.
+async fn wait_worker(timer: &BlockingTimer) -> Result<(), Error> { timer.wait() }
+
+/// Suspends this task for a span without blocking an executor thread.
+pub async fn sleep(duration: Duration) -> Result<(), Error> {
+    let worker = runtime::spawn_blocking(sleep_worker(duration));
+    match worker.await {
+        Ok(result) => { result },
+        Err(error) => { drop(error); Err(Error.LaunchFailed) },
+    }
+}
+
+/// Owns a reusable deadline whose waits suspend the calling task.
+pub struct Timer {
+    /// Shared deadline state borrowed until the worker wait completes.
+    inner: BlockingTimer,
+}
+impl Timer {
+    /// Creates an asynchronous timer after the supplied span.
+    fn after(duration: Duration) -> Result<Timer, Error> {
+        let inner = BlockingTimer::after(duration)?;
+        Ok(Timer { inner: inner })
+    }
+    /// Creates an asynchronous timer at an existing monotonic instant.
+    fn at(deadline: Instant) -> Timer {
+        let inner = BlockingTimer::at(deadline);
+        Timer { inner: inner }
+    }
+    /// Suspends until the deadline; the timer outlives its borrowed worker wait.
+    async fn wait(&self) -> Result<(), Error> {
+        let timer = &(*self).inner;
+        let worker = runtime::spawn_blocking(wait_worker(timer));
+        match worker.await {
+            Ok(result) => { result },
+            Err(error) => { drop(error); Err(Error.LaunchFailed) },
+        }
+    }
+}

@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Blocking mutexes with native-thread-bound guards.
+use std::sys::mutex as native;
+
+/// Owns a value and a stable native synchronization resource.
+#(type: T)
+pub struct Mutex<T> {
+    /// Native synchronization handle; never copied as a native mutex object.
+    raw: usize,
+    /// Owned payload cleaned after the mutex's own destructor.
+    value: T,
+}
+impl Mutex<T> {
+    /// Takes ownership of the payload and constructs its synchronization resource.
+    fn new(value: T) -> Mutex<T> {
+        let raw = native::create(false);
+        Mutex { raw: raw, value: value }
+    }
+    /// Blocks this thread until it acquires the native mutex.
+    #(lock: on=self, through_result=true)
+    fn lock(&self) -> MutexGuard<T> {
+        let raw = (*self).raw;
+        native::acquire(copy(raw));
+        // Native lock ownership permits this tracked interior-mutable borrow.
+        @unchecked {
+            return MutexGuard { raw: raw, data: &mut (*self).value };
+        }
+    }
+    /// Destroys unlocked native state; checked borrows keep active guards/waiters alive.
+    fn drop(&mut self) { let raw = (*self).raw; native::destroy(raw); }
+}
+
+/// Holds the lock until destruction and borrows its owner's payload.
+#(type: T)
+#(thread: transfer=false)
+pub struct MutexGuard<T> {
+    /// Borrowed native resource identity; the payload borrow retains its owner.
+    raw: usize,
+    /// Mutable payload access under the retained lock contract.
+    data: &mut T,
+}
+impl MutexGuard<T> {
+    /// Borrows the protected value for reading.
+    fn get(&self) -> &T { &*(*self).data }
+    /// Reborrows the protected value with mutation permission.
+    fn get_mut(&mut self) -> &mut T { &mut *(*self).data }
+    /// Releases ownership before the guard's reference fields are discarded.
+    fn drop(&mut self) { let raw = (*self).raw; native::release(raw); }
+}

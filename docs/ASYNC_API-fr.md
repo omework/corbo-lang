@@ -1,41 +1,43 @@
 [English](ASYNC_API.md)
 
-# I/O async par défaut et API bloquantes explicites
+# API synchrones par défaut et variantes asynchrones explicites
 
-Cette convention organise les API de la STD ; elle ne modifie ni la grammaire,
-ni les règles de capture, de move, d’emprunt ou de nettoyage. `main` reste
-synchrone et `.await` reste explicite dans un corps async.
+Cette organisation de la STD ne change pas les règles de capture, déplacement,
+emprunt, durée de vie des branches ou destruction. `main` reste synchrone.
 
-| API | Async par défaut | Bloquant explicite |
+| API | Synchrone | Asynchrone |
 | --- | --- | --- |
-| Fichiers | `std::io::File` | `std::io::sync::File` |
-| Flux tamponnés | `std::io::buffered::{BufReader, BufWriter}` | `std::io::sync::buffered::{BufReader, BufWriter}` |
-| TCP | `std::net::tcp` | `std::net::sync::tcp` |
-| UDP | `std::net::udp` | `std::net::sync::udp` |
-| Sleep et Timer | `std::time::{sleep, Timer}` | `std::time::sync::{sleep, Timer}` |
-| Transport TLS actuel | Non implémenté | `std::net::sync::tls` |
+| Fichiers | `std::io::File` | `std::io::asyn::File` |
+| Flux tamponnés | `std::io::buffered` | `std::io::asyn::buffered` |
+| TCP / UDP | `std::net::{tcp, udp}` | `std::net::asyn::{tcp, udp}` |
+| Attentes et Timer | `std::time` | `std::time::asyn` |
+| Mutex | `std::Mutex` | `std::asyn::Mutex` |
+| TLS actuel | `std::net::tls` | Non implémenté |
 
-Les types communs restent dans leurs packages : FileMode, FilePerm, FileStats et
-SeekFrom dans `std::io` ; SocketError/Datagram dans `std::net`, les adresses dans
-`std::net::ipv4` ; Duration/Instant/Error dans `std::time`. Les enveloppes d’erreur
-File et BufferedError restent propres à chaque variante. `Instant::remaining()`
-mesure la durée restante jusqu’à une échéance sans accéder aux champs privés
-d’un autre module.
+Les modes et permissions restent dans `std::io`, les adresses dans
+`std::net::ipv4`, Duration et Instant dans `std::time`. Les anciens chemins
+`::sync` sont supprimés. Les opérations asynchrones exigent `.await`.
+Les fichiers et délais asynchrones utilisent des workers bloquants ; les
+sockets utilisent epoll, kqueue ou IOCP. Les fonctions de configuration et les
+accesseurs en mémoire restent synchrones lorsque cela convient.
 
-Les fichiers et timers async utilisent les workers bloquants existants ; les
-sockets conservent epoll/kqueue/IOCP. Bind, UDP connect, les accesseurs addr/peer
-et les constructeurs de timers gardent leur signature synchrone actuelle. Le
-choix d’un package ne rend pas tous ses calculs asynchrones.
+## Mutex
 
-Aucune conversion implicite sync/async. Parseurs, encodage, cryptographie et
-collections restent des calculs synchrones. Le TLS existant est déplacé intact
-sous sync ; aucun transport TLS async n’est ajouté. HTTP garde son contrat de
-lecture actuel. Les anciens packages publics `asyn` sont supprimés ; le module
-interne `std::sys::net::asyn` reste un détail d’implémentation. Le compilateur
-charge ses fichiers avec `std::io::sync::File`.
+Chaque variante possède sa valeur `T`. `new(value)` crée sa ressource native.
+`lock(&self)` produit une garde ; la variante asynchrone doit être attendue.
+`get()` et `get_mut()` sur la garde empruntent la valeur. En Corbo, `&mut`
+exprime une permission de mutation, sans exiger l'unicité de la référence.
+Le mutex doit survivre aux gardes et aux attentes en cours.
 
-Le nettoyage en fin de bloc est automatique. `drop(value)` reste pertinent pour
-une libération anticipée volontaire, par exemple fermer un fichier avant sa
-suppression sous Windows. Il n’est pas nécessaire dans chaque bras d’erreur.
+Le contrat ordinaire `#(lock: on=self, through_result=true)` maintient la
+protection jusqu'à la destruction de la garde. Les noms Mutex n'ont aucun sens
+spécial pour le vérificateur. L'implémentation effectue le verrouillage.
 
-[Résultats d’intégration](cycles/ASYNC_DEFAULT_API_CYCLE.md).
+La garde synchrone porte `#(thread: transfer=false)` : son déverrouillage appartient
+au thread qui l'a acquise. La garde asynchrone peut migrer entre workers.
+Son attente utilise une file FIFO et le réveil des tâches, sans boucle active
+ni worker bloquant par acquisition. La destruction libère le verrou puis
+nettoie les champs. La réentrée avec une garde encore détenue est refusée par
+l'analyse des contrats existants.
+
+[Rapport de validation](cycles/SYNC_DEFAULT_MUTEX_CYCLE.md).

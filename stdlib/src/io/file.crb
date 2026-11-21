@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Asynchronous file operations dispatched to the runtime's blocking workers.
+//! Portable blocking file I/O, open modes, permissions and seek origins.
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
+    use std::sys::unix::{File as PlatformFile, FileError as PlatformError};
+#(endif)
+#(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
+    use std::sys::win::{File as PlatformFile, FileError as PlatformError};
+#(endif)
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
-    use std::io::sync::{File as BlockingFile, FileError as BlockingError};
-
-    /// Owns a blocking file handle and exposes operations that await worker completion.
+    /// Owns an open file and closes the platform handle when destroyed.
     pub struct File {
         /// Owned platform-specific object used to dispatch this portable wrapper's operations.
-        inner: BlockingFile,
+        inner: PlatformFile,
     }
 
-    /// Reports file errors or the runtime's failure to launch a worker.
+    /// Reports invalid path or options, or an error code from the operating system.
     pub enum FileError {
         /// The supplied path violates the platform path-input contract.
         InvalidPath,
@@ -21,203 +26,124 @@
             /// Native operating-system status code preserved by this error.
             code: i64
         },
-        /// The runtime could not launch the blocking worker.
-        LaunchFailed,
     }
 
     /// Converts a backend error to the corresponding error of this API.
-    fn translate_error(error: BlockingError) -> FileError {
+    fn translate_error(error: PlatformError) -> FileError {
         match error {
-            BlockingError.InvalidPath => { FileError.InvalidPath },
-            BlockingError.InvalidOptions => { FileError.InvalidOptions },
-            BlockingError.Os { code: code } => { FileError.Os { code: code } },
+            PlatformError.InvalidPath => { FileError.InvalidPath },
+            PlatformError.Os { code: code } => { FileError.Os { code: code } },
         }
     }
 
-    /// Opens or creates the blocking file from a worker task.
-    async fn open_on_worker(path: &[u8], mode: i64, create: bool, perm: FilePerm) -> Result<BlockingFile, BlockingError> {
-        if create { return BlockingFile::create(path, mode, perm); }
-        BlockingFile::open(path, mode)
-    }
 
-    /// Launches and awaits the open worker, then wraps the owned file handle.
-    async fn open_file(path: &[u8], mode: i64, create: bool, perm: FilePerm) -> Result<File, FileError> {
-        let worker = runtime::spawn_blocking(open_on_worker(path, mode, create, perm));
-        match worker.await {
-            Ok(result) => {
-                match result {
-                    Ok(inner) => { Ok(File { inner: inner }) },
-                    Err(error) => { Err(translate_error(error)) },
-                }
-            },
-            Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+    /// Validates the access mode and flags before dispatching to the platform backend.
+    fn open_file(path: &[u8], mode: i64, create: bool, perm: u32) -> Result<File, FileError> {
+        if copy(mode) < 0 || copy(mode) > 15 { return Err(FileError.InvalidOptions); }
+        let access = copy(mode) & 3;
+        let flags = copy(mode) & 12;
+        if copy(access) == 3 || (access == 0 && copy(flags) != 0) || flags == 12 {
+            return Err(FileError.InvalidOptions);
         }
-    }
-
-    /// Reads into the supplied buffer from a blocking worker.
-    async fn read_on_worker(file: &mut BlockingFile, buffer: &mut [u8]) -> Result<usize, BlockingError> {
-        file.read(buffer)
-    }
-
-    /// Writes from the supplied buffer on a blocking worker.
-    async fn write_on_worker(file: &mut BlockingFile, buffer: &[u8]) -> Result<usize, BlockingError> {
-        file.write(buffer)
-    }
-
-    /// Moves the file cursor on a blocking worker.
-    async fn seek_on_worker(file: &mut BlockingFile, from: SeekFrom) -> Result<u64, BlockingError> {
-        file.seek(from)
-    }
-
-    /// Persists file data/metadata on the selected blocking worker.
-    async fn sync_on_worker(file: &mut BlockingFile) -> Result<(), BlockingError> { file.sync_all() }
-
-    /// Changes the file length on the selected blocking worker.
-    async fn truncate_on_worker(file: &mut BlockingFile, length: u64) -> Result<(), BlockingError> { file.truncate(length) }
-
-    /// Renames the filesystem entry on a blocking worker.
-    async fn rename_on_worker(source: &[u8], destination: &[u8]) -> Result<(), BlockingError> {
-        BlockingFile::rename(source, destination)
-    }
-
-    /// Reads file metadata on a blocking worker.
-    async fn stats_on_worker(file: &BlockingFile) -> Result<FileStats, BlockingError> {
-        file.stats()
-    }
-
-    /// Removes the file on a blocking worker.
-    async fn delete_on_worker(path: &[u8]) -> Result<(), BlockingError> {
-        BlockingFile::delete(path)
+        match PlatformFile::open(path, mode, create, perm) {
+            Ok(inner) => { Ok(File { inner: inner }) },
+            Err(error) => { Err(translate_error(error)) },
+        }
     }
 
     impl File {
-        /// Awaits opening an existing file with the selected mode. The path needs one trailing NUL.
-        async fn open(path: &[u8], mode: i64) -> Result<File, FileError> {
-            open_file(path, mode, false, FilePerm.DefaultMode).await
-        }
+        /// Opens an existing file with the requested access mode and flags. The path needs one trailing NUL.
+        fn open(path: &[u8], mode: i64) -> Result<File, FileError> { open_file(path, mode, false, 0xffffffff) }
 
-        /// Awaits opening or creating a file with the selected mode and permissions. The path needs one trailing NUL.
-        async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError> {
-            open_file(path, mode, true, perm).await
-        }
-
-        /// Awaits a read into the caller's buffer and returns the actual byte count.
-        async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
-            if buffer.len() == 0 { return Ok(0); }
-            let inner = &mut (*self).inner;
-            let worker = runtime::spawn_blocking(read_on_worker(inner, buffer));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(count) => { Ok(count) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
+        /// Opens or creates a file with the requested mode and creation permissions. The path needs one trailing NUL.
+        fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError> {
+            let bits: u32 = match perm {
+                FilePerm.DefaultMode => { 0xffffffff },
+                FilePerm.Perm(bits) => {
+                    if copy(bits) > 0x1ff { return Err(FileError.InvalidOptions); }
+                    bits
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+            };
+            open_file(path, mode, true, bits)
+        }
+
+        /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
+            let inner = &mut (*self).inner;
+            match inner.read(buffer) {
+                Ok(count) => { Ok(count) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits a write from the caller's buffer and returns the actual byte count.
-        async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError> {
-            if buffer.len() == 0 { return Ok(0); }
+        /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+        fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError> {
             let inner = &mut (*self).inner;
-            let worker = runtime::spawn_blocking(write_on_worker(inner, buffer));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(count) => { Ok(count) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
-                },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+            match inner.write(buffer) {
+                Ok(count) => { Ok(count) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits moving the file cursor and returns the new absolute byte offset.
-        async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError> {
-            let inner = &mut (*self).inner;
-            let worker = runtime::spawn_blocking(seek_on_worker(inner, from));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(position) => { Ok(position) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
+        /// Moves the file cursor relative to the supplied origin and returns its new absolute position.
+        fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError> {
+            let mut origin: i64 = 0;
+            let offset = match from {
+                SeekFrom.Start(offset) => {
+                    if copy(offset) < 0 { return Err(FileError.InvalidOptions); }
+                    offset
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                SeekFrom.Current(offset) => { origin = 1; offset },
+                SeekFrom.End(offset) => { origin = 2; offset },
+            };
+            let inner = &mut (*self).inner;
+            match inner.seek(offset, origin) {
+                Ok(position) => { Ok(position) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits sync_all on a blocking worker, retaining mutable permission and the file dependency.
-        async fn sync_all(&mut self) -> Result<(), FileError> {
+        /// Persists this file's contents/metadata; does not sync a parent directory or create a transaction.
+        fn sync_all(&mut self) -> Result<(), FileError> {
             let inner = &mut (*self).inner;
-            let worker = runtime::spawn_blocking(sync_on_worker(inner));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(()) => { Ok(()) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
-                },
-                Err(_error) => { Err(FileError.LaunchFailed) },
+            match inner.sync_all() {
+                Ok(()) => { Ok(()) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits truncate on a blocking worker, retaining mutable permission and the file dependency.
-        async fn truncate(&mut self, length: u64) -> Result<(), FileError> {
+        /// Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
+        fn truncate(&mut self, length: u64) -> Result<(), FileError> {
+            if copy(length) > 9223372036854775807 { return Err(FileError.InvalidOptions); }
             let inner = &mut (*self).inner;
-            let worker = runtime::spawn_blocking(truncate_on_worker(inner, length));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(()) => { Ok(()) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
-                },
-                Err(_error) => { Err(FileError.LaunchFailed) },
+            match inner.truncate(length) {
+                Ok(()) => { Ok(()) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits a snapshot of the open file's metadata.
-        async fn stats(&self) -> Result<FileStats, FileError> {
+        /// Returns a snapshot of file metadata from its open handle.
+        fn stats(&self) -> Result<FileStats, FileError> {
             let inner = &(*self).inner;
-            let worker = runtime::spawn_blocking(stats_on_worker(inner));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(stats) => { Ok(stats) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
-                },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+            match inner.size() {
+                Ok(size) => { Ok(FileStats { size_bytes: size }) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits moving a filesystem entry to a different path.
-        async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
-            let worker = runtime::spawn_blocking(rename_on_worker(source, destination));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(()) => { Ok(()) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
-                },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+        /// Renames a file from the source path to the destination path using platform semantics.
+        fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
+            match PlatformFile::rename(source, destination) {
+                Ok(()) => { Ok(()) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
 
-        /// Awaits removing a file by path.
-        async fn delete(path: &[u8]) -> Result<(), FileError> {
-            let worker = runtime::spawn_blocking(delete_on_worker(path));
-            match worker.await {
-                Ok(result) => {
-                    match result {
-                        Ok(()) => { Ok(()) },
-                        Err(error) => { Err(translate_error(error)) },
-                    }
-                },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+        /// Removes the file named by the supplied path.
+        fn delete(path: &[u8]) -> Result<(), FileError> {
+            match PlatformFile::delete(path) {
+                Ok(()) => { Ok(()) },
+                Err(error) => { Err(translate_error(error)) },
             }
         }
     }

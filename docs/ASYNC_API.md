@@ -1,52 +1,54 @@
 [Français](ASYNC_API-fr.md)
 
-# Async-default I/O and explicit blocking APIs
+# Synchronous defaults and explicit asynchronous APIs
 
-This is an API/STD organization convention. It changes no grammar, capture,
-move, borrowing or cleanup rule. `main` remains synchronous. Calling an async
-operation creates its existing Future; `.await` remains explicit in async code.
+This is an API/STD organization convention. Grammar, captures, moves, borrowing,
+branch lifetimes and destruction retain their existing rules. `main` is synchronous.
 
-| API | Async default | Explicit blocking |
+| API | Synchronous default | Explicit asynchronous variant |
 | --- | --- | --- |
-| Files | `std::io::File` | `std::io::sync::File` |
-| Buffered streams | `std::io::buffered::{BufReader, BufWriter}` | `std::io::sync::buffered::{BufReader, BufWriter}` |
-| TCP | `std::net::tcp` | `std::net::sync::tcp` |
-| UDP | `std::net::udp` | `std::net::sync::udp` |
-| Sleep and Timer | `std::time::{sleep, Timer}` | `std::time::sync::{sleep, Timer}` |
-| Existing TLS transport | Not implemented | `std::net::sync::tls` |
+| Files | `std::io::File` | `std::io::asyn::File` |
+| Buffered streams | `std::io::buffered::{BufReader, BufWriter}` | `std::io::asyn::buffered::{BufReader, BufWriter}` |
+| TCP | `std::net::tcp` | `std::net::asyn::tcp` |
+| UDP | `std::net::udp` | `std::net::asyn::udp` |
+| Sleep and Timer | `std::time::{sleep, Timer}` | `std::time::asyn::{sleep, Timer}` |
+| Mutex | `std::Mutex` | `std::asyn::Mutex` |
+| Existing TLS transport | `std::net::tls` | Not implemented |
 
-Shared declarations remain independent of the wait strategy:
+Shared declarations remain in `std::io::{FileMode, FilePerm, FileStats, SeekFrom}`,
+`std::net::{SocketError, Datagram}`, `std::net::ipv4::{Addr, SocketAddr}`, and
+`std::time::{Duration, Instant, Error}`. There is no implicit sync/async conversion.
+`asyn` operations are awaited explicitly. Setup and in-memory accessors retain
+synchronous signatures where appropriate.
 
-- `std::io::{FileMode, FilePerm, FileStats, SeekFrom}`.
-- `std::net::{SocketError, Datagram}` and `std::net::ipv4::{Addr, SocketAddr}`.
-- `std::time::{Duration, Instant, Error}`.
+Async files and timers use blocking workers. Async sockets use epoll, kqueue or
+IOCP. Async mutex waiters park their polling root and are woken through a FIFO
+handoff; they do not spin or allocate a blocking worker per lock attempt.
 
-Each File/buffered variant keeps its own error wrapper where worker launch
-failure or the stream contract requires it. The options/metadata types are
-shared, not separately defined lookalikes. `Instant::remaining()` returns a
-nonnegative span until a monotonic deadline; blocking Timer uses this query
-rather than accessing another module's private fields.
+The old `::sync` packages are removed. Compiler file loading uses `std::io::File`.
+Native system modules remain implementation details. HTTP parsing keeps its
+synchronous reader contract. Scope exit automatically cleans owned resources.
 
-Async files and timers delegate native waiting to existing blocking workers.
-Async sockets retain their epoll/kqueue/IOCP implementation. Synchronous setup
-and in-memory accessors keep their established signatures: bind, UDP connect,
-addr/peer and timer construction do not become async merely because they are
-members of a default async package.
+## Mutex ownership
 
-There is no implicit conversion between sync and async calls. Parsing, binary
-encoding, cryptography and collection manipulation remain synchronous
-computations. The current TLS package is moved intact under sync; an async TLS
-transport is not introduced by this cleanup. HTTP keeps its current reader
-contract; no unimplemented async parser is claimed.
+Both mutex variants own `T`. `new(value)` constructs a stable native resource,
+`lock(&self)` returns a guard, and guard `get()` / `get_mut()` borrow `T`.
+The async variant's `lock()` returns a Future and requires `.await`.
+The public acquisition uses a shared reference. The trusted implementation
+creates a mutable payload borrow inside `@unchecked`, preserving its target
+and lifetime graph; the programmer must implement the promised lock correctly.
+Multiple tasks can borrow the mutex, while its lock
+contract serializes payload access. The mutex must outlive guards and waiters.
 
-Former public `asyn` packages are removed rather than retained as parallel
-aliases. Use the default packages for async, or explicit sync imports for
-blocking code. Internal `std::sys::net::asyn` remains an implementation detail.
-Compiler file loading explicitly selects `std::io::sync::File`.
+The ordinary `#(lock: on=self, through_result=true)` contract retains protection
+through guard destruction. Neither type name has special lock semantics.
+Locking is implemented by the STD/runtime; annotations alone do not perform it.
 
-At scope exit, values are cleaned up automatically. Explicit `drop(value)` is
-useful when an example intentionally releases a resource early, such as closing
-a file before deleting its path on Windows; error-arm boilerplate does not
-require explicit destruction.
+A synchronous guard owns a native-thread lock and is marked
+`#(thread: transfer=false)`. It cannot migrate to another thread, including as
+live suspended state in a launched Future. An async guard owns logical task
+state and can unlock on another worker. Guard destruction releases the lock;
+mutex destruction occurs before payload field cleanup. Recursive acquisition
+while retaining a guard is rejected by the existing lock contract analysis.
 
-[Executed integration evidence](cycles/ASYNC_DEFAULT_API_CYCLE.md).
+[Validation report](cycles/SYNC_DEFAULT_MUTEX_CYCLE.md).

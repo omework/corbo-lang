@@ -4,14 +4,14 @@ For the HTTP/1.1 parsing building blocks above these transports, see
 [HTTP parsing](HTTP.md). Parsers remain synchronous computations; they do not
 change the transport namespace convention.
 
-`std::net::{tcp, udp}` are async by default; `std::net::sync::{tcp, udp}`
+`std::net::asyn::{tcp, udp}` are asynchronous; `std::net::{tcp, udp}`
 are blocking. Endpoint accessors, bind and UDP connect keep their existing
-synchronous setup behavior. Blocking-only TLS lives in `std::net::sync::tls`.
+synchronous setup behavior. Blocking-only TLS lives in `std::net::tls`.
 
 ## Blocking API
 
-The STD provides the blocking IPv4 APIs in `std::net::sync::tcp`
-and `std::net::sync::udp`. The caller supplies data buffers. The blocking
+The STD provides the blocking IPv4 APIs in `std::net::tcp`
+and `std::net::udp`. The caller supplies data buffers. The blocking
 implementations use the address, backlog, error, and operation contracts
 described below.
 
@@ -34,7 +34,7 @@ driver, pass `-lws2_32`.
 ## API contracts
 
 The async API is available in
-`std::net::tcp` and `std::net::udp`, each with its own
+`std::net::asyn::tcp` and `std::net::asyn::udp`, each with its own
 `Connection` and `Listener` types. The four modules use
 `std::net::SocketError`.
 
@@ -80,10 +80,10 @@ TCP exposes `connect` as a function of the protocol module in both APIs.
 The result contains a connection from that module.
 
 ```rust
-// std::net::sync::tcp
+// std::net::tcp
 pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
 
-// std::net::tcp
+// std::net::asyn::tcp
 pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError>
 ```
 

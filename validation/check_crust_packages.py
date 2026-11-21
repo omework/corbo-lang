@@ -215,7 +215,7 @@ def check_package_file(compiler, directory):
     source.mkdir(parents=True)
     (package / "package.toml").write_text('[package]\nname = "read_demo"\n')
     main = source / "main.crb"
-    main.write_text("""use std::io::sync::{File};
+    main.write_text("""use std::io::{File};
 use std::io::{FileMode};
 fn main() -> i32 {
     let path: [u8; 5] = [100,97,116,97,0];

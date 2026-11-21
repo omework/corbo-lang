@@ -61,7 +61,28 @@ struct Task {
     int64_t io_error;
     /** waiting: dependency-wait predicate. parked: removed-from-ready-queue flag. blocking: dedicated blocking-worker flag. */
     bool waiting, parked, blocking;
+    /** mutex_next: next waiter in a mutex FIFO, protected by task_lock. */
+    Task *mutex_next;
+    /** mutex_owner: logical async mutex currently retaining this waiter. */
+    uintptr_t mutex_owner;
+    /** mutex_reserved: release handed this waiter the next acquisition. */
+    bool mutex_reserved;
 };
+/** Native mutex storage; its address remains stable until the owner is destroyed. */
+typedef struct CorboMutexState {
+    /** gate: native mutex, held through synchronous guard ownership only. */
+    pthread_mutex_t gate;
+    /** owner: thread which acquired the synchronous guard. */
+    pthread_t owner;
+    /** asynchronous: chooses logical task ownership instead of native guard ownership. */
+    bool asynchronous;
+    /** held: logical async lock state, protected by task_lock. */
+    bool held;
+    /** head: first queued waiter. tail: FIFO insertion point. */
+    Task *head, *tail;
+    /** reservation: waiter receiving a release-to-next handoff. */
+    Task *reservation;
+} CorboMutexState;
 static pthread_t task_workers[2];
 static size_t task_worker_count;
 static pthread_mutex_t task_lock = PTHREAD_MUTEX_INITIALIZER;

@@ -198,7 +198,7 @@ fn main() { let task = runtime::spawn(probe()); match task.join() {
 """
 
 PENDING_READ = """
-use std::io::{File, FileError};
+use std::io::asyn::{File, FileError};
 async fn probe(mut file: File) {
     let mut output: [u8; 1] = [0; 1];
     let pending = file.read(&mut output[..]);
@@ -211,7 +211,7 @@ fn main() {}
 
 PENDING_SEEK = """
 use std::io::SeekFrom;
-use std::io::File;
+use std::io::asyn::File;
 async fn probe(mut file: File) {
     let pending = file.seek(SeekFrom.Start(0));
     drop(file);
@@ -221,7 +221,7 @@ fn main() {}
 """
 
 PENDING_RENAME = """
-use std::io::File;
+use std::io::asyn::File;
 async fn probe() {
     let mut source: [u8; 2] = [97, 0];
     let mut destination: [u8; 2] = [98, 0];
@@ -234,7 +234,7 @@ fn main() {}
 
 
 def program(asynchronous, expect_acl_rejection=False):
-    module = "std::io" if asynchronous else "std::io::sync"
+    module = "std::io" if asynchronous else "std::io"
     private_refused = """match error {
         FileError.InvalidPath => { return Ok(118); },
         FileError.InvalidOptions => { return Ok(119); },
@@ -248,7 +248,7 @@ def program(asynchronous, expect_acl_rejection=False):
     launch_error = "FileError.LaunchFailed => { return Ok(112); }," if asynchronous else ""
     main = ASYNC_MAIN if asynchronous else SYNC_MAIN
     return (
-        f"use {module}::{{File, FileError}};\nuse std::io::sync::{{FileMode, FilePerm, SeekFrom}};\n"
+        f"use {module}::{{File, FileError}};\nuse std::io::{{FileMode, FilePerm, SeekFrom}};\n"
         + needs_io.replace("ASYNC", "async " if asynchronous else "")
         .replace("WAIT", ".await" if asynchronous else "")
         .replace("LAUNCH_ERROR", launch_error)
@@ -331,7 +331,7 @@ def main():
             refused = subprocess.run([FRONTEND, "check", root, *target], capture_output=True, text=True)
             assert refused.returncode != 0 and "emprunt" in refused.stderr, refused
         print("Pending seek and rename refused early close and path writes")
-        main_source.write_text("use std::io::File; fn main() { let file = File {}; drop(file); }")
+        main_source.write_text("use std::io::asyn::File; fn main() { let file = File {}; drop(file); }")
         refused = subprocess.run([FRONTEND, "check", root, *target], capture_output=True, text=True)
         assert refused.returncode != 0 and "représentation privée" in refused.stderr, refused
         print("Async File layout is private")

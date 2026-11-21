@@ -6,7 +6,7 @@ from pathlib import Path
 from exports import EXPORTS,declaration,wrapper
 ROOT=Path(__file__).resolve().parent
 GROUPS={
- 'metrics':'base_runtime','primitives':'base_runtime','memory':'base_runtime','collections':'base_runtime','reclaim':'base_runtime','api':'base_runtime',
+ 'mutex_primitives':'base_runtime','mutex':'base_runtime','metrics':'base_runtime','primitives':'base_runtime','memory':'base_runtime','collections':'base_runtime','reclaim':'base_runtime','api':'base_runtime',
  'thread_primitives':'native_runtime','scheduler':'task_runtime','values':'task_value_runtime','threads':'native_runtime',
  'socket_primitives':'readiness_runtime','readiness':'readiness_runtime',
  'completion_primitives':'completion_runtime','completion':'completion_runtime',
@@ -54,6 +54,7 @@ def build(compiler,out):
     for index,node in enumerate(nodes):
         if node[0]!=1:continue
         name=bytes(data[node[4]:node[5]]).decode();group=next(g for a,b,n,g in files if a<=node[2]<b)
+        if name=='task_enqueue': group='base_runtime'
         metadata['f'+str(index)]=(name,group)
     text=run('--emit-runtime-c');(out/'runtime.c').write_text(text)
     assert not re.search(r'\bmark\d+\s*=\s*cursor',text),'implicit datastack dependency'

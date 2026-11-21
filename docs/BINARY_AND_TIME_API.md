@@ -60,7 +60,7 @@ implicit Copy category.
 These timestamps have no wall-clock epoch or portable serialization meaning.
 The bounded nanosecond representation and native clock resolution apply.
 
-## Blocking waits — `std::time::sync`
+## Blocking waits — `std::time`
 
 `Timer::after(duration) -> Result<Timer, Error>` or `Timer::at(instant) -> Timer`
 constructs a deadline. `timer.wait() -> Result<(), Error>` blocks the calling
@@ -75,7 +75,7 @@ avoids overflowing the fractional multiplication. Long spans/timestamps still
 must fit the `u64` nanosecond representation. Errors are `ClockFailure`,
 `WaitFailure`, and `LaunchFailed` (for async worker creation).
 
-## Async waits — `std::time`
+## Async waits — `std::time::asyn`
 
 `sleep(duration)` and `Timer::wait(&self)` are async functions returning
 `Result<(), std::time::Error>`. `Timer::after` and `Timer::at` construct the async

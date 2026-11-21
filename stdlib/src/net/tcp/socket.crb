@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Asynchronous IPv4 TCP connections, listeners and borrowed stream halves.
+//! Blocking IPv4 TCP connections and listeners over the platform socket API.
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
     use std::net::SocketError;
     use std::net::ipv4::{SocketAddr, from_parts};
-    use std::sys::net::{PlatformSocket, open_listener, socket_descriptor};
+    use std::sys::net::{PlatformSocket, open_connection, open_listener};
 
-    use std::sys::net::asyn::{prepare_async, accept_nonblocking, connect_nonblocking, read_nonblocking, write_nonblocking};
-
-    /// Owns the socket used by asynchronous TCP reads and writes.
+    /// Owns a connected IPv4 TCP socket.
     pub struct Connection {
         /// Owned native socket storage; the connection/listener closes it on destruction.
         __din_package_socket: PlatformSocket,
@@ -16,39 +14,9 @@
         local_address: SocketAddr,
         /// Cached remote IPv4 endpoint.
         remote_address: SocketAddr,
-        /// Descriptor view reserved for the read half; the connection retains closure responsibility.
-        read_descriptor: u64,
-        /// Descriptor view reserved for the write half; the connection retains closure responsibility.
-        write_descriptor: u64,
     }
 
-    /// Borrows the portion of a TCP connection needed to read without owning its socket.
-    pub struct ReadHalf {
-        /// Borrowed native descriptor view; its owning connection must outlive this half.
-        descriptor: &mut u64,
-    }
-
-    /// Borrows the portion of a TCP connection needed to write without owning its socket.
-    pub struct WriteHalf {
-        /// Borrowed native descriptor view; its owning connection must outlive this half.
-        descriptor: &mut u64,
-    }
-
-    impl ReadHalf {
-        /// Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
-        async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError> {
-            read_nonblocking(*(*self).descriptor, buffer).await
-        }
-    }
-
-    impl WriteHalf {
-        /// Awaits a write from the borrowed slice and returns the actual byte count.
-        async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError> {
-            write_nonblocking(*(*self).descriptor, buffer).await
-        }
-    }
-
-    /// Owns a nonblocking listening socket for asynchronous accepts.
+    /// Owns a TCP listening socket and accepts incoming connections.
     pub struct Listener {
         /// Owned native socket storage; the connection/listener closes it on destruction.
         __din_package_socket: PlatformSocket,
@@ -56,7 +24,7 @@
         local_address: SocketAddr,
     }
 
-    /// Builds the async connection wrapper and records its local and peer endpoints.
+    /// Wraps a connected platform socket with its local and peer endpoints.
     fn connection(inner: PlatformSocket) -> Result<Connection, SocketError> {
         let local = match inner.endpoint(0) {
             Ok(value) => { value },
@@ -66,16 +34,12 @@
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
-        let descriptor = socket_descriptor(&inner);
-        Ok(Connection {
-            __din_package_socket: inner, local_address: local, remote_address: remote,
-            read_descriptor: copy(descriptor), write_descriptor: descriptor,
-        })
+        Ok(Connection { __din_package_socket: inner, local_address: local, remote_address: remote })
     }
 
-    /// Awaits a nonblocking TCP connection to the supplied endpoint.
-    pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError> {
-        let inner = match connect_nonblocking(address.ipv4_bits(), address.port()).await {
+    /// Establishes a blocking TCP connection to the supplied endpoint.
+    pub fn connect(address: SocketAddr) -> Result<Connection, SocketError> {
+        let inner = match open_connection(1, address.ipv4_bits(), address.port()) {
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
@@ -83,13 +47,6 @@
     }
 
     impl Connection {
-        /// Borrows separate read and write views from the connection, which still owns the socket.
-        fn split(&mut self) -> (ReadHalf, WriteHalf) {
-            let read = &mut (*self).read_descriptor;
-            let write = &mut (*self).write_descriptor;
-            (ReadHalf { descriptor: read }, WriteHalf { descriptor: write })
-        }
-
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
         fn addr(&self) -> SocketAddr {
             let local = &(*self).local_address;
@@ -102,22 +59,22 @@
             from_parts(remote.ipv4_bits(), remote.port())
         }
 
-        /// Awaits a write from the borrowed slice and returns the actual byte count.
-        async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError> {
+        /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+        fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError> {
             if buffer.len() == 0 { return Ok(0); }
-            let inner = &(*self).__din_package_socket;
-            write_nonblocking(socket_descriptor(inner), buffer).await
+            let inner = &mut (*self).__din_package_socket;
+            inner.send(buffer)
         }
 
-        /// Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
-        async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError> {
-            let inner = &(*self).__din_package_socket;
-            read_nonblocking(socket_descriptor(inner), buffer).await
+        /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError> {
+            let inner = &mut (*self).__din_package_socket;
+            inner.receive(buffer)
         }
     }
 
     impl Listener {
-        /// Binds a TCP listener and prepares its native socket for asynchronous accepts.
+        /// Binds and listens at the supplied endpoint. Use port zero for an assigned port and None for the system maximum backlog.
         fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError> {
             let limit = match backlog {
                 Some(value) => { value },
@@ -126,9 +83,6 @@
             let inner = match open_listener(1, address.ipv4_bits(), address.port(), limit) {
                 Ok(value) => { value },
                 Err(error) => { return Err(error); },
-            };
-            match prepare_async(&inner) {
-                Ok(()) => {}, Err(error) => { return Err(error); },
             };
             let local = match inner.endpoint(0) {
                 Ok(value) => { value },
@@ -143,14 +97,23 @@
             from_parts(local.ipv4_bits(), local.port())
         }
 
-        /// Awaits an incoming TCP connection and returns its owned socket wrapper.
-        async fn accept(&mut self) -> Result<Connection, SocketError> {
+        /// Blocks until it can return an owned accepted TCP connection or an error.
+        fn accept(&mut self) -> Result<Connection, SocketError> {
             let inner = &mut (*self).__din_package_socket;
-            let accepted = match accept_nonblocking(inner).await {
+            let accepted = match inner.accept() {
                 Ok(value) => { value },
                 Err(error) => { return Err(error); },
             };
             connection(accepted)
         }
+    }
+#(endif)
+
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    /// Exposes the native socket representation needed by standard-library package code.
+    pub fn __din_package_socket(connection: &Connection) -> u64 {
+        let inner = &(*connection).__din_package_socket;
+        std::sys::net::socket_descriptor(inner)
     }
 #(endif)

@@ -62,45 +62,39 @@ impl Instant {
 }
 
 
-use std::time::sync::{Timer as BlockingTimer, sleep as blocking_sleep};
 
-/// Performs the blocking span on the worker selected by spawn_blocking.
-async fn sleep_worker(duration: Duration) -> Result<(), Error> { blocking_sleep(duration) }
-/// Performs the blocking deadline wait on the selected worker.
-async fn wait_worker(timer: &BlockingTimer) -> Result<(), Error> { timer.wait() }
+use std::sys::time::pause;
 
-/// Suspends this task for a span without blocking an executor thread.
-pub async fn sleep(duration: Duration) -> Result<(), Error> {
-    let worker = runtime::spawn_blocking(sleep_worker(duration));
-    match worker.await {
-        Ok(result) => { result },
-        Err(error) => { drop(error); Err(Error.LaunchFailed) },
-    }
-}
-
-/// Owns a reusable deadline whose waits suspend the calling task.
+/// A reusable monotonic deadline; waiting does not consume it.
 pub struct Timer {
-    /// Shared deadline state borrowed until the worker wait completes.
-    inner: BlockingTimer,
+    /// Absolute monotonic timestamp of the deadline.
+    deadline: Instant,
 }
 impl Timer {
-    /// Creates an asynchronous timer after the supplied span.
+    /// Creates a timer that becomes ready after the given span.
     fn after(duration: Duration) -> Result<Timer, Error> {
-        let inner = BlockingTimer::after(duration)?;
-        Ok(Timer { inner: inner })
+        let now = Instant::now()?;
+        let deadline = now.after(duration);
+        Ok(Timer { deadline: deadline })
     }
-    /// Creates an asynchronous timer at an existing monotonic instant.
-    fn at(deadline: Instant) -> Timer {
-        let inner = BlockingTimer::at(deadline);
-        Timer { inner: inner }
+    /// Creates a timer for an existing monotonic deadline.
+    fn at(deadline: Instant) -> Timer { Timer { deadline: deadline } }
+    /// Blocks this thread until the deadline, retrying interruptions and early wakes.
+    fn wait(&self) -> Result<(), Error> {
+        loop {
+            let deadline = &(*self).deadline;
+            let span = deadline.remaining()?;
+            let remaining = span.as_nanos();
+            if copy(remaining) == 0 { return Ok(()); }
+            let chunk: u64 = if copy(remaining) > 60000000000 { 60000000000 } else { remaining };
+            if pause(chunk) != 0 { return Err(Error.WaitFailure); }
+        };
+        Err(Error.WaitFailure)
     }
-    /// Suspends until the deadline; the timer outlives its borrowed worker wait.
-    async fn wait(&self) -> Result<(), Error> {
-        let timer = &(*self).inner;
-        let worker = runtime::spawn_blocking(wait_worker(timer));
-        match worker.await {
-            Ok(result) => { result },
-            Err(error) => { drop(error); Err(Error.LaunchFailed) },
-        }
-    }
+}
+
+/// Blocks the current thread for at least the given monotonic span.
+pub fn sleep(duration: Duration) -> Result<(), Error> {
+    let timer = Timer::after(duration)?;
+    timer.wait()
 }

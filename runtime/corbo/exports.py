@@ -6,6 +6,10 @@ def add(group,name,result,*parameters):
     """Register one typed C ABI export; its implementation remains in the corresponding Corbo source function."""
     EXPORTS.append((group,name,result,parameters))
 for name,result,params in [
+ ('mutex_create','uintptr_t',[('bool','asynchronous')]),('mutex_acquire','void',[('uintptr_t','raw')]),
+ ('mutex_release','void',[('uintptr_t','raw')]),('mutex_destroy','void',[('uintptr_t','raw')]),
+ ('mutex_poll','bool',[('Task*','child'),('uintptr_t','raw')]),('mutex_detach','void',[('Task*','child')])]:add('base_runtime',name,result,*params)
+for name,result,params in [
  ('memory_cursor','void',[('size_t','next')]),
  ('reserve','void',[('uint64_t','bytes')]),('push','void*',[('size_t','size'),('size_t','alignment'),('size_t','count')]),('release','void',[]),('take','size_t',[('int*','used'),('size_t','count')]),('numeric','long long',[('int','op'),('long long','left'),('long long','right')]),
  ('region_error','void',[]),('region_default_capacity','size_t',[]),('region_metadata','RegionBand*',[]),('region_reserve','void',[('RegionBand*','band'),('size_t','bytes'),('size_t','maximum')]),('region_release_band','void',[('RegionBand*','band')]),('region_stride','size_t',[('size_t','bytes')]),('region_enter','void',[('size_t','bytes'),('size_t','count'),('size_t','inferred')]),('region_restore','void',[('RegionBand*','mark')]),('region_new','void',[('Region*','region'),('size_t','width'),('int','owned'),('int','dedicated')]),('region_drop','void',[('Region*','region')]),('region_add','unsigned char*',[('Region*','region')]),('region_release','void',[]),

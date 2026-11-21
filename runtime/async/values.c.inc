@@ -104,6 +104,7 @@ TaskValue v=make_task_in(r,size,poll,!current_band&&!global_budget);pthread_mute
 v.state->own_region=true;return v;}
 /** Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata. */
 static void release_future(TaskState*s,bool completed,bool taken){
+mutex_detach(&s->task);
 Region*r=s->region;bool own=s->own_region;if(s->dispose&&!taken)s->dispose(s,completed);
 pthread_mutex_lock(&task_lock);region_drop(r);pthread_mutex_unlock(&task_lock);if(own)task_unmap(r,sizeof(Region));}
 /** Releases a completed abandoned task, including its untaken result. */

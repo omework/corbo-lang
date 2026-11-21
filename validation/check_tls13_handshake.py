@@ -15,10 +15,10 @@ from tempfile import TemporaryDirectory, TemporaryFile
 from check_tls13_keys import ROOT, FRONTEND, binding
 
 IMPORTS = """
-use std::net::sync::tls::{client_handshake, client_handshake_x509, server_handshake,
+use std::net::tls::{client_handshake, client_handshake_x509, server_handshake,
     server_handshake_chain, HandshakeError};
 use std::crypto::p256::{PublicKey, SigningKey};
-use std::net::sync::tcp::{connect, Listener};
+use std::net::tcp::{connect, Listener};
 use std::net::ipv4::{Addr, SocketAddr};
 
 fn handshake_error(error: HandshakeError) -> i32 {
@@ -267,7 +267,7 @@ def out_of_order(binary):
 
 def check_private(args, package):
     source = """
-use std::net::sync::tls::Session;
+use std::net::tls::Session;
 fn peek(session: &Session) { let state = &(*session).writer; drop(state); }
 fn main() {}
 """
