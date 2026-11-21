@@ -1509,6 +1509,7 @@ bloquants. Le transport TLS actuel est uniquement bloquant, sous
 | `std::encoding::binary` | Lecture/écriture de primitifs, ordre little-endian/big-endian explicite et tampons fournis par l’appelant | [API binaire](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::time`, `std::time::sync` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::compression::{gzip, zstd}` | Codecs natifs bornés, traitement en flux et dictionnaires | [Compression](docs/COMPRESSION.md) |
+| `runtime::metrics` | Compteurs atomiques des octets réservés, engagés et occupés des datastacks/régions | [Métriques](docs/RUNTIME_METRICS-fr.md) |
 | `std::env` | Arguments du processus tout en conservant un `main` sans paramètres | [API](docs/STDLIB.md#stdenv) |
 
 La référence des API décrit les profils cryptographiques effectivement pris en charge et les contrats d’erreur. L’analyse et la sérialisation de clés RSA n’impliquent pas la prise en charge de la signature ou du chiffrement RSA. La disponibilité d’une API ne constitue pas une affirmation d’audit de sécurité indépendant.

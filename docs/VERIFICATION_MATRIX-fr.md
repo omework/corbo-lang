@@ -4047,3 +4047,9 @@ dix refus). Résultats dans le dépôt compilateur :
 `validation/thread-transfer-results.json` et `docs/THREAD_TRANSFER_CYCLE.md`.
 L’analyse est indépendante de la cible ; les backends runtime n’ont pas changé
 et n’ont pas été rejoués. Exécution Windows ARM64 toujours différée.
+
+## API de métriques runtime
+
+[Evidence and limits](RUNTIME_METRICS-fr.md). Eight Corbo observations plus
+C/Corbo ABI concurrent-counter witnesses pass with fatal UBSan. API executes on
+macOS ARM64/x86-64, Linux x86-64 and Windows x86-64; Windows ARM64 compile-only.

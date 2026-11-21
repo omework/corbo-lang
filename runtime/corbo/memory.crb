@@ -38,6 +38,7 @@ fn reserve(bytes:u64) {
         fault(0);
     }
     set_base(copy(address));
+    metric_add(0,mapped);
 }
 /// Reserves count aligned fixed-size elements at the current cursor; checks multiplication, alignment and capacity before advancing.
 fn push(size:usize,alignment:usize,count:usize)->usize {
@@ -55,6 +56,7 @@ fn push(size:usize,alignment:usize,count:usize)->usize {
         if !os_commit(get_base()+copy(done),copy(pages)-copy(done)) {
             fault(0);
         }
+        metric_add(1,copy(pages)-copy(done));
         set_committed(copy(pages));
     }
     set_cursor(copy(end));
@@ -62,6 +64,9 @@ fn push(size:usize,alignment:usize,count:usize)->usize {
 }
 /// Unmaps the calling thread's fixed datastack after its values and workers have been cleaned up.
 fn release() {
+    memory_cursor(0);
+    metric_sub(0,get_mapped_size());
+    metric_sub(1,get_committed());
     os_unmap(get_base(),get_mapped_size());
 }
 /// Finds the first free flag in a count-element slot bitmap, marks it used and returns its index; exhaustion terminates.
@@ -179,9 +184,12 @@ fn region_reserve(band:usize,bytes:usize,maximum:usize) {
         region_error();
     }
     s_RegionBand_base(copy(band),copy(pointer));
+    metric_add(0,rounded(bytes));
 }
 /// Unmaps an empty band and its separately mapped metadata when applicable; no active region may remain.
 fn region_release_band(band:usize) {
+    metric_sub(0,rounded(g_RegionBand_capacity(copy(band))));
+    metric_sub(1,g_RegionBand_committed(copy(band)));
     os_unmap(g_RegionBand_base(copy(band)),rounded(g_RegionBand_capacity(copy(band))));
     if copy(band)!=global_band_address() {
         os_unmap(copy(band),size_RegionBand());
@@ -292,6 +300,7 @@ fn region_new(region:usize,width:usize,owned:i32,dedicated:bool) {
         link=a_RegionBand_active(copy(band));
     }
     s_Region_data(copy(region),g_RegionBand_base(copy(band))+copy(offset));
+    s_Region_band(copy(region),0);
     s_Region_len(copy(region),0);
     s_Region_offset(copy(region),copy(offset));
     s_Region_bytes(copy(region),copy(bytes));
@@ -313,6 +322,7 @@ fn region_drop(region:usize) {
             write_integer(g_RegionOwner_slot(copy(item)),0);
         }
     }
+    metric_sub(3,g_Region_len(copy(region))*g_Region_width(copy(region)));
     let band=g_Region_band(copy(region));
     let mut link=a_RegionBand_active(copy(band));
     while read_word(copy(link))!=0 && read_word(copy(link))!=copy(region) {
@@ -341,6 +351,7 @@ fn region_add(region:usize)->usize {
         if !os_commit(g_RegionBand_base(copy(band))+copy(done),copy(pages)-copy(done)) {
             region_error();
         }
+        metric_add(1,copy(pages)-copy(done));
         s_RegionBand_committed(copy(band),copy(pages));
     }
     s_Region_len(copy(region),copy(length)+1);
@@ -371,6 +382,8 @@ fn new_pool(slots:usize,bytes:usize,arms:usize)->usize {
         atomic_init_slot(copy(used)+copy(index));
         index=copy(index)+1;
     }
+    metric_pool_register(copy(pool));
+    metric_add(4,copy(slots)*copy(arms)*copy(bytes));
     copy(pool)
 }
 /// Claims and zeroes a free slot; returns false without changing the pool if full.
@@ -386,6 +399,8 @@ fn pool_try_take(out:usize,pool:usize,arm:usize)->bool {
             s_Owned_slot(copy(out),copy(place));
             s_Owned_index(copy(out),copy(index));
             s_Owned_destroy(copy(out),0);
+            metric_pool_live(copy(pool),true);
+            metric_sub(4,g_Pools_stride(copy(pool)));
             return true;
         }
         index=copy(index)+1;
@@ -405,6 +420,8 @@ fn put(value:usize) {
             call_drop(copy(destructor),g_Owned_slot(copy(value)));
         }
         atomic_clear(g_Pools_used(copy(pool))+g_Owned_index(copy(value)));
+        metric_pool_live(copy(pool),false);
+        metric_add(4,g_Pools_stride(copy(pool)));
         s_Owned_pool(copy(value),0);
     }
 }

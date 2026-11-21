@@ -16,6 +16,7 @@ Regenerate with `python3 scripts/stdlib_docs.py --runtime > docs/RUNTIME.md`.
 - [`runtime::completion`](#runtimecompletion)
 - [`runtime::completion_primitives`](#runtimecompletion_primitives)
 - [`runtime::memory`](#runtimememory)
+- [`runtime::metrics`](#runtimemetrics)
 - [`runtime::primitives`](#runtimeprimitives)
 - [`runtime::readiness`](#runtimereadiness)
 - [`runtime::reclaim`](#runtimereclaim)
@@ -593,7 +594,7 @@ Reserves the calling thread's fixed datastack, initializes page metadata and com
 
 ### `push`
 
-[memory.crb:43](../runtime/corbo/memory.crb#L43)
+[memory.crb:44](../runtime/corbo/memory.crb#L44)
 
 ```rust
 fn push(size:usize,alignment:usize,count:usize)->usize
@@ -603,7 +604,7 @@ Reserves count aligned fixed-size elements at the current cursor; checks multipl
 
 ### `release`
 
-[memory.crb:64](../runtime/corbo/memory.crb#L64)
+[memory.crb:66](../runtime/corbo/memory.crb#L66)
 
 ```rust
 fn release()
@@ -613,7 +614,7 @@ Unmaps the calling thread's fixed datastack after its values and workers have be
 
 ### `take`
 
-[memory.crb:68](../runtime/corbo/memory.crb#L68)
+[memory.crb:73](../runtime/corbo/memory.crb#L73)
 
 ```rust
 fn take(used:usize,count:usize)->usize
@@ -623,7 +624,7 @@ Finds the first free flag in a count-element slot bitmap, marks it used and retu
 
 ### `magnitude`
 
-[memory.crb:82](../runtime/corbo/memory.crb#L82)
+[memory.crb:87](../runtime/corbo/memory.crb#L87)
 
 ```rust
 fn magnitude(value:i64)->usize
@@ -633,7 +634,7 @@ Returns an unsigned magnitude without overflowing on the minimum signed 64-bit i
 
 ### `numeric`
 
-[memory.crb:89](../runtime/corbo/memory.crb#L89)
+[memory.crb:94](../runtime/corbo/memory.crb#L94)
 
 ```rust
 fn numeric(op:i64,left:i64,right:i64)->i64
@@ -643,7 +644,7 @@ Evaluates the selected signed integer operation with the reference runtime's ove
 
 ### `region_default_capacity`
 
-[memory.crb:138](../runtime/corbo/memory.crb#L138)
+[memory.crb:143](../runtime/corbo/memory.crb#L143)
 
 ```rust
 fn region_default_capacity()->usize
@@ -653,7 +654,7 @@ Computes the region-stack byte budget from OS memory and CPU information, bounde
 
 ### `region_metadata`
 
-[memory.crb:163](../runtime/corbo/memory.crb#L163)
+[memory.crb:168](../runtime/corbo/memory.crb#L168)
 
 ```rust
 fn region_metadata()->usize
@@ -663,7 +664,7 @@ Maps zero-initialized RegionBand metadata independently of storage whose scope m
 
 ### `region_reserve`
 
-[memory.crb:171](../runtime/corbo/memory.crb#L171)
+[memory.crb:176](../runtime/corbo/memory.crb#L176)
 
 ```rust
 fn region_reserve(band:usize,bytes:usize,maximum:usize)
@@ -673,7 +674,7 @@ Reserves a virtual address range for a band and records its capacity and per-reg
 
 ### `region_release_band`
 
-[memory.crb:184](../runtime/corbo/memory.crb#L184)
+[memory.crb:190](../runtime/corbo/memory.crb#L190)
 
 ```rust
 fn region_release_band(band:usize)
@@ -683,7 +684,7 @@ Unmaps an empty band and its separately mapped metadata when applicable; no acti
 
 ### `region_stride`
 
-[memory.crb:191](../runtime/corbo/memory.crb#L191)
+[memory.crb:199](../runtime/corbo/memory.crb#L199)
 
 ```rust
 fn region_stride(bytes:usize)->usize
@@ -693,7 +694,7 @@ Rounds a region width to max_align_t with checked size arithmetic.
 
 ### `region_enter`
 
-[memory.crb:199](../runtime/corbo/memory.crb#L199)
+[memory.crb:207](../runtime/corbo/memory.crb#L207)
 
 ```rust
 fn region_enter(bytes:usize,count:usize,inferred:usize)
@@ -703,7 +704,7 @@ Creates a child region scope with the explicit or inferred count; the caller hol
 
 ### `region_restore`
 
-[memory.crb:231](../runtime/corbo/memory.crb#L231)
+[memory.crb:239](../runtime/corbo/memory.crb#L239)
 
 ```rust
 fn region_restore(mark:usize)
@@ -713,7 +714,7 @@ Closes region scopes back to mark, releasing only empty bands so transferred liv
 
 ### `region_new`
 
-[memory.crb:242](../runtime/corbo/memory.crb#L242)
+[memory.crb:250](../runtime/corbo/memory.crb#L250)
 
 ```rust
 fn region_new(region:usize,width:usize,owned:i32,dedicated:bool)
@@ -723,7 +724,7 @@ Links a stable descriptor into an available band or a dedicated band; owned regi
 
 ### `region_drop`
 
-[memory.crb:305](../runtime/corbo/memory.crb#L305)
+[memory.crb:314](../runtime/corbo/memory.crb#L314)
 
 ```rust
 fn region_drop(region:usize)
@@ -733,7 +734,7 @@ Destroys owned child regions before unlinking this region and releasing an empty
 
 ### `region_add`
 
-[memory.crb:330](../runtime/corbo/memory.crb#L330)
+[memory.crb:340](../runtime/corbo/memory.crb#L340)
 
 ```rust
 fn region_add(region:usize)->usize
@@ -743,7 +744,7 @@ Commits pages as needed and returns one new element slot; terminates at the regi
 
 ### `region_release`
 
-[memory.crb:350](../runtime/corbo/memory.crb#L350)
+[memory.crb:361](../runtime/corbo/memory.crb#L361)
 
 ```rust
 fn region_release()
@@ -753,7 +754,7 @@ Releases the global region band after its live values have been destroyed.
 
 ### `new_pool`
 
-[memory.crb:357](../runtime/corbo/memory.crb#L357)
+[memory.crb:368](../runtime/corbo/memory.crb#L368)
 
 ```rust
 fn new_pool(slots:usize,bytes:usize,arms:usize)->usize
@@ -763,7 +764,7 @@ Allocates a pool descriptor, atomic occupancy bytes and fixed slots on the datas
 
 ### `pool_try_take`
 
-[memory.crb:377](../runtime/corbo/memory.crb#L377)
+[memory.crb:390](../runtime/corbo/memory.crb#L390)
 
 ```rust
 fn pool_try_take(out:usize,pool:usize,arm:usize)->bool
@@ -773,7 +774,7 @@ Claims and zeroes a free slot; returns false without changing the pool if full.
 
 ### `pool_take`
 
-[memory.crb:396](../runtime/corbo/memory.crb#L396)
+[memory.crb:411](../runtime/corbo/memory.crb#L411)
 
 ```rust
 fn pool_take(out:usize,pool:usize,arm:usize)
@@ -783,7 +784,7 @@ Claims a free slot or terminates if the selected arm is full.
 
 ### `put`
 
-[memory.crb:400](../runtime/corbo/memory.crb#L400)
+[memory.crb:415](../runtime/corbo/memory.crb#L415)
 
 ```rust
 fn put(value:usize)
@@ -793,7 +794,7 @@ Calls a live allocation's typed cleanup callback before releasing its pool slot,
 
 ### `value_region_new`
 
-[memory.crb:412](../runtime/corbo/memory.crb#L412)
+[memory.crb:429](../runtime/corbo/memory.crb#L429)
 
 ```rust
 fn value_region_new(region:usize,width:usize,owned:i32,dedicated:bool)
@@ -803,7 +804,7 @@ Initializes a region while holding the shared runtime lock; the descriptor must 
 
 ### `value_region_add`
 
-[memory.crb:418](../runtime/corbo/memory.crb#L418)
+[memory.crb:435](../runtime/corbo/memory.crb#L435)
 
 ```rust
 fn value_region_add(region:usize)->usize
@@ -813,7 +814,7 @@ Appends one region slot under the runtime lock and returns its address.
 
 ### `value_region_drop`
 
-[memory.crb:425](../runtime/corbo/memory.crb#L425)
+[memory.crb:442](../runtime/corbo/memory.crb#L442)
 
 ```rust
 fn value_region_drop(region:usize)
@@ -823,7 +824,7 @@ Unlinks and releases a region under the runtime lock after owned child cleanup.
 
 ### `scoped_region_enter`
 
-[memory.crb:431](../runtime/corbo/memory.crb#L431)
+[memory.crb:448](../runtime/corbo/memory.crb#L448)
 
 ```rust
 fn scoped_region_enter(bytes:usize,count:usize,inferred:usize)
@@ -833,7 +834,7 @@ Enters a region scope under the runtime lock using explicit and inferred slot bu
 
 ### `scoped_region_restore`
 
-[memory.crb:437](../runtime/corbo/memory.crb#L437)
+[memory.crb:454](../runtime/corbo/memory.crb#L454)
 
 ```rust
 fn scoped_region_restore(mark:usize)
@@ -843,7 +844,7 @@ Restores the saved region-scope mark under the runtime lock while preserving liv
 
 ### `destroy_region`
 
-[memory.crb:443](../runtime/corbo/memory.crb#L443)
+[memory.crb:460](../runtime/corbo/memory.crb#L460)
 
 ```rust
 fn destroy_region(pointer:usize)
@@ -853,13 +854,38 @@ Cleanup-callback adapter for a region descriptor; releases its payload through t
 
 ### `dispose_owned`
 
-[memory.crb:447](../runtime/corbo/memory.crb#L447)
+[memory.crb:464](../runtime/corbo/memory.crb#L464)
 
 ```rust
 fn dispose_owned(pointer:usize)
 ```
 
 Cleanup-callback adapter that destroys and releases the Owned descriptor at pointer.
+
+
+## `runtime::metrics`
+
+Process-wide atomic accounting for managed storage, independent of OS RSS.
+
+### `memory_cursor`
+
+[metrics.crb:5](../runtime/corbo/metrics.crb#L5)
+
+```rust
+fn memory_cursor(next:usize)
+```
+
+Changes the fixed cursor after cleanup and removes retired pool bookkeeping.
+
+### `corbo_memory_stats`
+
+[metrics.crb:17](../runtime/corbo/metrics.crb#L17)
+
+```rust
+fn corbo_memory_stats(out:usize)
+```
+
+Samples atomic counters; concurrent fields may describe adjacent instants.
 
 
 ## `runtime::primitives`
@@ -924,7 +950,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Region_len`
 
-[primitives.crb:51](../runtime/corbo/primitives.crb#L51)
+[primitives.crb:54](../runtime/corbo/primitives.crb#L54)
 
 ```rust
 fn a_Region_len(pointer:usize)->usize
@@ -935,7 +961,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Region_offset`
 
-[primitives.crb:60](../runtime/corbo/primitives.crb#L60)
+[primitives.crb:63](../runtime/corbo/primitives.crb#L63)
 
 ```rust
 fn g_Region_offset(pointer:usize)->usize
@@ -946,7 +972,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Region_offset`
 
-[primitives.crb:69](../runtime/corbo/primitives.crb#L69)
+[primitives.crb:72](../runtime/corbo/primitives.crb#L72)
 
 ```rust
 fn s_Region_offset(pointer:usize, value:usize)
@@ -957,7 +983,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Region_offset`
 
-[primitives.crb:77](../runtime/corbo/primitives.crb#L77)
+[primitives.crb:80](../runtime/corbo/primitives.crb#L80)
 
 ```rust
 fn a_Region_offset(pointer:usize)->usize
@@ -968,7 +994,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Region_bytes`
 
-[primitives.crb:86](../runtime/corbo/primitives.crb#L86)
+[primitives.crb:89](../runtime/corbo/primitives.crb#L89)
 
 ```rust
 fn g_Region_bytes(pointer:usize)->usize
@@ -979,7 +1005,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Region_bytes`
 
-[primitives.crb:95](../runtime/corbo/primitives.crb#L95)
+[primitives.crb:98](../runtime/corbo/primitives.crb#L98)
 
 ```rust
 fn s_Region_bytes(pointer:usize, value:usize)
@@ -990,7 +1016,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Region_bytes`
 
-[primitives.crb:103](../runtime/corbo/primitives.crb#L103)
+[primitives.crb:106](../runtime/corbo/primitives.crb#L106)
 
 ```rust
 fn a_Region_bytes(pointer:usize)->usize
@@ -1001,7 +1027,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Region_width`
 
-[primitives.crb:112](../runtime/corbo/primitives.crb#L112)
+[primitives.crb:115](../runtime/corbo/primitives.crb#L115)
 
 ```rust
 fn g_Region_width(pointer:usize)->usize
@@ -1012,7 +1038,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Region_width`
 
-[primitives.crb:121](../runtime/corbo/primitives.crb#L121)
+[primitives.crb:124](../runtime/corbo/primitives.crb#L124)
 
 ```rust
 fn s_Region_width(pointer:usize, value:usize)
@@ -1023,7 +1049,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Region_width`
 
-[primitives.crb:129](../runtime/corbo/primitives.crb#L129)
+[primitives.crb:132](../runtime/corbo/primitives.crb#L132)
 
 ```rust
 fn a_Region_width(pointer:usize)->usize
@@ -1034,7 +1060,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Region_next`
 
-[primitives.crb:138](../runtime/corbo/primitives.crb#L138)
+[primitives.crb:141](../runtime/corbo/primitives.crb#L141)
 
 ```rust
 fn g_Region_next(pointer:usize)->usize
@@ -1045,7 +1071,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Region_next`
 
-[primitives.crb:147](../runtime/corbo/primitives.crb#L147)
+[primitives.crb:150](../runtime/corbo/primitives.crb#L150)
 
 ```rust
 fn s_Region_next(pointer:usize, value:usize)
@@ -1056,7 +1082,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Region_next`
 
-[primitives.crb:155](../runtime/corbo/primitives.crb#L155)
+[primitives.crb:158](../runtime/corbo/primitives.crb#L158)
 
 ```rust
 fn a_Region_next(pointer:usize)->usize
@@ -1067,7 +1093,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Region_band`
 
-[primitives.crb:164](../runtime/corbo/primitives.crb#L164)
+[primitives.crb:167](../runtime/corbo/primitives.crb#L167)
 
 ```rust
 fn g_Region_band(pointer:usize)->usize
@@ -1078,7 +1104,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Region_band`
 
-[primitives.crb:173](../runtime/corbo/primitives.crb#L173)
+[primitives.crb:176](../runtime/corbo/primitives.crb#L176)
 
 ```rust
 fn s_Region_band(pointer:usize, value:usize)
@@ -1089,7 +1115,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Region_band`
 
-[primitives.crb:181](../runtime/corbo/primitives.crb#L181)
+[primitives.crb:184](../runtime/corbo/primitives.crb#L184)
 
 ```rust
 fn a_Region_band(pointer:usize)->usize
@@ -1100,7 +1126,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Region_owned`
 
-[primitives.crb:190](../runtime/corbo/primitives.crb#L190)
+[primitives.crb:193](../runtime/corbo/primitives.crb#L193)
 
 ```rust
 fn g_Region_owned(pointer:usize)->i32
@@ -1111,7 +1137,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Region_owned`
 
-[primitives.crb:199](../runtime/corbo/primitives.crb#L199)
+[primitives.crb:202](../runtime/corbo/primitives.crb#L202)
 
 ```rust
 fn s_Region_owned(pointer:usize, value:i32)
@@ -1122,7 +1148,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_Region`
 
-[primitives.crb:206](../runtime/corbo/primitives.crb#L206)
+[primitives.crb:209](../runtime/corbo/primitives.crb#L209)
 
 ```rust
 fn size_Region()->usize
@@ -1132,7 +1158,7 @@ Returns the C ABI size in bytes of Region on this target.
 
 ### `align_Region`
 
-[primitives.crb:214](../runtime/corbo/primitives.crb#L214)
+[primitives.crb:217](../runtime/corbo/primitives.crb#L217)
 
 ```rust
 fn align_Region()->usize
@@ -1142,7 +1168,7 @@ Returns the required C ABI alignment of Region on this target.
 
 ### `g_RegionBand_base`
 
-[primitives.crb:223](../runtime/corbo/primitives.crb#L223)
+[primitives.crb:226](../runtime/corbo/primitives.crb#L226)
 
 ```rust
 fn g_RegionBand_base(pointer:usize)->usize
@@ -1153,7 +1179,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_base`
 
-[primitives.crb:232](../runtime/corbo/primitives.crb#L232)
+[primitives.crb:235](../runtime/corbo/primitives.crb#L235)
 
 ```rust
 fn s_RegionBand_base(pointer:usize, value:usize)
@@ -1164,7 +1190,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionBand_base`
 
-[primitives.crb:240](../runtime/corbo/primitives.crb#L240)
+[primitives.crb:243](../runtime/corbo/primitives.crb#L243)
 
 ```rust
 fn a_RegionBand_base(pointer:usize)->usize
@@ -1175,7 +1201,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionBand_capacity`
 
-[primitives.crb:249](../runtime/corbo/primitives.crb#L249)
+[primitives.crb:252](../runtime/corbo/primitives.crb#L252)
 
 ```rust
 fn g_RegionBand_capacity(pointer:usize)->usize
@@ -1186,7 +1212,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_capacity`
 
-[primitives.crb:258](../runtime/corbo/primitives.crb#L258)
+[primitives.crb:261](../runtime/corbo/primitives.crb#L261)
 
 ```rust
 fn s_RegionBand_capacity(pointer:usize, value:usize)
@@ -1197,7 +1223,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionBand_capacity`
 
-[primitives.crb:266](../runtime/corbo/primitives.crb#L266)
+[primitives.crb:269](../runtime/corbo/primitives.crb#L269)
 
 ```rust
 fn a_RegionBand_capacity(pointer:usize)->usize
@@ -1208,7 +1234,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionBand_committed`
 
-[primitives.crb:275](../runtime/corbo/primitives.crb#L275)
+[primitives.crb:278](../runtime/corbo/primitives.crb#L278)
 
 ```rust
 fn g_RegionBand_committed(pointer:usize)->usize
@@ -1219,7 +1245,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_committed`
 
-[primitives.crb:284](../runtime/corbo/primitives.crb#L284)
+[primitives.crb:287](../runtime/corbo/primitives.crb#L287)
 
 ```rust
 fn s_RegionBand_committed(pointer:usize, value:usize)
@@ -1230,7 +1256,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionBand_committed`
 
-[primitives.crb:292](../runtime/corbo/primitives.crb#L292)
+[primitives.crb:295](../runtime/corbo/primitives.crb#L295)
 
 ```rust
 fn a_RegionBand_committed(pointer:usize)->usize
@@ -1241,7 +1267,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionBand_limit`
 
-[primitives.crb:301](../runtime/corbo/primitives.crb#L301)
+[primitives.crb:304](../runtime/corbo/primitives.crb#L304)
 
 ```rust
 fn g_RegionBand_limit(pointer:usize)->usize
@@ -1252,7 +1278,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_limit`
 
-[primitives.crb:310](../runtime/corbo/primitives.crb#L310)
+[primitives.crb:313](../runtime/corbo/primitives.crb#L313)
 
 ```rust
 fn s_RegionBand_limit(pointer:usize, value:usize)
@@ -1263,7 +1289,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionBand_limit`
 
-[primitives.crb:318](../runtime/corbo/primitives.crb#L318)
+[primitives.crb:321](../runtime/corbo/primitives.crb#L321)
 
 ```rust
 fn a_RegionBand_limit(pointer:usize)->usize
@@ -1274,7 +1300,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionBand_active`
 
-[primitives.crb:327](../runtime/corbo/primitives.crb#L327)
+[primitives.crb:330](../runtime/corbo/primitives.crb#L330)
 
 ```rust
 fn g_RegionBand_active(pointer:usize)->usize
@@ -1285,7 +1311,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_active`
 
-[primitives.crb:336](../runtime/corbo/primitives.crb#L336)
+[primitives.crb:339](../runtime/corbo/primitives.crb#L339)
 
 ```rust
 fn s_RegionBand_active(pointer:usize, value:usize)
@@ -1296,7 +1322,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionBand_active`
 
-[primitives.crb:344](../runtime/corbo/primitives.crb#L344)
+[primitives.crb:347](../runtime/corbo/primitives.crb#L347)
 
 ```rust
 fn a_RegionBand_active(pointer:usize)->usize
@@ -1307,7 +1333,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionBand_parent`
 
-[primitives.crb:353](../runtime/corbo/primitives.crb#L353)
+[primitives.crb:356](../runtime/corbo/primitives.crb#L356)
 
 ```rust
 fn g_RegionBand_parent(pointer:usize)->usize
@@ -1318,7 +1344,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_parent`
 
-[primitives.crb:362](../runtime/corbo/primitives.crb#L362)
+[primitives.crb:365](../runtime/corbo/primitives.crb#L365)
 
 ```rust
 fn s_RegionBand_parent(pointer:usize, value:usize)
@@ -1329,7 +1355,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionBand_parent`
 
-[primitives.crb:370](../runtime/corbo/primitives.crb#L370)
+[primitives.crb:373](../runtime/corbo/primitives.crb#L373)
 
 ```rust
 fn a_RegionBand_parent(pointer:usize)->usize
@@ -1340,7 +1366,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionBand_closed`
 
-[primitives.crb:379](../runtime/corbo/primitives.crb#L379)
+[primitives.crb:382](../runtime/corbo/primitives.crb#L382)
 
 ```rust
 fn g_RegionBand_closed(pointer:usize)->i32
@@ -1351,7 +1377,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionBand_closed`
 
-[primitives.crb:388](../runtime/corbo/primitives.crb#L388)
+[primitives.crb:391](../runtime/corbo/primitives.crb#L391)
 
 ```rust
 fn s_RegionBand_closed(pointer:usize, value:i32)
@@ -1362,7 +1388,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_RegionBand`
 
-[primitives.crb:395](../runtime/corbo/primitives.crb#L395)
+[primitives.crb:398](../runtime/corbo/primitives.crb#L398)
 
 ```rust
 fn size_RegionBand()->usize
@@ -1372,7 +1398,7 @@ Returns the C ABI size in bytes of RegionBand on this target.
 
 ### `align_RegionBand`
 
-[primitives.crb:403](../runtime/corbo/primitives.crb#L403)
+[primitives.crb:406](../runtime/corbo/primitives.crb#L406)
 
 ```rust
 fn align_RegionBand()->usize
@@ -1382,7 +1408,7 @@ Returns the required C ABI alignment of RegionBand on this target.
 
 ### `g_Pools_cap`
 
-[primitives.crb:412](../runtime/corbo/primitives.crb#L412)
+[primitives.crb:415](../runtime/corbo/primitives.crb#L415)
 
 ```rust
 fn g_Pools_cap(pointer:usize)->usize
@@ -1393,7 +1419,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Pools_cap`
 
-[primitives.crb:421](../runtime/corbo/primitives.crb#L421)
+[primitives.crb:424](../runtime/corbo/primitives.crb#L424)
 
 ```rust
 fn s_Pools_cap(pointer:usize, value:usize)
@@ -1404,7 +1430,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Pools_cap`
 
-[primitives.crb:429](../runtime/corbo/primitives.crb#L429)
+[primitives.crb:432](../runtime/corbo/primitives.crb#L432)
 
 ```rust
 fn a_Pools_cap(pointer:usize)->usize
@@ -1415,7 +1441,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Pools_stride`
 
-[primitives.crb:438](../runtime/corbo/primitives.crb#L438)
+[primitives.crb:441](../runtime/corbo/primitives.crb#L441)
 
 ```rust
 fn g_Pools_stride(pointer:usize)->usize
@@ -1426,7 +1452,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Pools_stride`
 
-[primitives.crb:447](../runtime/corbo/primitives.crb#L447)
+[primitives.crb:450](../runtime/corbo/primitives.crb#L450)
 
 ```rust
 fn s_Pools_stride(pointer:usize, value:usize)
@@ -1437,7 +1463,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Pools_stride`
 
-[primitives.crb:455](../runtime/corbo/primitives.crb#L455)
+[primitives.crb:458](../runtime/corbo/primitives.crb#L458)
 
 ```rust
 fn a_Pools_stride(pointer:usize)->usize
@@ -1448,7 +1474,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Pools_arms`
 
-[primitives.crb:464](../runtime/corbo/primitives.crb#L464)
+[primitives.crb:467](../runtime/corbo/primitives.crb#L467)
 
 ```rust
 fn g_Pools_arms(pointer:usize)->usize
@@ -1459,7 +1485,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Pools_arms`
 
-[primitives.crb:473](../runtime/corbo/primitives.crb#L473)
+[primitives.crb:476](../runtime/corbo/primitives.crb#L476)
 
 ```rust
 fn s_Pools_arms(pointer:usize, value:usize)
@@ -1470,7 +1496,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Pools_arms`
 
-[primitives.crb:481](../runtime/corbo/primitives.crb#L481)
+[primitives.crb:484](../runtime/corbo/primitives.crb#L484)
 
 ```rust
 fn a_Pools_arms(pointer:usize)->usize
@@ -1481,7 +1507,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Pools_data`
 
-[primitives.crb:490](../runtime/corbo/primitives.crb#L490)
+[primitives.crb:493](../runtime/corbo/primitives.crb#L493)
 
 ```rust
 fn g_Pools_data(pointer:usize)->usize
@@ -1492,7 +1518,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Pools_data`
 
-[primitives.crb:499](../runtime/corbo/primitives.crb#L499)
+[primitives.crb:502](../runtime/corbo/primitives.crb#L502)
 
 ```rust
 fn s_Pools_data(pointer:usize, value:usize)
@@ -1503,7 +1529,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Pools_data`
 
-[primitives.crb:507](../runtime/corbo/primitives.crb#L507)
+[primitives.crb:510](../runtime/corbo/primitives.crb#L510)
 
 ```rust
 fn a_Pools_data(pointer:usize)->usize
@@ -1514,7 +1540,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Pools_used`
 
-[primitives.crb:516](../runtime/corbo/primitives.crb#L516)
+[primitives.crb:519](../runtime/corbo/primitives.crb#L519)
 
 ```rust
 fn g_Pools_used(pointer:usize)->usize
@@ -1525,7 +1551,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Pools_used`
 
-[primitives.crb:525](../runtime/corbo/primitives.crb#L525)
+[primitives.crb:528](../runtime/corbo/primitives.crb#L528)
 
 ```rust
 fn s_Pools_used(pointer:usize, value:usize)
@@ -1536,7 +1562,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Pools_used`
 
-[primitives.crb:533](../runtime/corbo/primitives.crb#L533)
+[primitives.crb:536](../runtime/corbo/primitives.crb#L536)
 
 ```rust
 fn a_Pools_used(pointer:usize)->usize
@@ -1547,7 +1573,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_Pools`
 
-[primitives.crb:541](../runtime/corbo/primitives.crb#L541)
+[primitives.crb:544](../runtime/corbo/primitives.crb#L544)
 
 ```rust
 fn size_Pools()->usize
@@ -1557,7 +1583,7 @@ Returns the C ABI size in bytes of Pools on this target.
 
 ### `align_Pools`
 
-[primitives.crb:549](../runtime/corbo/primitives.crb#L549)
+[primitives.crb:552](../runtime/corbo/primitives.crb#L552)
 
 ```rust
 fn align_Pools()->usize
@@ -1567,7 +1593,7 @@ Returns the required C ABI alignment of Pools on this target.
 
 ### `g_Owned_pool`
 
-[primitives.crb:558](../runtime/corbo/primitives.crb#L558)
+[primitives.crb:561](../runtime/corbo/primitives.crb#L561)
 
 ```rust
 fn g_Owned_pool(pointer:usize)->usize
@@ -1578,7 +1604,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Owned_pool`
 
-[primitives.crb:567](../runtime/corbo/primitives.crb#L567)
+[primitives.crb:570](../runtime/corbo/primitives.crb#L570)
 
 ```rust
 fn s_Owned_pool(pointer:usize, value:usize)
@@ -1589,7 +1615,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Owned_pool`
 
-[primitives.crb:575](../runtime/corbo/primitives.crb#L575)
+[primitives.crb:578](../runtime/corbo/primitives.crb#L578)
 
 ```rust
 fn a_Owned_pool(pointer:usize)->usize
@@ -1600,7 +1626,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Owned_slot`
 
-[primitives.crb:584](../runtime/corbo/primitives.crb#L584)
+[primitives.crb:587](../runtime/corbo/primitives.crb#L587)
 
 ```rust
 fn g_Owned_slot(pointer:usize)->usize
@@ -1611,7 +1637,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Owned_slot`
 
-[primitives.crb:593](../runtime/corbo/primitives.crb#L593)
+[primitives.crb:596](../runtime/corbo/primitives.crb#L596)
 
 ```rust
 fn s_Owned_slot(pointer:usize, value:usize)
@@ -1622,7 +1648,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Owned_slot`
 
-[primitives.crb:601](../runtime/corbo/primitives.crb#L601)
+[primitives.crb:604](../runtime/corbo/primitives.crb#L604)
 
 ```rust
 fn a_Owned_slot(pointer:usize)->usize
@@ -1633,7 +1659,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Owned_index`
 
-[primitives.crb:610](../runtime/corbo/primitives.crb#L610)
+[primitives.crb:613](../runtime/corbo/primitives.crb#L613)
 
 ```rust
 fn g_Owned_index(pointer:usize)->usize
@@ -1644,7 +1670,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Owned_index`
 
-[primitives.crb:619](../runtime/corbo/primitives.crb#L619)
+[primitives.crb:622](../runtime/corbo/primitives.crb#L622)
 
 ```rust
 fn s_Owned_index(pointer:usize, value:usize)
@@ -1655,7 +1681,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Owned_index`
 
-[primitives.crb:627](../runtime/corbo/primitives.crb#L627)
+[primitives.crb:630](../runtime/corbo/primitives.crb#L630)
 
 ```rust
 fn a_Owned_index(pointer:usize)->usize
@@ -1666,7 +1692,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Owned_destroy`
 
-[primitives.crb:636](../runtime/corbo/primitives.crb#L636)
+[primitives.crb:639](../runtime/corbo/primitives.crb#L639)
 
 ```rust
 fn g_Owned_destroy(pointer:usize)->usize
@@ -1677,7 +1703,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Owned_destroy`
 
-[primitives.crb:645](../runtime/corbo/primitives.crb#L645)
+[primitives.crb:648](../runtime/corbo/primitives.crb#L648)
 
 ```rust
 fn s_Owned_destroy(pointer:usize, value:usize)
@@ -1688,7 +1714,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Owned_destroy`
 
-[primitives.crb:653](../runtime/corbo/primitives.crb#L653)
+[primitives.crb:656](../runtime/corbo/primitives.crb#L656)
 
 ```rust
 fn a_Owned_destroy(pointer:usize)->usize
@@ -1699,7 +1725,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_Owned`
 
-[primitives.crb:661](../runtime/corbo/primitives.crb#L661)
+[primitives.crb:664](../runtime/corbo/primitives.crb#L664)
 
 ```rust
 fn size_Owned()->usize
@@ -1709,7 +1735,7 @@ Returns the C ABI size in bytes of Owned on this target.
 
 ### `align_Owned`
 
-[primitives.crb:669](../runtime/corbo/primitives.crb#L669)
+[primitives.crb:672](../runtime/corbo/primitives.crb#L672)
 
 ```rust
 fn align_Owned()->usize
@@ -1719,7 +1745,7 @@ Returns the required C ABI alignment of Owned on this target.
 
 ### `g_RegionOwner_region`
 
-[primitives.crb:678](../runtime/corbo/primitives.crb#L678)
+[primitives.crb:681](../runtime/corbo/primitives.crb#L681)
 
 ```rust
 fn g_RegionOwner_region(pointer:usize)->usize
@@ -1730,7 +1756,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionOwner_region`
 
-[primitives.crb:687](../runtime/corbo/primitives.crb#L687)
+[primitives.crb:690](../runtime/corbo/primitives.crb#L690)
 
 ```rust
 fn s_RegionOwner_region(pointer:usize, value:usize)
@@ -1741,7 +1767,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionOwner_region`
 
-[primitives.crb:695](../runtime/corbo/primitives.crb#L695)
+[primitives.crb:698](../runtime/corbo/primitives.crb#L698)
 
 ```rust
 fn a_RegionOwner_region(pointer:usize)->usize
@@ -1752,7 +1778,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionOwner_slot`
 
-[primitives.crb:704](../runtime/corbo/primitives.crb#L704)
+[primitives.crb:707](../runtime/corbo/primitives.crb#L707)
 
 ```rust
 fn g_RegionOwner_slot(pointer:usize)->usize
@@ -1763,7 +1789,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionOwner_slot`
 
-[primitives.crb:713](../runtime/corbo/primitives.crb#L713)
+[primitives.crb:716](../runtime/corbo/primitives.crb#L716)
 
 ```rust
 fn s_RegionOwner_slot(pointer:usize, value:usize)
@@ -1774,7 +1800,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionOwner_slot`
 
-[primitives.crb:721](../runtime/corbo/primitives.crb#L721)
+[primitives.crb:724](../runtime/corbo/primitives.crb#L724)
 
 ```rust
 fn a_RegionOwner_slot(pointer:usize)->usize
@@ -1785,7 +1811,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_RegionOwner`
 
-[primitives.crb:729](../runtime/corbo/primitives.crb#L729)
+[primitives.crb:732](../runtime/corbo/primitives.crb#L732)
 
 ```rust
 fn size_RegionOwner()->usize
@@ -1795,7 +1821,7 @@ Returns the C ABI size in bytes of RegionOwner on this target.
 
 ### `align_RegionOwner`
 
-[primitives.crb:737](../runtime/corbo/primitives.crb#L737)
+[primitives.crb:740](../runtime/corbo/primitives.crb#L740)
 
 ```rust
 fn align_RegionOwner()->usize
@@ -1805,7 +1831,7 @@ Returns the required C ABI alignment of RegionOwner on this target.
 
 ### `a_RegionalMap_region`
 
-[primitives.crb:746](../runtime/corbo/primitives.crb#L746)
+[primitives.crb:749](../runtime/corbo/primitives.crb#L749)
 
 ```rust
 fn a_RegionalMap_region(pointer:usize)->usize
@@ -1816,7 +1842,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionalMap_width`
 
-[primitives.crb:755](../runtime/corbo/primitives.crb#L755)
+[primitives.crb:758](../runtime/corbo/primitives.crb#L758)
 
 ```rust
 fn g_RegionalMap_width(pointer:usize)->usize
@@ -1827,7 +1853,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionalMap_width`
 
-[primitives.crb:764](../runtime/corbo/primitives.crb#L764)
+[primitives.crb:767](../runtime/corbo/primitives.crb#L767)
 
 ```rust
 fn s_RegionalMap_width(pointer:usize, value:usize)
@@ -1838,7 +1864,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionalMap_width`
 
-[primitives.crb:772](../runtime/corbo/primitives.crb#L772)
+[primitives.crb:775](../runtime/corbo/primitives.crb#L775)
 
 ```rust
 fn a_RegionalMap_width(pointer:usize)->usize
@@ -1849,7 +1875,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionalMap_free_slot`
 
-[primitives.crb:781](../runtime/corbo/primitives.crb#L781)
+[primitives.crb:784](../runtime/corbo/primitives.crb#L784)
 
 ```rust
 fn g_RegionalMap_free_slot(pointer:usize)->usize
@@ -1860,7 +1886,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionalMap_free_slot`
 
-[primitives.crb:790](../runtime/corbo/primitives.crb#L790)
+[primitives.crb:793](../runtime/corbo/primitives.crb#L793)
 
 ```rust
 fn s_RegionalMap_free_slot(pointer:usize, value:usize)
@@ -1871,7 +1897,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionalMap_free_slot`
 
-[primitives.crb:798](../runtime/corbo/primitives.crb#L798)
+[primitives.crb:801](../runtime/corbo/primitives.crb#L801)
 
 ```rust
 fn a_RegionalMap_free_slot(pointer:usize)->usize
@@ -1882,7 +1908,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_RegionalMap_dispose`
 
-[primitives.crb:807](../runtime/corbo/primitives.crb#L807)
+[primitives.crb:810](../runtime/corbo/primitives.crb#L810)
 
 ```rust
 fn g_RegionalMap_dispose(pointer:usize)->usize
@@ -1893,7 +1919,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_RegionalMap_dispose`
 
-[primitives.crb:816](../runtime/corbo/primitives.crb#L816)
+[primitives.crb:819](../runtime/corbo/primitives.crb#L819)
 
 ```rust
 fn s_RegionalMap_dispose(pointer:usize, value:usize)
@@ -1904,7 +1930,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_RegionalMap_dispose`
 
-[primitives.crb:824](../runtime/corbo/primitives.crb#L824)
+[primitives.crb:827](../runtime/corbo/primitives.crb#L827)
 
 ```rust
 fn a_RegionalMap_dispose(pointer:usize)->usize
@@ -1915,7 +1941,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_RegionalMap`
 
-[primitives.crb:832](../runtime/corbo/primitives.crb#L832)
+[primitives.crb:835](../runtime/corbo/primitives.crb#L835)
 
 ```rust
 fn size_RegionalMap()->usize
@@ -1925,7 +1951,7 @@ Returns the C ABI size in bytes of RegionalMap on this target.
 
 ### `align_RegionalMap`
 
-[primitives.crb:840](../runtime/corbo/primitives.crb#L840)
+[primitives.crb:843](../runtime/corbo/primitives.crb#L843)
 
 ```rust
 fn align_RegionalMap()->usize
@@ -1935,7 +1961,7 @@ Returns the required C ABI alignment of RegionalMap on this target.
 
 ### `g_MapEntry_key`
 
-[primitives.crb:849](../runtime/corbo/primitives.crb#L849)
+[primitives.crb:852](../runtime/corbo/primitives.crb#L852)
 
 ```rust
 fn g_MapEntry_key(pointer:usize)->u64
@@ -1946,7 +1972,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_MapEntry_key`
 
-[primitives.crb:858](../runtime/corbo/primitives.crb#L858)
+[primitives.crb:861](../runtime/corbo/primitives.crb#L861)
 
 ```rust
 fn s_MapEntry_key(pointer:usize, value:u64)
@@ -1957,7 +1983,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_MapEntry_next`
 
-[primitives.crb:866](../runtime/corbo/primitives.crb#L866)
+[primitives.crb:869](../runtime/corbo/primitives.crb#L869)
 
 ```rust
 fn g_MapEntry_next(pointer:usize)->usize
@@ -1968,7 +1994,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_MapEntry_next`
 
-[primitives.crb:875](../runtime/corbo/primitives.crb#L875)
+[primitives.crb:878](../runtime/corbo/primitives.crb#L878)
 
 ```rust
 fn s_MapEntry_next(pointer:usize, value:usize)
@@ -1979,7 +2005,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_MapEntry_next`
 
-[primitives.crb:883](../runtime/corbo/primitives.crb#L883)
+[primitives.crb:886](../runtime/corbo/primitives.crb#L886)
 
 ```rust
 fn a_MapEntry_next(pointer:usize)->usize
@@ -1990,7 +2016,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_MapEntry`
 
-[primitives.crb:891](../runtime/corbo/primitives.crb#L891)
+[primitives.crb:894](../runtime/corbo/primitives.crb#L894)
 
 ```rust
 fn size_MapEntry()->usize
@@ -2000,7 +2026,7 @@ Returns the C ABI size in bytes of MapEntry on this target.
 
 ### `align_MapEntry`
 
-[primitives.crb:899](../runtime/corbo/primitives.crb#L899)
+[primitives.crb:902](../runtime/corbo/primitives.crb#L902)
 
 ```rust
 fn align_MapEntry()->usize
@@ -2010,7 +2036,7 @@ Returns the required C ABI alignment of MapEntry on this target.
 
 ### `g_Task_pc`
 
-[primitives.crb:908](../runtime/corbo/primitives.crb#L908)
+[primitives.crb:911](../runtime/corbo/primitives.crb#L911)
 
 ```rust
 fn g_Task_pc(pointer:usize)->usize
@@ -2021,7 +2047,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_pc`
 
-[primitives.crb:917](../runtime/corbo/primitives.crb#L917)
+[primitives.crb:920](../runtime/corbo/primitives.crb#L920)
 
 ```rust
 fn s_Task_pc(pointer:usize, value:usize)
@@ -2032,7 +2058,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_pc`
 
-[primitives.crb:925](../runtime/corbo/primitives.crb#L925)
+[primitives.crb:928](../runtime/corbo/primitives.crb#L928)
 
 ```rust
 fn a_Task_pc(pointer:usize)->usize
@@ -2043,7 +2069,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_poll`
 
-[primitives.crb:934](../runtime/corbo/primitives.crb#L934)
+[primitives.crb:937](../runtime/corbo/primitives.crb#L937)
 
 ```rust
 fn g_Task_poll(pointer:usize)->usize
@@ -2054,7 +2080,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_poll`
 
-[primitives.crb:943](../runtime/corbo/primitives.crb#L943)
+[primitives.crb:946](../runtime/corbo/primitives.crb#L946)
 
 ```rust
 fn s_Task_poll(pointer:usize, value:usize)
@@ -2065,7 +2091,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_poll`
 
-[primitives.crb:951](../runtime/corbo/primitives.crb#L951)
+[primitives.crb:954](../runtime/corbo/primitives.crb#L954)
 
 ```rust
 fn a_Task_poll(pointer:usize)->usize
@@ -2076,7 +2102,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_next`
 
-[primitives.crb:960](../runtime/corbo/primitives.crb#L960)
+[primitives.crb:963](../runtime/corbo/primitives.crb#L963)
 
 ```rust
 fn g_Task_next(pointer:usize)->usize
@@ -2087,7 +2113,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_next`
 
-[primitives.crb:969](../runtime/corbo/primitives.crb#L969)
+[primitives.crb:972](../runtime/corbo/primitives.crb#L972)
 
 ```rust
 fn s_Task_next(pointer:usize, value:usize)
@@ -2098,7 +2124,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_next`
 
-[primitives.crb:977](../runtime/corbo/primitives.crb#L977)
+[primitives.crb:980](../runtime/corbo/primitives.crb#L980)
 
 ```rust
 fn a_Task_next(pointer:usize)->usize
@@ -2109,7 +2135,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_failed`
 
-[primitives.crb:986](../runtime/corbo/primitives.crb#L986)
+[primitives.crb:989](../runtime/corbo/primitives.crb#L989)
 
 ```rust
 fn g_Task_failed(pointer:usize)->bool
@@ -2120,7 +2146,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_failed`
 
-[primitives.crb:995](../runtime/corbo/primitives.crb#L995)
+[primitives.crb:998](../runtime/corbo/primitives.crb#L998)
 
 ```rust
 fn s_Task_failed(pointer:usize, value:bool)
@@ -2131,7 +2157,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_done`
 
-[primitives.crb:1003](../runtime/corbo/primitives.crb#L1003)
+[primitives.crb:1006](../runtime/corbo/primitives.crb#L1006)
 
 ```rust
 fn g_Task_done(pointer:usize)->bool
@@ -2142,7 +2168,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_done`
 
-[primitives.crb:1012](../runtime/corbo/primitives.crb#L1012)
+[primitives.crb:1015](../runtime/corbo/primitives.crb#L1015)
 
 ```rust
 fn s_Task_done(pointer:usize, value:bool)
@@ -2153,7 +2179,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_abandoned`
 
-[primitives.crb:1020](../runtime/corbo/primitives.crb#L1020)
+[primitives.crb:1023](../runtime/corbo/primitives.crb#L1023)
 
 ```rust
 fn g_Task_abandoned(pointer:usize)->bool
@@ -2164,7 +2190,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_abandoned`
 
-[primitives.crb:1029](../runtime/corbo/primitives.crb#L1029)
+[primitives.crb:1032](../runtime/corbo/primitives.crb#L1032)
 
 ```rust
 fn s_Task_abandoned(pointer:usize, value:bool)
@@ -2175,7 +2201,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_discard`
 
-[primitives.crb:1037](../runtime/corbo/primitives.crb#L1037)
+[primitives.crb:1040](../runtime/corbo/primitives.crb#L1040)
 
 ```rust
 fn g_Task_discard(pointer:usize)->usize
@@ -2186,7 +2212,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_discard`
 
-[primitives.crb:1046](../runtime/corbo/primitives.crb#L1046)
+[primitives.crb:1049](../runtime/corbo/primitives.crb#L1049)
 
 ```rust
 fn s_Task_discard(pointer:usize, value:usize)
@@ -2197,7 +2223,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_discard`
 
-[primitives.crb:1054](../runtime/corbo/primitives.crb#L1054)
+[primitives.crb:1057](../runtime/corbo/primitives.crb#L1057)
 
 ```rust
 fn a_Task_discard(pointer:usize)->usize
@@ -2208,7 +2234,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_root`
 
-[primitives.crb:1063](../runtime/corbo/primitives.crb#L1063)
+[primitives.crb:1066](../runtime/corbo/primitives.crb#L1066)
 
 ```rust
 fn g_Task_root(pointer:usize)->usize
@@ -2219,7 +2245,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_root`
 
-[primitives.crb:1072](../runtime/corbo/primitives.crb#L1072)
+[primitives.crb:1075](../runtime/corbo/primitives.crb#L1075)
 
 ```rust
 fn s_Task_root(pointer:usize, value:usize)
@@ -2230,7 +2256,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_root`
 
-[primitives.crb:1080](../runtime/corbo/primitives.crb#L1080)
+[primitives.crb:1083](../runtime/corbo/primitives.crb#L1083)
 
 ```rust
 fn a_Task_root(pointer:usize)->usize
@@ -2241,7 +2267,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_waiter`
 
-[primitives.crb:1089](../runtime/corbo/primitives.crb#L1089)
+[primitives.crb:1092](../runtime/corbo/primitives.crb#L1092)
 
 ```rust
 fn g_Task_waiter(pointer:usize)->usize
@@ -2252,7 +2278,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_waiter`
 
-[primitives.crb:1098](../runtime/corbo/primitives.crb#L1098)
+[primitives.crb:1101](../runtime/corbo/primitives.crb#L1101)
 
 ```rust
 fn s_Task_waiter(pointer:usize, value:usize)
@@ -2263,7 +2289,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_waiter`
 
-[primitives.crb:1106](../runtime/corbo/primitives.crb#L1106)
+[primitives.crb:1109](../runtime/corbo/primitives.crb#L1109)
 
 ```rust
 fn a_Task_waiter(pointer:usize)->usize
@@ -2274,7 +2300,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_ready`
 
-[primitives.crb:1115](../runtime/corbo/primitives.crb#L1115)
+[primitives.crb:1118](../runtime/corbo/primitives.crb#L1118)
 
 ```rust
 fn g_Task_io_ready(pointer:usize)->bool
@@ -2285,7 +2311,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_ready`
 
-[primitives.crb:1124](../runtime/corbo/primitives.crb#L1124)
+[primitives.crb:1127](../runtime/corbo/primitives.crb#L1127)
 
 ```rust
 fn s_Task_io_ready(pointer:usize, value:bool)
@@ -2296,7 +2322,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_registered`
 
-[primitives.crb:1132](../runtime/corbo/primitives.crb#L1132)
+[primitives.crb:1135](../runtime/corbo/primitives.crb#L1135)
 
 ```rust
 fn g_Task_io_registered(pointer:usize)->bool
@@ -2307,7 +2333,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_registered`
 
-[primitives.crb:1141](../runtime/corbo/primitives.crb#L1141)
+[primitives.crb:1144](../runtime/corbo/primitives.crb#L1144)
 
 ```rust
 fn s_Task_io_registered(pointer:usize, value:bool)
@@ -2318,7 +2344,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_socket`
 
-[primitives.crb:1149](../runtime/corbo/primitives.crb#L1149)
+[primitives.crb:1152](../runtime/corbo/primitives.crb#L1152)
 
 ```rust
 fn g_Task_io_socket(pointer:usize)->u64
@@ -2329,7 +2355,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_socket`
 
-[primitives.crb:1158](../runtime/corbo/primitives.crb#L1158)
+[primitives.crb:1161](../runtime/corbo/primitives.crb#L1161)
 
 ```rust
 fn s_Task_io_socket(pointer:usize, value:u64)
@@ -2340,7 +2366,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_write`
 
-[primitives.crb:1166](../runtime/corbo/primitives.crb#L1166)
+[primitives.crb:1169](../runtime/corbo/primitives.crb#L1169)
 
 ```rust
 fn g_Task_io_write(pointer:usize)->bool
@@ -2351,7 +2377,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_write`
 
-[primitives.crb:1175](../runtime/corbo/primitives.crb#L1175)
+[primitives.crb:1178](../runtime/corbo/primitives.crb#L1178)
 
 ```rust
 fn s_Task_io_write(pointer:usize, value:bool)
@@ -2362,7 +2388,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_next`
 
-[primitives.crb:1183](../runtime/corbo/primitives.crb#L1183)
+[primitives.crb:1186](../runtime/corbo/primitives.crb#L1186)
 
 ```rust
 fn g_Task_io_next(pointer:usize)->usize
@@ -2373,7 +2399,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_next`
 
-[primitives.crb:1192](../runtime/corbo/primitives.crb#L1192)
+[primitives.crb:1195](../runtime/corbo/primitives.crb#L1195)
 
 ```rust
 fn s_Task_io_next(pointer:usize, value:usize)
@@ -2384,7 +2410,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_io_next`
 
-[primitives.crb:1200](../runtime/corbo/primitives.crb#L1200)
+[primitives.crb:1203](../runtime/corbo/primitives.crb#L1203)
 
 ```rust
 fn a_Task_io_next(pointer:usize)->usize
@@ -2395,7 +2421,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_token`
 
-[primitives.crb:1209](../runtime/corbo/primitives.crb#L1209)
+[primitives.crb:1212](../runtime/corbo/primitives.crb#L1212)
 
 ```rust
 fn g_Task_io_token(pointer:usize)->usize
@@ -2406,7 +2432,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_token`
 
-[primitives.crb:1218](../runtime/corbo/primitives.crb#L1218)
+[primitives.crb:1221](../runtime/corbo/primitives.crb#L1221)
 
 ```rust
 fn s_Task_io_token(pointer:usize, value:usize)
@@ -2417,7 +2443,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_Task_io_token`
 
-[primitives.crb:1226](../runtime/corbo/primitives.crb#L1226)
+[primitives.crb:1229](../runtime/corbo/primitives.crb#L1229)
 
 ```rust
 fn a_Task_io_token(pointer:usize)->usize
@@ -2428,7 +2454,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_io_error`
 
-[primitives.crb:1235](../runtime/corbo/primitives.crb#L1235)
+[primitives.crb:1238](../runtime/corbo/primitives.crb#L1238)
 
 ```rust
 fn g_Task_io_error(pointer:usize)->i64
@@ -2439,7 +2465,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_io_error`
 
-[primitives.crb:1244](../runtime/corbo/primitives.crb#L1244)
+[primitives.crb:1247](../runtime/corbo/primitives.crb#L1247)
 
 ```rust
 fn s_Task_io_error(pointer:usize, value:i64)
@@ -2450,7 +2476,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_waiting`
 
-[primitives.crb:1252](../runtime/corbo/primitives.crb#L1252)
+[primitives.crb:1255](../runtime/corbo/primitives.crb#L1255)
 
 ```rust
 fn g_Task_waiting(pointer:usize)->bool
@@ -2461,7 +2487,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_waiting`
 
-[primitives.crb:1261](../runtime/corbo/primitives.crb#L1261)
+[primitives.crb:1264](../runtime/corbo/primitives.crb#L1264)
 
 ```rust
 fn s_Task_waiting(pointer:usize, value:bool)
@@ -2472,7 +2498,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_parked`
 
-[primitives.crb:1269](../runtime/corbo/primitives.crb#L1269)
+[primitives.crb:1272](../runtime/corbo/primitives.crb#L1272)
 
 ```rust
 fn g_Task_parked(pointer:usize)->bool
@@ -2483,7 +2509,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_parked`
 
-[primitives.crb:1278](../runtime/corbo/primitives.crb#L1278)
+[primitives.crb:1281](../runtime/corbo/primitives.crb#L1281)
 
 ```rust
 fn s_Task_parked(pointer:usize, value:bool)
@@ -2494,7 +2520,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_Task_blocking`
 
-[primitives.crb:1286](../runtime/corbo/primitives.crb#L1286)
+[primitives.crb:1289](../runtime/corbo/primitives.crb#L1289)
 
 ```rust
 fn g_Task_blocking(pointer:usize)->bool
@@ -2505,7 +2531,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_Task_blocking`
 
-[primitives.crb:1295](../runtime/corbo/primitives.crb#L1295)
+[primitives.crb:1298](../runtime/corbo/primitives.crb#L1298)
 
 ```rust
 fn s_Task_blocking(pointer:usize, value:bool)
@@ -2516,7 +2542,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_Task`
 
-[primitives.crb:1302](../runtime/corbo/primitives.crb#L1302)
+[primitives.crb:1305](../runtime/corbo/primitives.crb#L1305)
 
 ```rust
 fn size_Task()->usize
@@ -2526,7 +2552,7 @@ Returns the C ABI size in bytes of Task on this target.
 
 ### `align_Task`
 
-[primitives.crb:1310](../runtime/corbo/primitives.crb#L1310)
+[primitives.crb:1313](../runtime/corbo/primitives.crb#L1313)
 
 ```rust
 fn align_Task()->usize
@@ -2536,7 +2562,7 @@ Returns the required C ABI alignment of Task on this target.
 
 ### `a_TaskState_task`
 
-[primitives.crb:1319](../runtime/corbo/primitives.crb#L1319)
+[primitives.crb:1322](../runtime/corbo/primitives.crb#L1322)
 
 ```rust
 fn a_TaskState_task(pointer:usize)->usize
@@ -2547,7 +2573,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskState_value`
 
-[primitives.crb:1328](../runtime/corbo/primitives.crb#L1328)
+[primitives.crb:1331](../runtime/corbo/primitives.crb#L1331)
 
 ```rust
 fn a_TaskState_value(pointer:usize)->usize
@@ -2558,7 +2584,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskState_payload`
 
-[primitives.crb:1337](../runtime/corbo/primitives.crb#L1337)
+[primitives.crb:1340](../runtime/corbo/primitives.crb#L1340)
 
 ```rust
 fn g_TaskState_payload(pointer:usize)->usize
@@ -2569,7 +2595,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskState_payload`
 
-[primitives.crb:1346](../runtime/corbo/primitives.crb#L1346)
+[primitives.crb:1349](../runtime/corbo/primitives.crb#L1349)
 
 ```rust
 fn s_TaskState_payload(pointer:usize, value:usize)
@@ -2580,7 +2606,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskState_payload`
 
-[primitives.crb:1354](../runtime/corbo/primitives.crb#L1354)
+[primitives.crb:1357](../runtime/corbo/primitives.crb#L1357)
 
 ```rust
 fn a_TaskState_payload(pointer:usize)->usize
@@ -2591,7 +2617,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskState_region`
 
-[primitives.crb:1363](../runtime/corbo/primitives.crb#L1363)
+[primitives.crb:1366](../runtime/corbo/primitives.crb#L1366)
 
 ```rust
 fn g_TaskState_region(pointer:usize)->usize
@@ -2602,7 +2628,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskState_region`
 
-[primitives.crb:1372](../runtime/corbo/primitives.crb#L1372)
+[primitives.crb:1375](../runtime/corbo/primitives.crb#L1375)
 
 ```rust
 fn s_TaskState_region(pointer:usize, value:usize)
@@ -2613,7 +2639,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskState_region`
 
-[primitives.crb:1380](../runtime/corbo/primitives.crb#L1380)
+[primitives.crb:1383](../runtime/corbo/primitives.crb#L1383)
 
 ```rust
 fn a_TaskState_region(pointer:usize)->usize
@@ -2624,7 +2650,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskState_own_region`
 
-[primitives.crb:1389](../runtime/corbo/primitives.crb#L1389)
+[primitives.crb:1392](../runtime/corbo/primitives.crb#L1392)
 
 ```rust
 fn g_TaskState_own_region(pointer:usize)->bool
@@ -2635,7 +2661,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskState_own_region`
 
-[primitives.crb:1398](../runtime/corbo/primitives.crb#L1398)
+[primitives.crb:1401](../runtime/corbo/primitives.crb#L1401)
 
 ```rust
 fn s_TaskState_own_region(pointer:usize, value:bool)
@@ -2646,7 +2672,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskState_dispose`
 
-[primitives.crb:1406](../runtime/corbo/primitives.crb#L1406)
+[primitives.crb:1409](../runtime/corbo/primitives.crb#L1409)
 
 ```rust
 fn g_TaskState_dispose(pointer:usize)->usize
@@ -2657,7 +2683,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskState_dispose`
 
-[primitives.crb:1415](../runtime/corbo/primitives.crb#L1415)
+[primitives.crb:1418](../runtime/corbo/primitives.crb#L1418)
 
 ```rust
 fn s_TaskState_dispose(pointer:usize, value:usize)
@@ -2668,7 +2694,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskState_dispose`
 
-[primitives.crb:1423](../runtime/corbo/primitives.crb#L1423)
+[primitives.crb:1426](../runtime/corbo/primitives.crb#L1426)
 
 ```rust
 fn a_TaskState_dispose(pointer:usize)->usize
@@ -2679,7 +2705,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskState_classic`
 
-[primitives.crb:1432](../runtime/corbo/primitives.crb#L1432)
+[primitives.crb:1435](../runtime/corbo/primitives.crb#L1435)
 
 ```rust
 fn a_TaskState_classic(pointer:usize)->usize
@@ -2690,7 +2716,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_TaskState`
 
-[primitives.crb:1440](../runtime/corbo/primitives.crb#L1440)
+[primitives.crb:1443](../runtime/corbo/primitives.crb#L1443)
 
 ```rust
 fn size_TaskState()->usize
@@ -2700,7 +2726,7 @@ Returns the C ABI size in bytes of TaskState on this target.
 
 ### `align_TaskState`
 
-[primitives.crb:1448](../runtime/corbo/primitives.crb#L1448)
+[primitives.crb:1451](../runtime/corbo/primitives.crb#L1451)
 
 ```rust
 fn align_TaskState()->usize
@@ -2710,7 +2736,7 @@ Returns the required C ABI alignment of TaskState on this target.
 
 ### `g_TaskValue_state`
 
-[primitives.crb:1457](../runtime/corbo/primitives.crb#L1457)
+[primitives.crb:1460](../runtime/corbo/primitives.crb#L1460)
 
 ```rust
 fn g_TaskValue_state(pointer:usize)->usize
@@ -2721,7 +2747,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskValue_state`
 
-[primitives.crb:1466](../runtime/corbo/primitives.crb#L1466)
+[primitives.crb:1469](../runtime/corbo/primitives.crb#L1469)
 
 ```rust
 fn s_TaskValue_state(pointer:usize, value:usize)
@@ -2732,7 +2758,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskValue_state`
 
-[primitives.crb:1474](../runtime/corbo/primitives.crb#L1474)
+[primitives.crb:1477](../runtime/corbo/primitives.crb#L1477)
 
 ```rust
 fn a_TaskValue_state(pointer:usize)->usize
@@ -2743,7 +2769,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskValue_storage`
 
-[primitives.crb:1483](../runtime/corbo/primitives.crb#L1483)
+[primitives.crb:1486](../runtime/corbo/primitives.crb#L1486)
 
 ```rust
 fn g_TaskValue_storage(pointer:usize)->usize
@@ -2754,7 +2780,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskValue_storage`
 
-[primitives.crb:1492](../runtime/corbo/primitives.crb#L1492)
+[primitives.crb:1495](../runtime/corbo/primitives.crb#L1495)
 
 ```rust
 fn s_TaskValue_storage(pointer:usize, value:usize)
@@ -2765,7 +2791,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskValue_storage`
 
-[primitives.crb:1500](../runtime/corbo/primitives.crb#L1500)
+[primitives.crb:1503](../runtime/corbo/primitives.crb#L1503)
 
 ```rust
 fn a_TaskValue_storage(pointer:usize)->usize
@@ -2776,7 +2802,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskValue_poll`
 
-[primitives.crb:1509](../runtime/corbo/primitives.crb#L1509)
+[primitives.crb:1512](../runtime/corbo/primitives.crb#L1512)
 
 ```rust
 fn g_TaskValue_poll(pointer:usize)->usize
@@ -2787,7 +2813,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskValue_poll`
 
-[primitives.crb:1518](../runtime/corbo/primitives.crb#L1518)
+[primitives.crb:1521](../runtime/corbo/primitives.crb#L1521)
 
 ```rust
 fn s_TaskValue_poll(pointer:usize, value:usize)
@@ -2798,7 +2824,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskValue_poll`
 
-[primitives.crb:1526](../runtime/corbo/primitives.crb#L1526)
+[primitives.crb:1529](../runtime/corbo/primitives.crb#L1529)
 
 ```rust
 fn a_TaskValue_poll(pointer:usize)->usize
@@ -2809,7 +2835,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_TaskValue_native`
 
-[primitives.crb:1535](../runtime/corbo/primitives.crb#L1535)
+[primitives.crb:1538](../runtime/corbo/primitives.crb#L1538)
 
 ```rust
 fn g_TaskValue_native(pointer:usize)->bool
@@ -2820,7 +2846,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskValue_native`
 
-[primitives.crb:1544](../runtime/corbo/primitives.crb#L1544)
+[primitives.crb:1547](../runtime/corbo/primitives.crb#L1547)
 
 ```rust
 fn s_TaskValue_native(pointer:usize, value:bool)
@@ -2831,7 +2857,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_TaskValue`
 
-[primitives.crb:1551](../runtime/corbo/primitives.crb#L1551)
+[primitives.crb:1554](../runtime/corbo/primitives.crb#L1554)
 
 ```rust
 fn size_TaskValue()->usize
@@ -2841,7 +2867,7 @@ Returns the C ABI size in bytes of TaskValue on this target.
 
 ### `align_TaskValue`
 
-[primitives.crb:1559](../runtime/corbo/primitives.crb#L1559)
+[primitives.crb:1562](../runtime/corbo/primitives.crb#L1562)
 
 ```rust
 fn align_TaskValue()->usize
@@ -2851,7 +2877,7 @@ Returns the required C ABI alignment of TaskValue on this target.
 
 ### `g_TaskCompletion_ok`
 
-[primitives.crb:1568](../runtime/corbo/primitives.crb#L1568)
+[primitives.crb:1571](../runtime/corbo/primitives.crb#L1571)
 
 ```rust
 fn g_TaskCompletion_ok(pointer:usize)->bool
@@ -2862,7 +2888,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_TaskCompletion_ok`
 
-[primitives.crb:1577](../runtime/corbo/primitives.crb#L1577)
+[primitives.crb:1580](../runtime/corbo/primitives.crb#L1580)
 
 ```rust
 fn s_TaskCompletion_ok(pointer:usize, value:bool)
@@ -2873,7 +2899,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_TaskCompletion_value`
 
-[primitives.crb:1585](../runtime/corbo/primitives.crb#L1585)
+[primitives.crb:1588](../runtime/corbo/primitives.crb#L1588)
 
 ```rust
 fn a_TaskCompletion_value(pointer:usize)->usize
@@ -2884,7 +2910,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_TaskCompletion`
 
-[primitives.crb:1593](../runtime/corbo/primitives.crb#L1593)
+[primitives.crb:1596](../runtime/corbo/primitives.crb#L1596)
 
 ```rust
 fn size_TaskCompletion()->usize
@@ -2894,7 +2920,7 @@ Returns the C ABI size in bytes of TaskCompletion on this target.
 
 ### `align_TaskCompletion`
 
-[primitives.crb:1601](../runtime/corbo/primitives.crb#L1601)
+[primitives.crb:1604](../runtime/corbo/primitives.crb#L1604)
 
 ```rust
 fn align_TaskCompletion()->usize
@@ -2904,7 +2930,7 @@ Returns the required C ABI alignment of TaskCompletion on this target.
 
 ### `g_ClassicStack_base`
 
-[primitives.crb:1610](../runtime/corbo/primitives.crb#L1610)
+[primitives.crb:1613](../runtime/corbo/primitives.crb#L1613)
 
 ```rust
 fn g_ClassicStack_base(pointer:usize)->usize
@@ -2915,7 +2941,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_base`
 
-[primitives.crb:1619](../runtime/corbo/primitives.crb#L1619)
+[primitives.crb:1622](../runtime/corbo/primitives.crb#L1622)
 
 ```rust
 fn s_ClassicStack_base(pointer:usize, value:usize)
@@ -2926,7 +2952,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_base`
 
-[primitives.crb:1627](../runtime/corbo/primitives.crb#L1627)
+[primitives.crb:1630](../runtime/corbo/primitives.crb#L1630)
 
 ```rust
 fn a_ClassicStack_base(pointer:usize)->usize
@@ -2937,7 +2963,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_ClassicStack_cursor`
 
-[primitives.crb:1636](../runtime/corbo/primitives.crb#L1636)
+[primitives.crb:1639](../runtime/corbo/primitives.crb#L1639)
 
 ```rust
 fn g_ClassicStack_cursor(pointer:usize)->usize
@@ -2948,7 +2974,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_cursor`
 
-[primitives.crb:1645](../runtime/corbo/primitives.crb#L1645)
+[primitives.crb:1648](../runtime/corbo/primitives.crb#L1648)
 
 ```rust
 fn s_ClassicStack_cursor(pointer:usize, value:usize)
@@ -2959,7 +2985,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_cursor`
 
-[primitives.crb:1653](../runtime/corbo/primitives.crb#L1653)
+[primitives.crb:1656](../runtime/corbo/primitives.crb#L1656)
 
 ```rust
 fn a_ClassicStack_cursor(pointer:usize)->usize
@@ -2970,7 +2996,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_ClassicStack_limit`
 
-[primitives.crb:1662](../runtime/corbo/primitives.crb#L1662)
+[primitives.crb:1665](../runtime/corbo/primitives.crb#L1665)
 
 ```rust
 fn g_ClassicStack_limit(pointer:usize)->usize
@@ -2981,7 +3007,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_limit`
 
-[primitives.crb:1671](../runtime/corbo/primitives.crb#L1671)
+[primitives.crb:1674](../runtime/corbo/primitives.crb#L1674)
 
 ```rust
 fn s_ClassicStack_limit(pointer:usize, value:usize)
@@ -2992,7 +3018,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_limit`
 
-[primitives.crb:1679](../runtime/corbo/primitives.crb#L1679)
+[primitives.crb:1682](../runtime/corbo/primitives.crb#L1682)
 
 ```rust
 fn a_ClassicStack_limit(pointer:usize)->usize
@@ -3003,7 +3029,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_ClassicStack_committed`
 
-[primitives.crb:1688](../runtime/corbo/primitives.crb#L1688)
+[primitives.crb:1691](../runtime/corbo/primitives.crb#L1691)
 
 ```rust
 fn g_ClassicStack_committed(pointer:usize)->usize
@@ -3014,7 +3040,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_committed`
 
-[primitives.crb:1697](../runtime/corbo/primitives.crb#L1697)
+[primitives.crb:1700](../runtime/corbo/primitives.crb#L1700)
 
 ```rust
 fn s_ClassicStack_committed(pointer:usize, value:usize)
@@ -3025,7 +3051,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_committed`
 
-[primitives.crb:1705](../runtime/corbo/primitives.crb#L1705)
+[primitives.crb:1708](../runtime/corbo/primitives.crb#L1708)
 
 ```rust
 fn a_ClassicStack_committed(pointer:usize)->usize
@@ -3036,7 +3062,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_ClassicStack_page_size`
 
-[primitives.crb:1714](../runtime/corbo/primitives.crb#L1714)
+[primitives.crb:1717](../runtime/corbo/primitives.crb#L1717)
 
 ```rust
 fn g_ClassicStack_page_size(pointer:usize)->usize
@@ -3047,7 +3073,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_page_size`
 
-[primitives.crb:1723](../runtime/corbo/primitives.crb#L1723)
+[primitives.crb:1726](../runtime/corbo/primitives.crb#L1726)
 
 ```rust
 fn s_ClassicStack_page_size(pointer:usize, value:usize)
@@ -3058,7 +3084,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_page_size`
 
-[primitives.crb:1731](../runtime/corbo/primitives.crb#L1731)
+[primitives.crb:1734](../runtime/corbo/primitives.crb#L1734)
 
 ```rust
 fn a_ClassicStack_page_size(pointer:usize)->usize
@@ -3069,7 +3095,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_ClassicStack_mapped_size`
 
-[primitives.crb:1740](../runtime/corbo/primitives.crb#L1740)
+[primitives.crb:1743](../runtime/corbo/primitives.crb#L1743)
 
 ```rust
 fn g_ClassicStack_mapped_size(pointer:usize)->usize
@@ -3080,7 +3106,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_mapped_size`
 
-[primitives.crb:1749](../runtime/corbo/primitives.crb#L1749)
+[primitives.crb:1752](../runtime/corbo/primitives.crb#L1752)
 
 ```rust
 fn s_ClassicStack_mapped_size(pointer:usize, value:usize)
@@ -3091,7 +3117,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_mapped_size`
 
-[primitives.crb:1757](../runtime/corbo/primitives.crb#L1757)
+[primitives.crb:1760](../runtime/corbo/primitives.crb#L1760)
 
 ```rust
 fn a_ClassicStack_mapped_size(pointer:usize)->usize
@@ -3102,7 +3128,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_ClassicStack_band`
 
-[primitives.crb:1766](../runtime/corbo/primitives.crb#L1766)
+[primitives.crb:1769](../runtime/corbo/primitives.crb#L1769)
 
 ```rust
 fn g_ClassicStack_band(pointer:usize)->usize
@@ -3113,7 +3139,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_ClassicStack_band`
 
-[primitives.crb:1775](../runtime/corbo/primitives.crb#L1775)
+[primitives.crb:1778](../runtime/corbo/primitives.crb#L1778)
 
 ```rust
 fn s_ClassicStack_band(pointer:usize, value:usize)
@@ -3124,7 +3150,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_ClassicStack_band`
 
-[primitives.crb:1783](../runtime/corbo/primitives.crb#L1783)
+[primitives.crb:1786](../runtime/corbo/primitives.crb#L1786)
 
 ```rust
 fn a_ClassicStack_band(pointer:usize)->usize
@@ -3135,7 +3161,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_ClassicStack`
 
-[primitives.crb:1791](../runtime/corbo/primitives.crb#L1791)
+[primitives.crb:1794](../runtime/corbo/primitives.crb#L1794)
 
 ```rust
 fn size_ClassicStack()->usize
@@ -3145,7 +3171,7 @@ Returns the C ABI size in bytes of ClassicStack on this target.
 
 ### `align_ClassicStack`
 
-[primitives.crb:1799](../runtime/corbo/primitives.crb#L1799)
+[primitives.crb:1802](../runtime/corbo/primitives.crb#L1802)
 
 ```rust
 fn align_ClassicStack()->usize
@@ -3155,7 +3181,7 @@ Returns the required C ABI alignment of ClassicStack on this target.
 
 ### `a_NativeBox_region`
 
-[primitives.crb:1808](../runtime/corbo/primitives.crb#L1808)
+[primitives.crb:1811](../runtime/corbo/primitives.crb#L1811)
 
 ```rust
 fn a_NativeBox_region(pointer:usize)->usize
@@ -3166,7 +3192,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_NativeBox_state`
 
-[primitives.crb:1817](../runtime/corbo/primitives.crb#L1817)
+[primitives.crb:1820](../runtime/corbo/primitives.crb#L1820)
 
 ```rust
 fn g_NativeBox_state(pointer:usize)->usize
@@ -3177,7 +3203,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_NativeBox_state`
 
-[primitives.crb:1826](../runtime/corbo/primitives.crb#L1826)
+[primitives.crb:1829](../runtime/corbo/primitives.crb#L1829)
 
 ```rust
 fn s_NativeBox_state(pointer:usize, value:usize)
@@ -3188,7 +3214,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_NativeBox_state`
 
-[primitives.crb:1834](../runtime/corbo/primitives.crb#L1834)
+[primitives.crb:1837](../runtime/corbo/primitives.crb#L1837)
 
 ```rust
 fn a_NativeBox_state(pointer:usize)->usize
@@ -3199,7 +3225,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_NativeBox_run`
 
-[primitives.crb:1843](../runtime/corbo/primitives.crb#L1843)
+[primitives.crb:1846](../runtime/corbo/primitives.crb#L1846)
 
 ```rust
 fn g_NativeBox_run(pointer:usize)->usize
@@ -3210,7 +3236,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_NativeBox_run`
 
-[primitives.crb:1852](../runtime/corbo/primitives.crb#L1852)
+[primitives.crb:1855](../runtime/corbo/primitives.crb#L1855)
 
 ```rust
 fn s_NativeBox_run(pointer:usize, value:usize)
@@ -3221,7 +3247,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_NativeBox_run`
 
-[primitives.crb:1860](../runtime/corbo/primitives.crb#L1860)
+[primitives.crb:1863](../runtime/corbo/primitives.crb#L1863)
 
 ```rust
 fn a_NativeBox_run(pointer:usize)->usize
@@ -3232,7 +3258,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_NativeBox_abandoned`
 
-[primitives.crb:1869](../runtime/corbo/primitives.crb#L1869)
+[primitives.crb:1872](../runtime/corbo/primitives.crb#L1872)
 
 ```rust
 fn g_NativeBox_abandoned(pointer:usize)->bool
@@ -3243,7 +3269,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_NativeBox_abandoned`
 
-[primitives.crb:1878](../runtime/corbo/primitives.crb#L1878)
+[primitives.crb:1881](../runtime/corbo/primitives.crb#L1881)
 
 ```rust
 fn s_NativeBox_abandoned(pointer:usize, value:bool)
@@ -3254,7 +3280,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_NativeBox_dispose`
 
-[primitives.crb:1886](../runtime/corbo/primitives.crb#L1886)
+[primitives.crb:1889](../runtime/corbo/primitives.crb#L1889)
 
 ```rust
 fn g_NativeBox_dispose(pointer:usize)->usize
@@ -3265,7 +3291,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_NativeBox_dispose`
 
-[primitives.crb:1895](../runtime/corbo/primitives.crb#L1895)
+[primitives.crb:1898](../runtime/corbo/primitives.crb#L1898)
 
 ```rust
 fn s_NativeBox_dispose(pointer:usize, value:usize)
@@ -3276,7 +3302,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_NativeBox_dispose`
 
-[primitives.crb:1903](../runtime/corbo/primitives.crb#L1903)
+[primitives.crb:1906](../runtime/corbo/primitives.crb#L1906)
 
 ```rust
 fn a_NativeBox_dispose(pointer:usize)->usize
@@ -3287,7 +3313,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_NativeBox`
 
-[primitives.crb:1911](../runtime/corbo/primitives.crb#L1911)
+[primitives.crb:1914](../runtime/corbo/primitives.crb#L1914)
 
 ```rust
 fn size_NativeBox()->usize
@@ -3297,7 +3323,7 @@ Returns the C ABI size in bytes of NativeBox on this target.
 
 ### `align_NativeBox`
 
-[primitives.crb:1919](../runtime/corbo/primitives.crb#L1919)
+[primitives.crb:1922](../runtime/corbo/primitives.crb#L1922)
 
 ```rust
 fn align_NativeBox()->usize
@@ -3307,7 +3333,7 @@ Returns the required C ABI alignment of NativeBox on this target.
 
 ### `g_CorboStackMark_position`
 
-[primitives.crb:1928](../runtime/corbo/primitives.crb#L1928)
+[primitives.crb:1931](../runtime/corbo/primitives.crb#L1931)
 
 ```rust
 fn g_CorboStackMark_position(pointer:usize)->usize
@@ -3318,7 +3344,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_CorboStackMark_position`
 
-[primitives.crb:1937](../runtime/corbo/primitives.crb#L1937)
+[primitives.crb:1940](../runtime/corbo/primitives.crb#L1940)
 
 ```rust
 fn s_CorboStackMark_position(pointer:usize, value:usize)
@@ -3329,7 +3355,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_CorboStackMark_position`
 
-[primitives.crb:1945](../runtime/corbo/primitives.crb#L1945)
+[primitives.crb:1948](../runtime/corbo/primitives.crb#L1948)
 
 ```rust
 fn a_CorboStackMark_position(pointer:usize)->usize
@@ -3340,7 +3366,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_CorboStackMark_stack`
 
-[primitives.crb:1954](../runtime/corbo/primitives.crb#L1954)
+[primitives.crb:1957](../runtime/corbo/primitives.crb#L1957)
 
 ```rust
 fn g_CorboStackMark_stack(pointer:usize)->usize
@@ -3351,7 +3377,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_CorboStackMark_stack`
 
-[primitives.crb:1963](../runtime/corbo/primitives.crb#L1963)
+[primitives.crb:1966](../runtime/corbo/primitives.crb#L1966)
 
 ```rust
 fn s_CorboStackMark_stack(pointer:usize, value:usize)
@@ -3362,7 +3388,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_CorboStackMark_stack`
 
-[primitives.crb:1971](../runtime/corbo/primitives.crb#L1971)
+[primitives.crb:1974](../runtime/corbo/primitives.crb#L1974)
 
 ```rust
 fn a_CorboStackMark_stack(pointer:usize)->usize
@@ -3373,7 +3399,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_CorboStackMark_region_scope`
 
-[primitives.crb:1980](../runtime/corbo/primitives.crb#L1980)
+[primitives.crb:1983](../runtime/corbo/primitives.crb#L1983)
 
 ```rust
 fn g_CorboStackMark_region_scope(pointer:usize)->usize
@@ -3384,7 +3410,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_CorboStackMark_region_scope`
 
-[primitives.crb:1989](../runtime/corbo/primitives.crb#L1989)
+[primitives.crb:1992](../runtime/corbo/primitives.crb#L1992)
 
 ```rust
 fn s_CorboStackMark_region_scope(pointer:usize, value:usize)
@@ -3395,7 +3421,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_CorboStackMark_region_scope`
 
-[primitives.crb:1997](../runtime/corbo/primitives.crb#L1997)
+[primitives.crb:2000](../runtime/corbo/primitives.crb#L2000)
 
 ```rust
 fn a_CorboStackMark_region_scope(pointer:usize)->usize
@@ -3406,7 +3432,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_CorboStackMark`
 
-[primitives.crb:2005](../runtime/corbo/primitives.crb#L2005)
+[primitives.crb:2008](../runtime/corbo/primitives.crb#L2008)
 
 ```rust
 fn size_CorboStackMark()->usize
@@ -3416,7 +3442,7 @@ Returns the C ABI size in bytes of CorboStackMark on this target.
 
 ### `align_CorboStackMark`
 
-[primitives.crb:2013](../runtime/corbo/primitives.crb#L2013)
+[primitives.crb:2016](../runtime/corbo/primitives.crb#L2016)
 
 ```rust
 fn align_CorboStackMark()->usize
@@ -3426,7 +3452,7 @@ Returns the required C ABI alignment of CorboStackMark on this target.
 
 ### `g_CorboStackInfo_position`
 
-[primitives.crb:2022](../runtime/corbo/primitives.crb#L2022)
+[primitives.crb:2025](../runtime/corbo/primitives.crb#L2025)
 
 ```rust
 fn g_CorboStackInfo_position(pointer:usize)->usize
@@ -3437,7 +3463,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_CorboStackInfo_position`
 
-[primitives.crb:2031](../runtime/corbo/primitives.crb#L2031)
+[primitives.crb:2034](../runtime/corbo/primitives.crb#L2034)
 
 ```rust
 fn s_CorboStackInfo_position(pointer:usize, value:usize)
@@ -3448,7 +3474,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_CorboStackInfo_position`
 
-[primitives.crb:2039](../runtime/corbo/primitives.crb#L2039)
+[primitives.crb:2042](../runtime/corbo/primitives.crb#L2042)
 
 ```rust
 fn a_CorboStackInfo_position(pointer:usize)->usize
@@ -3459,7 +3485,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_CorboStackInfo_committed`
 
-[primitives.crb:2048](../runtime/corbo/primitives.crb#L2048)
+[primitives.crb:2051](../runtime/corbo/primitives.crb#L2051)
 
 ```rust
 fn g_CorboStackInfo_committed(pointer:usize)->usize
@@ -3470,7 +3496,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_CorboStackInfo_committed`
 
-[primitives.crb:2057](../runtime/corbo/primitives.crb#L2057)
+[primitives.crb:2060](../runtime/corbo/primitives.crb#L2060)
 
 ```rust
 fn s_CorboStackInfo_committed(pointer:usize, value:usize)
@@ -3481,7 +3507,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_CorboStackInfo_committed`
 
-[primitives.crb:2065](../runtime/corbo/primitives.crb#L2065)
+[primitives.crb:2068](../runtime/corbo/primitives.crb#L2068)
 
 ```rust
 fn a_CorboStackInfo_committed(pointer:usize)->usize
@@ -3492,7 +3518,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `g_CorboStackInfo_capacity`
 
-[primitives.crb:2074](../runtime/corbo/primitives.crb#L2074)
+[primitives.crb:2077](../runtime/corbo/primitives.crb#L2077)
 
 ```rust
 fn g_CorboStackInfo_capacity(pointer:usize)->usize
@@ -3503,7 +3529,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `s_CorboStackInfo_capacity`
 
-[primitives.crb:2083](../runtime/corbo/primitives.crb#L2083)
+[primitives.crb:2086](../runtime/corbo/primitives.crb#L2086)
 
 ```rust
 fn s_CorboStackInfo_capacity(pointer:usize, value:usize)
@@ -3514,7 +3540,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `a_CorboStackInfo_capacity`
 
-[primitives.crb:2091](../runtime/corbo/primitives.crb#L2091)
+[primitives.crb:2094](../runtime/corbo/primitives.crb#L2094)
 
 ```rust
 fn a_CorboStackInfo_capacity(pointer:usize)->usize
@@ -3525,7 +3551,7 @@ Caller supplies valid aligned storage and any required lock; this binding perfor
 
 ### `size_CorboStackInfo`
 
-[primitives.crb:2099](../runtime/corbo/primitives.crb#L2099)
+[primitives.crb:2102](../runtime/corbo/primitives.crb#L2102)
 
 ```rust
 fn size_CorboStackInfo()->usize
@@ -3535,7 +3561,7 @@ Returns the C ABI size in bytes of CorboStackInfo on this target.
 
 ### `align_CorboStackInfo`
 
-[primitives.crb:2107](../runtime/corbo/primitives.crb#L2107)
+[primitives.crb:2110](../runtime/corbo/primitives.crb#L2110)
 
 ```rust
 fn align_CorboStackInfo()->usize
@@ -3545,7 +3571,7 @@ Returns the required C ABI alignment of CorboStackInfo on this target.
 
 ### `get_base`
 
-[primitives.crb:2116](../runtime/corbo/primitives.crb#L2116)
+[primitives.crb:2119](../runtime/corbo/primitives.crb#L2119)
 
 ```rust
 fn get_base()->usize
@@ -3556,7 +3582,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_base`
 
-[primitives.crb:2125](../runtime/corbo/primitives.crb#L2125)
+[primitives.crb:2128](../runtime/corbo/primitives.crb#L2128)
 
 ```rust
 fn set_base(value:usize)
@@ -3567,7 +3593,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_cursor`
 
-[primitives.crb:2133](../runtime/corbo/primitives.crb#L2133)
+[primitives.crb:2136](../runtime/corbo/primitives.crb#L2136)
 
 ```rust
 fn get_cursor()->usize
@@ -3578,7 +3604,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_cursor`
 
-[primitives.crb:2142](../runtime/corbo/primitives.crb#L2142)
+[primitives.crb:2145](../runtime/corbo/primitives.crb#L2145)
 
 ```rust
 fn set_cursor(value:usize)
@@ -3589,7 +3615,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_limit`
 
-[primitives.crb:2150](../runtime/corbo/primitives.crb#L2150)
+[primitives.crb:2153](../runtime/corbo/primitives.crb#L2153)
 
 ```rust
 fn get_limit()->usize
@@ -3600,7 +3626,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_limit`
 
-[primitives.crb:2159](../runtime/corbo/primitives.crb#L2159)
+[primitives.crb:2162](../runtime/corbo/primitives.crb#L2162)
 
 ```rust
 fn set_limit(value:usize)
@@ -3611,7 +3637,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_committed`
 
-[primitives.crb:2167](../runtime/corbo/primitives.crb#L2167)
+[primitives.crb:2170](../runtime/corbo/primitives.crb#L2170)
 
 ```rust
 fn get_committed()->usize
@@ -3622,7 +3648,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_committed`
 
-[primitives.crb:2176](../runtime/corbo/primitives.crb#L2176)
+[primitives.crb:2179](../runtime/corbo/primitives.crb#L2179)
 
 ```rust
 fn set_committed(value:usize)
@@ -3633,7 +3659,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_page_size`
 
-[primitives.crb:2184](../runtime/corbo/primitives.crb#L2184)
+[primitives.crb:2187](../runtime/corbo/primitives.crb#L2187)
 
 ```rust
 fn get_page_size()->usize
@@ -3644,7 +3670,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_page_size`
 
-[primitives.crb:2193](../runtime/corbo/primitives.crb#L2193)
+[primitives.crb:2196](../runtime/corbo/primitives.crb#L2196)
 
 ```rust
 fn set_page_size(value:usize)
@@ -3655,7 +3681,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_mapped_size`
 
-[primitives.crb:2201](../runtime/corbo/primitives.crb#L2201)
+[primitives.crb:2204](../runtime/corbo/primitives.crb#L2204)
 
 ```rust
 fn get_mapped_size()->usize
@@ -3666,7 +3692,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_mapped_size`
 
-[primitives.crb:2210](../runtime/corbo/primitives.crb#L2210)
+[primitives.crb:2213](../runtime/corbo/primitives.crb#L2213)
 
 ```rust
 fn set_mapped_size(value:usize)
@@ -3677,7 +3703,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_global_fixed_budget`
 
-[primitives.crb:2218](../runtime/corbo/primitives.crb#L2218)
+[primitives.crb:2221](../runtime/corbo/primitives.crb#L2221)
 
 ```rust
 fn get_global_fixed_budget()->usize
@@ -3688,7 +3714,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_global_fixed_budget`
 
-[primitives.crb:2227](../runtime/corbo/primitives.crb#L2227)
+[primitives.crb:2230](../runtime/corbo/primitives.crb#L2230)
 
 ```rust
 fn set_global_fixed_budget(value:usize)
@@ -3699,7 +3725,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_global_budget`
 
-[primitives.crb:2235](../runtime/corbo/primitives.crb#L2235)
+[primitives.crb:2238](../runtime/corbo/primitives.crb#L2238)
 
 ```rust
 fn get_global_budget()->usize
@@ -3710,7 +3736,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_global_budget`
 
-[primitives.crb:2244](../runtime/corbo/primitives.crb#L2244)
+[primitives.crb:2247](../runtime/corbo/primitives.crb#L2247)
 
 ```rust
 fn set_global_budget(value:usize)
@@ -3721,7 +3747,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_global_limit`
 
-[primitives.crb:2252](../runtime/corbo/primitives.crb#L2252)
+[primitives.crb:2255](../runtime/corbo/primitives.crb#L2255)
 
 ```rust
 fn get_global_limit()->usize
@@ -3732,7 +3758,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_global_limit`
 
-[primitives.crb:2261](../runtime/corbo/primitives.crb#L2261)
+[primitives.crb:2264](../runtime/corbo/primitives.crb#L2264)
 
 ```rust
 fn set_global_limit(value:usize)
@@ -3743,7 +3769,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_current_band`
 
-[primitives.crb:2269](../runtime/corbo/primitives.crb#L2269)
+[primitives.crb:2272](../runtime/corbo/primitives.crb#L2272)
 
 ```rust
 fn get_current_band()->usize
@@ -3754,7 +3780,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_current_band`
 
-[primitives.crb:2278](../runtime/corbo/primitives.crb#L2278)
+[primitives.crb:2281](../runtime/corbo/primitives.crb#L2281)
 
 ```rust
 fn set_current_band(value:usize)
@@ -3765,7 +3791,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_fixed_reclaim_threshold`
 
-[primitives.crb:2286](../runtime/corbo/primitives.crb#L2286)
+[primitives.crb:2289](../runtime/corbo/primitives.crb#L2289)
 
 ```rust
 fn get_fixed_reclaim_threshold()->usize
@@ -3776,7 +3802,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_fixed_reclaim_threshold`
 
-[primitives.crb:2295](../runtime/corbo/primitives.crb#L2295)
+[primitives.crb:2298](../runtime/corbo/primitives.crb#L2298)
 
 ```rust
 fn set_fixed_reclaim_threshold(value:usize)
@@ -3787,7 +3813,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_region_reclaim_threshold`
 
-[primitives.crb:2303](../runtime/corbo/primitives.crb#L2303)
+[primitives.crb:2306](../runtime/corbo/primitives.crb#L2306)
 
 ```rust
 fn get_region_reclaim_threshold()->usize
@@ -3798,7 +3824,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_region_reclaim_threshold`
 
-[primitives.crb:2312](../runtime/corbo/primitives.crb#L2312)
+[primitives.crb:2315](../runtime/corbo/primitives.crb#L2315)
 
 ```rust
 fn set_region_reclaim_threshold(value:usize)
@@ -3809,7 +3835,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_task_worker_count`
 
-[primitives.crb:2320](../runtime/corbo/primitives.crb#L2320)
+[primitives.crb:2323](../runtime/corbo/primitives.crb#L2323)
 
 ```rust
 fn get_task_worker_count()->usize
@@ -3820,7 +3846,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_task_worker_count`
 
-[primitives.crb:2329](../runtime/corbo/primitives.crb#L2329)
+[primitives.crb:2332](../runtime/corbo/primitives.crb#L2332)
 
 ```rust
 fn set_task_worker_count(value:usize)
@@ -3831,7 +3857,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_task_head`
 
-[primitives.crb:2337](../runtime/corbo/primitives.crb#L2337)
+[primitives.crb:2340](../runtime/corbo/primitives.crb#L2340)
 
 ```rust
 fn get_task_head()->usize
@@ -3842,7 +3868,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_task_head`
 
-[primitives.crb:2346](../runtime/corbo/primitives.crb#L2346)
+[primitives.crb:2349](../runtime/corbo/primitives.crb#L2349)
 
 ```rust
 fn set_task_head(value:usize)
@@ -3853,7 +3879,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_task_tail`
 
-[primitives.crb:2354](../runtime/corbo/primitives.crb#L2354)
+[primitives.crb:2357](../runtime/corbo/primitives.crb#L2357)
 
 ```rust
 fn get_task_tail()->usize
@@ -3864,7 +3890,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_task_tail`
 
-[primitives.crb:2363](../runtime/corbo/primitives.crb#L2363)
+[primitives.crb:2366](../runtime/corbo/primitives.crb#L2366)
 
 ```rust
 fn set_task_tail(value:usize)
@@ -3875,7 +3901,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_task_active`
 
-[primitives.crb:2371](../runtime/corbo/primitives.crb#L2371)
+[primitives.crb:2374](../runtime/corbo/primitives.crb#L2374)
 
 ```rust
 fn get_task_active()->usize
@@ -3886,7 +3912,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_task_active`
 
-[primitives.crb:2380](../runtime/corbo/primitives.crb#L2380)
+[primitives.crb:2383](../runtime/corbo/primitives.crb#L2383)
 
 ```rust
 fn set_task_active(value:usize)
@@ -3897,7 +3923,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_native_count`
 
-[primitives.crb:2388](../runtime/corbo/primitives.crb#L2388)
+[primitives.crb:2391](../runtime/corbo/primitives.crb#L2391)
 
 ```rust
 fn get_native_count()->usize
@@ -3908,7 +3934,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_native_count`
 
-[primitives.crb:2397](../runtime/corbo/primitives.crb#L2397)
+[primitives.crb:2400](../runtime/corbo/primitives.crb#L2400)
 
 ```rust
 fn set_native_count(value:usize)
@@ -3919,7 +3945,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_socket_waiters`
 
-[primitives.crb:2405](../runtime/corbo/primitives.crb#L2405)
+[primitives.crb:2408](../runtime/corbo/primitives.crb#L2408)
 
 ```rust
 fn get_socket_waiters()->usize
@@ -3930,7 +3956,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_socket_waiters`
 
-[primitives.crb:2414](../runtime/corbo/primitives.crb#L2414)
+[primitives.crb:2417](../runtime/corbo/primitives.crb#L2417)
 
 ```rust
 fn set_socket_waiters(value:usize)
@@ -3941,7 +3967,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_socket_serial`
 
-[primitives.crb:2422](../runtime/corbo/primitives.crb#L2422)
+[primitives.crb:2425](../runtime/corbo/primitives.crb#L2425)
 
 ```rust
 fn get_socket_serial()->usize
@@ -3952,7 +3978,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_socket_serial`
 
-[primitives.crb:2431](../runtime/corbo/primitives.crb#L2431)
+[primitives.crb:2434](../runtime/corbo/primitives.crb#L2434)
 
 ```rust
 fn set_socket_serial(value:usize)
@@ -3963,7 +3989,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_completion_port`
 
-[primitives.crb:2439](../runtime/corbo/primitives.crb#L2439)
+[primitives.crb:2442](../runtime/corbo/primitives.crb#L2442)
 
 ```rust
 fn get_completion_port()->usize
@@ -3974,7 +4000,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_completion_port`
 
-[primitives.crb:2448](../runtime/corbo/primitives.crb#L2448)
+[primitives.crb:2451](../runtime/corbo/primitives.crb#L2451)
 
 ```rust
 fn set_completion_port(value:usize)
@@ -3985,7 +4011,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_task_attempted`
 
-[primitives.crb:2456](../runtime/corbo/primitives.crb#L2456)
+[primitives.crb:2459](../runtime/corbo/primitives.crb#L2459)
 
 ```rust
 fn get_task_attempted()->bool
@@ -3996,7 +4022,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_task_attempted`
 
-[primitives.crb:2465](../runtime/corbo/primitives.crb#L2465)
+[primitives.crb:2468](../runtime/corbo/primitives.crb#L2468)
 
 ```rust
 fn set_task_attempted(value:bool)
@@ -4007,7 +4033,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_task_stopping`
 
-[primitives.crb:2473](../runtime/corbo/primitives.crb#L2473)
+[primitives.crb:2476](../runtime/corbo/primitives.crb#L2476)
 
 ```rust
 fn get_task_stopping()->bool
@@ -4018,7 +4044,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_task_stopping`
 
-[primitives.crb:2482](../runtime/corbo/primitives.crb#L2482)
+[primitives.crb:2485](../runtime/corbo/primitives.crb#L2485)
 
 ```rust
 fn set_task_stopping(value:bool)
@@ -4029,7 +4055,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_socket_queue`
 
-[primitives.crb:2490](../runtime/corbo/primitives.crb#L2490)
+[primitives.crb:2493](../runtime/corbo/primitives.crb#L2493)
 
 ```rust
 fn get_socket_queue()->i64
@@ -4040,7 +4066,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_socket_queue`
 
-[primitives.crb:2499](../runtime/corbo/primitives.crb#L2499)
+[primitives.crb:2502](../runtime/corbo/primitives.crb#L2502)
 
 ```rust
 fn set_socket_queue(value:i64)
@@ -4051,7 +4077,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_socket_init_error`
 
-[primitives.crb:2507](../runtime/corbo/primitives.crb#L2507)
+[primitives.crb:2510](../runtime/corbo/primitives.crb#L2510)
 
 ```rust
 fn get_socket_init_error()->i64
@@ -4062,7 +4088,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_socket_init_error`
 
-[primitives.crb:2516](../runtime/corbo/primitives.crb#L2516)
+[primitives.crb:2519](../runtime/corbo/primitives.crb#L2519)
 
 ```rust
 fn set_socket_init_error(value:i64)
@@ -4073,7 +4099,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `get_completion_init_error`
 
-[primitives.crb:2524](../runtime/corbo/primitives.crb#L2524)
+[primitives.crb:2527](../runtime/corbo/primitives.crb#L2527)
 
 ```rust
 fn get_completion_init_error()->i64
@@ -4084,7 +4110,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `set_completion_init_error`
 
-[primitives.crb:2533](../runtime/corbo/primitives.crb#L2533)
+[primitives.crb:2536](../runtime/corbo/primitives.crb#L2536)
 
 ```rust
 fn set_completion_init_error(value:i64)
@@ -4095,7 +4121,7 @@ Synchronize shared access; thread-local state belongs to the current execution c
 
 ### `global_band_address`
 
-[primitives.crb:2540](../runtime/corbo/primitives.crb#L2540)
+[primitives.crb:2543](../runtime/corbo/primitives.crb#L2543)
 
 ```rust
 fn global_band_address()->usize
@@ -4105,7 +4131,7 @@ Returns the stable address of the shared fallback region band, without creating 
 
 ### `head_address`
 
-[primitives.crb:2548](../runtime/corbo/primitives.crb#L2548)
+[primitives.crb:2551](../runtime/corbo/primitives.crb#L2551)
 
 ```rust
 fn head_address()->usize
@@ -4115,7 +4141,7 @@ Returns the scheduler queue-head link address for locked tail-link maintenance.
 
 ### `worker_address`
 
-[primitives.crb:2556](../runtime/corbo/primitives.crb#L2556)
+[primitives.crb:2559](../runtime/corbo/primitives.crb#L2559)
 
 ```rust
 fn worker_address(index:usize)->usize
@@ -4125,7 +4151,7 @@ Returns the address of a poll-worker pthread_t slot; index must be inside the fi
 
 ### `read_word`
 
-[primitives.crb:2564](../runtime/corbo/primitives.crb#L2564)
+[primitives.crb:2567](../runtime/corbo/primitives.crb#L2567)
 
 ```rust
 fn read_word(pointer:usize)->usize
@@ -4135,7 +4161,7 @@ Loads one uintptr_t from a live, suitably aligned address; the caller must provi
 
 ### `write_word`
 
-[primitives.crb:2572](../runtime/corbo/primitives.crb#L2572)
+[primitives.crb:2575](../runtime/corbo/primitives.crb#L2575)
 
 ```rust
 fn write_word(pointer:usize, value:usize)
@@ -4145,7 +4171,7 @@ Stores one uintptr_t into live, aligned, writable storage; performs no ownership
 
 ### `read_byte`
 
-[primitives.crb:2579](../runtime/corbo/primitives.crb#L2579)
+[primitives.crb:2582](../runtime/corbo/primitives.crb#L2582)
 
 ```rust
 fn read_byte(pointer:usize)->usize
@@ -4155,7 +4181,7 @@ Loads one byte from a live readable address without a Corbo bounds check.
 
 ### `write_byte`
 
-[primitives.crb:2587](../runtime/corbo/primitives.crb#L2587)
+[primitives.crb:2590](../runtime/corbo/primitives.crb#L2590)
 
 ```rust
 fn write_byte(pointer:usize, value:usize)
@@ -4165,7 +4191,7 @@ Stores the low byte of value into a live writable address.
 
 ### `read_integer`
 
-[primitives.crb:2594](../runtime/corbo/primitives.crb#L2594)
+[primitives.crb:2597](../runtime/corbo/primitives.crb#L2597)
 
 ```rust
 fn read_integer(pointer:usize)->usize
@@ -4175,7 +4201,7 @@ Loads one C int from live, aligned storage used by region-owner flags.
 
 ### `write_integer`
 
-[primitives.crb:2602](../runtime/corbo/primitives.crb#L2602)
+[primitives.crb:2605](../runtime/corbo/primitives.crb#L2605)
 
 ```rust
 fn write_integer(pointer:usize, value:usize)
@@ -4185,7 +4211,7 @@ Stores one C int into live, aligned, writable flag storage.
 
 ### `memory_zero`
 
-[primitives.crb:2609](../runtime/corbo/primitives.crb#L2609)
+[primitives.crb:2612](../runtime/corbo/primitives.crb#L2612)
 
 ```rust
 fn memory_zero(pointer:usize, bytes:usize)
@@ -4195,7 +4221,7 @@ Zeroes bytes of valid writable storage; the range must not contain resources nee
 
 ### `memory_copy`
 
-[primitives.crb:2616](../runtime/corbo/primitives.crb#L2616)
+[primitives.crb:2619](../runtime/corbo/primitives.crb#L2619)
 
 ```rust
 fn memory_copy(destination:usize, source:usize, bytes:usize)
@@ -4205,7 +4231,7 @@ Copies bytes between valid nonoverlapping ranges; ownership effects are managed 
 
 ### `memory_move`
 
-[primitives.crb:2623](../runtime/corbo/primitives.crb#L2623)
+[primitives.crb:2626](../runtime/corbo/primitives.crb#L2626)
 
 ```rust
 fn memory_move(destination:usize, source:usize, bytes:usize)
@@ -4215,7 +4241,7 @@ Moves bytes between valid ranges, allowing overlap; the caller updates element o
 
 ### `max_size`
 
-[primitives.crb:2630](../runtime/corbo/primitives.crb#L2630)
+[primitives.crb:2633](../runtime/corbo/primitives.crb#L2633)
 
 ```rust
 fn max_size()->usize
@@ -4225,7 +4251,7 @@ Returns the largest target uintptr_t value used for checked size arithmetic.
 
 ### `max_difference`
 
-[primitives.crb:2638](../runtime/corbo/primitives.crb#L2638)
+[primitives.crb:2641](../runtime/corbo/primitives.crb#L2641)
 
 ```rust
 fn max_difference()->usize
@@ -4235,7 +4261,7 @@ Returns PTRDIFF_MAX, the largest supported positive object-address difference.
 
 ### `max_alignment`
 
-[primitives.crb:2646](../runtime/corbo/primitives.crb#L2646)
+[primitives.crb:2649](../runtime/corbo/primitives.crb#L2649)
 
 ```rust
 fn max_alignment()->usize
@@ -4245,7 +4271,7 @@ Returns alignof(max_align_t) for fixed slots and map entry layout.
 
 ### `wrapping_multiply`
 
-[primitives.crb:2654](../runtime/corbo/primitives.crb#L2654)
+[primitives.crb:2657](../runtime/corbo/primitives.crb#L2657)
 
 ```rust
 fn wrapping_multiply(left:u64, right:u64)->u64
@@ -4255,7 +4281,7 @@ Multiplies machine words with unsigned wrapping for the map hash mixer.
 
 ### `os_page_size`
 
-[primitives.crb:2662](../runtime/corbo/primitives.crb#L2662)
+[primitives.crb:2665](../runtime/corbo/primitives.crb#L2665)
 
 ```rust
 fn os_page_size()->usize
@@ -4265,7 +4291,7 @@ Queries the target OS virtual-memory page size.
 
 ### `os_available_pages`
 
-[primitives.crb:2674](../runtime/corbo/primitives.crb#L2674)
+[primitives.crb:2677](../runtime/corbo/primitives.crb#L2677)
 
 ```rust
 fn os_available_pages()->i64
@@ -4275,7 +4301,7 @@ Queries available physical-memory pages on Unix; nonpositive results require the
 
 ### `os_physical_pages`
 
-[primitives.crb:2688](../runtime/corbo/primitives.crb#L2688)
+[primitives.crb:2691](../runtime/corbo/primitives.crb#L2691)
 
 ```rust
 fn os_physical_pages()->i64
@@ -4285,7 +4311,7 @@ Queries total physical-memory pages as a Unix sizing fallback.
 
 ### `os_cpus`
 
-[primitives.crb:2700](../runtime/corbo/primitives.crb#L2700)
+[primitives.crb:2703](../runtime/corbo/primitives.crb#L2703)
 
 ```rust
 fn os_cpus()->usize
@@ -4295,7 +4321,7 @@ Queries the OS processor count used to divide default memory budgets.
 
 ### `os_reserve`
 
-[primitives.crb:2712](../runtime/corbo/primitives.crb#L2712)
+[primitives.crb:2715](../runtime/corbo/primitives.crb#L2715)
 
 ```rust
 fn os_reserve(bytes:usize)->usize
@@ -4305,7 +4331,7 @@ Reserves a virtual address range without committing its full payload; returns ze
 
 ### `os_metadata`
 
-[primitives.crb:2724](../runtime/corbo/primitives.crb#L2724)
+[primitives.crb:2727](../runtime/corbo/primitives.crb#L2727)
 
 ```rust
 fn os_metadata(bytes:usize)->usize
@@ -4315,7 +4341,7 @@ Maps writable zero-initialized metadata pages and returns zero on failure.
 
 ### `os_commit`
 
-[primitives.crb:2736](../runtime/corbo/primitives.crb#L2736)
+[primitives.crb:2739](../runtime/corbo/primitives.crb#L2739)
 
 ```rust
 fn os_commit(pointer:usize, bytes:usize)->bool
@@ -4325,7 +4351,7 @@ Makes the supplied page range readable/writable through the target OS; reports s
 
 ### `os_unmap`
 
-[primitives.crb:2748](../runtime/corbo/primitives.crb#L2748)
+[primitives.crb:2751](../runtime/corbo/primitives.crb#L2751)
 
 ```rust
 fn os_unmap(pointer:usize, bytes:usize)
@@ -4335,7 +4361,7 @@ Releases an OS mapping using its original address and byte extent.
 
 ### `os_decommit`
 
-[primitives.crb:2759](../runtime/corbo/primitives.crb#L2759)
+[primitives.crb:2762](../runtime/corbo/primitives.crb#L2762)
 
 ```rust
 fn os_decommit(pointer:usize, bytes:usize)->bool
@@ -4345,7 +4371,7 @@ Returns physical backing for complete unused pages while preserving the reserved
 
 ### `fault`
 
-[primitives.crb:2771](../runtime/corbo/primitives.crb#L2771)
+[primitives.crb:2774](../runtime/corbo/primitives.crb#L2774)
 
 ```rust
 fn fault(code:usize)
@@ -4355,7 +4381,7 @@ Terminates with the selected reference-runtime diagnostic for invalid storage, s
 
 ### `os_abort`
 
-[primitives.crb:2778](../runtime/corbo/primitives.crb#L2778)
+[primitives.crb:2781](../runtime/corbo/primitives.crb#L2781)
 
 ```rust
 fn os_abort()
@@ -4365,7 +4391,7 @@ Terminates immediately for an impossible worker/pthread contract violation.
 
 ### `atomic_claim`
 
-[primitives.crb:2785](../runtime/corbo/primitives.crb#L2785)
+[primitives.crb:2788](../runtime/corbo/primitives.crb#L2788)
 
 ```rust
 fn atomic_claim(pointer:usize)->bool
@@ -4375,7 +4401,7 @@ Atomically changes an unoccupied pool-slot byte to occupied and reports whether 
 
 ### `atomic_clear`
 
-[primitives.crb:2793](../runtime/corbo/primitives.crb#L2793)
+[primitives.crb:2796](../runtime/corbo/primitives.crb#L2796)
 
 ```rust
 fn atomic_clear(pointer:usize)
@@ -4385,7 +4411,7 @@ Publishes a pool slot as free after its destructor has completed.
 
 ### `atomic_init_slot`
 
-[primitives.crb:2800](../runtime/corbo/primitives.crb#L2800)
+[primitives.crb:2803](../runtime/corbo/primitives.crb#L2803)
 
 ```rust
 fn atomic_init_slot(pointer:usize)
@@ -4395,7 +4421,7 @@ Initializes an occupancy byte before any thread may access the pool.
 
 ### `call_drop`
 
-[primitives.crb:2807](../runtime/corbo/primitives.crb#L2807)
+[primitives.crb:2810](../runtime/corbo/primitives.crb#L2810)
 
 ```rust
 fn call_drop(callback:usize, pointer:usize)
@@ -4405,7 +4431,7 @@ Calls a void(void*) payload destructor; function and payload addresses must sati
 
 ### `call_dispose`
 
-[primitives.crb:2814](../runtime/corbo/primitives.crb#L2814)
+[primitives.crb:2817](../runtime/corbo/primitives.crb#L2817)
 
 ```rust
 fn call_dispose(callback:usize, pointer:usize, completed:bool)
@@ -4415,7 +4441,7 @@ Calls a task-state cleanup callback with the completion flag controlling capture
 
 ### `call_poll`
 
-[primitives.crb:2821](../runtime/corbo/primitives.crb#L2821)
+[primitives.crb:2824](../runtime/corbo/primitives.crb#L2824)
 
 ```rust
 fn call_poll(callback:usize, pointer:usize, failed:bool)->bool
@@ -4425,7 +4451,7 @@ Calls a bool(Task*,bool) poll/clear callback and returns its completion result.
 
 ### `lock`
 
-[primitives.crb:2829](../runtime/corbo/primitives.crb#L2829)
+[primitives.crb:2832](../runtime/corbo/primitives.crb#L2832)
 
 ```rust
 fn lock()
@@ -4435,7 +4461,7 @@ Acquires the shared runtime/scheduler mutex; callers must not already hold this 
 
 ### `unlock`
 
-[primitives.crb:2838](../runtime/corbo/primitives.crb#L2838)
+[primitives.crb:2841](../runtime/corbo/primitives.crb#L2841)
 
 ```rust
 fn unlock()
@@ -4445,7 +4471,7 @@ Releases the shared mutex held by this thread.
 
 ### `condition_wait`
 
-[primitives.crb:2847](../runtime/corbo/primitives.crb#L2847)
+[primitives.crb:2850](../runtime/corbo/primitives.crb#L2850)
 
 ```rust
 fn condition_wait()
@@ -4455,7 +4481,7 @@ Atomically releases the held runtime mutex while waiting, then reacquires it; ca
 
 ### `broadcast`
 
-[primitives.crb:2856](../runtime/corbo/primitives.crb#L2856)
+[primitives.crb:2859](../runtime/corbo/primitives.crb#L2859)
 
 ```rust
 fn broadcast()
@@ -4465,7 +4491,7 @@ Wakes condition waiters so they can recheck state protected by the runtime mutex
 
 ### `thread_create`
 
-[primitives.crb:2865](../runtime/corbo/primitives.crb#L2865)
+[primitives.crb:2868](../runtime/corbo/primitives.crb#L2868)
 
 ```rust
 fn thread_create(slot:usize, entry:usize, argument:usize)->i32
@@ -4475,7 +4501,7 @@ Starts a joinable platform thread using a correctly typed entry callback and cal
 
 ### `thread_detached`
 
-[primitives.crb:2873](../runtime/corbo/primitives.crb#L2873)
+[primitives.crb:2876](../runtime/corbo/primitives.crb#L2876)
 
 ```rust
 fn thread_detached(entry:usize, argument:usize)->i32
@@ -4485,7 +4511,7 @@ Starts a detached platform worker with native thread attributes and returns the 
 
 ### `thread_join`
 
-[primitives.crb:2881](../runtime/corbo/primitives.crb#L2881)
+[primitives.crb:2884](../runtime/corbo/primitives.crb#L2884)
 
 ```rust
 fn thread_join(slot:usize)->i32
@@ -4495,7 +4521,7 @@ Joins a platform worker by identifier; failure violates the runtime shutdown con
 
 ### `thread_detach`
 
-[primitives.crb:2889](../runtime/corbo/primitives.crb#L2889)
+[primitives.crb:2892](../runtime/corbo/primitives.crb#L2892)
 
 ```rust
 fn thread_detach(slot:usize)
@@ -4505,7 +4531,7 @@ Detaches a platform thread identifier when its lifetime is managed independently
 
 ### `unsigned_bits`
 
-[primitives.crb:2903](../runtime/corbo/primitives.crb#L2903)
+[primitives.crb:2906](../runtime/corbo/primitives.crb#L2906)
 
 ```rust
 fn unsigned_bits(value:i64)->usize
@@ -4515,7 +4541,7 @@ Reinterprets a signed integer as unsigned bits, including negative values.
 
 ### `signed_bits`
 
-[primitives.crb:2905](../runtime/corbo/primitives.crb#L2905)
+[primitives.crb:2908](../runtime/corbo/primitives.crb#L2908)
 
 ```rust
 fn signed_bits(value:usize)->i64
@@ -4525,7 +4551,7 @@ Reinterprets an unsigned word as signed bits without an exact-conversion require
 
 ### `size_TaskResult`
 
-[primitives.crb:2907](../runtime/corbo/primitives.crb#L2907)
+[primitives.crb:2910](../runtime/corbo/primitives.crb#L2910)
 
 ```rust
 fn size_TaskResult()->usize
@@ -4535,7 +4561,7 @@ Returns the C ABI size in bytes of TaskResult on this target.
 
 ### `socket_waiters_address`
 
-[primitives.crb:2909](../runtime/corbo/primitives.crb#L2909)
+[primitives.crb:2912](../runtime/corbo/primitives.crb#L2912)
 
 ```rust
 fn socket_waiters_address()->usize
@@ -4545,7 +4571,7 @@ Returns the stable address of the waiter-list head for locked intrusive-list upd
 
 ### `temporary_thread_slot`
 
-[primitives.crb:2911](../runtime/corbo/primitives.crb#L2911)
+[primitives.crb:2914](../runtime/corbo/primitives.crb#L2914)
 
 ```rust
 fn temporary_thread_slot()->usize
@@ -4555,7 +4581,7 @@ Returns thread-local scratch storage for a detached thread identifier.
 
 ### `call_task_drop`
 
-[primitives.crb:2913](../runtime/corbo/primitives.crb#L2913)
+[primitives.crb:2916](../runtime/corbo/primitives.crb#L2916)
 
 ```rust
 fn call_task_drop(callback:usize,pointer:usize)
@@ -4565,7 +4591,7 @@ Calls a void(Task*) task destructor through its exact function-pointer type.
 
 ### `os_windows`
 
-[primitives.crb:2915](../runtime/corbo/primitives.crb#L2915)
+[primitives.crb:2918](../runtime/corbo/primitives.crb#L2918)
 
 ```rust
 fn os_windows()->bool
@@ -4575,13 +4601,133 @@ Reports whether the selected C target is Windows for platform-specific capacity 
 
 ### `os_available_bytes`
 
-[primitives.crb:2921](../runtime/corbo/primitives.crb#L2921)
+[primitives.crb:2924](../runtime/corbo/primitives.crb#L2924)
 
 ```rust
 fn os_available_bytes()->usize
 ```
 
 Queries available Windows physical bytes; returns UINTPTR_MAX if the OS query fails.
+
+### `set_cursor_untracked`
+
+[primitives.crb:2931](../runtime/corbo/primitives.crb#L2931)
+
+```rust
+fn set_cursor_untracked(value:usize)
+```
+
+Assigns a restored execution cursor without counting the context as a new allocation.
+
+### `metric_add`
+
+[primitives.crb:2933](../runtime/corbo/primitives.crb#L2933)
+
+```rust
+fn metric_add(counter:usize,bytes:usize)
+```
+
+Adds a successful byte transition to one global atomic metric.
+
+### `metric_sub`
+
+[primitives.crb:2935](../runtime/corbo/primitives.crb#L2935)
+
+```rust
+fn metric_sub(counter:usize,bytes:usize)
+```
+
+Subtracts a completed byte transition from one global atomic metric.
+
+### `metric_read`
+
+[primitives.crb:2937](../runtime/corbo/primitives.crb#L2937)
+
+```rust
+fn metric_read(counter:usize)->usize
+```
+
+Reads one metric without reading another thread's mutable storage.
+
+### `metric_pool`
+
+[primitives.crb:2943](../runtime/corbo/primitives.crb#L2943)
+
+```rust
+fn metric_pool()->usize
+```
+
+Returns the current execution context's newest pool descriptor.
+
+### `metric_pool_register`
+
+[primitives.crb:2949](../runtime/corbo/primitives.crb#L2949)
+
+```rust
+fn metric_pool_register(pool:usize)
+```
+
+Registers a completed pool, its cursor end and live-slot counter.
+
+### `metric_pool_pop`
+
+[primitives.crb:2956](../runtime/corbo/primitives.crb#L2956)
+
+```rust
+fn metric_pool_pop(next:usize)->usize
+```
+
+Removes the newest pool and returns its unused payload byte count before cursor rewind.
+
+### `metric_pool_after`
+
+[primitives.crb:2968](../runtime/corbo/primitives.crb#L2968)
+
+```rust
+fn metric_pool_after(next:usize)->bool
+```
+
+Returns whether the newest pool extends beyond the next fixed-stack cursor.
+
+### `metric_pool_live`
+
+[primitives.crb:2974](../runtime/corbo/primitives.crb#L2974)
+
+```rust
+fn metric_pool_live(pool:usize,claim:bool)
+```
+
+Records a claimed or released slot; the occupancy bitmap remains authoritative for allocation.
+
+### `metric_context_save`
+
+[primitives.crb:2981](../runtime/corbo/primitives.crb#L2981)
+
+```rust
+fn metric_context_save(out:usize)
+```
+
+Saves the metric pool chain with its suspended fixed-stack context.
+
+### `metric_context_restore`
+
+[primitives.crb:2983](../runtime/corbo/primitives.crb#L2983)
+
+```rust
+fn metric_context_restore(next:usize)
+```
+
+Restores an existing chain without counting its storage twice.
+
+### `metric_snapshot`
+
+[primitives.crb:2985](../runtime/corbo/primitives.crb#L2985)
+
+```rust
+fn metric_snapshot(out:usize,reserved:usize,committed:usize,occupied:usize)
+```
+
+Writes the public C snapshot layout; the caller supplies valid result storage.
 
 
 ## `runtime::readiness`
@@ -4665,7 +4811,7 @@ Returns complete unused pages beyond live to the OS when forced or above thresho
 
 ### `reclaim_band`
 
-[reclaim.crb:20](../runtime/corbo/reclaim.crb#L20)
+[reclaim.crb:21](../runtime/corbo/reclaim.crb#L21)
 
 ```rust
 fn reclaim_band(band:usize,force:bool)
@@ -4675,7 +4821,7 @@ Computes the last live byte across active regions before considering complete ta
 
 ### `reclaim_scope`
 
-[reclaim.crb:33](../runtime/corbo/reclaim.crb#L33)
+[reclaim.crb:34](../runtime/corbo/reclaim.crb#L34)
 
 ```rust
 fn reclaim_scope(force:bool)
@@ -4685,7 +4831,7 @@ Reclaims unused fixed/region tail pages using the configured thresholds or force
 
 ### `release_pages`
 
-[reclaim.crb:58](../runtime/corbo/reclaim.crb#L58)
+[reclaim.crb:60](../runtime/corbo/reclaim.crb#L60)
 
 ```rust
 fn release_pages(start:usize,size:usize)->bool
@@ -5046,7 +5192,7 @@ Saves the current thread-local fixed-stack/region context in out and installs ne
 
 ### `make_task_in`
 
-[values.crb:21](../runtime/corbo/values.crb#L21)
+[values.crb:23](../runtime/corbo/values.crb#L23)
 
 ```rust
 fn make_task_in(out:usize,region:usize,size:usize,poll:usize,dedicated:bool)
@@ -5056,7 +5202,7 @@ Places inactive task state in a region and fills out with its state, storage and
 
 ### `task_metadata`
 
-[values.crb:32](../runtime/corbo/values.crb#L32)
+[values.crb:34](../runtime/corbo/values.crb#L34)
 
 ```rust
 fn task_metadata(bytes:usize)->usize
@@ -5066,7 +5212,7 @@ Maps separate runtime metadata of the requested byte size; terminates if the OS 
 
 ### `task_unmap`
 
-[values.crb:40](../runtime/corbo/values.crb#L40)
+[values.crb:42](../runtime/corbo/values.crb#L42)
 
 ```rust
 fn task_unmap(pointer:usize,bytes:usize)
@@ -5076,7 +5222,7 @@ Unmaps a metadata address with the original mapping byte count after its users f
 
 ### `make_task`
 
-[values.crb:44](../runtime/corbo/values.crb#L44)
+[values.crb:46](../runtime/corbo/values.crb#L46)
 
 ```rust
 fn make_task(out:usize,size:usize,poll:usize)
@@ -5086,7 +5232,7 @@ Creates inactive future storage under the runtime lock and records ownership of 
 
 ### `release_future`
 
-[values.crb:52](../runtime/corbo/values.crb#L52)
+[values.crb:54](../runtime/corbo/values.crb#L54)
 
 ```rust
 fn release_future(state:usize,completed:bool,taken:bool)
@@ -5096,7 +5242,7 @@ Cleans an untaken result or inactive captures, releases frame storage, and unmap
 
 ### `task_abandoned`
 
-[values.crb:67](../runtime/corbo/values.crb#L67)
+[values.crb:69](../runtime/corbo/values.crb#L69)
 
 ```rust
 fn task_abandoned(task:usize)
@@ -5106,7 +5252,7 @@ Releases a completed abandoned task, including its untaken result.
 
 ### `start_task`
 
-[values.crb:71](../runtime/corbo/values.crb#L71)
+[values.crb:73](../runtime/corbo/values.crb#L73)
 
 ```rust
 fn start_task(value:usize)
@@ -5116,7 +5262,7 @@ Schedules a TaskValue using its poll function and the abandoned-task cleanup cal
 
 ### `discard_handle`
 
-[values.crb:75](../runtime/corbo/values.crb#L75)
+[values.crb:77](../runtime/corbo/values.crb#L77)
 
 ```rust
 fn discard_handle(value:usize)
@@ -5126,7 +5272,7 @@ Marks an active execution abandoned or releases a completed one; native executio
 
 ### `join_task`
 
-[values.crb:95](../runtime/corbo/values.crb#L95)
+[values.crb:97](../runtime/corbo/values.crb#L97)
 
 ```rust
 fn join_task(out:usize,value:usize)
@@ -5136,7 +5282,7 @@ Waits for completion, writes a scalar completion descriptor to out and releases 
 
 ### `join_task_into`
 
-[values.crb:107](../runtime/corbo/values.crb#L107)
+[values.crb:109](../runtime/corbo/values.crb#L109)
 
 ```rust
 fn join_task_into(value:usize,out:usize,bytes:usize)->bool
@@ -5146,7 +5292,7 @@ Waits for completion and moves a successful aggregate payload into caller storag
 
 ### `discard_future`
 
-[values.crb:122](../runtime/corbo/values.crb#L122)
+[values.crb:124](../runtime/corbo/values.crb#L124)
 
 ```rust
 fn discard_future(value:usize)
@@ -5315,65 +5461,67 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`band`](../runtime/async/values.c.inc#L32): band: saved region-scope link.
 
-- [`swap_classic`](../runtime/async/values.c.inc#L35): Installs next as the thread-local fixed-stack/region context and returns the previous context for later restoration.
+- [`metric_pools`](../runtime/async/values.c.inc#L34): metric_pools: suspended fixed-stack pool accounting chain.
 
-- [`TaskState`](../runtime/async/values.c.inc#L40): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
+- [`swap_classic`](../runtime/async/values.c.inc#L37): Installs next as the thread-local fixed-stack/region context and returns the previous context for later restoration.
 
-- [`task`](../runtime/async/values.c.inc#L42): task: scheduler header at offset zero.
+- [`TaskState`](../runtime/async/values.c.inc#L42): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
 
-- [`value`](../runtime/async/values.c.inc#L44): value: inline scalar result storage.
+- [`task`](../runtime/async/values.c.inc#L44): task: scheduler header at offset zero.
 
-- [`payload`](../runtime/async/values.c.inc#L46): payload: aggregate result address.
+- [`value`](../runtime/async/values.c.inc#L46): value: inline scalar result storage.
 
-- [`region`](../runtime/async/values.c.inc#L48): region: frame-storage region link.
+- [`payload`](../runtime/async/values.c.inc#L48): payload: aggregate result address.
 
-- [`own_region`](../runtime/async/values.c.inc#L50): own_region: separate region-descriptor ownership flag.
+- [`region`](../runtime/async/values.c.inc#L50): region: frame-storage region link.
 
-- [`dispose`](../runtime/async/values.c.inc#L52): dispose: typed capture/result cleanup callback.
+- [`own_region`](../runtime/async/values.c.inc#L52): own_region: separate region-descriptor ownership flag.
 
-- [`classic`](../runtime/async/values.c.inc#L54): classic: suspended thread-local datastack context.
+- [`dispose`](../runtime/async/values.c.inc#L54): dispose: typed capture/result cleanup callback.
 
-- [`TaskValue`](../runtime/async/values.c.inc#L57): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
+- [`classic`](../runtime/async/values.c.inc#L56): classic: suspended thread-local datastack context.
 
-- [`state`](../runtime/async/values.c.inc#L59): state: execution frame address.
+- [`TaskValue`](../runtime/async/values.c.inc#L59): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
 
-- [`storage`](../runtime/async/values.c.inc#L61): storage: owned backing-region link.
+- [`state`](../runtime/async/values.c.inc#L61): state: execution frame address.
 
-- [`poll`](../runtime/async/values.c.inc#L63): poll: frame-specific poll callback.
+- [`storage`](../runtime/async/values.c.inc#L63): storage: owned backing-region link.
 
-- [`native`](../runtime/async/values.c.inc#L65): native: native-worker ownership selector.
+- [`poll`](../runtime/async/values.c.inc#L65): poll: frame-specific poll callback.
 
-- [`TaskCompletion`](../runtime/async/values.c.inc#L68): Success flag and inline scalar result moved out by join_task.
+- [`native`](../runtime/async/values.c.inc#L67): native: native-worker ownership selector.
 
-- [`ok`](../runtime/async/values.c.inc#L70): ok: successful-launch/completion flag.
+- [`TaskCompletion`](../runtime/async/values.c.inc#L70): Success flag and inline scalar result moved out by join_task.
 
-- [`value`](../runtime/async/values.c.inc#L72): value: moved scalar result bits.
+- [`ok`](../runtime/async/values.c.inc#L72): ok: successful-launch/completion flag.
 
-- [`make_task_in`](../runtime/async/values.c.inc#L75): Returns an inactive task descriptor backed by the supplied stable region; caller holds the runtime lock.
+- [`value`](../runtime/async/values.c.inc#L74): value: moved scalar result bits.
 
-- [`release_native`](../runtime/async/values.c.inc#L79): Releases a completed native execution, destroying its result only when it was not transferred to the caller.
+- [`make_task_in`](../runtime/async/values.c.inc#L77): Returns an inactive task descriptor backed by the supplied stable region; caller holds the runtime lock.
 
-- [`abandon_native`](../runtime/async/values.c.inc#L81): Transfers final cleanup of a running native frame to its worker; completed frames are released immediately.
+- [`release_native`](../runtime/async/values.c.inc#L81): Releases a completed native execution, destroying its result only when it was not transferred to the caller.
 
-- [`task_metadata`](../runtime/async/values.c.inc#L83): Maps separate runtime metadata of the requested byte size; terminates if the OS cannot provide it.
+- [`abandon_native`](../runtime/async/values.c.inc#L83): Transfers final cleanup of a running native frame to its worker; completed frames are released immediately.
 
-- [`task_unmap`](../runtime/async/values.c.inc#L91): Unmaps a metadata address with the original mapping byte count after its users finish.
+- [`task_metadata`](../runtime/async/values.c.inc#L85): Maps separate runtime metadata of the requested byte size; terminates if the OS cannot provide it.
 
-- [`make_task`](../runtime/async/values.c.inc#L99): Returns an inactive task descriptor backed by a region and separately owned metadata.
+- [`task_unmap`](../runtime/async/values.c.inc#L93): Unmaps a metadata address with the original mapping byte count after its users finish.
 
-- [`release_future`](../runtime/async/values.c.inc#L104): Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata.
+- [`make_task`](../runtime/async/values.c.inc#L101): Returns an inactive task descriptor backed by a region and separately owned metadata.
 
-- [`task_abandoned`](../runtime/async/values.c.inc#L108): Releases a completed abandoned task, including its untaken result.
+- [`release_future`](../runtime/async/values.c.inc#L106): Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata.
 
-- [`start_task`](../runtime/async/values.c.inc#L110): Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
+- [`task_abandoned`](../runtime/async/values.c.inc#L110): Releases a completed abandoned task, including its untaken result.
 
-- [`discard_handle`](../runtime/async/values.c.inc#L112): Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
+- [`start_task`](../runtime/async/values.c.inc#L112): Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
 
-- [`join_task`](../runtime/async/values.c.inc#L117): Waits for completion, returns a scalar completion descriptor and releases consumed handle storage.
+- [`discard_handle`](../runtime/async/values.c.inc#L114): Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
 
-- [`join_task_into`](../runtime/async/values.c.inc#L120): Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
+- [`join_task`](../runtime/async/values.c.inc#L119): Waits for completion, returns a scalar completion descriptor and releases consumed handle storage.
 
-- [`discard_future`](../runtime/async/values.c.inc#L124): Destroys captures and storage of a nonempty inactive future descriptor.
+- [`join_task_into`](../runtime/async/values.c.inc#L122): Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
+
+- [`discard_future`](../runtime/async/values.c.inc#L126): Destroys captures and storage of a nonempty inactive future descriptor.
 
 ### `runtime/collections/hashmap.c.inc`
 
@@ -5419,111 +5567,113 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 ### `runtime/corbo/corbo_runtime_abi.h`
 
-- [`Task`](../runtime/corbo/corbo_runtime_abi.h#L30): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
+- [`Task`](../runtime/corbo/corbo_runtime_abi.h#L31): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
 
-- [`Task`](../runtime/corbo/corbo_runtime_abi.h#L32): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
+- [`Task`](../runtime/corbo/corbo_runtime_abi.h#L33): Intrusive execution header shared by generated frames and the scheduler. Queue, completion and waiter transitions require task_lock.
 
-- [`pc`](../runtime/corbo/corbo_runtime_abi.h#L34): pc: resume-state program counter.
+- [`pc`](../runtime/corbo/corbo_runtime_abi.h#L35): pc: resume-state program counter.
 
-- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L36): poll: typed poll/clear callback.
+- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L37): poll: typed poll/clear callback.
 
-- [`next`](../runtime/corbo/corbo_runtime_abi.h#L38): next: ready-queue next link.
+- [`next`](../runtime/corbo/corbo_runtime_abi.h#L39): next: ready-queue next link.
 
-- [`failed`](../runtime/corbo/corbo_runtime_abi.h#L40): failed: launch-failure flag.
+- [`failed`](../runtime/corbo/corbo_runtime_abi.h#L41): failed: launch-failure flag.
 
-- [`done`](../runtime/corbo/corbo_runtime_abi.h#L42): done: completion-publication flag.
+- [`done`](../runtime/corbo/corbo_runtime_abi.h#L43): done: completion-publication flag.
 
-- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L44): abandoned: worker-owned final-cleanup flag.
+- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L45): abandoned: worker-owned final-cleanup flag.
 
-- [`discard`](../runtime/corbo/corbo_runtime_abi.h#L46): discard: typed abandoned-task cleanup callback.
+- [`discard`](../runtime/corbo/corbo_runtime_abi.h#L47): discard: typed abandoned-task cleanup callback.
 
-- [`root,waiter`](../runtime/corbo/corbo_runtime_abi.h#L48): root: outer polling-root link. waiter: dependent polling-root link.
+- [`root,waiter`](../runtime/corbo/corbo_runtime_abi.h#L49): root: outer polling-root link. waiter: dependent polling-root link.
 
-- [`io_ready,io_registered`](../runtime/corbo/corbo_runtime_abi.h#L50): io_ready: readiness-publication flag. io_registered: active-wait registration flag.
+- [`io_ready,io_registered`](../runtime/corbo/corbo_runtime_abi.h#L51): io_ready: readiness-publication flag. io_registered: active-wait registration flag.
 
-- [`io_socket`](../runtime/corbo/corbo_runtime_abi.h#L52): io_socket: native socket identifier.
+- [`io_socket`](../runtime/corbo/corbo_runtime_abi.h#L53): io_socket: native socket identifier.
 
-- [`io_write`](../runtime/corbo/corbo_runtime_abi.h#L54): io_write: write-interest selector.
+- [`io_write`](../runtime/corbo/corbo_runtime_abi.h#L55): io_write: write-interest selector.
 
-- [`io_next`](../runtime/corbo/corbo_runtime_abi.h#L56): io_next: intrusive readiness-waiter link.
+- [`io_next`](../runtime/corbo/corbo_runtime_abi.h#L57): io_next: intrusive readiness-waiter link.
 
-- [`io_token`](../runtime/corbo/corbo_runtime_abi.h#L58): io_token: readiness-generation token.
+- [`io_token`](../runtime/corbo/corbo_runtime_abi.h#L59): io_token: readiness-generation token.
 
-- [`io_error`](../runtime/corbo/corbo_runtime_abi.h#L60): io_error: recorded platform I/O status.
+- [`io_error`](../runtime/corbo/corbo_runtime_abi.h#L61): io_error: recorded platform I/O status.
 
-- [`waiting,parked,blocking`](../runtime/corbo/corbo_runtime_abi.h#L62): waiting: dependency-wait predicate. parked: removed-from-ready-queue flag. blocking: dedicated blocking-worker flag.
+- [`waiting,parked,blocking`](../runtime/corbo/corbo_runtime_abi.h#L63): waiting: dependency-wait predicate. parked: removed-from-ready-queue flag. blocking: dedicated blocking-worker flag.
 
-- [`TaskResult`](../runtime/corbo/corbo_runtime_abi.h#L74): Inline scalar result union; the generated frame contract determines the active member.
+- [`TaskResult`](../runtime/corbo/corbo_runtime_abi.h#L75): Inline scalar result union; the generated frame contract determines the active member.
 
-- [`k1`](../runtime/corbo/corbo_runtime_abi.h#L76): k1: Result storage for i32.
+- [`k1`](../runtime/corbo/corbo_runtime_abi.h#L77): k1: Result storage for i32.
 
-- [`k2`](../runtime/corbo/corbo_runtime_abi.h#L78): k2: Result storage for i64.
+- [`k2`](../runtime/corbo/corbo_runtime_abi.h#L79): k2: Result storage for i64.
 
-- [`k3`](../runtime/corbo/corbo_runtime_abi.h#L80): k3: Result storage for bool.
+- [`k3`](../runtime/corbo/corbo_runtime_abi.h#L81): k3: Result storage for bool.
 
-- [`k4`](../runtime/corbo/corbo_runtime_abi.h#L82): k4: Result storage for u8.
+- [`k4`](../runtime/corbo/corbo_runtime_abi.h#L83): k4: Result storage for u8.
 
-- [`k5`](../runtime/corbo/corbo_runtime_abi.h#L84): k5: Result storage for u16.
+- [`k5`](../runtime/corbo/corbo_runtime_abi.h#L85): k5: Result storage for u16.
 
-- [`k6`](../runtime/corbo/corbo_runtime_abi.h#L86): k6: Result storage for u32.
+- [`k6`](../runtime/corbo/corbo_runtime_abi.h#L87): k6: Result storage for u32.
 
-- [`k7`](../runtime/corbo/corbo_runtime_abi.h#L88): k7: Result storage for u64.
+- [`k7`](../runtime/corbo/corbo_runtime_abi.h#L89): k7: Result storage for u64.
 
-- [`k8`](../runtime/corbo/corbo_runtime_abi.h#L90): k8: Result storage for f32.
+- [`k8`](../runtime/corbo/corbo_runtime_abi.h#L91): k8: Result storage for f32.
 
-- [`k9`](../runtime/corbo/corbo_runtime_abi.h#L92): k9: Result storage for f64.
+- [`k9`](../runtime/corbo/corbo_runtime_abi.h#L93): k9: Result storage for f64.
 
-- [`ClassicStack`](../runtime/corbo/corbo_runtime_abi.h#L95): Saved thread-local fixed-stack mapping and region-scope context for task suspension/resumption.
+- [`ClassicStack`](../runtime/corbo/corbo_runtime_abi.h#L96): Saved thread-local fixed-stack mapping and region-scope context for task suspension/resumption.
 
-- [`base`](../runtime/corbo/corbo_runtime_abi.h#L97): base: saved fixed-stack base.
+- [`base`](../runtime/corbo/corbo_runtime_abi.h#L98): base: saved fixed-stack base.
 
-- [`cursor,limit,committed,page_size,mapped_size`](../runtime/corbo/corbo_runtime_abi.h#L99): cursor: saved next free byte offset. limit: saved fixed-stack capacity. committed: saved committed-byte boundary. page_size: saved OS page size. mapped_size: saved mapping extent.
+- [`cursor,limit,committed,page_size,mapped_size`](../runtime/corbo/corbo_runtime_abi.h#L100): cursor: saved next free byte offset. limit: saved fixed-stack capacity. committed: saved committed-byte boundary. page_size: saved OS page size. mapped_size: saved mapping extent.
 
-- [`band`](../runtime/corbo/corbo_runtime_abi.h#L101): band: saved region-scope link.
+- [`band`](../runtime/corbo/corbo_runtime_abi.h#L102): band: saved region-scope link.
 
-- [`TaskState`](../runtime/corbo/corbo_runtime_abi.h#L104): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
+- [`metric_pools`](../runtime/corbo/corbo_runtime_abi.h#L104): metric_pools: suspended fixed-stack pool accounting chain.
 
-- [`task`](../runtime/corbo/corbo_runtime_abi.h#L106): task: scheduler header at offset zero.
+- [`TaskState`](../runtime/corbo/corbo_runtime_abi.h#L107): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
 
-- [`value`](../runtime/corbo/corbo_runtime_abi.h#L108): value: inline scalar result storage.
+- [`task`](../runtime/corbo/corbo_runtime_abi.h#L109): task: scheduler header at offset zero.
 
-- [`payload`](../runtime/corbo/corbo_runtime_abi.h#L110): payload: aggregate result address.
+- [`value`](../runtime/corbo/corbo_runtime_abi.h#L111): value: inline scalar result storage.
 
-- [`region`](../runtime/corbo/corbo_runtime_abi.h#L112): region: frame-storage region link.
+- [`payload`](../runtime/corbo/corbo_runtime_abi.h#L113): payload: aggregate result address.
 
-- [`own_region`](../runtime/corbo/corbo_runtime_abi.h#L114): own_region: separate region-descriptor ownership flag.
+- [`region`](../runtime/corbo/corbo_runtime_abi.h#L115): region: frame-storage region link.
 
-- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L116): dispose: typed capture/result cleanup callback.
+- [`own_region`](../runtime/corbo/corbo_runtime_abi.h#L117): own_region: separate region-descriptor ownership flag.
 
-- [`classic`](../runtime/corbo/corbo_runtime_abi.h#L118): classic: suspended thread-local datastack context.
+- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L119): dispose: typed capture/result cleanup callback.
 
-- [`TaskValue`](../runtime/corbo/corbo_runtime_abi.h#L121): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
+- [`classic`](../runtime/corbo/corbo_runtime_abi.h#L121): classic: suspended thread-local datastack context.
 
-- [`state`](../runtime/corbo/corbo_runtime_abi.h#L123): state: execution frame address.
+- [`TaskValue`](../runtime/corbo/corbo_runtime_abi.h#L124): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
 
-- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L125): storage: owned backing-region link.
+- [`state`](../runtime/corbo/corbo_runtime_abi.h#L126): state: execution frame address.
 
-- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L127): poll: frame-specific poll callback.
+- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L128): storage: owned backing-region link.
 
-- [`native`](../runtime/corbo/corbo_runtime_abi.h#L129): native: native-worker ownership selector.
+- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L130): poll: frame-specific poll callback.
 
-- [`TaskCompletion`](../runtime/corbo/corbo_runtime_abi.h#L132): Success flag and inline scalar result moved out by join_task.
+- [`native`](../runtime/corbo/corbo_runtime_abi.h#L132): native: native-worker ownership selector.
 
-- [`ok`](../runtime/corbo/corbo_runtime_abi.h#L134): ok: successful-launch/completion flag.
+- [`TaskCompletion`](../runtime/corbo/corbo_runtime_abi.h#L135): Success flag and inline scalar result moved out by join_task.
 
-- [`value`](../runtime/corbo/corbo_runtime_abi.h#L136): value: moved scalar result bits.
+- [`ok`](../runtime/corbo/corbo_runtime_abi.h#L137): ok: successful-launch/completion flag.
 
-- [`NativeBox`](../runtime/corbo/corbo_runtime_abi.h#L139): Worker metadata with its Region prefix at offset zero; abandonment can transfer final cleanup to the worker.
+- [`value`](../runtime/corbo/corbo_runtime_abi.h#L139): value: moved scalar result bits.
 
-- [`region`](../runtime/corbo/corbo_runtime_abi.h#L141): region: embedded frame region at offset zero.
+- [`NativeBox`](../runtime/corbo/corbo_runtime_abi.h#L142): Worker metadata with its Region prefix at offset zero; abandonment can transfer final cleanup to the worker.
 
-- [`state`](../runtime/corbo/corbo_runtime_abi.h#L143): state: native frame address.
+- [`region`](../runtime/corbo/corbo_runtime_abi.h#L144): region: embedded frame region at offset zero.
 
-- [`run`](../runtime/corbo/corbo_runtime_abi.h#L145): run: native frame run callback.
+- [`state`](../runtime/corbo/corbo_runtime_abi.h#L146): state: native frame address.
 
-- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L147): abandoned: worker-owned cleanup flag.
+- [`run`](../runtime/corbo/corbo_runtime_abi.h#L148): run: native frame run callback.
 
-- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L149): dispose: capture/result cleanup callback.
+- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L150): abandoned: worker-owned cleanup flag.
+
+- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L152): dispose: capture/result cleanup callback.
 
 ### `runtime/corbo_runtime.h`
 
@@ -5587,129 +5737,155 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`used`](../runtime/corbo_runtime.h#L87): used: atomic occupancy-byte array.
 
-- [`Owned`](../runtime/corbo_runtime.h#L90): Move-only allocation descriptor carrying the pool, payload, physical index and destructor. C callers must enforce single cleanup responsibility.
+- [`metric_previous`](../runtime/corbo_runtime.h#L89): Metrics chain belongs to the allocating fixed-stack context.
 
-- [`pool`](../runtime/corbo_runtime.h#L92): pool: source pool link, zero after release.
+- [`metric_end`](../runtime/corbo_runtime.h#L91): metric_end: fixed-stack cursor immediately after pool creation.
 
-- [`slot`](../runtime/corbo_runtime.h#L94): slot: payload slot address.
+- [`metric_live`](../runtime/corbo_runtime.h#L93): metric_live: claimed slots, updated atomically across sharing threads.
 
-- [`index`](../runtime/corbo_runtime.h#L96): index: physical slot index.
+- [`Owned`](../runtime/corbo_runtime.h#L96): Move-only allocation descriptor carrying the pool, payload, physical index and destructor. C callers must enforce single cleanup responsibility.
 
-- [`destroy`](../runtime/corbo_runtime.h#L98): destroy: typed payload destructor callback.
+- [`pool`](../runtime/corbo_runtime.h#L98): pool: source pool link, zero after release.
 
-- [`MapEntry`](../runtime/corbo_runtime.h#L101): Stable map entry header containing normalized key bits and a bucket/free-list offset.
+- [`slot`](../runtime/corbo_runtime.h#L100): slot: payload slot address.
 
-- [`key`](../runtime/corbo_runtime.h#L103): key: normalized integer key bits.
+- [`index`](../runtime/corbo_runtime.h#L102): index: physical slot index.
 
-- [`next`](../runtime/corbo_runtime.h#L105): next: next bucket-chain or free-list byte offset.
+- [`destroy`](../runtime/corbo_runtime.h#L104): destroy: typed payload destructor callback.
 
-- [`RegionalMap`](../runtime/corbo_runtime.h#L108): Map descriptor owning a stable byte region, entry width, reusable-slot list and optional value destructor.
+- [`MapEntry`](../runtime/corbo_runtime.h#L107): Stable map entry header containing normalized key bits and a bucket/free-list offset.
 
-- [`region`](../runtime/corbo_runtime.h#L110): region: stable entry-storage region.
+- [`key`](../runtime/corbo_runtime.h#L109): key: normalized integer key bits.
 
-- [`width,free_slot`](../runtime/corbo_runtime.h#L112): width: value byte width. free_slot: free-entry offset list head.
+- [`next`](../runtime/corbo_runtime.h#L111): next: next bucket-chain or free-list byte offset.
 
-- [`dispose`](../runtime/corbo_runtime.h#L114): dispose: value cleanup callback.
+- [`RegionalMap`](../runtime/corbo_runtime.h#L114): Map descriptor owning a stable byte region, entry width, reusable-slot list and optional value destructor.
 
-- [`CorboRegion`](../runtime/corbo_runtime.h#L118): Public C alias of the stable Region descriptor; payload ownership rules are unchanged.
+- [`region`](../runtime/corbo_runtime.h#L116): region: stable entry-storage region.
 
-- [`CorboVector`](../runtime/corbo_runtime.h#L120): Public C vector storage descriptor; element-specific cleanup remains the caller/generated code's responsibility.
+- [`width,free_slot`](../runtime/corbo_runtime.h#L118): width: value byte width. free_slot: free-entry offset list head.
 
-- [`CorboString`](../runtime/corbo_runtime.h#L122): Public C UTF-8 string storage descriptor; unchecked C mutations must preserve the string contract.
+- [`dispose`](../runtime/corbo_runtime.h#L120): dispose: value cleanup callback.
 
-- [`CorboPool`](../runtime/corbo_runtime.h#L124): Public C alias for fixed slot storage; the source datastack must outlive its allocations.
+- [`CorboRegion`](../runtime/corbo_runtime.h#L124): Public C alias of the stable Region descriptor; payload ownership rules are unchanged.
 
-- [`CorboAllocation`](../runtime/corbo_runtime.h#L126): Public C allocation descriptor. Copying it in C does not transfer or duplicate cleanup responsibility.
+- [`CorboVector`](../runtime/corbo_runtime.h#L126): Public C vector storage descriptor; element-specific cleanup remains the caller/generated code's responsibility.
 
-- [`CorboHashMap`](../runtime/corbo_runtime.h#L128): Public C map descriptor with stable entry addresses and optional element cleanup.
+- [`CorboString`](../runtime/corbo_runtime.h#L128): Public C UTF-8 string storage descriptor; unchecked C mutations must preserve the string contract.
 
-- [`CorboStackMark`](../runtime/corbo_runtime.h#L131): Saved cursor, stack identity and region-scope mark; rewind is valid only after dependent resources and workers are cleaned up.
+- [`CorboPool`](../runtime/corbo_runtime.h#L130): Public C alias for fixed slot storage; the source datastack must outlive its allocations.
 
-- [`position`](../runtime/corbo_runtime.h#L133): position: saved fixed-stack byte cursor.
+- [`CorboAllocation`](../runtime/corbo_runtime.h#L132): Public C allocation descriptor. Copying it in C does not transfer or duplicate cleanup responsibility.
 
-- [`stack`](../runtime/corbo_runtime.h#L135): stack: originating stack identity.
+- [`CorboHashMap`](../runtime/corbo_runtime.h#L134): Public C map descriptor with stable entry addresses and optional element cleanup.
 
-- [`region_scope`](../runtime/corbo_runtime.h#L137): region_scope: saved region-scope marker.
+- [`CorboStackMark`](../runtime/corbo_runtime.h#L137): Saved cursor, stack identity and region-scope mark; rewind is valid only after dependent resources and workers are cleaned up.
 
-- [`CorboStackInfo`](../runtime/corbo_runtime.h#L140): Snapshot of the current fixed-stack cursor, committed bytes and reserved capacity.
+- [`position`](../runtime/corbo_runtime.h#L139): position: saved fixed-stack byte cursor.
 
-- [`position,committed,capacity`](../runtime/corbo_runtime.h#L142): position: next free fixed-stack byte offset. committed: committed fixed-stack bytes. capacity: reserved fixed-stack byte capacity.
+- [`stack`](../runtime/corbo_runtime.h#L141): stack: originating stack identity.
 
-- [`corbo_runtime_abi_version`](../runtime/corbo_runtime.h#L147): Returns the experimental C ABI version; clients must use the matching runtime header.
+- [`region_scope`](../runtime/corbo_runtime.h#L143): region_scope: saved region-scope marker.
 
-- [`corbo_runtime_init`](../runtime/corbo_runtime.h#L149): Initializes C-owned runtime storage with optional fixed-stack, region-stack and region-width budgets; repeated initialization terminates.
+- [`CorboStackInfo`](../runtime/corbo_runtime.h#L146): Snapshot of the current fixed-stack cursor, committed bytes and reserved capacity.
 
-- [`corbo_runtime_shutdown`](../runtime/corbo_runtime.h#L151): Releases the calling thread's C-owned runtime after all live resources and workers have been cleaned up; a stopped runtime is a no-op.
+- [`position,committed,capacity`](../runtime/corbo_runtime.h#L148): position: next free fixed-stack byte offset. committed: committed fixed-stack bytes. capacity: reserved fixed-stack byte capacity.
 
-- [`corbo_datastack_alloc`](../runtime/corbo_runtime.h#L155): Allocates count aligned elements on the calling thread's initialized stack; invalid size/alignment or exhaustion terminates.
+- [`CorboMemoryStats`](../runtime/corbo_runtime.h#L152): Process-wide Corbo-managed datastack and region byte counters.
 
-- [`corbo_datastack_mark`](../runtime/corbo_runtime.h#L157): Returns a mark containing the current cursor, stack identity and region-scope marker.
+- [`reserved`](../runtime/corbo_runtime.h#L154): Reserved virtual-address bytes, including committed pages.
 
-- [`corbo_datastack_info`](../runtime/corbo_runtime.h#L159): Returns the current cursor, committed-byte boundary and fixed-stack capacity.
+- [`committed`](../runtime/corbo_runtime.h#L156): Committed pages; this is not process RSS.
 
-- [`corbo_datastack_rewind`](../runtime/corbo_runtime.h#L162): Restores a mark from this stack after caller cleanup; rejects foreign or forward marks and preserves live transferred regions.
+- [`occupied`](../runtime/corbo_runtime.h#L158): Fixed cursor spans and live region payloads, excluding free pool slots.
 
-- [`corbo_free_pages`](../runtime/corbo_runtime.h#L164): Requests immediate reclamation of complete unused pages without changing live values or their reserved address ranges.
+- [`corbo_memory_stats`](../runtime/corbo_runtime.h#L161): Samples concurrency-safe counters; fields may represent adjacent instants.
 
-- [`corbo_pool_create`](../runtime/corbo_runtime.h#L167): Creates fixed slots for each enum arm on the current datastack; zero element width or invalid capacity terminates.
+- [`corbo_runtime_abi_version`](../runtime/corbo_runtime.h#L165): Returns the experimental C ABI version; clients must use the matching runtime header.
 
-- [`corbo_pool_take`](../runtime/corbo_runtime.h#L169): Claims a free slot in arm and returns its allocation descriptor; invalid arms or exhaustion terminate.
+- [`corbo_runtime_init`](../runtime/corbo_runtime.h#L167): Initializes C-owned runtime storage with optional fixed-stack, region-stack and region-width budgets; repeated initialization terminates.
 
-- [`corbo_allocation_data`](../runtime/corbo_runtime.h#L171): Returns an allocation's payload address without transferring ownership or extending its lifetime.
+- [`corbo_runtime_shutdown`](../runtime/corbo_runtime.h#L169): Releases the calling thread's C-owned runtime after all live resources and workers have been cleaned up; a stopped runtime is a no-op.
 
-- [`corbo_allocation_drop`](../runtime/corbo_runtime.h#L174): Destroys a live allocation before releasing its slot and clears its pool link; a cleared descriptor is harmless.
+- [`corbo_datastack_alloc`](../runtime/corbo_runtime.h#L173): Allocates count aligned elements on the calling thread's initialized stack; invalid size/alignment or exhaustion terminates.
 
-- [`corbo_region_enter`](../runtime/corbo_runtime.h#L177): Enters a local region scope with the requested maximum region size and count budget.
+- [`corbo_datastack_mark`](../runtime/corbo_runtime.h#L175): Returns a mark containing the current cursor, stack identity and region-scope marker.
 
-- [`corbo_region_new`](../runtime/corbo_runtime.h#L179): Initializes a stable caller-owned region descriptor for element_size bytes per item; dedicated selects independent band storage.
+- [`corbo_datastack_info`](../runtime/corbo_runtime.h#L177): Returns the current cursor, committed-byte boundary and fixed-stack capacity.
 
-- [`corbo_region_push`](../runtime/corbo_runtime.h#L181): Appends one uninitialized region element and returns its address; region exhaustion terminates.
+- [`corbo_datastack_rewind`](../runtime/corbo_runtime.h#L180): Restores a mark from this stack after caller cleanup; rejects foreign or forward marks and preserves live transferred regions.
 
-- [`corbo_region_drop`](../runtime/corbo_runtime.h#L183): Destroys child-region links, releases payload storage and zeroes the caller's region descriptor.
+- [`corbo_free_pages`](../runtime/corbo_runtime.h#L182): Requests immediate reclamation of complete unused pages without changing live values or their reserved address ranges.
 
-- [`corbo_map_new`](../runtime/corbo_runtime.h#L186): Maps a map descriptor and initializes its stable region storage with an optional element cleanup callback.
+- [`corbo_pool_create`](../runtime/corbo_runtime.h#L185): Creates fixed slots for each enum arm on the current datastack; zero element width or invalid capacity terminates.
 
-- [`corbo_map_get`](../runtime/corbo_runtime.h#L188): Returns the stored value address for key, or zero when absent; the map retains ownership.
+- [`corbo_pool_take`](../runtime/corbo_runtime.h#L187): Claims a free slot in arm and returns its allocation descriptor; invalid arms or exhaustion terminate.
 
-- [`corbo_map_insert`](../runtime/corbo_runtime.h#L190): Moves incoming bytes into a stable entry. Returns true and moves the replaced bytes into previous when the key exists.
+- [`corbo_allocation_data`](../runtime/corbo_runtime.h#L189): Returns an allocation's payload address without transferring ownership or extending its lifetime.
 
-- [`corbo_map_remove`](../runtime/corbo_runtime.h#L192): Unlinks key and moves its value into previous; returns false without writing when absent and indexes the freed slot for reuse.
+- [`corbo_allocation_drop`](../runtime/corbo_runtime.h#L192): Destroys a live allocation before releasing its slot and clears its pool link; a cleared descriptor is harmless.
 
-- [`corbo_map_drop`](../runtime/corbo_runtime.h#L194): Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage.
+- [`corbo_region_enter`](../runtime/corbo_runtime.h#L195): Enters a local region scope with the requested maximum region size and count budget.
+
+- [`corbo_region_new`](../runtime/corbo_runtime.h#L197): Initializes a stable caller-owned region descriptor for element_size bytes per item; dedicated selects independent band storage.
+
+- [`corbo_region_push`](../runtime/corbo_runtime.h#L199): Appends one uninitialized region element and returns its address; region exhaustion terminates.
+
+- [`corbo_region_drop`](../runtime/corbo_runtime.h#L201): Destroys child-region links, releases payload storage and zeroes the caller's region descriptor.
+
+- [`corbo_map_new`](../runtime/corbo_runtime.h#L204): Maps a map descriptor and initializes its stable region storage with an optional element cleanup callback.
+
+- [`corbo_map_get`](../runtime/corbo_runtime.h#L206): Returns the stored value address for key, or zero when absent; the map retains ownership.
+
+- [`corbo_map_insert`](../runtime/corbo_runtime.h#L208): Moves incoming bytes into a stable entry. Returns true and moves the replaced bytes into previous when the key exists.
+
+- [`corbo_map_remove`](../runtime/corbo_runtime.h#L210): Unlinks key and moves its value into previous; returns false without writing when absent and indexes the freed slot for reuse.
+
+- [`corbo_map_drop`](../runtime/corbo_runtime.h#L212): Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage.
 
 ### `runtime/memory/datastack.c.inc`
 
-- [`reserve`](../runtime/memory/datastack.c.inc#L20): Reserves the calling thread's fixed datastack, initializes page metadata and commits storage on demand.
+- [`memory_cursor`](../runtime/memory/datastack.c.inc#L20): Rewinds fixed storage after cleanup; retire pool holes before its pages can be reused.
 
-- [`push`](../runtime/memory/datastack.c.inc#L44): Reserves count aligned fixed-size elements at the current cursor; checks multiplication, alignment and capacity before advancing.
+- [`reserve`](../runtime/memory/datastack.c.inc#L30): Reserves the calling thread's fixed datastack, initializes page metadata and commits storage on demand.
 
-- [`release`](../runtime/memory/datastack.c.inc#L62): Unmaps the calling thread's fixed datastack after its values and workers have been cleaned up.
+- [`push`](../runtime/memory/datastack.c.inc#L55): Reserves count aligned fixed-size elements at the current cursor; checks multiplication, alignment and capacity before advancing.
 
-- [`take`](../runtime/memory/datastack.c.inc#L70): Finds the first free flag in a count-element slot bitmap, marks it used and returns its index; exhaustion terminates.
+- [`release`](../runtime/memory/datastack.c.inc#L74): Unmaps the calling thread's fixed datastack after its values and workers have been cleaned up.
 
-- [`numeric`](../runtime/memory/datastack.c.inc#L78): Evaluates the selected signed integer operation with the reference runtime's overflow and zero-divisor failures.
+- [`take`](../runtime/memory/datastack.c.inc#L83): Finds the first free flag in a count-element slot bitmap, marks it used and returns its index; exhaustion terminates.
 
-- [`region_error`](../runtime/memory/datastack.c.inc#L94): Reports an invalid or exhausted region operation and terminates the process.
+- [`numeric`](../runtime/memory/datastack.c.inc#L91): Evaluates the selected signed integer operation with the reference runtime's overflow and zero-divisor failures.
 
-- [`region_default_capacity`](../runtime/memory/datastack.c.inc#L99): Computes the region-stack byte budget from OS memory and CPU information, bounded by PTRDIFF_MAX.
+- [`region_error`](../runtime/memory/datastack.c.inc#L107): Reports an invalid or exhausted region operation and terminates the process.
 
-- [`region_metadata`](../runtime/memory/datastack.c.inc#L121): Maps zero-initialized RegionBand metadata independently of storage whose scope may end first.
+- [`region_default_capacity`](../runtime/memory/datastack.c.inc#L112): Computes the region-stack byte budget from OS memory and CPU information, bounded by PTRDIFF_MAX.
 
-- [`region_reserve`](../runtime/memory/datastack.c.inc#L132): Reserves a virtual address range for a band and records its capacity and per-region limit; commits no payload yet.
+- [`region_metadata`](../runtime/memory/datastack.c.inc#L134): Maps zero-initialized RegionBand metadata independently of storage whose scope may end first.
 
-- [`region_release_band`](../runtime/memory/datastack.c.inc#L147): Unmaps an empty band and its separately mapped metadata when applicable; no active region may remain.
+- [`region_reserve`](../runtime/memory/datastack.c.inc#L145): Reserves a virtual address range for a band and records its capacity and per-region limit; commits no payload yet.
 
-- [`region_stride`](../runtime/memory/datastack.c.inc#L163): Rounds a region width to max_align_t with checked size arithmetic.
+- [`region_release_band`](../runtime/memory/datastack.c.inc#L161): Unmaps an empty band and its separately mapped metadata when applicable; no active region may remain.
 
-- [`region_enter`](../runtime/memory/datastack.c.inc#L169): Creates a child region scope with the explicit or inferred count; the caller holds the runtime lock.
+- [`region_stride`](../runtime/memory/datastack.c.inc#L179): Rounds a region width to max_align_t with checked size arithmetic.
 
-- [`region_restore`](../runtime/memory/datastack.c.inc#L182): Closes region scopes back to mark, releasing only empty bands so transferred live regions survive; requires the lock.
+- [`region_enter`](../runtime/memory/datastack.c.inc#L185): Creates a child region scope with the explicit or inferred count; the caller holds the runtime lock.
 
-- [`region_new`](../runtime/memory/datastack.c.inc#L191): Links a stable descriptor into an available band or a dedicated band; owned regions store child-region cleanup links. Requires the runtime lock.
+- [`region_restore`](../runtime/memory/datastack.c.inc#L198): Closes region scopes back to mark, releasing only empty bands so transferred live regions survive; requires the lock.
 
-- [`region_drop`](../runtime/memory/datastack.c.inc#L223): Destroys owned child regions before unlinking this region and releasing an empty closed band; requires the runtime lock.
+- [`region_new`](../runtime/memory/datastack.c.inc#L207): Links a stable descriptor into an available band or a dedicated band; owned regions store child-region cleanup links. Requires the runtime lock.
 
-- [`region_add`](../runtime/memory/datastack.c.inc#L240): Commits pages as needed and returns one new element slot; terminates at the region limit. Requires the runtime lock.
+- [`region_drop`](../runtime/memory/datastack.c.inc#L239): Destroys owned child regions before unlinking this region and releasing an empty closed band; requires the runtime lock.
+
+- [`region_add`](../runtime/memory/datastack.c.inc#L257): Commits pages as needed and returns one new element slot; terminates at the region limit. Requires the runtime lock.
+
+### `runtime/memory/metrics_storage.h`
+
+- [`memory_metric_add`](../runtime/memory/metrics_storage.h#L11): Add a successful storage transition without inspecting another thread's stack.
+
+- [`memory_metric_sub`](../runtime/memory/metrics_storage.h#L15): Remove bytes after their storage transition; never sample mutable descriptors.
+
+- [`memory_metric_read`](../runtime/memory/metrics_storage.h#L19): Sample one atomic counter without stopping workers.
 
 ### `runtime/memory/pools.c.inc`
 
@@ -5784,3 +5960,5 @@ These declarations describe the C boundary/reference, not new checked-language A
 - [`corbo_map_remove`](../runtime/runtime_api.c.inc#L90): Unlinks key and moves its value into previous; returns false without writing when absent and indexes the freed slot for reuse.
 
 - [`corbo_map_drop`](../runtime/runtime_api.c.inc#L92): Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage.
+
+- [`corbo_memory_stats`](../runtime/runtime_api.c.inc#L95): Samples managed-storage counters atomically; fields may represent adjacent instants.

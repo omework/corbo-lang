@@ -40,6 +40,8 @@ def render(runtime=False):
         count += len(list(flatten(entries)))
         if not runtime and path.relative_to(source_root).parts[0] == 'sys': continue
         module = ('runtime::'+path.stem if runtime else '::'.join(('std',*path.relative_to(source_root).parts[:-1])))
+        if not runtime and path.relative_to(source_root).parts[0] == 'runtime':
+            module = '::'.join(path.relative_to(source_root).parts[:-1])
         modules[module].append((path,source,summary,entries,annotations))
     title = 'Corbo runtime source reference' if runtime else 'Corbo standard library reference'
     output = ['# '+title, '', 'Generated from source documentation. Do not edit this reference by hand.', '']

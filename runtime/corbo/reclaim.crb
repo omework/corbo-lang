@@ -13,6 +13,7 @@ fn reclaim_after(start:usize,live:usize,done_slot:usize,threshold:usize,force:bo
     }
     let bytes=copy(done)-copy(boundary);
     if (copy(force) || copy(bytes)>=copy(threshold)) && os_decommit(copy(start)+copy(boundary),copy(bytes)) {
+        metric_sub(1,copy(bytes));
         write_word(copy(done_slot),copy(boundary));
     }
 }
@@ -39,6 +40,7 @@ fn reclaim_scope(force:bool) {
         if copy(boundary)<copy(fixed) {
             let bytes=copy(fixed)-copy(boundary);
             if (copy(force) || copy(bytes)>=get_fixed_reclaim_threshold()) && os_decommit(get_base()+copy(boundary),copy(bytes)) {
+                metric_sub(1,copy(bytes));
                 set_committed(copy(boundary));
             }
         }

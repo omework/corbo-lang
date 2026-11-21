@@ -22,7 +22,7 @@ static void reclaim_after(unsigned char *start, size_t live, size_t *committed,
     size_t boundary = live + (page_size - live % page_size) % page_size;
     if (boundary >= *committed) return;
     size_t bytes = *committed - boundary;
-    if ((force || bytes >= threshold) && release_pages(start + boundary, bytes)) *committed = boundary;
+    if ((force || bytes >= threshold) && release_pages(start + boundary, bytes)) {memory_metric_sub(1,bytes);*committed = boundary;}
 }
 
 /** Computes the last live byte across active regions before considering complete tail pages for reclamation. */

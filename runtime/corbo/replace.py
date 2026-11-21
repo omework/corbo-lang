@@ -5,7 +5,7 @@ from pathlib import Path
 import argparse,importlib.util
 ROOT=Path(__file__).resolve().parents[1]
 SECTIONS={
- 'base_runtime':['memory/datastack.c.inc','collections/vector.c.inc','memory/region_release.c.inc'],
+ 'base_runtime':['memory/metrics_storage.h','memory/datastack.c.inc','collections/vector.c.inc','memory/region_release.c.inc'],
  'task_runtime':['async/scheduler.c.inc'],'pool_runtime':['memory/pools.c.inc','collections/vector_owned.c.inc'],
  'task_value_runtime':['async/values.c.inc'],'native_runtime':['async/threads.c.inc'],
  'reclaim_runtime':['memory/reclaim.c.inc'],'map_runtime':['collections/hashmap.c.inc'],

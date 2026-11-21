@@ -5,6 +5,7 @@
  * Standalone C memory runtime. Generated Corbo embeds the same implementation. */
 #include "corbo_runtime.h"
 #include <string.h>
+#include "memory/metrics_storage.h"
 #include "memory/datastack.c.inc"
 #include "collections/vector.c.inc"
 #include "memory/region_release.c.inc"

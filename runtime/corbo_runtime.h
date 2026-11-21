@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stdatomic.h>
 
-#define CORBO_RUNTIME_ABI_VERSION 1u
+#define CORBO_RUNTIME_ABI_VERSION 2u
 
 /* Primitive representations use the target C implementation's fixed-width types. */
 /** C ABI representation of Corbo i32, using this target's corresponding primitive layout. */
@@ -85,6 +85,12 @@ typedef struct Pools {
     unsigned char *data;
     /** used: atomic occupancy-byte array. */
     _Atomic unsigned char *used;
+    /** Metrics chain belongs to the allocating fixed-stack context. */
+    struct Pools *metric_previous;
+    /** metric_end: fixed-stack cursor immediately after pool creation. */
+    size_t metric_end;
+    /** metric_live: claimed slots, updated atomically across sharing threads. */
+    _Atomic size_t metric_live;
 } Pools;
 /** Move-only allocation descriptor carrying the pool, payload, physical index and destructor. C callers must enforce single cleanup responsibility. */
 typedef struct Owned {
@@ -141,6 +147,18 @@ typedef struct {
     /** position: next free fixed-stack byte offset. committed: committed fixed-stack bytes. capacity: reserved fixed-stack byte capacity. */
     size_t position, committed, capacity;
 } CorboStackInfo;
+
+/** Process-wide Corbo-managed datastack and region byte counters. */
+typedef struct {
+    /** Reserved virtual-address bytes, including committed pages. */
+    size_t reserved;
+    /** Committed pages; this is not process RSS. */
+    size_t committed;
+    /** Fixed cursor spans and live region payloads, excluding free pool slots. */
+    size_t occupied;
+} CorboMemoryStats;
+/** Samples concurrency-safe counters; fields may represent adjacent instants. */
+CorboMemoryStats corbo_memory_stats(void);
 
 /* Call init/shutdown only when C owns the runtime. Generated Corbo main does it. */
 /** Returns the experimental C ABI version; clients must use the matching runtime header. */

@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Process-wide atomic accounting for managed storage, independent of OS RSS.
+
+/// Changes the fixed cursor after cleanup and removes retired pool bookkeeping.
+fn memory_cursor(next:usize) {
+    while metric_pool_after(copy(next)) {
+        let holes=metric_pool_pop(copy(next));
+        metric_sub(4,holes);
+    }
+    let previous=get_cursor();
+    if copy(next)>copy(previous) { metric_add(2,copy(next)-copy(previous)); }
+    else { metric_sub(2,copy(previous)-copy(next)); }
+    set_cursor_untracked(next);
+}
+
+/// Samples atomic counters; concurrent fields may describe adjacent instants.
+fn corbo_memory_stats(out:usize) {
+    let reserved=metric_read(0);
+    let committed=metric_read(1);
+    let total=metric_read(2)+metric_read(3);
+    let holes=metric_read(4);
+    // Sampling while other workers update counters must never wrap subtraction.
+    let occupied:usize=if copy(holes)>copy(total) { 0 } else { total-holes };
+    metric_snapshot(out,reserved,committed,occupied);
+}

@@ -42,6 +42,9 @@ copy(out)
 /// Caller supplies valid aligned storage and any required lock; this binding performs no borrow checking.
 fn s_Region_len(pointer:usize, value:usize) {
 @unchecked{@c(includes={"corbo_runtime_abi.h"}){
+Region *r=(Region*)${pointer};
+if(r->band){if(${value}>r->len)memory_metric_add(3,(${value}-r->len)*r->width);
+else memory_metric_sub(3,(r->len-${value})*r->width);}
 ((Region*)${pointer})->len=(__typeof__(((Region*)${pointer})->len))${value};
 }}
 }
@@ -2141,7 +2144,7 @@ copy(out)
 /// Synchronize shared access; thread-local state belongs to the current execution context.
 fn set_cursor(value:usize) {
 @unchecked{@c(includes={"corbo_runtime_abi.h"}){
-cursor=(__typeof__(cursor))${value};
+memory_cursor(${value});
 }}
 }
 
@@ -2923,3 +2926,62 @@ fn os_available_bytes()->usize{let mut out:usize=0;@unchecked{@c{
 MEMORYSTATUSEX info={0};info.dwLength=sizeof info;${out}=GlobalMemoryStatusEx(&info)?(uintptr_t)info.ullAvailPhys:UINTPTR_MAX;
 #endif
 }}copy(out)}
+
+/// Assigns a restored execution cursor without counting the context as a new allocation.
+fn set_cursor_untracked(value:usize) { @unchecked { @c { cursor=${value}; } } }
+/// Adds a successful byte transition to one global atomic metric.
+fn metric_add(counter:usize,bytes:usize) { @unchecked { @c { memory_metric_add(${counter},${bytes}); } } }
+/// Subtracts a completed byte transition from one global atomic metric.
+fn metric_sub(counter:usize,bytes:usize) { @unchecked { @c { memory_metric_sub(${counter},${bytes}); } } }
+/// Reads one metric without reading another thread's mutable storage.
+fn metric_read(counter:usize)->usize {
+    let mut value:usize=0;
+    @unchecked { @c { ${value}=memory_metric_read(${counter}); } }
+    value
+}
+/// Returns the current execution context's newest pool descriptor.
+fn metric_pool()->usize {
+    let mut value:usize=0;
+    @unchecked { @c { ${value}=(uintptr_t)metric_pool_head; } }
+    value
+}
+/// Registers a completed pool, its cursor end and live-slot counter.
+fn metric_pool_register(pool:usize) {
+    @unchecked { @c {
+        Pools *p=(Pools*)${pool}; p->metric_previous=metric_pool_head;
+        p->metric_end=cursor; atomic_init(&p->metric_live,0); metric_pool_head=p;
+    } }
+}
+/// Removes the newest pool and returns its unused payload byte count before cursor rewind.
+fn metric_pool_pop(next:usize)->usize {
+    let mut bytes:usize=0;
+    @unchecked { @c {
+        Pools *p=metric_pool_head;
+        if(p && p->metric_end>${next}) {
+            ${bytes}=(p->cap*p->arms-atomic_load_explicit(&p->metric_live,memory_order_relaxed))*p->stride;
+            metric_pool_head=p->metric_previous;
+        }
+    } }
+    bytes
+}
+/// Returns whether the newest pool extends beyond the next fixed-stack cursor.
+fn metric_pool_after(next:usize)->bool {
+    let mut value:bool=false;
+    @unchecked { @c { ${value}=metric_pool_head && metric_pool_head->metric_end>${next}; } }
+    value
+}
+/// Records a claimed or released slot; the occupancy bitmap remains authoritative for allocation.
+fn metric_pool_live(pool:usize,claim:bool) {
+    @unchecked { @c {
+        if(${claim})atomic_fetch_add_explicit(&((Pools*)${pool})->metric_live,1,memory_order_relaxed);
+        else atomic_fetch_sub_explicit(&((Pools*)${pool})->metric_live,1,memory_order_relaxed);
+    } }
+}
+/// Saves the metric pool chain with its suspended fixed-stack context.
+fn metric_context_save(out:usize) { @unchecked { @c { ((ClassicStack*)${out})->metric_pools=metric_pool_head; } } }
+/// Restores an existing chain without counting its storage twice.
+fn metric_context_restore(next:usize) { @unchecked { @c { metric_pool_head=((ClassicStack*)${next})->metric_pools; } } }
+/// Writes the public C snapshot layout; the caller supplies valid result storage.
+fn metric_snapshot(out:usize,reserved:usize,committed:usize,occupied:usize) {
+    @unchecked { @c { *(CorboMemoryStats*)${out}=(CorboMemoryStats){${reserved},${committed},${occupied}}; } }
+}

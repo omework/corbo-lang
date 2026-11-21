@@ -16,6 +16,16 @@
 static _Thread_local unsigned char *base;
 static _Thread_local size_t cursor, limit, committed, page_size, mapped_size;
 static size_t __attribute__((unused)) global_fixed_budget=1073741824ULL;
+/** Rewinds fixed storage after cleanup; retire pool holes before its pages can be reused. */
+static inline void memory_cursor(size_t next) {
+    while(metric_pool_head && metric_pool_head->metric_end>next){
+        Pools *p=metric_pool_head;
+        size_t free_slots=p->cap*p->arms-atomic_load(&p->metric_live);
+        memory_metric_sub(4,free_slots*p->stride);metric_pool_head=p->metric_previous;
+    }
+    if(next>cursor)memory_metric_add(2,next-cursor);else memory_metric_sub(2,cursor-next);
+    cursor=next;
+}
 /** Reserves the calling thread's fixed datastack, initializes page metadata and commits storage on demand. */
 static void reserve(uint64_t bytes) {
     if (bytes > SIZE_MAX) exit(1);
@@ -39,6 +49,7 @@ static void reserve(uint64_t bytes) {
     if (mapping == MAP_FAILED) exit(1);
     base = mapping;
 #endif
+    memory_metric_add(0,mapped_size);
 }
 /** Reserves count aligned fixed-size elements at the current cursor; checks multiplication, alignment and capacity before advancing. */
 void *push(size_t size, size_t align, size_t count) {
@@ -53,13 +64,15 @@ void *push(size_t size, size_t align, size_t count) {
 #else
         if (mprotect(base + committed, pages - committed, PROT_READ | PROT_WRITE)) exit(1);
 #endif
+        memory_metric_add(1,pages-committed);
         committed = pages;
     }
-    cursor = end;
+    memory_cursor(end);
     return base + start;
 }
 /** Unmaps the calling thread's fixed datastack after its values and workers have been cleaned up. */
 static void release(void) {
+    memory_cursor(0); memory_metric_sub(0,mapped_size);memory_metric_sub(1,committed);
 #ifdef _WIN32
     VirtualFree(base, 0, MEM_RELEASE);
 #else
@@ -142,9 +155,12 @@ static void region_reserve(RegionBand *band, size_t bytes, size_t limit) {
     if (mapping == MAP_FAILED) region_error();
     band->base = mapping;
 #endif
+    memory_metric_add(0,((band->capacity+page_size-1)/page_size)*page_size);
 }
 /** Unmaps an empty band and its separately mapped metadata when applicable; no active region may remain. */
 static void region_release_band(RegionBand *band) {
+    memory_metric_sub(0,((band->capacity+page_size-1)/page_size)*page_size);
+    memory_metric_sub(1,band->committed);
 #ifdef _WIN32
     VirtualFree(band->base, 0, MEM_RELEASE);
 #else
@@ -229,6 +245,7 @@ void region_drop(Region *r) {
             *item.slot = 0;
         }
     }
+    memory_metric_sub(3,r->len*r->width);
     RegionBand *band = r->band;
     Region **link = &band->active;
     while (*link && *link != r) link = &(*link)->next;
@@ -248,7 +265,9 @@ static unsigned char *region_add(Region *r) {
 #else
         if (mprotect(band->base + band->committed, pages - band->committed, PROT_READ | PROT_WRITE)) region_error();
 #endif
+        memory_metric_add(1,pages-band->committed);
         band->committed = pages;
     }
+    memory_metric_add(3,r->width);
     return r->data + r->width * r->len++;
 }

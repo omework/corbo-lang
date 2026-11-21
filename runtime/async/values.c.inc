@@ -30,12 +30,14 @@ typedef struct {
     size_t cursor,limit,committed,page_size,mapped_size;
     /** band: saved region-scope link. */
     RegionBand *band;
+    /** metric_pools: suspended fixed-stack pool accounting chain. */
+    Pools *metric_pools;
 } ClassicStack;
 /** Installs next as the thread-local fixed-stack/region context and returns the previous context for later restoration. */
 static inline __attribute__((unused)) ClassicStack swap_classic(ClassicStack next){
-ClassicStack old={base,cursor,limit,committed,page_size,mapped_size,current_band};
+ClassicStack old={base,cursor,limit,committed,page_size,mapped_size,current_band,metric_pool_head};
 base=next.base;cursor=next.cursor;limit=next.limit;committed=next.committed;page_size=next.page_size;
-mapped_size=next.mapped_size;current_band=next.band;return old;}
+mapped_size=next.mapped_size;current_band=next.band;metric_pool_head=next.metric_pools;return old;}
 /** Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context. */
 typedef struct TaskState {
     /** task: scheduler header at offset zero. */

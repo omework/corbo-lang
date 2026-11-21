@@ -11,6 +11,7 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 
 ## Modules
 
+- [`runtime::metrics`](#runtimemetrics)
 - [`std`](#std)
 - [`std::compression::gzip`](#stdcompressiongzip)
 - [`std::compression::zstd`](#stdcompressionzstd)
@@ -53,6 +54,67 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 - [`std::text`](#stdtext)
 - [`std::time`](#stdtime)
 - [`std::time::sync`](#stdtimesync)
+
+## `runtime::metrics`
+
+Concurrency-safe process-wide Corbo storage counters; excludes process RSS.
+
+### `MemoryStats`
+
+[metrics.crb:5](../stdlib/src/runtime/metrics/metrics.crb#L5)
+
+```rust
+pub struct MemoryStats
+```
+
+Byte counts for managed fixed datastacks, pool storage and growing regions.
+
+Members:
+
+- [`reserved_bytes`](../stdlib/src/runtime/metrics/metrics.crb#L7) (implementation field): Reserved virtual address bytes; committed storage is a subset.
+- [`committed_bytes`](../stdlib/src/runtime/metrics/metrics.crb#L9) (implementation field): Committed managed pages, not physical resident memory.
+- [`occupied_bytes`](../stdlib/src/runtime/metrics/metrics.crb#L11) (implementation field): Fixed cursor spans plus live region payload, excluding unused pool slots.
+
+### `memory_stats`
+
+[metrics.crb:15](../stdlib/src/runtime/metrics/metrics.crb#L15)
+
+```rust
+pub fn memory_stats() -> MemoryStats
+```
+
+Samples atomic counters without pausing workers. Fields may reflect adjacent instants.
+
+### `MemoryStats::reserved`
+
+[metrics.crb:32](../stdlib/src/runtime/metrics/metrics.crb#L32)
+
+```rust
+fn reserved(&self) -> usize
+```
+
+Returns sampled reserved virtual address bytes.
+
+### `MemoryStats::committed`
+
+[metrics.crb:34](../stdlib/src/runtime/metrics/metrics.crb#L34)
+
+```rust
+fn committed(&self) -> usize
+```
+
+Returns sampled committed managed pages in bytes, independently of OS RSS.
+
+### `MemoryStats::occupied`
+
+[metrics.crb:36](../stdlib/src/runtime/metrics/metrics.crb#L36)
+
+```rust
+fn occupied(&self) -> usize
+```
+
+Returns sampled occupied bytes, excluding unused pool slots.
+
 
 ## `std`
 

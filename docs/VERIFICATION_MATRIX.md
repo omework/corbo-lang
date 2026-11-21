@@ -5008,3 +5008,9 @@ and malformed annotation placement. The existing object-lock runner also passes
 under `validation/thread-transfer-results.json` and `docs/THREAD_TRANSFER_CYCLE.md`.
 This changes target-independent analysis; platform runtime backends are unchanged
 and were not replayed. Windows ARM64 execution remains deferred.
+
+## Runtime metrics API
+
+[Evidence and limits](RUNTIME_METRICS.md). Eight Corbo observations plus
+C/Corbo ABI concurrent-counter witnesses pass with fatal UBSan. API executes on
+macOS ARM64/x86-64, Linux x86-64 and Windows x86-64; Windows ARM64 compile-only.

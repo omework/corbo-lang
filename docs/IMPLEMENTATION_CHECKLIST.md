@@ -1409,3 +1409,11 @@ be refused; this refusal is not a missing feature.
 - [x] `#(thread: transfer=false)` : grammar, parser and specification.
 - [x] Separate structural summaries for owned fields, closure captures and async state.
 - [x] Five fatal-UBSan executions and fourteen refusals; existing object-lock regressions pass.
+
+## Runtime metrics API
+
+- [x] Dedicated `runtime::metrics` package and commented `MemoryStats` API.
+- [x] Atomic fixed cursor, pool-hole, region and reclamation counters in both runtimes.
+- [x] Preserve suspended context bookkeeping; no descriptor scans during reads.
+- [x] Focused fatal-UBSan witnesses and supported-target API execution.
+- [x] Windows ARM64 compile-only; source documentation/reference updated.

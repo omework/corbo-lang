@@ -38,7 +38,7 @@ void corbo_datastack_rewind(CorboStackMark mark) {
 #ifdef CORBO_RUNTIME_TASKS
     pthread_mutex_lock(&task_lock);
 #endif
-    region_restore(mark.region_scope); cursor = mark.position;
+    region_restore(mark.region_scope); memory_cursor(mark.position);
 #ifdef CORBO_RUNTIME_TASKS
     pthread_mutex_unlock(&task_lock);
 #endif
@@ -90,3 +90,10 @@ bool corbo_map_insert(CorboHashMap *map, uint64_t key, const void *value, void *
 bool corbo_map_remove(CorboHashMap *map, uint64_t key, void *previous) { return map_remove(map, key, previous); }
 /** Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage. */
 void corbo_map_drop(CorboHashMap **map) { map_drop(map); }
+
+/** Samples managed-storage counters atomically; fields may represent adjacent instants. */
+CorboMemoryStats corbo_memory_stats(void) {
+    size_t reserved=memory_metric_read(0),committed=memory_metric_read(1);
+    size_t total=memory_metric_read(2)+memory_metric_read(3),holes=memory_metric_read(4);
+    return (CorboMemoryStats){reserved,committed,holes>total?0:total-holes};
+}

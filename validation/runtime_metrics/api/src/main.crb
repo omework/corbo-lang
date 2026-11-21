@@ -1,0 +1,46 @@
+//! Metrics use the ordinary runtime package API and preserve pool accounting.
+use runtime::metrics::{MemoryStats, memory_stats};
+
+async fn suspended() -> i64 {
+    let mut pool = Pool<i64>::new(2);
+    let value = pool.new(7);
+    let before = runtime::metrics::memory_stats();
+    yield;
+    let after = runtime::metrics::memory_stats();
+    print(after.occupied() == before.occupied());
+    drop(value);
+    7
+}
+
+fn main() {
+    let initial: MemoryStats = memory_stats();
+    print(initial.reserved() > 0);
+    print(initial.committed() <= initial.reserved());
+    {
+        let mut pool = Pool<i64>::new(4);
+        let before = runtime::metrics::memory_stats();
+        let value = pool.new(42);
+        let allocated = runtime::metrics::memory_stats();
+        print(allocated.occupied() > before.occupied());
+        drop(value);
+        let released = runtime::metrics::memory_stats();
+        print(released.occupied() == before.occupied());
+    }
+    {
+        let mut vectors = Pool<Vector<i64>>::new(1);
+        let mut values = vectors.new();
+        let before = runtime::metrics::memory_stats();
+        values.push(7);
+        let appended = runtime::metrics::memory_stats();
+        print(appended.occupied() == before.occupied() + 8);
+        drop(values.pop());
+        let popped = runtime::metrics::memory_stats();
+        print(popped.occupied() == before.occupied());
+    }
+    {
+        let execution = runtime::spawn(suspended());
+        drop(execution.join());
+    }
+    let after = runtime::metrics::memory_stats();
+    print(after.occupied() == initial.occupied());
+}

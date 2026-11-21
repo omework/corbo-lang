@@ -1111,3 +1111,11 @@ consignées. Une perdante de Select conservant un handle lancé non attendu doit
 - [x] `#(thread: transfer=false)` : grammaire, parseur et spécification.
 - [x] Résumés structurels séparés pour les champs possédés, captures de closure et états async.
 - [x] Cinq exécutions UBSan fatales et quatorze refus ; régressions des verrous objet inchangées.
+
+## API de métriques runtime
+
+- [x] Paquet `runtime::metrics` et API `MemoryStats` documentée.
+- [x] Compteurs atomiques curseurs, pools, régions et restitution dans les deux runtimes.
+- [x] Bookkeeping conservé dans les contextes suspendus, sans parcours de descripteurs aux lectures.
+- [x] Témoins UBSan ciblés et exécution API sur les cibles disponibles.
+- [x] Windows ARM64 compilé seulement ; documentation et références mises à jour.

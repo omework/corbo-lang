@@ -1466,6 +1466,7 @@ blocking workers. The current TLS transport is blocking-only, under
 | `std::encoding::binary` | Primitive reads/writes with explicit little-/big-endian byte order and caller-provided buffers | [Binary API](docs/BINARY_AND_TIME_API.md#stdencodingbinary) |
 | `std::time`, `std::time::sync` | Monotonic Duration/Instant, sleep and reusable deadline timers; async waits use blocking workers | [Time API](docs/BINARY_AND_TIME_API.md) |
 | `std::compression::{gzip, zstd}` | Native bounded codecs, streaming and dictionary support | [Compression](docs/COMPRESSION.md) |
+| `runtime::metrics` | Atomic reserved, committed and occupied datastack/region byte counters | [Metrics](docs/RUNTIME_METRICS.md) |
 | `std::env` | Process arguments while keeping `main` argument-free | [API](docs/STDLIB.md#stdenv) |
 
 The API reference documents the actual supported cryptographic profiles and

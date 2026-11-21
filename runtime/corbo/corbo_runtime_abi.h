@@ -20,6 +20,7 @@
 #endif
 _Static_assert(sizeof(uintptr_t)==8,"Corbo runtime requires a supported 64-bit target");
 _Static_assert(sizeof(void(*)(void))==sizeof(uintptr_t),"unsupported callback representation");
+#include "../memory/metrics_storage.h"
 static _Thread_local unsigned char *base;
 static _Thread_local size_t cursor,limit,committed,page_size,mapped_size;
 static size_t global_fixed_budget=1073741824ULL,global_budget,global_limit=104857600ULL;
@@ -99,6 +100,8 @@ typedef struct {
     size_t cursor,limit,committed,page_size,mapped_size;
     /** band: saved region-scope link. */
     RegionBand *band;
+    /** metric_pools: suspended fixed-stack pool accounting chain. */
+    Pools *metric_pools;
 } ClassicStack;
 /** Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context. */
 typedef struct TaskState {

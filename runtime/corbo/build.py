@@ -6,7 +6,7 @@ from pathlib import Path
 from exports import EXPORTS,declaration,wrapper
 ROOT=Path(__file__).resolve().parent
 GROUPS={
- 'primitives':'base_runtime','memory':'base_runtime','collections':'base_runtime','reclaim':'base_runtime','api':'base_runtime',
+ 'metrics':'base_runtime','primitives':'base_runtime','memory':'base_runtime','collections':'base_runtime','reclaim':'base_runtime','api':'base_runtime',
  'thread_primitives':'native_runtime','scheduler':'task_runtime','values':'task_value_runtime','threads':'native_runtime',
  'socket_primitives':'readiness_runtime','readiness':'readiness_runtime',
  'completion_primitives':'completion_runtime','completion':'completion_runtime',
@@ -66,7 +66,7 @@ def build(compiler,out):
         key=match[1];name,group=metadata[key];opening=match.end()-1;end=closing_brace(text,opening)
         prototypes.append(renamed(text[match.start():opening])+';\n');pieces[group].append(renamed(text[match.start():end]).replace('arithmetic_error(', 'crb_arithmetic_error(')+'\n');count+=1
     assert count==len(metadata),(count,len(metadata))
-    abi=(ROOT/'corbo_runtime_abi.h').read_text()
+    abi=(ROOT/'corbo_runtime_abi.h').read_text().replace('#include "../memory/metrics_storage.h"', (ROOT.parent/'memory/metrics_storage.h').read_text())
     abi+='\n'+''.join(declaration(name,result,params)+';\n'for group,name,result,params in EXPORTS)
     common=abi+'\n'+aliases+'''#include <math.h>
 static __attribute__((unused)) void crb_arithmetic_error(void){fputs("corbo: erreur arithmetique\\n",stderr);exit(EXIT_FAILURE);}

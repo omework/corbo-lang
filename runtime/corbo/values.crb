@@ -2,6 +2,7 @@
 //! Task descriptors preserve separate state, storage, result and cleanup responsibilities.
 /// Saves the current thread-local fixed-stack/region context in out and installs next for a resumed task.
 fn swap_classic(out:usize,next:usize) {
+    metric_context_save(copy(out));
     s_ClassicStack_base(copy(out),get_base());
     s_ClassicStack_cursor(copy(out),get_cursor());
     s_ClassicStack_limit(copy(out),get_limit());
@@ -10,7 +11,8 @@ fn swap_classic(out:usize,next:usize) {
     s_ClassicStack_mapped_size(copy(out),get_mapped_size());
     s_ClassicStack_band(copy(out),get_current_band());
     set_base(g_ClassicStack_base(copy(next)));
-    set_cursor(g_ClassicStack_cursor(copy(next)));
+    set_cursor_untracked(g_ClassicStack_cursor(copy(next)));
+    metric_context_restore(copy(next));
     set_limit(g_ClassicStack_limit(copy(next)));
     set_committed(g_ClassicStack_committed(copy(next)));
     set_page_size(g_ClassicStack_page_size(copy(next)));
