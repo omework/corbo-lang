@@ -2,6 +2,11 @@
 
 # Représentation mémoire du vérificateur Corbo
 
+La décision [permission de mutation](MUTABLE_ACCESS-fr.md) prévaut sur les
+passages qui déduisent une exclusivité du seul `&mut`. Séparer permission
+d’écrire, dépendances de validité, fin de chaque branche et contrats de verrou
+explicites. Corboc implémente cette séparation ; les preuves manquantes restent refusées.
+
 Ce document décrit le modèle de conception du vérificateur. Il évolue avec
 les décisions de conception et leur intégration. Les garanties du langage
 sont définies dans les [règles du core](LANGUAGE_RULES.md#noyau-mémoire--grille-de-lecture).
@@ -374,3 +379,14 @@ racine source. La visibilité privée suit chaque déclaration concrète génér
 son implémentation, plutôt que l’emplacement d’un modèle effacé.
 
 Voir les [résultats d’intégration](cycles/BINARY_TIME_BOUNDED_CYCLE.md).
+
+## Faits d’accès et de protection implémentés
+
+`CheckedValue.writable` porte la permission d’écrire, indépendamment de la
+mutabilité de liaison et des liens de cible, de réemprunt et de possession.
+Les nœuds statiques portent `access_mode` (effet démontré sur le contenu sans
+invalidation du stockage) et `protection` (identité de verrou résolue). Ces résumés
+sont établis après résolution lexicale et instanciés aux appels et captures.
+Les verrous portés par résultat gardent un marqueur dédié, sans permission
+d’écriture induite. Un effet ou un verrou inconnu n’établit aucune preuve de
+synchronisation. Voir [MA1–MA6](MUTABLE_ACCESS-fr.md).

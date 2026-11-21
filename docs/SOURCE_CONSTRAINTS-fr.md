@@ -2,6 +2,13 @@
 
 # Contraintes inférées entre sources
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 Le compilateur déduit les relations entre les sources des paramètres depuis les
 opérations du corps, puis les substitue aux appels. Aucune annotation n'est
 ajoutée aux signatures. Les contraintes complètent les résumés d'effets et de

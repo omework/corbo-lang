@@ -4,6 +4,12 @@
 
 # Function memory contracts: inventory and proposal
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 The inventory describes the nature of the project.
 The current compiler. The focus is to infer contracts since
 the operations of the body, without adding annotation of provenance to the signatures.

@@ -4,6 +4,12 @@
 
 # Fields containing a read-out loan
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 Later extension: [fields &mut Int](MUTABLE_REFERENCE_FIELDS.md) are now available; the measures below describe this historical cycle.
 
 The prototype now accepts fields `&Int` in the enums.

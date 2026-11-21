@@ -1,0 +1,37 @@
+use std::io::sync::{File, FileError};
+use std::io::{FileMode, FilePerm, SeekFrom};
+
+fn run() -> Result<(), FileError> {
+    let path: [u8; 8] = [100,117,114,97,98,108,101,0];
+    {
+        let mut file = File::create(&path[..], FileMode::READ_WRITE, FilePerm.DefaultMode)?;
+        let bytes: [u8; 4] = [1,2,3,4];
+        file.write(&bytes[..])?;
+        file.sync_all()?;
+        file.seek(SeekFrom.Start(1))?;
+        file.truncate(2)?;
+        let position = file.seek(SeekFrom.Current(0))?;
+        print(position == 1);
+        file.truncate(6)?;
+        let position = file.seek(SeekFrom.Current(0))?;
+        print(position == 1);
+        file.seek(SeekFrom.Start(0))?;
+        let mut output: [u8; 6] = [9; 6];
+        let count = file.read(&mut output[..])?;
+        print(count == 6 && output[0] == 1 && output[1] == 2 && output[2] == 0 && output[5] == 0);
+        file.truncate(0)?;
+        file.sync_all()?;
+        let size = file.stats()?;
+        print(size.size() == 0);
+        match file.truncate(18446744073709551615) { Ok(()) => { print(false); }, Err(_error) => { print(true); }, }
+    }
+    {
+        let mut file = File::open(&path[..], FileMode::READ_ONLY)?;
+        match file.truncate(1) { Ok(()) => { print(false); }, Err(_error) => { print(true); }, }
+    }
+    File::delete(&path[..])?;
+    Ok(())
+}
+fn main() {
+    match run() { Ok(()) => {}, Err(_error) => { print(-1); }, }
+}

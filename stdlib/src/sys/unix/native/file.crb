@@ -461,3 +461,129 @@
         }
     }
 #(endif)
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    /// Requests fsync and F_FULLFSYNC; unsupported storage errors are propagated.
+    pub fn sync_all(fd: i64) -> i64 {
+        let mut status: i32 = 0;
+        let mut error: i64 = 0;
+        loop {
+            @unchecked {
+                @asm {
+                    mov x0, ${fd}
+                    bl _fsync
+                    cbnz w0, 1f
+                    mov x0, ${fd}
+                    mov w1, #51
+                    bl _fcntl
+                    1:
+                    mov ${status}, w0
+                }
+            }
+            if status == 0 { return 0; }
+            @unchecked {
+                @asm {
+                    bl ___error
+                    ldr w0, [x0]
+                    neg x0, x0
+                    mov ${error}, x0
+                }
+            }
+            if error != -4 { return error; }
+        };
+        error
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "aarch64")
+    /// Changes file length without moving the cursor.
+    pub fn truncate(fd: i64, length: u64) -> i64 {
+        let mut status: i32 = 0;
+        let mut error: i64 = 0;
+        loop {
+            @unchecked {
+                @asm {
+                    mov x0, ${fd}
+                    mov x1, ${length}
+                    bl _ftruncate
+                    mov ${status}, w0
+                }
+            }
+            if status == 0 { return 0; }
+            @unchecked {
+                @asm {
+                    bl ___error
+                    ldr w0, [x0]
+                    neg x0, x0
+                    mov ${error}, x0
+                }
+            }
+            if error != -4 { return error; }
+        };
+        error
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "x86_64")
+    /// Requests fsync and F_FULLFSYNC; unsupported storage errors are propagated.
+    pub fn sync_all(fd: i64) -> i64 {
+        let mut status: i32 = 0;
+        let mut error: i64 = 0;
+        loop {
+            @unchecked {
+                @asm {
+                    mov rdi, ${fd}
+                    call _fsync
+                    test eax, eax
+                    jnz 1f
+                    mov rdi, ${fd}
+                    mov esi, 51
+                    xor eax, eax
+                    call _fcntl
+                    1:
+                    mov ${status}, eax
+                }
+            }
+            if status == 0 { return 0; }
+            @unchecked {
+                @asm {
+                    call ___error
+                    mov eax, DWORD PTR [rax]
+                    neg rax
+                    mov ${error}, rax
+                }
+            }
+            if error != -4 { return error; }
+        };
+        error
+    }
+#(endif)
+
+#(if: target.os == "macos" && target.arch == "x86_64")
+    /// Changes file length without moving the cursor.
+    pub fn truncate(fd: i64, length: u64) -> i64 {
+        let mut status: i32 = 0;
+        let mut error: i64 = 0;
+        loop {
+            @unchecked {
+                @asm {
+                    mov rdi, ${fd}
+                    mov rsi, ${length}
+                    call _ftruncate
+                    mov ${status}, eax
+                }
+            }
+            if status == 0 { return 0; }
+            @unchecked {
+                @asm {
+                    call ___error
+                    mov eax, DWORD PTR [rax]
+                    neg rax
+                    mov ${error}, rax
+                }
+            }
+            if error != -4 { return error; }
+        };
+        error
+    }
+#(endif)

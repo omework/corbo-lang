@@ -1193,7 +1193,7 @@ All compositions are covered. The overall objective remains open.
 | --- | --- | --- |
 | Compilation and Heart | CLI, verification, C generation, synchronous hand, binary; flow control, functions, expressions | Generalization of types/signatures in the remaining compositions |
 | Transfers and destruction | Movements by value and blocks `move`, reception, drop, scope cleaning, return/break/continue | Compatibility fixtures still exert historical arrows |
-| Borrowing and contracts | Last use, exclusivity, multiple sources, undercut contracts and call verification | Dependencies of complex aggregates/collections and some async interactions |
+| Borrowing and contracts | Last use, mutation permission, synchronization, multiple sources, undercut contracts and call verification | Dependencies of complex aggregates/collections and some async interactions |
 | Tableaux fixes | Entwined tables, referenced references and lines, explicit copies, entries and returns | See the perimeter and deviations of FIXED_ARRAYS_VALIDATION.md; not a promise for any type of element |
 | Structures, enums, methods | Complete construction, defects, methods, copies, borrowed fields and owners, several recursive graphs | T/A<T> connected nominal returns; general compositions with remaining collections and async |
 | UTF-8 and conversions | str, char, string, views/cuts, UTF-8 mutations verified, as/try_from, failed results | Forms and types not yet connected, general interactions with collections |
@@ -1379,3 +1379,19 @@ be refused; this refusal is not a missing feature.
 | 05 — Data stack and pools | Storage, typed pools and nominal returns T/A<T> in place; general placement still to be completed |
 | 06 — Type features | Static historical resolution to a method and multi-method functional contracts in the tested perimeter |
 | 07 — Conversions, copies and views | Operations retained in place; composition coverage and partial types |
+
+## Subdb-required File APIs
+
+- [x] Add sync/async File synchronization and cursor-preserving truncation.
+- [x] Implement Linux, macOS and Windows native boundaries.
+- [x] Execute focused sync/async cases on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64.
+- [x] Compile Windows ARM64; execution remains explicitly deferred.
+- [x] Document persistence limits and regenerate the STD reference.
+
+## Mutation permission / permission de mutation (MA1–MA6)
+
+- [x] English/French normative rules, README and representation documentation aligned.
+- [x] Corboc separates write permission, content/protection summaries and lifetime dependencies.
+- [x] Nine fatal-UBSan executions and ten expected refusals retained in corboc.
+- [x] Native sharing executed on macOS/Linux/Windows x86-64; Windows ARM64 compile-only.
+- [x] Historical exclusion verdicts explicitly distinguished from current semantics.

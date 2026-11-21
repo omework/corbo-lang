@@ -57,6 +57,20 @@
             Ok(position)
         }
 
+        /// Persists file contents and metadata, propagating native flush failures.
+        fn sync_all(&mut self) -> Result<(), FileError> {
+            let raw = std::sys::win::native::sync_all((*self).handle);
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(())
+        }
+
+        /// Changes file length without moving the cursor; growth is zero-filled by the OS.
+        fn truncate(&mut self, length: u64) -> Result<(), FileError> {
+            let raw = std::sys::win::native::truncate((*self).handle, length);
+            if raw != 0 { return Err(FileError.Os { code: -raw }); }
+            Ok(())
+        }
+
         /// Queries the file size from the open HANDLE.
         fn size(&self) -> Result<u64, FileError> {
             let (raw, count) = std::sys::win::native::stats((*self).handle);

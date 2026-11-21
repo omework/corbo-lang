@@ -2,6 +2,13 @@
 
 # Validation du match mutable
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 `match &mut writer` réserve l'accès au porteur jusqu'à la fin du bras. Chaque
 liaison de champ `&mut Int` peut écrire dans sa cible avec `.set()`. Le porteur
 reprend ensuite la protection de cette cible jusqu'à son dernier usage ou

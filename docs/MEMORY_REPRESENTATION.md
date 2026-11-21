@@ -4,6 +4,11 @@
 
 # Presentation of the Corbo Auditor's Memorandum
 
+The [mutation-permission decision](MUTABLE_ACCESS.md) takes precedence over
+passages that infer exclusivity from `&mut` alone. Write permission, validity
+dependencies, completion of each branch and explicit lock contracts are distinct
+facts. Corboc implements this separation; bounded or unresolved proofs still reject.
+
 This document describes the auditor's design model. It evolves with design decisions
 and their integration.
 are defined in the [core rules](LANGUAGE_RULES.md#noyau-mémoire--grille-de-lecture).
@@ -408,3 +413,14 @@ Private generic-layout metadata is attached to each generated concrete declarati
 and its implementation, rather than to an erased template’s output offset.
 
 See [integration evidence](cycles/BINARY_TIME_BOUNDED_CYCLE.md).
+
+## Implemented access/protection facts
+
+Corboc stores reference write permission in `CheckedValue.writable`, independently
+of binding mutability and the existing target/loan-parent/ownership links. Static
+nodes carry `access_mode` (a proven storage-preserving content-effect summary) and
+`protection` (a resolved lock identity). These summaries are materialized after
+lexical resolution and instantiated through concrete calls/captures. Explicit
+through-result locks retain their dedicated summary marker; they do not gain
+write permission from that marker. Unknown effects or lock identities do not
+supply synchronization proof. See [MA1–MA6](MUTABLE_ACCESS.md).

@@ -2,6 +2,11 @@
 
 # Corbo — structures, construction et méthodes
 
+Les permissions des références suivent [MA1–MA6](MUTABLE_ACCESS-fr.md).
+Les anciennes descriptions d’exclusion ci-dessous ne réintroduisent pas
+l’unicité de `&mut` ; les effets invalidants restent soumis aux dépendances.
+
+
 Décisions validées dans la discussion, consignées le 5 novembre 2026.
 
 Ce document complète [LANGUAGE_RULES.md](LANGUAGE_RULES.md). Il consigne la
@@ -256,7 +261,7 @@ sources et leurs règles de transfert, sans modifier silencieusement les tableau
 
 Les [règles TF1–TF5](TYPE_FEATURES.md) complètent ME1, ME2 et ME4 : les
 receveurs de feature `&self`, `&mut self` et `-> self` exigent respectivement
-les modes concrets partagé, exclusif et consommant ci-dessous. La résolution
+les modes concrets lecture, permission de mutation et consommation ci-dessous. La résolution
 statique conserve les effets et les origines du contrat de méthode concret.
 
 **ME1 — Signature du receveur.** Une méthode se déclare dans `impl Type`.

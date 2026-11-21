@@ -433,7 +433,7 @@ Output: `42, 7`. [Complete package](examples/features/moves/).
 
 #### Shared borrows and mutable reborrows
 
-References do not transfer cleanup responsibility. Their targets must remain valid, and mutable loans exclude incompatible access until their last use.
+References do not transfer cleanup responsibility. `&mut T` grants permission to mutate, not uniqueness: multiple mutable references may coexist. Shared accesses across threads must satisfy the same-lock synchronization requirements, and each target must remain valid through the relevant branch completion points and any surviving borrowed results. Corboc rejects missing proofs. See [mutable access](docs/MUTABLE_ACCESS.md).
 
 <!-- example: borrows -->
 ```rust

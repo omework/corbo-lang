@@ -442,7 +442,7 @@ Sortie : `42, 7`. [Paquet complet](examples/features/moves/).
 
 #### Emprunts partagés et réemprunts mutables
 
-Les références ne transfèrent pas la responsabilité du nettoyage. Leurs cibles doivent rester valides, et les emprunts mutables excluent les accès incompatibles jusqu’à leur dernière utilisation.
+Les références ne transfèrent pas la responsabilité du nettoyage. `&mut T` donne une permission de mutation, sans unicité : plusieurs références mutables peuvent coexister. Les accès partagés entre threads doivent respecter les exigences de synchronisation par le même verrou. Chaque cible doit rester valide jusqu’aux fins de branche concernées et pour les résultats empruntés qui survivent. Corboc refuse les preuves manquantes. Voir [les accès mutables](docs/MUTABLE_ACCESS-fr.md).
 
 <!-- example: borrows -->
 ```rust

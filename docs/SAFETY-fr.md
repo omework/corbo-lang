@@ -2,6 +2,13 @@
 
 # Périmètre et vérification mémoire de Corbo
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 ## Annotations d’emprunt et littéraux à travers mut_vref
 
 Le parseur accepte le préfixe d’emprunt dans l’annotation d’un `let`.

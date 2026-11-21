@@ -57,6 +57,12 @@ contrats sans parcourir les corps appelés ; le backend C reste spécialisé.
 
 [Règles des packages et modules](MODULES-fr.md).
 
+La décision normative [permission de mutation](MUTABLE_ACCESS-fr.md) remplace
+les anciennes obligations d’exclusivité déduites du seul `&mut`. Les obligations
+de durée de vie, de synchronisation et de fin de branche sont conservées.
+Corboc implémente cette séparation avec une validation ciblée ; les preuves
+manquantes restent refusées.
+
 ## Noyau mémoire — grille de lecture
 
 Les repères N1–N8 regroupent les règles déjà retenues. Les sections normatives
@@ -68,7 +74,7 @@ et les documents auxquels elles renvoient fixent le détail des règles.
 | N2 | Une valeur à détruire n'a qu'un responsable du nettoyage à la fois. Un déplacement transmet cette responsabilité et un emprunt la laisse en place. | §3, §6, H1 |
 | N3 | La syntaxe distingue copie, emprunt et déplacement. Un transfert sortant a besoin d'un receveur pour prendre effet. Les obligations d'usage et les règles propres aux méthodes s'appliquent. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | La cible d'un emprunt et le pool source d'une allocation doivent rester valides là où la valeur est transmise. Chaque passage enfant → parent se vérifie séparément, sans promotion implicite de la cible. | §3–§5 |
-| N5 | Les accès simultanés sont compatibles. Un emprunt mutable réserve la zone concernée, et un réemprunt suspend les usages incompatibles jusqu'à sa dernière utilisation. | §5, ST6, ST11 |
+| N5 | `&mut T` autorise la mutation sans garantir l’unicité. Les accès concurrents qui se chevauchent et dont au moins un écrit exigent une synchronisation démontrée. Les dépendances de validité restent suivies. | MA1–MA6, §5 |
 | N6 | Chaque chemin qui atteint un usage doit permettre cet usage. L'analyse suit les provenances, les sorties de contrôle et l'ordre d'évaluation, y compris la préparation du remplacement avant la destruction de l'ancienne valeur. | §1–§5, F3–F4 |
 | N7 | On détruit une valeur une seule fois avant de récupérer son stockage. Les dépendances contraignent l'ordre de destruction. Un slot réutilisé ne réactive aucun ancien accès. | §6–§8 |
 | N8 | Les obligations de type, de provenance, d'emprunt et de nettoyage se conservent aux frontières. Un appel est vérifié à partir du contrat inféré. | §5, §10 |
@@ -575,13 +581,14 @@ Les dépendances vers un allocateur suivent les règles spécifiques de la secti
 
 ## 5. Emprunts et fonctions
 
-**B1 — Lecture et mutation.** Plusieurs emprunts en lecture peuvent coexister.
-Un emprunt mutable exige un accès exclusif à l'allocation pendant sa période
-d'utilisation. Les autres accès incompatibles sont interdits pendant cette
-période.
+**B1 — Lecture et mutation.** `&T` donne un accès en lecture et `&mut T`
+une permission de mutation, sans unicité implicite. Les accès suivent MA1–MA6 :
+coexistence permise, synchronisation démontrée pour les accès concurrents concernés,
+et conservation des dépendances de validité.
 
-**B2 — Fin d'emprunt.** L'exclusivité peut prendre fin après la dernière
-utilisation de l'emprunt, sans attendre la fin du bloc.
+**B2 — Fin d'emprunt.** La dernière utilisation peut terminer une dépendance
+d'emprunt avant la fin du bloc. Elle ne termine ni une autre branche encore active,
+ni un contrat de verrou porté jusqu'à la destruction d'un résultat.
 
 **B3 — Emprunt et déplacement.** Pour le prototype, un déplacement est interdit
 tant qu'un emprunt doit encore être utilisé.
@@ -617,9 +624,9 @@ sa cible sans `mut data`, puisque le droit d'écriture vient du type de référe
 `modify(&mut data)`. Si `view` est déjà un emprunt, on le passe par son nom :
 `inspect(view)` ; un résultat de fonction déjà emprunté se passe directement,
 comme `inspect(borrow(&data))`. Le mode reste déclaré dans la signature.
-Ce passage ne transfère ni ne copie l'allocation. Un accès mutable conserve
-son exclusivité ; son utilisation par un appel suspend les accès incompatibles
-et reprend après la fin des emprunts issus de cet appel.
+Ce passage ne transfère ni ne copie l’allocation. Une référence mutable conserve
+sa permission d’écrire et ses dépendances aux appels. MA1–MA6 régit les accès
+coexistants, sans unicité implicite ni suspension automatique de tous les alias.
 
 `&view` ajoute un niveau de référence ; ce n'est pas un raccourci vers sa cible.
 Les types de références imbriquées sont admis, par exemple `&&mut i64`
@@ -733,8 +740,9 @@ les substituent à travers les appels successifs. Un retour conditionnel retient
 toutes les cibles possibles. Chaque frontière quittée applique D1 : les cibles
 sont déjà vivantes et rattachées au parent ou à un ancêtre, sans promotion.
 Une cible créée localement ou reçue par `->` ne peut donc pas sortir par emprunt.
-L'emprunt retourné protège toutes ses cibles contre mutation, déplacement, drop
-et reset jusqu'à sa dernière utilisation. Il reste en lecture, même si son
+L’emprunt retourné conserve les dépendances de toutes ses cibles jusqu’à sa
+dernière utilisation. Déplacement invalidant, drop et reset historique restent
+soumis à N4 ; les accès au contenu suivent MA1–MA6. Il reste en lecture, même si son
 paramètre d'origine est mutable. Les retours &mut Int sont désormais également
 implémentés :
 
@@ -750,18 +758,17 @@ vue.set(30);
 nombre = 40; // Après le dernier usage de vue.
 ```
 
-Le résultat mutable conserve l'exclusivité après l'appel. Tant qu'il doit servir,
-les autres accès incompatibles à chaque cible possible sont refusés, y compris
-lecture depuis l'accès d'origine, mutation, déplacement, drop et reset. Un
-réemprunt enfant peut utiliser cette capacité : il suspend les accès incompatibles
-du parent jusqu'à son dernier usage. Les appels successifs conservent les chaînes
-de parents ; l'accès d'origine reprend ensuite sous réserve des autres emprunts.
+Le résultat mutable conserve la permission d’écrire et les dépendances de cible
+après l’appel. Un réemprunt les transporte sans exclure automatiquement l’accès
+parent. Les accès séquentiels au contenu peuvent coexister ; l’invalidation du
+stockage et les accès concurrents restent soumis à MA1–MA6. Les appels successifs
+conservent toutes les chaînes de dépendances pertinentes.
 
 Un résultat &mut Int exige une provenance depuis des paramètres &mut Int.
 Une entrée &Int ne devient pas mutable parce que sa variable est déclarée mut.
 Les cibles locales ou reçues par transfert restent non durables au retour,
 même avec une source de stockage durable. Les retours conditionnels conservent
-toutes les cibles possibles et protègent chacune avec la capacité exclusive.
+toutes les cibles possibles et leurs obligations de validité et de synchronisation.
 Il n'y a ni allocation, ni destruction, ni réception de propriété, ni déplacement
 d'octets lors du retour de cet emprunt. Le nom existant s'utilise sans & ajouté.
 Les retours vers d'autres types restent hors du prototype. Voir
@@ -1000,16 +1007,16 @@ Les champs `&Int` constituent une première étape de références stockées : i
 sont immuables après construction et exigent un emprunt nommé vers une allocation
 Int. On fournit `field: &data` depuis une allocation, ou `field: view` si
 `view` est déjà un emprunt Int ; aucun `&` n'est aplati. Leurs dépendances
-protègent la cible contre déplacement, mutation, destruction
-et reset tant que l'objet ou un emprunt vers lui doit encore servir. Le `match`
+conservent les dépendances contre déplacement invalidant, destruction et reset
+historique tant que la cible doit servir. La mutation du contenu suit MA1–MA6. Le `match`
 lie ces champs par emprunt en lecture, et non par copie de l'allocation.
 Le prototype accepte leur transfert de bloc seulement si les cibles sont déjà
 assez durables dans la destination, conformément à D1. Les champs vers d'autres
 enums restent différés. Les retours de fonctions
 contenant ces champs sont admis avec la même vérification enfant → parent ;
 leurs contrats transmettent les cibles aux appelants. Un réemprunt partagé
-stocké suspend les accès incompatibles du parent mutable jusqu'au dernier
-usage, sans créer de champ mutable. Voir [REFERENCE_FIELDS.md](REFERENCE_FIELDS.md)
+stocké garde les dépendances et donne une permission de lecture, sans créer de
+permission mutable ni suspendre automatiquement les accès au contenu du parent. Voir [REFERENCE_FIELDS.md](REFERENCE_FIELDS.md)
 et [BORROWED_RETURNS.md](BORROWED_RETURNS.md).
 
 Les champs `&mut Int` sont également admis. Ils exigent une capacité mutable :
@@ -1017,29 +1024,17 @@ Les champs `&mut Int` sont également admis. Ils exigent une capacité mutable :
 est déjà un emprunt mutable Int. Une référence en lecture ne devient pas
 mutable par son stockage. Le champ conserve sa référence après construction.
 
-L'objet conserve la capacité exclusive sur chaque cible possible jusqu'à son
-dernier usage, y compris les usages via un emprunt vers lui. Les autres accès
-incompatibles à ces cibles, notamment lecture par leur accès d'origine,
-écriture, déplacement, drop et reset, sont refusés pendant cet intervalle.
-Déplacer ou retourner l'objet conserve cette restriction ; D1 reste applicable
-à chaque frontière enfant → parent, sans promotion implicite des cibles.
-Plusieurs références partagées vers le même objet retiennent la même capacité
-de champ, sans créer plusieurs emprunts mutables concurrents. Le `match &value`
-reste en lecture : une liaison d'un champ `&mut Int` donne un accès partagé
-dérivé de cette capacité, et ne libère pas les accès d'origine à la cible.
-Après le dernier usage protecteur, les autres accès redeviennent possibles ;
-cela ne déclenche pas de destruction automatique anticipée. Voir
-[MUTABLE_REFERENCE_FIELDS.md](MUTABLE_REFERENCE_FIELDS.md).
+L’objet conserve les dépendances de chaque cible possible et la permission
+d’écriture du champ. Déplacement et retour préservent ces obligations ; D1
+s’applique à chaque frontière enfant → parent, sans promotion implicite.
+Plusieurs références peuvent coexister selon MA1–MA6. `match &value` donne des
+projections en lecture.
 
-`match &mut value` exige un accès exclusif au porteur. Une allocation doit
-être liée par `let mut`. Un paramètre ou une variable portant déjà un emprunt
-mutable fournit cet accès. Dans le bras, chaque champ `&mut Int` lié fournit
-un réemprunt mutable limité au bras. L'opération `vue.set(n)` modifie l'Int
-référencé sur place. Les champs `&Int` restent lisibles et les champs `Int`
-sont copiés. Le bras réserve le porteur et les cibles de ses champs mutables
-jusqu'à sa sortie, même après le dernier usage d'une projection. Le porteur
-retrouve alors son accès exclusif et protège les cibles jusqu'à son dernier
-usage ou celui de ses références.
+`match &mut value` exige une permission d’écriture sur le porteur. Les projections
+mutables conservent les dépendances de porteur et de place nécessaires à la validité
+des cibles. L’accès au contenu n’exclut pas automatiquement d’autres références.
+Remplacement structurel, destruction et concurrence suivent MA1–MA6. La sortie du
+bras ne termine pas une dépendance portée par un résultat qui en sort.
 
 Les bras autorisent les lectures du match de lecture et `.set()` sur les
 projections mutables. Ils admettent aussi les appels `Void` dont les arguments
@@ -1048,10 +1043,9 @@ Une déclaration locale du bras peut recevoir le résultat d'un appel
 `Int` avec les mêmes arguments. L'Int copié reste indépendant des écritures
 ultérieures et sa liaison est limitée à son bloc.
 Une déclaration `let mut autre = reemprunter(vue)` peut aussi recevoir
-un `&mut Int`. L'accès via `vue`
-reprend après le dernier usage de `autre`, selon B2, y compris si cet usage
-précède la fin du bloc. La réservation du porteur se poursuit jusqu'à la
-sortie du bras.
+un `&mut Int`. `vue` et `autre` conservent permissions et dépendances selon
+MA1–MA6 ; leur coexistence ne suspend pas à elle seule les accès au contenu par
+`vue`. Le porteur reste protégé contre l’invalidation tant qu’il est requis.
 Après un appel Void ou Int, le bras peut réutiliser ses projections dès le
 retour. La réservation du porteur couvre tout l'appel et le reste du bras.
 Dans une expression `match` par emprunt, un appel `Void` peut aussi
@@ -1095,10 +1089,9 @@ contraintes aux allocations réelles. Il protège aussi les autres emprunts
 qui devront encore servir et les arguments déjà préparés pendant l'évaluation
 des suivants. Après un appel, un reset possible invalide l'accès aux
 allocations qu'il peut avoir détruites.
-Le prototype refuse de projeter, dans un même bras, plusieurs
-champs utilisés dont les ensembles de cibles possibles se recouvrent quand l'un des
-champs exige l'exclusivité. Cette restriction peut s'appliquer après un retour
-conditionnel dont les chemins permutent deux cibles distinctes.
+Le chevauchement des cibles possibles ne suffit pas à interdire plusieurs
+projections mutables. Le compilateur établit la validité et la compatibilité
+des effets sur chaque chemin selon MA1–MA6 ; une preuve requise absente reste un refus.
 Voir [MATCH_MUTABLE.md](MATCH_MUTABLE.md).
 
 Un `reset` du pool détruit les valeurs vivantes de toutes ses stacks avant de
@@ -1143,7 +1136,7 @@ Les résultats tableau qui traversent un `return`, un `break` ou la sortie
 d'une branche avec receveur utilisent `<-` explicitement. Chaque branche qui
 fournit un résultat conserve le type et la longueur. Déplacer directement
 une case est interdit. `replace` vérifie l'indice, évalue la nouvelle valeur
-puis l'installe avec accès exclusif et rend l'ancienne valeur. `swap` évalue
+puis l’installe après les contrôles de validité et d’effets requis et rend l’ancienne valeur. `swap` évalue
 les indices de gauche à droite et les vérifie avant toute écriture. Deux
 indices identiques et valides donnent un échange sans effet.
 
@@ -1157,8 +1150,8 @@ qui sort par `break` doit avoir une cible durable sur chaque sortie
 possible, et toutes les provenances possibles restent suivies.
 Les arguments d'un appel conservent l'ordre de B4a. Un emprunt direct
 de case reste actif pendant les arguments suivants et l'appel. Les
-emprunts mutables concurrents de deux cases du même tableau sont
-refusés même pour des indices distincts. Une fonction peut renvoyer un
+emprunts mutables ne sont pas refusés du seul fait de leur tableau commun :
+leur préparation et leurs effets suivent MA1–MA6. Une fonction peut renvoyer un
 emprunt d'une case injectée par emprunt si sa cible et les parents
 requis sont durables selon B5 et D1.
 Une preuve de bornes sur un chemin peut supprimer un contrôle si elle
@@ -1168,10 +1161,9 @@ vaut encore pour la valeur utilisée.
 référence. Un indice dynamique retient les provenances de toutes les
 cases possibles. Copier un tableau de références partagées conserve les
 cibles et les emprunts. Un tableau de références mutables ne peut être
-copié. Le réemprunt mutable d'une cible suspend l'utilisation de la
-référence stockée dans la case sélectionnée, ou de toutes les cases
-possibles, jusqu'à son dernier usage. Une autre case prouvée distincte
-reste accessible. `replace` rend l'ancienne référence avec son emprunt
+copié. Un réemprunt mutable conserve les dépendances de place et de cible sans
+suspendre automatiquement les accès au contenu par la référence stockée.
+Remplacement invalidant et accès concurrents restent soumis à MA1–MA6. `replace` rend l'ancienne référence avec son emprunt
 et refuse le remplacement si un réemprunt actif le bloque. Ignorer
 l'ancienne référence mutable termine son emprunt. Tout transfert
 vérifie D1 pour les cibles possibles. Un contrat de fonction conserve
@@ -1283,7 +1275,7 @@ appliquent N1 à N8.
 
 ### Types d’éléments des pipelines
 
-`Iter` prend un emprunt exclusif de la source. Chaque `Map` prend possession
+`Iter` emprunte la source par référence mutable sans unicité implicite. Chaque `Map` prend possession
 de son prédécesseur. `collect(&mut destination)` consomme la chaîne et ajoute
 les éléments au vecteur de destination.
 

@@ -2,6 +2,13 @@
 
 # Fondamentaux, allocations typées et vecteurs
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 Décisions du chantier suivant String. Les identifiants ci-dessous servent à
 rattacher le comportement attendu à la matrice de vérification.
 

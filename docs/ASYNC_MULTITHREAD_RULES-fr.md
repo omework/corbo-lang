@@ -2,6 +2,11 @@
 
 # Corbo — async, multithread et runtime
 
+La décision [permission de mutation](MUTABLE_ACCESS-fr.md) prévaut sur les
+passages qui déduisent une exclusivité du seul `&mut`. Séparer permission
+d’écrire, dépendances de validité, fin de chaque branche et contrats de verrou
+explicites. Corboc implémente cette séparation ; les preuves manquantes restent refusées.
+
 Décisions validées dans la discussion, intégrant la dernière version du
 brouillon 04 de `design-buffer`.
 
@@ -112,10 +117,10 @@ ni d'embarquer un graphe complet d'emprunts au runtime : le suivi reste statique
 La réutilisation interne d'un emplacement exige la fin des usages et emprunts
 correspondants.
 
-**AS9 — Adresses stables.** Une instance conserve un stockage stable, y compris
-si elle reprend sur un autre thread. Emprunter ses propres variables à travers
-une suspension est autorisé si leurs emplacements restent valides et stables.
-La suspension ne relâche pas l'exclusivité d'un emprunt mutable.
+**AS9 — Adresses stables.** Une instance garde un stockage stable à travers
+suspension et changement de thread. Ses références conservent permissions et
+dépendances. La suspension n’invalide pas la cible et ne termine pas les obligations
+de synchronisation. La coexistence des références mutables suit MA1–MA6.
 
 **AS10 — Terminaison et restitution du résultat.** Tant que le handle peut être
 attendu, l'état d'une tâche terminée reste dans son slot et compte dans la
@@ -162,11 +167,12 @@ lancée sous réserve de N4. Si la tâche qui le capture est détruite avant
 de démarrer, ou si son lancement échoue, le nettoyage abandonne le handle
 capturé. Le runtime applique alors RT7 à la tâche lancée.
 
-**AS15 — Captures incompatibles.** Deux instances inactives ne peuvent pas
-capturer simultanément un emprunt mutable de la même cible. Les attendre ensuite
-successivement ne corrige pas le chevauchement créé lors des captures. La même
-restriction vaut pour un emprunt partagé incompatible préparé après un argument
-mutable, même si cet argument partagé sert à une sous-expression avec `.await`.
+**AS15 — Capture et accès effectif.** Plusieurs instances inactives peuvent
+capturer des références mutables vers la même cible. La capture conserve les
+dépendances sans exécuter le corps. Des attentes successives peuvent démontrer
+l’absence de chevauchement d’exécution. Les accès réellement concurrents suivent
+MA1–MA6 et les exigences du même verrou. Une preuve requise de validité,
+de préparation ou de synchronisation absente entraîne le refus.
 
 **AS16 — Effets immédiats et effets différés.** Les contrats distinguent les
 effets de capture à la création et ceux de l'exécution du corps. Créer une tâche
@@ -420,17 +426,18 @@ l'intégration.
 
 ## 5. Sûreté mémoire entre threads
 
-**MT1 — Emprunt mutable réservé.** Une tâche lancée peut capturer un emprunt
-mutable local si le compilateur prouve que la cible et son pool survivent à tous
-ses accès. L'accès d'origine reste réservé tant que la branche peut utiliser
-la cible. L'effet de fin de branche de RT3 permet de lever cette réservation.
-Si un résultat emprunté prolonge la réservation, celle-ci continue jusqu'au
-dernier usage de ce résultat ou de ses descendants.
+**MT1 — Dépendances de branche empruntées.** Une tâche lancée peut capturer
+des références mutables si les cibles et pools survivent à leurs usages et si les
+accès partagés respectent MA1–MA6. Chaque branche garde ses propres dépendances
+jusqu’à sa fin établie. Finir une branche ne termine pas les autres. Les résultats
+empruntés gardent leurs dépendances après la fin de l’exécution ; la référence
+mutable n’exclut pas automatiquement tous les autres accès au contenu.
 
-**MT2 — Lectures partagées.** Plusieurs tâches et leur appelant peuvent lire
-simultanément un même `Int` avec des emprunts partagés. Mutation et destruction
-restent interdites tant qu'un de ces emprunts doit servir. Attendre une seule
-tâche ne termine pas les réservations des autres.
+**MT2 — Lectures et écritures partagées.** Les accès respectent les permissions
+et exigences du même verrou de MA1–MA6. Les lectures seules restent compatibles ;
+les accès concurrents impliquant une mutation exigent la preuve de synchronisation
+correspondante. Destruction et invalidation respectent toutes les dépendances
+restantes. Attendre une tâche ne termine pas les autres.
 
 **MT3 — Vérification par chemin.** Chaque sortie doit établir la terminaison
 des tâches qui dépendent des données détruites sur ce chemin. Cela comprend les
@@ -456,7 +463,7 @@ pas sa cible destructible si le résultat doit encore l'utiliser. Un résultat
 `Int` indépendant permet au contraire de terminer cette dépendance après join.
 
 **MT7 — Pools concurrents.** Des tâches peuvent modifier des allocations
-distinctes issues d'un même pool. Allouer exige un accès exclusif au pool ;
+distinctes issues d'un même pool. L’allocation doit sérialiser l’accès aux métadonnées du pool selon le contrat de synchronisation applicable ;
 des threads peuvent allouer en parallèle chacun dans leur propre pool. Le
 runtime synchronise la restitution concurrente de slots distincts issus du
 même pool : curseur, index et métadonnées ne subissent pas de concurrence
@@ -465,21 +472,18 @@ slot après destruction ; les adresses des allocations vivantes restent stables.
 Cette obligation s'applique aussi aux pools d'états générés. Le mécanisme
 interne de synchronisation n'est pas encore choisi.
 
-**MT8 — Déduction structurelle.** Le compilateur déduit récursivement les droits
-de transfert et de partage entre threads, sans trait utilisateur obligatoire
-pour le prototype. Les valeurs simples comme `Int` sont transférables. Un objet
-contenant des références conserve leurs obligations de durée et d'exclusivité ;
-une référence partagée exige une cible partageable sans mutation concurrente non
-protégée. Une ressource liée à un thread empêche le transfert du contenant.
-Les types externes sans contrat suffisant sont refusés par défaut. La notation
-des contrats externes et les futurs mécanismes de mutation partagée restent
-ouverts ; cette règle n'autorise pas arbitrairement tout type derrière `&`.
+**MT8 — Déduction structurelle.** Le compilateur suit récursivement possession,
+permissions de référence, dépendances de validité et synchronisation dans les
+conteneurs et les appels. `&mut` n’apporte aucune hypothèse d’unicité. Les ressources
+liées à un thread gardent leurs restrictions de transfert. Les contrats externes
+ou inconnus ne fournissent aucune preuve implicite ; une obligation non démontrée
+est refusée.
 
 **MT9 — Mutex et gardes.** `Mutex::new(valeur)` construit un mutex
 synchrone de type `Mutex<T>`, déduit du type de la valeur fournie. Un mutex
 possède sa valeur T. Son partage entre
-threads exige que l'accès exclusif à T puisse changer de thread, par déduction
-structurelle. `lock()` sur un mutex synchrone bloque le thread et produit une
+threads exige les obligations structurelles de transfert et de durée de vie de T ;
+la garde fournit la protection du verrou, distincte des permissions de référence. `lock()` sur un mutex synchrone bloque le thread et produit une
 garde unique liée au thread acquéreur : elle ne peut être partagée avec un
 autre thread et doit être détruite avant toute suspension.
 
@@ -577,7 +581,7 @@ d'ajout parmi les branches éligibles et s'arrête au premier `Ready`.
 
 Après sélection, les perdantes ne sont plus pollées. Leurs états et captures
 restent dans le groupe jusqu'à sa destruction. Leurs emprunts gardent leurs
-exigences de durée et d'exclusivité jusque-là. La destruction retire une
+exigences de durée de vie et de synchronisation jusque-là. La destruction retire une
 attente de mutex perdante et rend toute réservation du verrou. Une garde déjà
 acquise reste dans l'état perdant et sa destruction libère le verrou.
 

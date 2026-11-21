@@ -1,0 +1,35 @@
+use std::io::{File, FileError};
+use std::io::{FileMode, FilePerm, SeekFrom};
+
+async fn run() -> Result<(), FileError> {
+    let path: [u8; 8] = [100,117,114,97,98,108,101,0];
+    {
+        let mut file = File::create(&path[..], FileMode::READ_WRITE, FilePerm.DefaultMode).await?;
+        let bytes: [u8; 4] = [1,2,3,4];
+        file.write(&bytes[..]).await?;
+        file.sync_all().await?;
+        file.seek(SeekFrom.Start(1)).await?;
+        file.truncate(2).await?;
+        let position = file.seek(SeekFrom.Current(0)).await?;
+        print(position == 1);
+        file.truncate(6).await?;
+        let position = file.seek(SeekFrom.Current(0)).await?;
+        print(position == 1);
+        file.seek(SeekFrom.Start(0)).await?;
+        let mut output: [u8; 6] = [9; 6];
+        let count = file.read(&mut output[..]).await?;
+        print(count == 6 && output[0] == 1 && output[1] == 2 && output[2] == 0 && output[5] == 0);
+        file.truncate(0).await?;
+        file.sync_all().await?;
+        let size = file.stats().await?;
+        print(size.size() == 0);
+        match file.truncate(18446744073709551615).await { Ok(()) => { print(false); }, Err(_error) => { print(true); }, }
+    }
+    {
+        let mut file = File::open(&path[..], FileMode::READ_ONLY).await?;
+        match file.truncate(1).await { Ok(()) => { print(false); }, Err(_error) => { print(true); }, }
+    }
+    File::delete(&path[..]).await?;
+    Ok(())
+}
+fn main(){let task=runtime::spawn(run());match task.join(){Ok(result)=>{match result{Ok(())=>{},Err(_error)=>{print(-1);},}},Err(_error)=>{print(-2);},}}

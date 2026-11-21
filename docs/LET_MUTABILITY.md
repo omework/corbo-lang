@@ -4,6 +4,12 @@
 
 # Statements and changes in content
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 Later extension: [back &mut Int](MUTABLE_BORROW_RETURNS.md) are
 The restrictions and measures below describe the
 Historical cycle perimeter, with raw and print sources retained.

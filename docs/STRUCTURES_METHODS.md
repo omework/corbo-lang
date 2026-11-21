@@ -4,6 +4,11 @@
 
 # Corbo — structures, construction and methods
 
+Reference permissions follow [MA1–MA6](MUTABLE_ACCESS.md). Earlier exclusion
+descriptions below do not reintroduce `&mut` uniqueness; storage-invalidating
+effects remain constrained by dependencies.
+
+
 Decisions validated in discussion, recorded on November 5, 2026.
 
 This document is complete [LANGUAGE_RULES.md](LANGUAGE_RULES.md). It shall record the
@@ -253,7 +258,7 @@ and transfer rules, without silently changing the tables.
 
 The [Rules TF1–TF5](TYPE_FEATURES.md) complete ME1, ME2 and ME4: the
 Feature recipients `&self`, `&mut self` and `-> self` exigent respectivement
-the concrete modes shared, exclusive and consuming below. Static resolution retains
+the concrete read, write-permitted and consuming modes below. Static resolution retains
 the effects and origins of the concrete method contract.
 
 **ME1 — Signature of recipient.** A method is declared in `impl Type`.

@@ -2,6 +2,13 @@
 
 # Champs contenant un emprunt en lecture
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 Extension ultérieure : les [champs &mut Int](MUTABLE_REFERENCE_FIELDS.md) sont maintenant disponibles ; les mesures ci-dessous décrivent ce cycle historique.
 
 Le prototype accepte désormais des champs `&Int` dans les enums. Cette étape

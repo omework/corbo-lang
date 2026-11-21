@@ -23,6 +23,8 @@ Scope exit or explicit `drop(file)` invokes the inner type's destructor.
 | `File::create(path, mode, perm)` | Creates a new file exclusively with a `FilePerm` creation policy. |
 | `file.read(&mut buffer[..])` | Reads at most the buffer length and returns the number of bytes read. EOF and empty buffers return zero. |
 | `file.write(&buffer[..])` | Writes up to the buffer length and returns the number of bytes written. An empty buffer writes zero bytes. |
+| `file.sync_all()` | Requests persistence of this file's contents and metadata; returns synchronization errors. |
+| `file.truncate(length)` | Sets the file length without moving its cursor; extension reads as zero bytes. |
 | `file.seek(from)` | Sets the current byte position and returns the resulting absolute position as a `u64`. |
 | `File::rename(source, destination)` | Renames a path on the same filesystem and replaces an existing destination file when the OS permits it. |
 | `file.stats()` | Returns a `FileStats` for the open file. `stats.size()` reports its size in bytes as a `u64`. |
@@ -169,3 +171,27 @@ The [blocking API](../stdlib/src/io/sync/file.crb) and
 [Linux x86-64 syscalls](../stdlib/src/sys/unix/linux/x86_64/file.crb)
 are written in Corbo. [Windows File](../stdlib/src/sys/win/file.crb)
 owns its handle and uses the [Win32 assembly backend](../stdlib/src/sys/win/native/file.crb). See also the [macOS assembly backend](../stdlib/src/sys/unix/native/file.crb).
+
+
+## Persistence and explicit tail repair
+
+Both File APIs expose `sync_all()` and `truncate(length: u64)`. The default
+async API runs them on its existing blocking workers; the explicit sync API
+executes them directly. Lengths above `i64::MAX` return `InvalidOptions` before
+calling the OS. A failed truncation is returned as an error. The current cursor
+is preserved even when it lies beyond the new end.
+
+Linux uses `fsync` and `ftruncate`; interrupted calls are retried. macOS uses
+`fsync` followed by `F_FULLFSYNC`, and `ftruncate`. Windows uses
+`FlushFileBuffers` and `SetFileInformationByHandle(FileEndOfFileInfo)`, preserving
+the file pointer. These calls request OS/device persistence; they are not an
+absolute guarantee against every hardware or filesystem failure.
+
+Synchronizing a file does **not** establish durability of a newly created or
+renamed parent-directory entry. A durable publication protocol must provision
+its directory entries or add an appropriate directory synchronization step.
+`truncate` does not itself synchronize: call `sync_all()` when the chosen
+persistence protocol requires it.
+
+[Focused validation](cycles/FILE_DURABILITY_SUBDB_CYCLE.md) records the executed
+sync/async cases and platform limits.

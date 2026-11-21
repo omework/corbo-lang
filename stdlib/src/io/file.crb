@@ -69,6 +69,12 @@
         file.seek(from)
     }
 
+    /// Persists file data/metadata on the selected blocking worker.
+    async fn sync_on_worker(file: &mut BlockingFile) -> Result<(), BlockingError> { file.sync_all() }
+
+    /// Changes the file length on the selected blocking worker.
+    async fn truncate_on_worker(file: &mut BlockingFile, length: u64) -> Result<(), BlockingError> { file.truncate(length) }
+
     /// Renames the filesystem entry on a blocking worker.
     async fn rename_on_worker(source: &[u8], destination: &[u8]) -> Result<(), BlockingError> {
         BlockingFile::rename(source, destination)
@@ -139,6 +145,36 @@
                     }
                 },
                 Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+            }
+        }
+
+        /// Awaits sync_all on a blocking worker, retaining mutable permission and the file dependency.
+        async fn sync_all(&mut self) -> Result<(), FileError> {
+            let inner = &mut (*self).inner;
+            let worker = runtime::spawn_blocking(sync_on_worker(inner));
+            match worker.await {
+                Ok(result) => {
+                    match result {
+                        Ok(()) => { Ok(()) },
+                        Err(error) => { Err(translate_error(error)) },
+                    }
+                },
+                Err(_error) => { Err(FileError.LaunchFailed) },
+            }
+        }
+
+        /// Awaits truncate on a blocking worker, retaining mutable permission and the file dependency.
+        async fn truncate(&mut self, length: u64) -> Result<(), FileError> {
+            let inner = &mut (*self).inner;
+            let worker = runtime::spawn_blocking(truncate_on_worker(inner, length));
+            match worker.await {
+                Ok(result) => {
+                    match result {
+                        Ok(()) => { Ok(()) },
+                        Err(error) => { Err(translate_error(error)) },
+                    }
+                },
+                Err(_error) => { Err(FileError.LaunchFailed) },
             }
         }
 

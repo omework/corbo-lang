@@ -2,6 +2,13 @@
 
 # Champs contenant un emprunt mutable
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 Cycle du 3 novembre 2026, après validation explicite de la règle. Procédure :
 [guidelines](VALIDATION_GUIDELINES.md), [règles](LANGUAGE_RULES.md),
 [matrice](VERIFICATION_MATRIX.md).

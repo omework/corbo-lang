@@ -1089,3 +1089,11 @@ consignées. Une perdante de Select conservant un handle lancé non attendu doit
 | 05 — Data stack et pools | Stockage, pools typés et retours nominaux T/A<T> en place ; placement général encore à compléter |
 | 06 — Type features | Résolution statique historique à une méthode et contrats de fonction à plusieurs méthodes dans le périmètre testé |
 | 07 — Conversions, copies et vues | Opérations retenues en place ; couverture des compositions et types partielle |
+
+## Permission de mutation (MA1–MA6)
+
+- [x] Règles normatives, README et représentations alignés en anglais/français.
+- [x] Corboc sépare permission d’écriture, effets/protection et dépendances de durée de vie.
+- [x] Neuf exécutions UBSan fatales et dix refus attendus conservés dans corboc.
+- [x] Partage natif exécuté sur macOS/Linux/Windows x86-64 ; Windows ARM64 compilé seulement.
+- [x] Anciens verdicts d’exclusion explicitement séparés de la sémantique actuelle.

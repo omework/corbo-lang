@@ -4,6 +4,12 @@
 
 # Fundamentals, typed allowances and vectors
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 Next String site decisions. The following identifiers are used for
 link expected behaviour to the verification matrix.
 

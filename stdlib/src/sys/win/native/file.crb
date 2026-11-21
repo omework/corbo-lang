@@ -536,3 +536,85 @@
         }
     }
 #(endif)
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Flushes file buffers through the native HANDLE; zero indicates success.
+    pub fn sync_all(handle: u64) -> i64 {
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${handle}
+                bl FlushFileBuffers
+                cbnz w0, 1f
+                bl GetLastError
+                mov ${error}, x0
+                1:
+            }
+        }
+        error
+    }
+    /// Sets FileEndOfFileInfo without moving the file cursor; zero indicates success.
+    pub fn truncate(handle: u64, length: u64) -> i64 {
+        let mut size = length;
+        let mut error: i64 = 0;
+        @unchecked {
+            let address = addr(&mut size);
+            @asm {
+                mov x0, ${handle}
+                mov w1, #6
+                mov x2, ${address}
+                mov w3, #8
+                bl SetFileInformationByHandle
+                cbnz w0, 1f
+                bl GetLastError
+                mov ${error}, x0
+                1:
+            }
+        }
+        error
+    }
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Flushes file buffers through the native HANDLE; zero indicates success.
+    pub fn sync_all(handle: u64) -> i64 {
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${handle}
+                call FlushFileBuffers
+                test eax, eax
+                jnz 1f
+                call GetLastError
+                mov ${error}, rax
+                1:
+                add rsp, 32
+            }
+        }
+        error
+    }
+    /// Sets FileEndOfFileInfo without moving the file cursor; zero indicates success.
+    pub fn truncate(handle: u64, length: u64) -> i64 {
+        let mut size = length;
+        let mut error: i64 = 0;
+        @unchecked {
+            let address = addr(&mut size);
+            @asm {
+                sub rsp, 32
+                mov rcx, ${handle}
+                mov edx, 6
+                mov r8, ${address}
+                mov r9d, 8
+                call SetFileInformationByHandle
+                test eax, eax
+                jnz 1f
+                call GetLastError
+                mov ${error}, rax
+                1:
+                add rsp, 32
+            }
+        }
+        error
+    }
+#(endif)

@@ -3022,7 +3022,7 @@ Members:
 
 ### `File::open`
 
-[file.crb:89](../stdlib/src/io/file.crb#L89)
+[file.crb:95](../stdlib/src/io/file.crb#L95)
 
 ```rust
 async fn open(path: &[u8], mode: i64) -> Result<File, FileError>
@@ -3032,7 +3032,7 @@ Awaits opening an existing file with the selected mode. The path needs one trail
 
 ### `File::create`
 
-[file.crb:94](../stdlib/src/io/file.crb#L94)
+[file.crb:100](../stdlib/src/io/file.crb#L100)
 
 ```rust
 async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
@@ -3042,7 +3042,7 @@ Awaits opening or creating a file with the selected mode and permissions. The pa
 
 ### `File::read`
 
-[file.crb:99](../stdlib/src/io/file.crb#L99)
+[file.crb:105](../stdlib/src/io/file.crb#L105)
 
 ```rust
 async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
@@ -3052,7 +3052,7 @@ Awaits a read into the caller's buffer and returns the actual byte count.
 
 ### `File::write`
 
-[file.crb:115](../stdlib/src/io/file.crb#L115)
+[file.crb:121](../stdlib/src/io/file.crb#L121)
 
 ```rust
 async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
@@ -3062,7 +3062,7 @@ Awaits a write from the caller's buffer and returns the actual byte count.
 
 ### `File::seek`
 
-[file.crb:131](../stdlib/src/io/file.crb#L131)
+[file.crb:137](../stdlib/src/io/file.crb#L137)
 
 ```rust
 async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
@@ -3070,9 +3070,29 @@ async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
 
 Awaits moving the file cursor and returns the new absolute byte offset.
 
+### `File::sync_all`
+
+[file.crb:152](../stdlib/src/io/file.crb#L152)
+
+```rust
+async fn sync_all(&mut self) -> Result<(), FileError>
+```
+
+Awaits sync_all on a blocking worker, retaining mutable permission and the file dependency.
+
+### `File::truncate`
+
+[file.crb:167](../stdlib/src/io/file.crb#L167)
+
+```rust
+async fn truncate(&mut self, length: u64) -> Result<(), FileError>
+```
+
+Awaits truncate on a blocking worker, retaining mutable permission and the file dependency.
+
 ### `File::stats`
 
-[file.crb:146](../stdlib/src/io/file.crb#L146)
+[file.crb:182](../stdlib/src/io/file.crb#L182)
 
 ```rust
 async fn stats(&self) -> Result<FileStats, FileError>
@@ -3082,7 +3102,7 @@ Awaits a snapshot of the open file's metadata.
 
 ### `File::rename`
 
-[file.crb:161](../stdlib/src/io/file.crb#L161)
+[file.crb:197](../stdlib/src/io/file.crb#L197)
 
 ```rust
 async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
@@ -3092,7 +3112,7 @@ Awaits moving a filesystem entry to a different path.
 
 ### `File::delete`
 
-[file.crb:175](../stdlib/src/io/file.crb#L175)
+[file.crb:211](../stdlib/src/io/file.crb#L211)
 
 ```rust
 async fn delete(path: &[u8]) -> Result<(), FileError>
@@ -3486,9 +3506,29 @@ fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
 
 Moves the file cursor relative to the supplied origin and returns its new absolute position.
 
-### `File::stats`
+### `File::sync_all`
 
 [file.crb:108](../stdlib/src/io/sync/file.crb#L108)
+
+```rust
+fn sync_all(&mut self) -> Result<(), FileError>
+```
+
+Persists this file's contents/metadata; does not sync a parent directory or create a transaction.
+
+### `File::truncate`
+
+[file.crb:117](../stdlib/src/io/sync/file.crb#L117)
+
+```rust
+fn truncate(&mut self, length: u64) -> Result<(), FileError>
+```
+
+Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
+
+### `File::stats`
+
+[file.crb:127](../stdlib/src/io/sync/file.crb#L127)
 
 ```rust
 fn stats(&self) -> Result<FileStats, FileError>
@@ -3498,7 +3538,7 @@ Returns a snapshot of file metadata from its open handle.
 
 ### `File::rename`
 
-[file.crb:117](../stdlib/src/io/sync/file.crb#L117)
+[file.crb:136](../stdlib/src/io/sync/file.crb#L136)
 
 ```rust
 fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
@@ -3508,7 +3548,7 @@ Renames a file from the source path to the destination path using platform seman
 
 ### `File::delete`
 
-[file.crb:125](../stdlib/src/io/sync/file.crb#L125)
+[file.crb:144](../stdlib/src/io/sync/file.crb#L144)
 
 ```rust
 fn delete(path: &[u8]) -> Result<(), FileError>
@@ -3659,7 +3699,7 @@ Statically constrained iteration over an explicitly borrowed source.
 pub struct Iter<T, V>
 ```
 
-Borrows a source exclusively. The source must outlive the iterator.
+Borrows a source mutably without implying uniqueness. The source must outlive the iterator.
 
 Members:
 
@@ -3819,7 +3859,7 @@ Consumes this chain and appends its remaining items to the destination.
 pub fn iter(source: &mut T) -> Iter<T, V>
 ```
 
-Builds an iterator by explicitly borrowing a compatible source exclusively.
+Builds an iterator with explicit mutable permission and a dependency on its source.
 
 
 ## `std::net`

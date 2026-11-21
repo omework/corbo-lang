@@ -55,6 +55,10 @@ parsing and records caller responsibility for request-dependent body semantics.
 The synchronous HTTP API is implemented; its focused execution evidence and limits
 are recorded in the [implementation cycle](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md).
 
+The accepted [mutation-permission decision](MUTABLE_ACCESS.md) supersedes older
+requirements that infer exclusivity merely from `&mut`. Lifetime, synchronization
+and branch-completion obligations remain. Corboc implements the separation with focused validation; unresolved proofs still reject.
+
 <a id="noyau-mémoire--grille-de-lecture"></a>
 
 ## Core memory invariants
@@ -68,7 +72,7 @@ references define each obligation in detail.
 | N2 | A value that needs destruction has exactly one party responsible for cleanup at a time. A move transfers that responsibility. A borrow leaves it in place. | §3, §6, H1 |
 | N3 | The syntax distinguishes copying, borrowing, and moving. An outgoing transfer takes effect when it has a receiver. Usage requirements and method-specific rules apply. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | The target of a borrow and the source pool of an allocation must remain valid wherever the value is passed. Each transfer from a child scope to its parent is checked separately, without implicit promotion of the target. | §3–§5 |
-| N5 | Overlapping accesses must be compatible. A mutable borrow reserves the relevant place. A reborrow suspends incompatible uses until its last use. | §5, ST6, ST11 |
+| N5 | `&mut T` grants mutation permission, not uniqueness. Potentially concurrent overlapping accesses involving a write require established synchronization. Validity dependencies remain tracked. | MA1–MA6, §5 |
 | N6 | Every path reaching a use must permit that use. The analysis tracks provenance, control-flow exits, and evaluation order, including evaluating a replacement before destroying the old value. | §1–§5, F3–F4 |
 | N7 | A value is destroyed once before its storage is reclaimed. Dependencies constrain destruction order. Reusing a slot never reactivates a previous access. | §6–§8 |
 | N8 | Type, provenance, borrowing, and cleanup obligations carry across boundaries. Calls are checked using the inferred contract. | §5, §10 |
@@ -581,12 +585,14 @@ Dependencies on an allocator follow the specific rules of the section
 
 ## 5. Borrowing and functions
 
-**B1 — Reading and mutation.** Several read-out borrowings may coexist.
-A transferable borrow requires exclusive access to the allowance during its period of
-use. Other incompatible access is prohibited during this period.
+**B1 — Reading and mutation.** `&T` grants read access and `&mut T` grants
+mutation permission without implicit uniqueness. MA1–MA6 govern coexistence,
+synchronization of potentially concurrent conflicting accesses, and validity
+dependencies.
 
-**B2 — Fin d'emprunt.** Exclusiveity can end after the last
-use of the loan, without waiting for the end of the block.
+**B2 — End of borrowing.** Last use can end a borrow dependency before block
+exit. It does not end another active branch or a through-result lock contract
+whose release depends on destruction.
 
 **B3 — Borrowing and displacement.** For the prototype, a move is prohibited
 as long as a loan is still to be used.
@@ -622,9 +628,9 @@ On appeal, a loan is created from an allowance with `inspect(&data)` ou
 `modify(&mut data)`. Si `view` is already a loan, we pass it by his name:
 `inspect(view)` ; a function result already borrowed occurs directly,
 comme `inspect(borrow(&data))`. Mode remains declared in the signature.
-This passage does not transfer or copy the allocation. A mutable access retains its
-exclusivity; its use by a call suspends incompatible access and resumes after the end
-of the borrowings resulting from this call.
+This passage does not transfer or copy the allocation. A mutable reference retains
+its write permission and dependencies across calls. Coexisting accesses follow
+MA1–MA6; a call does not imply uniqueness or automatic suspension of every alias.
 
 `&view` adds a reference level; it is not a shortcut to its target.
 The types of nested references are allowed, for example `&&mut i64`
@@ -736,8 +742,9 @@ A conditional return retains all possible targets. Each exited border applies D1
 targets are already alive and attached to the parent or an ancestor, without
 promotion.
 A target created locally or received by `->` cannot therefore be taken out by borrowing.
-The returned borrow protects all its targets against mutation, displacement, drop and
-reset until its last use. It remains readable, even if its original parameter is
+The returned borrow preserves every target dependency until its last use.
+Invalidating movement, drop and historical reset remain constrained by N4; content
+mutation and concurrent accesses follow MA1–MA6. It remains readable, even if its original parameter is
 mutable. &mut Int returns are now also implemented:
 
 ```rust
@@ -752,17 +759,16 @@ vue.set(30);
 nombre = 40; // Après le dernier usage de vue.
 ```
 
-The mutable result retains exclusivity after the call. As long as it is to be used,
-other incompatible accesses to each possible target are refused, including reading
-from the original access, transfer, displacement, drop and reset. A child borrow can
-use this ability: it suspends incompatible accesses of the parent until its last use.
-Successive calls retain the parent chains; access of origin then resumes subject to
-other borrowings.
+A mutable result retains write permission and its target dependencies after the
+call. A reborrow carries those dependencies without automatically excluding the
+parent reference. Sequential content accesses may coexist; storage invalidation
+and concurrent access remain subject to the lifetime and synchronization proofs
+of MA1–MA6. Successive calls preserve every relevant dependency chain.
 
 A &mut Int result requires a provenance from &mut Int parameters. An &Int input does
 not become mutable because its variable is declared mut. Local or transfer targets
 remain unsustainable on return, even with a sustainable storage source. Conditional
-returns retain all possible targets and protect each with exclusive capacity. There
+returns retain all possible targets and their validity/synchronization obligations. There
 is no allocation, destruction, receipt of property, or byte displacement when
 returning this borrow. The existing name is used without & added. Returns to other
 types remain out of the prototype. See
@@ -998,14 +1004,15 @@ Fields `&Int` are a first step in the storage of references: they
 are immutable after construction and require a named loan to an allowance
 Int. On fournit `field: &data` from an allowance, or `field: view` si
 `view` is already an Int loan; none `&` Their addictions are flattened.
-protect the target against displacement, mutation, destruction
-and reset as long as the object or a loan to it is still to be used. `match`
+retain target dependencies against invalidating movement, destruction and
+historical reset while the object or a borrow to it still needs the target.
+Content mutation follows MA1–MA6. `match`
 The prototype accepts their block transfer only if the targets are already long
 enough in the destination, according to D1. The fields to other enums remain delayed.
 Returns of functions containing these fields are allowed with the same child check →
 parent; their contracts transmit the targets to the callers. A stored shared reborrow
-suspends the incompatible accesses of the mutable parent until the last
-use, without creating a mutable field. See [REFERENCE_FIELDS.md](REFERENCE_FIELDS.md)
+retains dependencies and grants read permission through that field, without
+creating mutable permission or automatically suspending parent content access. See [REFERENCE_FIELDS.md](REFERENCE_FIELDS.md)
 and [BORROWED_RETURNS.md](BORROWED_RETURNS.md).
 
 Fields `&mut Int` They also require a mutable capacity:
@@ -1013,29 +1020,16 @@ Fields `&mut Int` They also require a mutable capacity:
 is already a mutable borrow Int. A read reference does not become mutable by its
 storage. The field retains its reference after construction.
 
-The object retains the exclusive capacity on each possible target until its last use,
-including uses via a borrow to it. Other incompatible accesses to these targets,
-including reading through their original access, writing, displacement, drop and
-reset, are refused during this interval. Move or return the object retains this
-restriction; D1 remains applicable to each child border → parent, without implicit
-promotion of the targets. Several shared references to the same object retain the
-same capacity
-de champ, sans créer plusieurs emprunts mutables concurrents. Le `match &value`
-remains read: a field link `&mut Int` gives shared access
-derived from this capacity, and does not release original accesses to the target.
-After the last protective use, other accesses become possible again; this does not
-trigger early automatic destruction. See
-[MUTABLE_REFERENCE_FIELDS.md](MUTABLE_REFERENCE_FIELDS.md).
+The object retains each possible target dependency and its field's write
+permission. Moving or returning it preserves those obligations; D1 still applies
+at every child-to-parent boundary without implicit target promotion. Multiple
+references can coexist under MA1–MA6. `match &value` grants read projections.
 
-`match &mut value` The allowance must be paid to the holder only.
-be bound by `let mut`. A parameter or variable already carrying a loan
-This access is provided by mutable. In the arm, each field `&mut Int` related supply
-a mutable reborrowing limited to the arm. `vue.set(n)` modifie l'Int
-referenced on site. `&Int` remain legible and fields `Int`
-The arm reserves the carrier and the targets of its mutable fields until it is
-released, even after the last use of a projection. The carrier then regains its
-exclusive access and protects the targets until its last use or that of its
-references.
+`match &mut value` requires write permission to the carrier. Mutable projections
+retain the carrier/place dependencies needed to keep their targets valid. Content
+access does not automatically exclude other references. Structural replacement,
+destruction and concurrent access must satisfy MA1–MA6; the end of an arm does not
+end a dependency retained by a result escaping that arm.
 
 The arms allow readings of the play match and `.set()` on the
 mutable projections. They also admit calls `Void` of which the arguments
@@ -1044,9 +1038,9 @@ a call
 `Int` The copied Int remains independent of the scriptures
 and its connection is limited to its block.
 A statement `let mut autre = reemprunter(vue)` peut aussi recevoir
-un `&mut Int`. Access via `vue`
-resume after the last use of `autre`, selon B2, y compris si cet usage
-The holder's reservation continues until the arm exits. After a Void or Int call, the
+un `&mut Int`. `vue` and `autre` retain permissions and dependencies under
+MA1–MA6; their coexistence does not itself suspend content access through `vue`.
+The holder remains protected against invalidation while required. After a Void or Int call, the
 arm can re-use its projections upon return. The carrier's reservation covers the
 whole call and the rest of the arm.
 In an expression `match` by borrowing, one call `Void` peut aussi
@@ -1085,10 +1079,10 @@ sources from the pool reset. The analysis includes returns at the beginning of a
 loop. The appellant applies these constraints to the actual allocations. He also
 protects the other borrowings that will still have to be used and the arguments
 already prepared during the evaluation of the next ones. After a call, a possible
-reset invalidates access to the allowances that he may have destroyed. The prototype
-refuses to project, in the same arm, several fields used whose sets of possible
-targets overlap when one of the fields requires exclusivity. This restriction can
-apply after a conditional return whose paths rotate two distinct targets.
+reset invalidates access to the allowances it may have destroyed. Overlapping
+possible targets do not themselves prohibit multiple mutable projections. The
+compiler must establish validity and compatible actual effects on each path under
+MA1–MA6; unresolved required facts still cause rejection.
 Voir [MATCH_MUTABLE.md](MATCH_MUTABLE.md).
 
 Un `reset` the pool destroys the living values of all its stacks before
@@ -1133,7 +1127,7 @@ The table results that pass through a `return`, un `break` or exit
 of a branch with receiver use `<-` explicitly. Each branch that
 provides a result retains type and length. Move directly
 a box is not allowed. `replace` checks the index, evaluates the new value
-then install it with exclusive access and make the old value. `swap` evaluate
+then installs it after the required validity/effect checks and returns the old value. `swap` evaluate
 the indices from left to right and check them before writing. Two identical and valid
 indices give an exchange without effect.
 
@@ -1144,8 +1138,9 @@ A borrow from a temporary copy can be used in the instruction that created it. I
 cannot survive it. The last use is followed on loop recovery paths. A borrow
 that comes out `break` must have a sustainable target on each exit
 The arguments of a call remain in the order of B4a. A direct box borrow remains
-active during the following arguments and the call. Competitor mutable borrowings
-from two boxes in the same table are refused even for separate clues. A function can
+active during subsequent argument evaluation and the call. Multiple mutable
+borrows are not rejected solely because they refer to the same table; preparation
+and actual call effects must preserve their dependencies under MA1–MA6. A function can
 return a borrow from a box injected by borrowing if its target and the parents
 required are durable according to B5 and D1. Proof of terminals on a path can remove
 a check if it still applies to the value used.
@@ -1153,10 +1148,9 @@ a check if it still applies to the value used.
 **E7 — References stored.** Each box shall retain the source of its
 A dynamic index holds the sources of all possible boxes. Copying a shared reference
 table keeps the targets and borrowings. A mutable reference table cannot be copied.
-The mutable re-borrowing of a target suspends the use of the reference stored in the
-selected box, or all possible boxes, until it is last used. Another distinct proven
-box
-remains accessible. `replace` makes the old reference with its loan
+A mutable reborrow retains its place and target dependencies. It does not
+automatically suspend content access through the stored reference; invalidating
+replacement and concurrent access still require the MA1–MA6 proofs. `replace` makes the old reference with its loan
 and refuses replacement if an active reborrower blocks it. Ignore the old mutable
 reference terminates its borrowing. Any transfer checks D1 for possible targets. A
 function contract retains the sources of the references returned by box.
@@ -1267,7 +1261,8 @@ apply N1 to N8.
 
 ### Pipeline element types
 
-`Iter` takes an exclusive borrow of the source. Each `Map` takes ownership of
+`Iter` takes a mutable reference to the source, granting write permission and
+retaining lifetime dependencies without an implicit uniqueness guarantee. Each `Map` takes ownership of
 its predecessor. The instance method `collect(&mut destination)` consumes the
 chain and appends its items to the destination vector. It is provided by `Iter`,
 `Map`, `Filter`, and `Reduce`; it is not a package-level function.

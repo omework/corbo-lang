@@ -2,6 +2,12 @@
 
 # Champs contenant un emprunt mutable
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 Cycle of 3 November 2026, after explicit validation of the rule. Procedure:
 [guidelines](VALIDATION_GUIDELINES.md), [rules](LANGUAGE_RULES.md),
 [matrice](VERIFICATION_MATRIX.md).

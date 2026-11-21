@@ -4,6 +4,12 @@
 
 # Validation of the mutable match
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 `match &mut writer` reserves access to the carrier until the end of the arm.
 field link `&mut Int` can write in his target with `.set()`. The bearer
 then resumes protection of this target until its last use or

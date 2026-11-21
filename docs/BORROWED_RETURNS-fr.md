@@ -2,6 +2,13 @@
 
 # Retours d'objets contenant un emprunt : enfant → parent
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 Extension ultérieure : les [champs &mut Int](MUTABLE_REFERENCE_FIELDS.md) sont maintenant disponibles ; les mesures ci-dessous décrivent ce cycle historique.
 
 Cycle du 2 novembre 2026. Extension demandée par l'utilisateur ; procédure selon

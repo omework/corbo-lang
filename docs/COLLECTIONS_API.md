@@ -75,7 +75,7 @@ index changes do not relocate live payloads.
 | --- | --- |
 | `map.insert(key, value)` | Move both inputs; return `Some(previous)` when replacing, otherwise `None`. |
 | `map.get(&key)` | Return `Option<&V>`; lookup does not consume the key or stored value. |
-| `map.get_mut(&key)` | Return `Option<&mut V>` with exclusive access obligations. |
+| `map.get_mut(&key)` | Return `Option<&mut V>` with write permission and lifetime/synchronization obligations under MA1–MA6. |
 | `map.remove(&key)` | Return `Option<V>` by move and make the old entry slot reusable. |
 | `drop(map)` | Destroy the values still owned by the map before releasing storage. |
 

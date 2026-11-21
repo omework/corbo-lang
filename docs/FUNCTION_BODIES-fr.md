@@ -2,6 +2,13 @@
 
 # Vérification mémoire des corps sans appel réel
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 Chaque fonction est maintenant parcourue par le vérificateur mémoire, même si
 le programme ne l'appelle jamais. Les règles du langage ne changent pas.
 

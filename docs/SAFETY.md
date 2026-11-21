@@ -4,6 +4,12 @@
 
 # Corbo Perimeter and Memory Verification
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 <a id="annotations-demprunt-et-littéraux-à-travers-mut_vref"></a>
 
 ## Borrowing and literal annotations through mut_vref

@@ -228,3 +228,39 @@
         }
     }
 #(endif)
+
+#(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
+    /// Requests persistence of file contents and metadata; retries interrupted calls.
+    pub fn sync_all(fd: i64) -> i64 {
+        let mut status: i64 = 0;
+        loop {
+            @unchecked {
+                @asm {
+                    mov rdi, ${fd}
+                    mov eax, 74
+                    syscall
+                    mov ${status}, rax
+                }
+            }
+            if status != -4 { return status; }
+        };
+        status
+    }
+    /// Changes file length without changing its cursor; retries interrupted calls.
+    pub fn truncate(fd: i64, length: u64) -> i64 {
+        let mut status: i64 = 0;
+        loop {
+            @unchecked {
+                @asm {
+                    mov rdi, ${fd}
+                    mov rsi, ${length}
+                    mov eax, 77
+                    syscall
+                    mov ${status}, rax
+                }
+            }
+            if status != -4 { return status; }
+        };
+        status
+    }
+#(endif)

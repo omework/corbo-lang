@@ -1,3 +1,13 @@
+## Permission de mutation — validation ciblée
+
+MA1–MA6 remplace l’unicité implicite de `&mut`. Corboc sépare permissions,
+effets/protection et dépendances. Neuf exécutions UBSan fatales et dix refus
+attendus couvrent alias, verrou commun, fins de branche et nettoyage. Le cas
+natif à trois threads passe sur macOS ARM64/x86-64, Linux x86-64 et Windows
+x86-64 sous Wine. Windows ARM64 est compilé seulement. Les anciens verdicts
+ci-dessous décrivent leurs cycles d’origine. Voir le rapport
+`corboc/docs/MUTABLE_ACCESS_CYCLE.md` pour le périmètre et les limites.
+
 [English](VERIFICATION_MATRIX.md)
 
 # Matrice règles → vérification

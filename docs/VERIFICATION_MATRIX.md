@@ -1,3 +1,13 @@
+## Mutable references as mutation permission — focused compiler validation
+
+MA1–MA6 revise N5: `&mut` does not establish uniqueness. Corboc separates
+permission, content-effect/protection facts and retained dependencies. Nine
+fatal-UBSan executions and ten refusals cover aliasing, same-lock sharing,
+completion/lifetime boundaries and related cleanup. The native three-thread case
+also executes on macOS x86-64, Linux x86-64 and Windows x86-64 under Wine;
+Windows ARM64 is compile-only. See `corboc/docs/MUTABLE_ACCESS_CYCLE.md` and the
+retained result snapshots there for exact scope and conservative limits.
+
 ## Documentation coverage follow-up
 
 | Rules / mechanism | Executed evidence | Scope and limits |
@@ -4968,3 +4978,11 @@ with fatal UBSan on macOS ARM64; all 38 EN/FR source blocks are synchronized.
 The bare map insert statement refusal is recorded and the example uses an
 explicit `_previous` receiver. Spacing-only and unchanged examples were not
 re-executed. [Cycle evidence](cycles/EXAMPLE_CLEANUP_CYCLE.md).
+
+## File persistence APIs required by Subdb
+
+API-only addition, with no change to normative rules. Sync/async File cursor
+preservation, shrink/zero-fill extension, zero length, oversized length and
+read-only failure execute on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64
+under Wine. Windows ARM64 is compile-only. No power-loss or directory-entry
+durability proof is claimed. [Evidence](cycles/FILE_DURABILITY_SUBDB_CYCLE.md).

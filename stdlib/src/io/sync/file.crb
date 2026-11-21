@@ -104,6 +104,25 @@
             }
         }
 
+        /// Persists this file's contents/metadata; does not sync a parent directory or create a transaction.
+        fn sync_all(&mut self) -> Result<(), FileError> {
+            let inner = &mut (*self).inner;
+            match inner.sync_all() {
+                Ok(()) => { Ok(()) },
+                Err(error) => { Err(translate_error(error)) },
+            }
+        }
+
+        /// Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
+        fn truncate(&mut self, length: u64) -> Result<(), FileError> {
+            if copy(length) > 9223372036854775807 { return Err(FileError.InvalidOptions); }
+            let inner = &mut (*self).inner;
+            match inner.truncate(length) {
+                Ok(()) => { Ok(()) },
+                Err(error) => { Err(translate_error(error)) },
+            }
+        }
+
         /// Returns a snapshot of file metadata from its open handle.
         fn stats(&self) -> Result<FileStats, FileError> {
             let inner = &(*self).inner;

@@ -2,6 +2,13 @@
 
 # Contrats mémoire des fonctions : inventaire et proposition
 
+**Actualisation des emprunts mutables :** [MA1–MA6](MUTABLE_ACCESS-fr.md)
+remplace l’exclusivité déduite du seul `&mut`. Les exemples et verdicts d’exclusion
+rapportés dans les anciens cycles ci-dessous sont historiques ; ils ne définissent
+pas la compatibilité actuelle des accès. Permissions, validité, synchronisation
+et fins de branche se vérifient séparément.
+
+
 État du 2 novembre 2026 : document de conception. L'inventaire décrit le
 compilateur actuel. L'orientation retenue est d'inférer les contrats depuis
 les opérations du corps, sans ajouter d'annotation de provenance aux signatures.

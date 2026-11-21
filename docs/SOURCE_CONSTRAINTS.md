@@ -4,6 +4,12 @@
 
 # Inferred constraints between sources
 
+**Mutable-access update:** [MA1–MA6](MUTABLE_ACCESS.md) supersede exclusion
+inferred from `&mut` alone. Exclusion examples and verdicts recorded in earlier
+cycles below are historical evidence, not the current access-compatibility rule.
+Permissions, validity, synchronization and branch completion are separate checks.
+
+
 The compiler deduces the relationships between the sources of the parameters from the
 the body operations, then substitutes them for calls.
 added to signatures. Constraints complement summaries of effects and effects
