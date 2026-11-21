@@ -1434,8 +1434,8 @@ Voir [les restrictions de thread](THREAD_TRANSFER-fr.md).
 
 ## Mutation interne de confiance et mutex
 
-L'acquisition publique utilise `lock(&self)`, dans `std::Mutex<T>` et
-`std::asyn::Mutex<T>`. L'implémentation peut créer un emprunt mutable d'un champ
+L'acquisition publique utilise `lock(&self)`, dans `std::sync::Mutex<T>` et
+`std::sync::asyn::Mutex<T>`. L'implémentation peut créer un emprunt mutable d'un champ
 à travers une référence partagée dans `@unchecked`, après acquisition du verrou.
 L'emprunt conserve sa provenance et ses vérifications de durée de vie. Ce passage
 ne génère aucune synchronisation : l'implémenteur doit respecter le contrat de

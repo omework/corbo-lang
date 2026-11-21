@@ -12,7 +12,7 @@ branch lifetimes and destruction retain their existing rules. `main` is synchron
 | TCP | `std::net::tcp` | `std::net::asyn::tcp` |
 | UDP | `std::net::udp` | `std::net::asyn::udp` |
 | Sleep and Timer | `std::time::{sleep, Timer}` | `std::time::asyn::{sleep, Timer}` |
-| Mutex | `std::Mutex` | `std::asyn::Mutex` |
+| Mutex | `std::sync::Mutex` | `std::sync::asyn::Mutex` |
 | Existing TLS transport | `std::net::tls` | Not implemented |
 
 Shared declarations remain in `std::io::{FileMode, FilePerm, FileStats, SeekFrom}`,
@@ -25,7 +25,8 @@ Async files and timers use blocking workers. Async sockets use epoll, kqueue or
 IOCP. Async mutex waiters park their polling root and are woken through a FIFO
 handoff; they do not spin or allocate a blocking worker per lock attempt.
 
-The old `::sync` packages are removed. Compiler file loading uses `std::io::File`.
+The old `std::io::sync`, `std::net::sync` and `std::time::sync` paths are removed.
+`std::sync` groups synchronization primitives; its async variants live in `std::sync::asyn`. Compiler file loading uses `std::io::File`.
 Native system modules remain implementation details. HTTP parsing keeps its
 synchronous reader contract. Scope exit automatically cleans owned resources.
 

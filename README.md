@@ -1439,8 +1439,8 @@ exit; the async guard below remains valid across `yield`.
 
 <!-- example: mutex -->
 ```rust
-use std::Mutex;
-use std::asyn::Mutex as AsyncMutex;
+use std::sync::Mutex;
+use std::sync::asyn::Mutex as AsyncMutex;
 
 async fn async_value() -> i64 {
     let mutex = AsyncMutex::new(10);
@@ -1500,7 +1500,7 @@ stay in `std::io`, addresses in `std::net::ipv4`, and Duration/Instant in
 operations use the readiness reactor. TLS is currently synchronous under
 `std::net::tls`.
 
-`std::Mutex<T>` blocks the calling thread. `std::asyn::Mutex<T>` parks a waiting
+`std::sync::Mutex<T>` blocks the calling thread. `std::sync::asyn::Mutex<T>` parks a waiting
 task; its guard can survive suspension and resume on another worker. Both
 expose `new(value)`, `lock(&self)`, and guard `get()` / `get_mut()` methods.
 A guard releases its lock at scope exit. Synchronous guards are marked
@@ -1511,7 +1511,7 @@ types use the same lock contracts as user-defined locks.
 | --- | --- | --- |
 | `std::{Pool, Vector, HashMap, String}` | Fixed-capacity pools, vectors, maps, growing UTF-8 strings and inline `String<N>` with a compile-time byte maximum | [Collections](docs/COLLECTIONS_API.md) · [Bounded strings](docs/UTF8_STRINGS.md#bounded-inline-utf-8-strings) |
 | `std::iter` | Iter, Map, Filter, Reduce and instance `collect` | [API](docs/STDLIB.md#stditer) |
-| `std::Mutex`, `std::asyn::Mutex` | Shared-reference acquisition, scope-owned guards and task-parking async waits | [API](docs/ASYNC_API.md#mutex-ownership) |
+| `std::sync::Mutex`, `std::sync::asyn::Mutex` | Shared-reference acquisition, scope-owned guards and task-parking async waits | [API](docs/ASYNC_API.md#mutex-ownership) |
 | `std::io`, `std::io::asyn` | File read/write, seek, stats, rename/delete and buffered streams | [API](docs/STDLIB.md#stdio) · [File guide](docs/FILE.md) |
 | `std::net::{tcp, udp}`, `std::net::asyn::{tcp, udp}` | Typed IPv4 endpoints, sockets, partial TCP I/O and borrowed async halves | [Networking](docs/NETWORKING.md) |
 | `std::net::http` | Request/response head parsing, configurable static limits and optional streaming bodies through a reader contract | [HTTP](docs/HTTP.md) |

@@ -1481,8 +1481,8 @@ Les deux variantes acquièrent le verrou via `&self`. La garde libère le verrou
 
 <!-- example: mutex -->
 ```rust
-use std::Mutex;
-use std::asyn::Mutex as AsyncMutex;
+use std::sync::Mutex;
+use std::sync::asyn::Mutex as AsyncMutex;
 
 async fn async_value() -> i64 {
     let mutex = AsyncMutex::new(10);
@@ -1538,7 +1538,7 @@ use std::time::sleep;
 use std::time::asyn::sleep as async_sleep;
 ```
 
-`std::Mutex<T>` bloque le thread appelant. `std::asyn::Mutex<T>` suspend la tâche
+`std::sync::Mutex<T>` bloque le thread appelant. `std::sync::asyn::Mutex<T>` suspend la tâche
 en attente ; sa garde peut reprendre sur un autre thread. Les deux proposent
 `new(value)`, `lock(&self)`, puis `get()` et `get_mut()` sur la garde.
 La destruction de la garde libère le verrou. Une garde synchrone porte
@@ -1549,7 +1549,7 @@ Les contrats de verrouillage ordinaires s'appliquent à ces types.
 | --- | --- | --- |
 | `std::{Pool, Vector, HashMap, String}` | Pools de capacité fixe, vecteurs, maps, chaînes UTF-8 grandissantes et `String<N>` inline avec un maximum en octets connu à la compilation | [Collections](docs/COLLECTIONS_API.md) · [Chaînes bornées](docs/UTF8_STRINGS-fr.md) |
 | `std::iter` | Iter, Map, Filter, Reduce et méthode d’instance `collect` | [API](docs/STDLIB.md#stditer) |
-| `std::Mutex`, `std::asyn::Mutex` | Acquisition par référence partagée, gardes détruites en fin de bloc et attente asynchrone suspendue | [API](docs/ASYNC_API.md#mutex-ownership) |
+| `std::sync::Mutex`, `std::sync::asyn::Mutex` | Acquisition par référence partagée, gardes détruites en fin de bloc et attente asynchrone suspendue | [API](docs/ASYNC_API.md#mutex-ownership) |
 | `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
 | `std::net::{tcp, udp}`, `std::net::asyn::{tcp, udp}` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
 | `std::net::http` | Analyse des en-têtes de requêtes/réponses, limites statiques configurables et corps optionnels en flux via un contrat de lecture | [HTTP](docs/HTTP.md) |

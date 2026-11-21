@@ -11,12 +11,13 @@ emprunt, durée de vie des branches ou destruction. `main` reste synchrone.
 | Flux tamponnés | `std::io::buffered` | `std::io::asyn::buffered` |
 | TCP / UDP | `std::net::{tcp, udp}` | `std::net::asyn::{tcp, udp}` |
 | Attentes et Timer | `std::time` | `std::time::asyn` |
-| Mutex | `std::Mutex` | `std::asyn::Mutex` |
+| Mutex | `std::sync::Mutex` | `std::sync::asyn::Mutex` |
 | TLS actuel | `std::net::tls` | Non implémenté |
 
 Les modes et permissions restent dans `std::io`, les adresses dans
 `std::net::ipv4`, Duration et Instant dans `std::time`. Les anciens chemins
-`::sync` sont supprimés. Les opérations asynchrones exigent `.await`.
+`std::io::sync`, `std::net::sync` et `std::time::sync` sont supprimés.
+`std::sync` regroupe les primitives de synchronisation et `std::sync::asyn` leurs variantes asynchrones. Les opérations asynchrones exigent `.await`.
 Les fichiers et délais asynchrones utilisent des workers bloquants ; les
 sockets utilisent epoll, kqueue ou IOCP. Les fonctions de configuration et les
 accesseurs en mémoire restent synchrones lorsque cela convient.
