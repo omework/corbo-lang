@@ -27,7 +27,7 @@ left to right. The pattern `E.Pair(a, b)` binds the same positions and accepts
 `_` for an ignored field. The usual move and borrow rules for enum fields apply.
 
 The [async and multithreaded rules](ASYNC_MULTITHREAD_RULES.md) are normative.
-AS1–AS16, RT1–RT8, MT1–MT10, SL1–SL2, and PR1 supersede incompatible historical
+AS1–AS16, RT1–RT8, MT1–MT11, SL1–SL2, and PR1 supersede incompatible historical
 passages below. The entry point remains synchronous. The compiler injects async
 state pools. Public `reset()` was removed from the prototype. It is available
 in the explicitly enabled historical compatibility profile. The verification
@@ -219,7 +219,7 @@ recent rating decisions.
 `scope A { ... }` was used for discussion; it is not part of the syntax.
 
 **S2 — Initial model and extension.** The initial model is synchronous.
-The async/multithread design is defined by AS1–AS16, RT1–RT8, MT1–MT10 and SL1–SL2 in
+The async/multithread design is defined by AS1–AS16, RT1–RT8, MT1–MT11 and SL1–SL2 in
 [l'extension normative](ASYNC_MULTITHREAD_RULES.md). It must not be
 presented as fully verified by this compiler: its partial support and proof of
 execution are followed in the matrix.

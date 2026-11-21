@@ -1097,3 +1097,11 @@ consignées. Une perdante de Select conservant un handle lancé non attendu doit
 - [x] Neuf exécutions UBSan fatales et dix refus attendus conservés dans corboc.
 - [x] Partage natif exécuté sur macOS/Linux/Windows x86-64 ; Windows ARM64 compilé seulement.
 - [x] Anciens verdicts d’exclusion explicitement séparés de la sémantique actuelle.
+
+## Contrats de verrou objet (MT11)
+
+- [x] Consigner `#(lock)` sur les structs et son héritage par les méthodes d’instance publiques.
+- [x] Exclure constructeurs et helpers privés de l’acquisition automatique ; conserver les gardes explicites.
+- [x] Refuser les réentrées checked directes/transitives à partir de l’identité symbolique du receveur.
+
+- [x] Six programmes acceptés exécutés sous UBSan fatal ; dix programmes invalides refusés.

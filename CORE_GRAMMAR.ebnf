@@ -39,7 +39,7 @@ parametres_externes = parametre_externe, { ",", parametre_externe }, [ "," ] ;
 parametre_externe   = identifiant, ":", primitif ;
 resultat_externe    = primitif | "Void" | "(", ")" ;
 
-structure           = { contrat_type }, corps_structure ;
+structure           = { contrat_type | contrat_lock_objet }, corps_structure ;
 corps_structure     = "struct", identifiant, [ parametres_generiques ],
                       "{", [ champs_types ], "}" ;
 parametres_generiques = "<", identifiant, { ",", identifiant }, [ "," ], ">" ;
@@ -61,13 +61,14 @@ annotation_override = "#", "(", "override", ":", remplacement_constante,
                       { ",", remplacement_constante }, [ "," ], ")" ;
 remplacement_constante = chemin, "=", expression ;
 
-methode             = [ contrat_lock ], [ "async" ], signature_methode, bloc ;
+methode             = [ contrat_lock ], [ "pub" ], [ "async" ], signature_methode, bloc ;
 exigence_methode    = [ "async" ], signature_methode, ";" ;
 signature_methode   = "fn", ( identifiant | "addr" ), "(",
                       [ receveur, [ ",", [ parametres ] ] | parametres ], ")",
                       [ "->", type ] ;
 receveur            = "&", [ "mut" ], "self"
                     | [ "mut" ], "self", ":", type ;
+contrat_lock_objet  = "#", "(", "lock", ")" ;
 contrat_lock        = "#", "(", "lock", ":", "on", "=", "self",
                       [ ",", "through_result", "=", "true" ], ")" ;
 
@@ -322,8 +323,8 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    aucun fait de fin de branche. N4 s'applique sur chaque chemin.
    RT8 applique le même contrat branch au bloc lancé par runtime::thread.
    RT5 définit les attentes des handles et RT7 leur nettoyage après abandon.
-   MT9 fixe les règles de garde des mutex et
-   MT10 les contraintes des contrats lock.
+   MT9 conserve les types de synchronisation ordinaires ;
+   MT10 définit les contrats lock et MT11 leur héritage objet.
    SL1 définit group.add(tache) et group.select().await. Les méthodes
    add et select utilisent la syntaxe des appels ordinaires.
    Chaque chemin qui atteint group.select() doit avoir exécuté au moins
@@ -337,3 +338,9 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    Les traits, les déclarations de modules et les interfaces détaillées des
    collections sont hors de cette grammaire.
 *)
+
+(* #(lock) is permitted once on a struct. Public instance methods inherit
+   #(lock: on=self); associated functions have no implicit receiver contract.
+   Explicit through_result=true may extend protection into a returned guard.
+   Checked direct/indirect same-object reacquisition is rejected. These are
+   trusted effect contracts: the compiler does not generate locking code. *)

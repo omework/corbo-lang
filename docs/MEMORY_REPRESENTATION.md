@@ -424,3 +424,7 @@ lexical resolution and instantiated through concrete calls/captures. Explicit
 through-result locks retain their dedicated summary marker; they do not gain
 write permission from that marker. Unknown effects or lock identities do not
 supply synchronization proof. See [MA1–MA6](MUTABLE_ACCESS.md).
+
+## Object-level lock contracts (MT11)
+
+A bare `#(lock)` on a struct is represented by its annotation node; method nodes retain `pub` visibility. Effective receiver contracts are derived from that declaration before access analysis and are preserved by specialization. Call analysis maps formal parameters to actual receiver roots through private helpers and free functions. No concrete type name supplies a protection fact, and no runtime lock is generated.

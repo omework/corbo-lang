@@ -1395,3 +1395,11 @@ be refused; this refusal is not a missing feature.
 - [x] Nine fatal-UBSan executions and ten expected refusals retained in corboc.
 - [x] Native sharing executed on macOS/Linux/Windows x86-64; Windows ARM64 compile-only.
 - [x] Historical exclusion verdicts explicitly distinguished from current semantics.
+
+## Object lock contracts (MT11)
+
+- [x] Record `#(lock)` on structs and public instance-method inheritance in grammar/specification.
+- [x] Keep constructors and private helpers outside automatic acquisition; preserve explicit retained guards.
+- [x] Implement checked direct/transitive re-entry rejection with symbolic receiver identity.
+
+- [x] Six accepted programs executed under fatal UBSan; ten invalid forms rejected.

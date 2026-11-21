@@ -390,3 +390,7 @@ sont établis après résolution lexicale et instanciés aux appels et captures.
 Les verrous portés par résultat gardent un marqueur dédié, sans permission
 d’écriture induite. Un effet ou un verrou inconnu n’établit aucune preuve de
 synchronisation. Voir [MA1–MA6](MUTABLE_ACCESS-fr.md).
+
+## Contrats de verrou objet (MT11)
+
+Un `#(lock)` sur une struct est représenté par son nœud d’annotation ; les méthodes conservent leur visibilité `pub`. Le contrat effectif du receveur est déduit de cette déclaration avant l’analyse des accès et conservé par spécialisation. Les appels associent les paramètres formels aux racines des receveurs effectifs, via les helpers privés et fonctions libres. Aucun nom de type concret ne fournit de fait de protection et aucun verrou runtime n’est généré.

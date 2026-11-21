@@ -61,3 +61,12 @@ La notation existante suffit. Le plan est consigné dans
 `corboc/docs/MUTABLE_ACCESS_PLAN.md`, avec le rapport d’implémentation et ses
 limites dans `corboc/docs/MUTABLE_ACCESS_CYCLE.md`. Les anciens rapports et tests ne valident
 pas encore cette évolution.
+
+## Noms ordinaires des types de verrou
+
+`Mutex` et `AsyncMutex` n’ont aucun statut builtin ni réservé. Déclaration,
+paramètres de type et constructeurs suivent la résolution nominale ordinaire.
+Les faits de synchronisation viennent des contrats, pas du nom. Le raccourci objet
+`#(lock)` fait hériter le contrat du receveur aux méthodes d’instance publiques ;
+la réentrée checked sur le même objet est refusée. Voir MT11 dans
+[les règles async et multithread](ASYNC_MULTITHREAD_RULES-fr.md).

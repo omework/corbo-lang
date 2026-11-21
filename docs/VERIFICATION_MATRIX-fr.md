@@ -4024,3 +4024,14 @@ Aucune nouvelle règle. Quatorze programmes modifiés passent sous UBSan O1 sur
 macOS ARM64 ; les 38 blocs EN/FR correspondent aux sources. Le refus de insert
 sans receveur est consigné ; `_previous` résout l’exemple sans modifier le core.
 [Rapport](cycles/EXAMPLE_CLEANUP_CYCLE.md).
+
+## Contrats de verrou objet (MT11)
+
+Corboc déduit les contrats des annotations de struct et des méthodes d’instance
+publiques, les conserve lors des spécialisations/imports et refuse la réentrée
+checked sur le même objet via helpers et alias. Six exécutions UBSan fatales,
+dix refus et trois régressions de gardes sont consignés dans le dépôt compilateur
+(`docs/OBJECT_LOCK_CYCLE.md`). Le témoin à trois threads avec un vrai verrou
+s’exécute sur macOS ARM64/x86-64, Linux x86-64 et Windows x86-64 sous Wine.
+Windows ARM64 est compilé seulement. Aucun verrouillage automatique ni preuve
+générale de sûreté n’est revendiqué.

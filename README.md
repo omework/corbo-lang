@@ -435,6 +435,13 @@ Output: `42, 7`. [Complete package](examples/features/moves/).
 
 References do not transfer cleanup responsibility. `&mut T` grants permission to mutate, not uniqueness: multiple mutable references may coexist. Shared accesses across threads must satisfy the same-lock synchronization requirements, and each target must remain valid through the relevant branch completion points and any surviving borrowed results. Corboc rejects missing proofs. See [mutable access](docs/MUTABLE_ACCESS.md).
 
+Lock facts come from contracts, not type names. A struct marked `#(lock)` gives
+its public instance methods the `#(lock: on=self)` contract. Private helpers and
+associated constructors do not inherit acquisition. Corboc rejects checked
+same-object re-entry through method or helper calls. The developer supplies the
+actual locking implementation; the annotation generates no locking code. See
+[MT9–MT11](docs/ASYNC_MULTITHREAD_RULES.md).
+
 <!-- example: borrows -->
 ```rust
 fn increment(value: &mut i64) {

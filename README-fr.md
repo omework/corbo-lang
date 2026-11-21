@@ -444,6 +444,14 @@ Sortie : `42, 7`. [Paquet complet](examples/features/moves/).
 
 Les références ne transfèrent pas la responsabilité du nettoyage. `&mut T` donne une permission de mutation, sans unicité : plusieurs références mutables peuvent coexister. Les accès partagés entre threads doivent respecter les exigences de synchronisation par le même verrou. Chaque cible doit rester valide jusqu’aux fins de branche concernées et pour les résultats empruntés qui survivent. Corboc refuse les preuves manquantes. Voir [les accès mutables](docs/MUTABLE_ACCESS-fr.md).
 
+Les faits de verrou viennent des contrats, pas des noms de types. Une struct
+marquée `#(lock)` transmet le contrat `#(lock: on=self)` à ses méthodes
+d’instance publiques. Helpers privés et constructeurs associés n’acquièrent pas
+automatiquement de verrou. Corboc refuse les réentrées checked sur le même objet,
+y compris via des helpers. Le développeur fournit le verrouillage effectif ;
+l’annotation ne génère aucun code de verrou. Voir
+[MT9–MT11](docs/ASYNC_MULTITHREAD_RULES-fr.md).
+
 <!-- example: borrows -->
 ```rust
 fn increment(value: &mut i64) {

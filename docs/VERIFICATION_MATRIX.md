@@ -4986,3 +4986,13 @@ preservation, shrink/zero-fill extension, zero length, oversized length and
 read-only failure execute on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64
 under Wine. Windows ARM64 is compile-only. No power-loss or directory-entry
 durability proof is claimed. [Evidence](cycles/FILE_DURABILITY_SUBDB_CYCLE.md).
+
+## Object lock contracts (MT11)
+
+Corboc derives lock contracts from struct annotations and public instance methods,
+preserves them through specialization/imports, and rejects checked same-object
+re-entry through helper calls and aliases. Six accepted executions with fatal
+UBSan, ten rejections and three retained-lock regressions are recorded in the
+compiler repository (`docs/OBJECT_LOCK_CYCLE.md`). The actual-lock three-thread
+fixture executes on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64 under Wine.
+Windows ARM64 compiles only. No automatic locking code or general safety proof.

@@ -75,3 +75,12 @@ notations. The compiler repository records the implementation and focused eviden
 `docs/MUTABLE_ACCESS_CYCLE.md`, and the original impact inventory in
 `docs/MUTABLE_ACCESS_PLAN.md`. Historical tests and earlier validation reports
 describe the former checker; they are not validation of this decision.
+
+## Ordinary lock type names
+
+`Mutex` and `AsyncMutex` have no builtin or reserved-name status. A declaration
+with either name follows ordinary named-type, generic-argument and constructor
+resolution. Synchronization facts come from contracts, not spelling. The object-level
+`#(lock)` shorthand makes public instance methods inherit the receiver contract,
+with checked same-object re-entry rejected. See MT11 in
+[Async and multithread rules](ASYNC_MULTITHREAD_RULES.md).

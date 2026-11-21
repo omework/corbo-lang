@@ -34,7 +34,7 @@ d’enum s’appliquent.
 
 **Extension normative, implémentation partielle :**
 [ASYNC_MULTITHREAD_RULES.md](ASYNC_MULTITHREAD_RULES.md) fait partie des règles
-retenues. Ses règles AS1–AS16, RT1–RT8, MT1–MT10, SL1–SL2 et PR1 prévalent sur les passages
+retenues. Ses règles AS1–AS16, RT1–RT8, MT1–MT11, SL1–SL2 et PR1 prévalent sur les passages
 historiques incompatibles ci-dessous : async et multithread sont désormais conçus,
 `main` reste synchrone, les pools d'états async sont injectés automatiquement et
 l'API publique `reset()` est retirée du prototype. Le compilateur dispose d'un
@@ -211,7 +211,7 @@ locales indiquées ; ils ne remplacent pas les décisions de notation récentes.
 `scope A { ... }` servait à la discussion ; elle ne fait pas partie de la syntaxe.
 
 **S2 — Modèle initial et extension.** Le modèle initial est synchrone.
-La conception async/multithread est définie par AS1–AS16, RT1–RT8, MT1–MT10 et SL1–SL2 dans
+La conception async/multithread est définie par AS1–AS16, RT1–RT8, MT1–MT11 et SL1–SL2 dans
 [l'extension normative](ASYNC_MULTITHREAD_RULES.md). Elle ne doit pas être
 présentée comme entièrement vérifiée par ce compilateur : son support partiel
 et ses preuves d'exécution sont suivis dans la matrice.

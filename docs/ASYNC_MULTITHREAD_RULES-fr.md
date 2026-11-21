@@ -479,24 +479,17 @@ liées à un thread gardent leurs restrictions de transfert. Les contrats extern
 ou inconnus ne fournissent aucune preuve implicite ; une obligation non démontrée
 est refusée.
 
-**MT9 — Mutex et gardes.** `Mutex::new(valeur)` construit un mutex
-synchrone de type `Mutex<T>`, déduit du type de la valeur fournie. Un mutex
-possède sa valeur T. Son partage entre
-threads exige les obligations structurelles de transfert et de durée de vie de T ;
-la garde fournit la protection du verrou, distincte des permissions de référence. `lock()` sur un mutex synchrone bloque le thread et produit une
-garde unique liée au thread acquéreur : elle ne peut être partagée avec un
-autre thread et doit être détruite avant toute suspension.
+**MT9 — Objets de synchronisation ordinaires.** `Mutex` et `AsyncMutex`
+ne sont ni des mots réservés ni des types privilégiés du langage. Toute bibliothèque
+peut déclarer ces noms selon les règles ordinaires des types nommés, y compris
+leurs paramètres de type et constructeurs. Le nom ne donne aucune propriété
+statique de synchronisation, de transfert ou de durée de vie.
 
-`AsyncMutex::new(valeur)` construit un mutex asynchrone de type
-`AsyncMutex<T>`, déduit du type de la valeur fournie.
-`lock().await` sur un mutex async suspend si nécessaire. Sa garde unique est
-liée à la tâche et peut survivre à yield/await, y compris après migration. Elle
-garde le verrou pendant la suspension et peut réemprunter T en `&mut T` à une
-fonction enfant. La garde demeure dans l'appelante. Sa destruction libère le
-verrou, éventuellement sur le thread de reprise ; tous ses emprunts dérivés
-doivent être terminés. Toutes les sorties de sa portée doivent la détruire.
-L'acquisition suivante observe les écritures précédentes. Le compilateur
-n'a pas à prouver qu'une attente finira.
+Les acquisitions, protections et libérations sont décrites par les contrats de
+méthodes de MT10 et les dépendances des résultats. Une bibliothèque fournit le
+mécanisme de verrouillage effectif. Les contraintes propres à ses gardes doivent
+venir de leurs contrats, pas d’un nom reconnu par le compilateur. MT11 définit
+un raccourci de contrat au niveau objet.
 
 **MT10 — Contrat de verrou sur le receveur.** `#(lock: on=self)` déclare
 que l'appel prend un verrou exclusif associé à l'instance reçue et le libère
@@ -509,7 +502,7 @@ L'implémentation assure l'acquisition, le maintien et la libération du verrou
 à l'exécution. Le compilateur utilise le contrat pour vérifier les usages
 côté appelant. Il se fie à l'implémentation pour respecter le contrat.
 L'effet décrit par MT10 vient de l'annotation, quel que soit le type qui
-implémente le verrou. MT9 décrit les primitives intégrées et leurs gardes.
+implémente le verrou. MT9 conserve des types de synchronisation ordinaires.
 
 Avec le contrat suivant, deux appels successifs sur la même instance sont
 refusés si le premier résultat est encore vivant au second appel.
@@ -538,6 +531,28 @@ le résultat d'attente récupère le verrou avec elle. Sur `LaunchFailed`,
 le nettoyage de la capture met fin à son effet. Le
 [rapport d'intégration](cycles/HASHMAP_LOCK_INTEGRATION_CYCLE.md) précise le
 périmètre exercé et les limites.
+
+**MT11 — Contrat de verrou au niveau objet.** Un unique `#(lock)` sur une
+struct fait hériter à chaque méthode d’instance `pub` le contrat
+`#(lock: on=self)`. Les helpers privés et fonctions associées sans receveur,
+constructeurs compris, n’héritent pas de l’acquisition. Une méthode peut maintenir
+explicitement le même verrou avec `#(lock: on=self, through_result=true)` ; elle
+ne peut pas rediriger le contrat hérité vers un autre paramètre. Le marqueur est
+conservé par la spécialisation générique et le chargement des modules. Il ne
+s’applique pas aux enums.
+
+Le compilateur refuse la réacquisition checked directe ou indirecte du même objet
+pendant le contrat de méthode, y compris via des helpers privés, fonctions libres
+et alias. Deux noms de paramètres ne prouvent pas deux objets distincts. Un appel
+sur un autre objet dont la création indépendante est prouvée est autorisé. Si la
+séparation d’identité nécessaire n’est pas démontrable, l’appel est refusé. Les
+helpers privés peuvent s’appeler tant qu’aucun appel accessible ne reprend le
+verrou sur l’objet déjà protégé.
+
+Ce contrat d’effet est de confiance : il ne génère aucune synchronisation.
+Le développeur implémente acquisition et libération. `@unchecked` et le verrouillage
+natif restent sous sa responsabilité. Possession, durées de vie et règles de branche
+restent applicables ; aucun marqueur `Send` n’est introduit.
 
 **SL1 — Groupe de sélection.** `runtime::select_group()` crée un
 `runtime::SelectGroup<R>` vide. Le type de résultat `R` peut être annoté

@@ -473,23 +473,16 @@ thread-bound resource keeps its transfer restrictions. External or unresolved
 contracts supply no missing proof; the compiler rejects an obligation it cannot
 establish.
 
-**MT9 — Mutex and guards.** `Mutex::new(valeur)` construit un mutex
-type synchronous `Mutex<T>`, deducted from the type of value provided. A mutex
-has its value T. Its division between
-Threads requires the structural transfer/lifetime obligations of T; the guard
-provides lock-protected access independently of reference permissions. `lock()` on a synchronous mutex blocks thread and produces a
-single guard linked to the purchaser thread: it cannot be shared with another thread
-and must be destroyed before any suspension.
+**MT9 — Ordinary synchronization objects.** `Mutex` and `AsyncMutex` are
+neither reserved words nor privileged language types. A library may declare
+these names using ordinary named-type rules, including type parameters and
+constructors. The name supplies no static synchronization, transfer or lifetime
+property.
 
-`AsyncMutex::new(valeur)` built an asynchronous mutex of type
-`AsyncMutex<T>`, deducted from the type of value provided.
-`lock().await` on a mutex async suspends if necessary. Its sole guard is
-related to the task and can survive Yield/await, including after migration.
-keep the lock during suspension and can re-borrow T in `&mut T` at
-Child function. Custody remains in the appellant. Its destruction releases the lock,
-possibly on the recovery thread; all its derivative borrowings must be completed. All
-exits from its range must destroy it. The following acquisition observes the previous
-writings. The compiler does not have to prove that a wait will end.
+Acquisition, protection and release are expressed through MT10 method contracts
+and result dependencies. A library supplies the actual locking mechanism.
+Guard-specific constraints must come from its contracts rather than recognition
+of a type name. MT11 defines an object-level shorthand for those contracts.
 
 **MT10 — Locking contract on receiver.** `#(lock: on=self)` declare
 that the call takes an exclusive lock associated with the received proceeding and releases it
@@ -501,8 +494,7 @@ the new receiver.
 The implementation ensures the acquisition, maintenance and release of the lock to
 execution. The compiler uses the contract to verify the uses on the calling side. It
 relies on the implementation to comply with the contract. The effect described by
-MT10 comes from the annotation, regardless of the type that implements the lock. MT9
-describes the integrated primitives and their guards.
+MT10 comes from the annotation, regardless of the type that implements the lock. MT9 keeps synchronization objects ordinary named types.
 
 With the next contract, two successive appeals on the same instance are refused if
 the first result is still alive in the second appeal.
@@ -531,6 +523,26 @@ The waiting result recovers the lock with it. `LaunchFailed`,
 the clean-up of the catch puts an end to its effect.
 [Integration report](cycles/HASHMAP_LOCK_INTEGRATION_CYCLE.md) specify the
 The scope and limits.
+
+**MT11 — Object-level lock contract.** A single bare `#(lock)` on a struct
+makes every `pub` instance method inherit `#(lock: on=self)`. Private helpers
+and associated functions without a receiver, including constructors, do not
+inherit acquisition. A method may explicitly retain the same lock with
+`#(lock: on=self, through_result=true)`; it cannot redirect the inherited
+contract to another parameter. The marker is preserved by generic specialization
+and module loading. It does not apply to enums.
+
+The compiler rejects checked direct or indirect reacquisition of the same object
+while its method contract is active, including routes through private helpers,
+free functions and aliases. Distinct parameter names do not establish distinct
+objects. A call on a proven fresh different object is permitted; when the required
+identity separation cannot be proved, the call is refused. Private helpers may
+call each other provided their reachable calls do not reacquire the held object.
+
+This is a trusted effect contract, not generated synchronization. The developer
+implements acquisition and release. `@unchecked` and native locking remain the
+developer's responsibility. Public instance methods remain subject to ordinary
+ownership, lifetime and branch rules; this annotation introduces no `Send` marker.
 
 **SL1 — Selection group.** `runtime::select_group()` creates a
 `runtime::SelectGroup<R>` empty. The type of result `R` may be annotated
