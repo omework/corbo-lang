@@ -1,0 +1,370 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Cursor-independent Windows I/O; owned OVERLAPPED companions never alter the ordinary File cursor.
+
+#(if: target.os == "windows" && target.arch == "aarch64")
+    /// Creates the owned OVERLAPPED companion immediately, preserving file identity across rename.
+    pub fn reopen_positioned(handle: u64, mode: i64) -> (i64, u64) {
+        let kind = copy(mode) & 3;
+        let read_access: u64 = if copy(kind) == 1 { 0 } else { 0x80000000 };
+        let write_access: u64 = if kind == 0 { 0 }
+            else if (mode & 4) != 0 { 0x100084 } else { 0x40000000 };
+        let access = read_access | write_access;
+        let mut reopened: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, ${handle}
+                mov x1, ${access}
+                mov w2, #7
+                mov w3, #0x40000000
+                bl ReOpenFile
+                cmn x0, #1
+                b.eq 1f
+                mov ${reopened}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                2:
+            }
+        }
+        return (error, reopened);
+    }
+
+    /// Reads through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
+    pub fn read_at(handle: u64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut event: u64 = 0;
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, #0
+                mov w1, #1
+                mov w2, #0
+                mov x3, #0
+                bl CreateEventW
+                cbz x0, 1f
+                mov ${event}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                2:
+            }
+        }
+        if error != 0 { return (error, 0); }
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub sp, sp, #48
+                stp xzr, xzr, [sp]
+                mov x0, ${offset}
+                str x0, [sp, #16]
+                mov x0, ${event}
+                str x0, [sp, #24]
+                str wzr, [sp, #32]
+                mov x0, ${handle}
+                mov x1, ${address}
+                mov x2, ${length}
+                add x3, sp, #32
+                mov x4, sp
+                bl ReadFile
+                cbnz w0, 3f
+                bl GetLastError
+                cmp w0, #997
+                b.eq 3f
+                mov w0, w0
+                mov ${error}, x0
+                b 5f
+                3:
+                mov x0, ${handle}
+                mov x1, sp
+                add x2, sp, #32
+                mov w3, #1
+                bl GetOverlappedResult
+                cbz w0, 4f
+                ldr w0, [sp, #32]
+                mov ${count}, x0
+                b 5f
+                4:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                5:
+                add sp, sp, #48
+            }
+        }
+        close(event);
+        if error == 38 { return (0, 0); }
+        return (error, count);
+    }
+
+    /// Writes through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
+    pub fn write_at(handle: u64, buffer: &[u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut event: u64 = 0;
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                mov x0, #0
+                mov w1, #1
+                mov w2, #0
+                mov x3, #0
+                bl CreateEventW
+                cbz x0, 1f
+                mov ${event}, x0
+                b 2f
+                1:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                2:
+            }
+        }
+        if error != 0 { return (error, 0); }
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub sp, sp, #48
+                stp xzr, xzr, [sp]
+                mov x0, ${offset}
+                str x0, [sp, #16]
+                mov x0, ${event}
+                str x0, [sp, #24]
+                str wzr, [sp, #32]
+                mov x0, ${handle}
+                mov x1, ${address}
+                mov x2, ${length}
+                add x3, sp, #32
+                mov x4, sp
+                bl WriteFile
+                cbnz w0, 3f
+                bl GetLastError
+                cmp w0, #997
+                b.eq 3f
+                mov w0, w0
+                mov ${error}, x0
+                b 5f
+                3:
+                mov x0, ${handle}
+                mov x1, sp
+                add x2, sp, #32
+                mov w3, #1
+                bl GetOverlappedResult
+                cbz w0, 4f
+                ldr w0, [sp, #32]
+                mov ${count}, x0
+                b 5f
+                4:
+                bl GetLastError
+                mov w0, w0
+                mov ${error}, x0
+                5:
+                add sp, sp, #48
+            }
+        }
+        close(event);
+        return (error, count);
+    }
+
+#(endif)
+
+#(if: target.os == "windows" && target.arch == "x86_64")
+    /// Creates the owned OVERLAPPED companion immediately, preserving file identity across rename.
+    pub fn reopen_positioned(handle: u64, mode: i64) -> (i64, u64) {
+        let kind = copy(mode) & 3;
+        let read_access: u64 = if copy(kind) == 1 { 0 } else { 0x80000000 };
+        let write_access: u64 = if kind == 0 { 0 }
+            else if (mode & 4) != 0 { 0x100084 } else { 0x40000000 };
+        let access = read_access | write_access;
+        let mut reopened: u64 = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                mov rcx, ${handle}
+                mov rdx, ${access}
+                mov r8d, 7
+                mov r9d, 0x40000000
+                call ReOpenFile
+                cmp rax, -1
+                je 1f
+                mov ${reopened}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                2:
+                add rsp, 32
+            }
+        }
+        return (error, reopened);
+    }
+
+    /// Reads through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
+    pub fn read_at(handle: u64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut event: u64 = 0;
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                xor ecx, ecx
+                mov edx, 1
+                xor r8d, r8d
+                xor r9d, r9d
+                call CreateEventW
+                test rax, rax
+                jz 1f
+                mov ${event}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                2:
+                add rsp, 32
+            }
+        }
+        if error != 0 { return (error, 0); }
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 80
+                mov QWORD PTR [rsp + 40], 0
+                mov QWORD PTR [rsp + 48], 0
+                mov rax, ${offset}
+                mov QWORD PTR [rsp + 56], rax
+                mov rax, ${event}
+                mov QWORD PTR [rsp + 64], rax
+                mov DWORD PTR [rsp + 72], 0
+                mov rcx, ${handle}
+                mov rdx, ${address}
+                mov r8, ${length}
+                lea r9, [rsp + 72]
+                lea rax, [rsp + 40]
+                mov QWORD PTR [rsp + 32], rax
+                call ReadFile
+                test eax, eax
+                jnz 3f
+                call GetLastError
+                cmp eax, 997
+                je 3f
+                mov eax, eax
+                mov ${error}, rax
+                jmp 5f
+                3:
+                mov rcx, ${handle}
+                lea rdx, [rsp + 40]
+                lea r8, [rsp + 72]
+                mov r9d, 1
+                call GetOverlappedResult
+                test eax, eax
+                jz 4f
+                mov eax, DWORD PTR [rsp + 72]
+                mov ${count}, rax
+                jmp 5f
+                4:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                5:
+                add rsp, 80
+            }
+        }
+        close(event);
+        if error == 38 { return (0, 0); }
+        return (error, count);
+    }
+
+    /// Writes through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
+    pub fn write_at(handle: u64, buffer: &[u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 4294967295 { length = 4294967295; }
+        let mut event: u64 = 0;
+        let mut count: usize = 0;
+        let mut error: i64 = 0;
+        @unchecked {
+            @asm {
+                sub rsp, 32
+                xor ecx, ecx
+                mov edx, 1
+                xor r8d, r8d
+                xor r9d, r9d
+                call CreateEventW
+                test rax, rax
+                jz 1f
+                mov ${event}, rax
+                jmp 2f
+                1:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                2:
+                add rsp, 32
+            }
+        }
+        if error != 0 { return (error, 0); }
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                sub rsp, 80
+                mov QWORD PTR [rsp + 40], 0
+                mov QWORD PTR [rsp + 48], 0
+                mov rax, ${offset}
+                mov QWORD PTR [rsp + 56], rax
+                mov rax, ${event}
+                mov QWORD PTR [rsp + 64], rax
+                mov DWORD PTR [rsp + 72], 0
+                mov rcx, ${handle}
+                mov rdx, ${address}
+                mov r8, ${length}
+                lea r9, [rsp + 72]
+                lea rax, [rsp + 40]
+                mov QWORD PTR [rsp + 32], rax
+                call WriteFile
+                test eax, eax
+                jnz 3f
+                call GetLastError
+                cmp eax, 997
+                je 3f
+                mov eax, eax
+                mov ${error}, rax
+                jmp 5f
+                3:
+                mov rcx, ${handle}
+                lea rdx, [rsp + 40]
+                lea r8, [rsp + 72]
+                mov r9d, 1
+                call GetOverlappedResult
+                test eax, eax
+                jz 4f
+                mov eax, DWORD PTR [rsp + 72]
+                mov ${count}, rax
+                jmp 5f
+                4:
+                call GetLastError
+                mov eax, eax
+                mov ${error}, rax
+                5:
+                add rsp, 80
+            }
+        }
+        close(event);
+        return (error, count);
+    }
+
+#(endif)

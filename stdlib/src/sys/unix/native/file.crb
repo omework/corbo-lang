@@ -116,6 +116,70 @@
         return (raw, count);
     }
 
+    /// Uses pread/pwrite for cursor-independent I/O; interrupted calls are retried.
+    pub fn read_at(fd: i64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                1:
+                mov x0, ${fd}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, ${offset}
+                bl _pread
+                mov ${raw}, x0
+                mov ${count}, x0
+                tbz x0, #63, 2f
+                bl ___error
+                ldr w0, [x0]
+                cmp w0, #4
+                b.eq 1b
+                neg x0, x0
+                mov ${raw}, x0
+                2:
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (raw, count);
+    }
+
+    /// Uses pread/pwrite for cursor-independent I/O; interrupted calls are retried.
+    pub fn write_at(fd: i64, buffer: &[u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                1:
+                mov x0, ${fd}
+                mov x1, ${address}
+                mov x2, ${length}
+                mov x3, ${offset}
+                bl _pwrite
+                mov ${raw}, x0
+                mov ${count}, x0
+                tbz x0, #63, 2f
+                bl ___error
+                ldr w0, [x0]
+                cmp w0, #4
+                b.eq 1b
+                neg x0, x0
+                mov ${raw}, x0
+                2:
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (raw, count);
+    }
+
     // The target stat ABI supplies the size field for the already open descriptor.
     /// Returns the platform's error code for unsupported permission bits.
     pub fn unsupported_permissions() -> i64 { -45 }
@@ -342,6 +406,72 @@
         if raw < 0 {
             return (raw, 0);
         }
+        return (raw, count);
+    }
+
+    /// Uses pread/pwrite for cursor-independent I/O; interrupted calls are retried.
+    pub fn read_at(fd: i64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                1:
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                mov rcx, ${offset}
+                call _pread
+                mov ${raw}, rax
+                mov ${count}, rax
+                test rax, rax
+                jns 2f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                cmp eax, 4
+                je 1b
+                neg rax
+                mov ${raw}, rax
+                2:
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (raw, count);
+    }
+
+    /// Uses pread/pwrite for cursor-independent I/O; interrupted calls are retried.
+    pub fn write_at(fd: i64, buffer: &[u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                1:
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                mov rcx, ${offset}
+                call _pwrite
+                mov ${raw}, rax
+                mov ${count}, rax
+                test rax, rax
+                jns 2f
+                call ___error
+                mov eax, DWORD PTR [rax]
+                cmp eax, 4
+                je 1b
+                neg rax
+                mov ${raw}, rax
+                2:
+            }
+        }
+        if raw < 0 { return (raw, 0); }
         return (raw, count);
     }
 

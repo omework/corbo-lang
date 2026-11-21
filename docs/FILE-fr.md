@@ -107,3 +107,25 @@ L’adresse est la même avec une référence partagée ou mutable. La permissio
 de modifier le slice est exprimée par `buffer: &mut [u8]` dans la signature.
 Le bloc passe l’adresse et la longueur séparément. Le test du buffer vide
 précède la prise d’adresse.
+
+## Entrées/sorties à position explicite
+
+`std::io::File` et `std::io::asyn::File` proposent `read_at(&self, buffer: &mut [u8], offset: u64)`
+et `write_at(&self, buffer: &[u8], offset: u64)`, avec `Result<usize, FileError>` en retour.
+Les variantes asynchrones exigent `.await`. Le curseur séquentiel reste inchangé,
+y compris après une erreur. Les transferts peuvent être partiels ; EOF et les
+tranches vides à une position valide renvoient zéro. La position et la fin de
+la plage doivent tenir dans un `i64`, sinon `InvalidOptions` est renvoyé.
+La lecture en mode écriture seule, l’écriture en lecture seule et `write_at`
+en mode append sont refusés.
+
+Unix utilise `pread`/`pwrite` et réessaie après EINTR. Sous Windows, File possède
+un HANDLE séquentiel et un HANDLE compagnon OVERLAPPED créé dès l’ouverture.
+Chaque opération positionnée utilise son propre événement de fin, conservé
+jusqu’à la fin de ReadFile/WriteFile puis fermé. Les périphériques spéciaux ne permettant pas ce compagnon peuvent être refusés
+à l’ouverture. Les deux HANDLEs du fichier sont fermés à sa destruction, y compris après un move. La création anticipée
+du compagnon préserve l’identité du fichier après renommage. Les variantes
+async utilisent les workers bloquants existants et retiennent les emprunts
+jusqu’à la fin de l’opération.
+
+[Validation ciblée](cycles/FILE_POSITIONED_CYCLE.md).

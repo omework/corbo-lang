@@ -121,6 +121,92 @@
     /// Returns the platform's error code for unsupported permission bits.
     pub fn unsupported_permissions() -> i64 { -95 }
 
+    /// Uses pread64/pwrite64 syscalls for cursor-independent I/O; interrupted calls are retried.
+    pub fn read_at(fd: i64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                pushfq
+                push rax
+                push rcx
+                push r11
+                push rdi
+                push rsi
+                push rdx
+                push r10
+                1:
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                mov r10, ${offset}
+                mov eax, 17
+                syscall
+                cmp rax, -4
+                je 1b
+                mov ${raw}, rax
+                mov ${count}, rax
+                pop r10
+                pop rdx
+                pop rsi
+                pop rdi
+                pop r11
+                pop rcx
+                pop rax
+                popfq
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (raw, count);
+    }
+
+    /// Uses pread64/pwrite64 syscalls for cursor-independent I/O; interrupted calls are retried.
+    pub fn write_at(fd: i64, buffer: &[u8], offset: u64) -> (i64, usize) {
+        let mut length = buffer.len();
+        if length == 0 { return (0, 0); }
+        if length > 9223372036854775807 { length = 9223372036854775807; }
+        let mut raw: i64 = 0;
+        let mut count: usize = 0;
+        @unchecked {
+            let address = addr(&buffer[0]);
+            @asm {
+                pushfq
+                push rax
+                push rcx
+                push r11
+                push rdi
+                push rsi
+                push rdx
+                push r10
+                1:
+                mov rdi, ${fd}
+                mov rsi, ${address}
+                mov rdx, ${length}
+                mov r10, ${offset}
+                mov eax, 18
+                syscall
+                cmp rax, -4
+                je 1b
+                mov ${raw}, rax
+                mov ${count}, rax
+                pop r10
+                pop rdx
+                pop rsi
+                pop rdi
+                pop r11
+                pop rcx
+                pop rax
+                popfq
+            }
+        }
+        if raw < 0 { return (raw, 0); }
+        return (raw, count);
+    }
+
     /// Reads size and mode bits from the descriptor's native stat record.
     pub fn stats(fd: i64) -> (i64, u64, u32) {
         let mut status: i64 = 0;

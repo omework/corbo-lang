@@ -68,6 +68,20 @@
             Ok(count)
         }
 
+        /// Performs a positioned read without changing the original descriptor/handle cursor.
+        fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError> {
+            let (raw, count) = syscalls::read_at((*self).fd, buffer, offset);
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(count)
+        }
+
+        /// Performs a positioned write without changing the original descriptor/handle cursor.
+        fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError> {
+            let (raw, count) = syscalls::write_at((*self).fd, buffer, offset);
+            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            Ok(count)
+        }
+
         /// Seeks relative to the native origin and returns the resulting offset.
         fn seek(&mut self, offset: i64, origin: i64) -> Result<u64, FileError> {
             let (raw, position) = syscalls::seek((*self).fd, offset, origin);

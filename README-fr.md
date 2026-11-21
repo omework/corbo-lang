@@ -1564,7 +1564,7 @@ Les contrats de verrouillage ordinaires s'appliquent à ces types.
 | `std::{Pool, Vector, HashMap, String}` | Pools de capacité fixe, vecteurs, maps, chaînes UTF-8 grandissantes et `String<N>` inline avec un maximum en octets connu à la compilation | [Collections](docs/COLLECTIONS_API.md) · [Chaînes bornées](docs/UTF8_STRINGS-fr.md) |
 | `std::iter` | Iter, Map, Filter, Reduce et méthode d’instance `collect` | [API](docs/STDLIB.md#stditer) |
 | `std::sync::Mutex`, `std::sync::asyn::Mutex` | Acquisition par référence partagée, gardes détruites en fin de bloc et attente asynchrone suspendue | [API](docs/ASYNC_API.md#mutex-ownership) |
-| `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
+| `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, read_at/write_at sans déplacement du curseur, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
 | `std::net::{tcp, udp}`, `std::net::asyn::{tcp, udp}` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
 | `std::net::http` | Analyse des en-têtes de requêtes/réponses, limites statiques configurables et corps optionnels en flux via un contrat de lecture | [HTTP](docs/HTTP.md) |
 | `std::net::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnettls) |

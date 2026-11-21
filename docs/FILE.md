@@ -23,6 +23,8 @@ Scope exit or explicit `drop(file)` invokes the inner type's destructor.
 | `File::create(path, mode, perm)` | Creates a new file exclusively with a `FilePerm` creation policy. |
 | `file.read(&mut buffer[..])` | Reads at most the buffer length and returns the number of bytes read. EOF and empty buffers return zero. |
 | `file.write(&buffer[..])` | Writes up to the buffer length and returns the number of bytes written. An empty buffer writes zero bytes. |
+| `file.read_at(&mut buffer[..], offset)` | Reads at an explicit `u64` byte offset without moving the cursor. EOF and valid empty ranges return zero. |
+| `file.write_at(&buffer[..], offset)` | Writes at an explicit offset without moving the cursor; read-only and append modes are rejected. |
 | `file.sync_all()` | Requests persistence of this file's contents and metadata; returns synchronization errors. |
 | `file.truncate(length)` | Sets the file length without moving its cursor; extension reads as zero bytes. |
 | `file.seek(from)` | Sets the current byte position and returns the resulting absolute position as a `u64`. |
@@ -30,7 +32,7 @@ Scope exit or explicit `drop(file)` invokes the inner type's destructor.
 | `file.stats()` | Returns a `FileStats` for the open file. `stats.size()` reports its size in bytes as a `u64`. |
 | `File::delete(path)` | Removes the file entry at the path using the platform's deletion rules. |
 
-Reads and writes advance the file's current position by the number of bytes
+Sequential `read` and `write` advance the file's current position by the number of bytes
 transferred. A caller that requires a complete transfer can retry with the
 remaining slice.
 
@@ -73,6 +75,44 @@ NUL-terminated paths return `InvalidPath`. OS errors use `Os { code }` with a ne
 - `@asm { ... }` contains target assembly only. An operand written `${name}` refers to a Corbo binding in scope. The instructions express the transfers explicitly. For example, `mov rdi, ${address}` reads the binding's value and `mov ${raw}, rax` writes to the mutable binding.
 - `usize` is an unsigned primitive with the pointer width of the compilation target. The compiler obtains that width from the same target configuration used by `#(if: ...)`. It is available without a target annotation.
 - In the example, `addr` exposes a byte's address as a `usize`. The verifier retains the reference origin through supported Corbo operations, including a use as an assembly operand. The block author is responsible for the lifetime of accesses performed after the block exits.
+
+## Positioned I/O
+
+Both `std::io::File` and `std::io::asyn::File` expose:
+
+```rust
+fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError>
+fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError>
+```
+
+The async versions are `async fn` and their calls require `.await`. The receiver
+uses `&self`: neither operation reads or changes the sequential cursor. A short
+transfer is valid; callers requiring the whole slice must advance both the slice
+and explicit offset. Reading at/beyond EOF returns zero. Empty buffers return
+zero when their offset is valid. The requested offset and end must fit in `i64`;
+unrepresentable ranges return `InvalidOptions` before I/O. Write-only reads,
+read-only writes and positioned writes in append mode return `InvalidOptions`.
+Append mode is rejected because it can override the offset of Unix `pwrite`.
+
+Unix uses `pread`/`pwrite` (Linux x86-64 direct pread64/pwrite64 syscalls), retrying
+EINTR. Windows File owns its ordinary cursor-bearing HANDLE **and one OVERLAPPED
+companion**, created with `ReOpenFile` immediately when the file opens. Failed
+companion creation closes the ordinary handle before returning an error. This
+keeps the original access intent and file identity across rename, without
+reopening by path on each request. Both handles close on File destruction. Windows File therefore requires a
+reopenable file that supports OVERLAPPED I/O; opening a special device that
+cannot provide this companion can return an OS error.
+Each positioned request uses a distinct completion event and a live OVERLAPPED
+structure, calls ReadFile/WriteFile, waits with GetOverlappedResult when needed,
+and closes its event after completion, including EOF/error paths. Ordinary
+read/write/seek continue to use the original handle.
+
+Async positioned methods use the existing blocking-worker dispatch. The file
+and buffer borrows remain retained until the worker finishes; this does not
+introduce an IOCP-based async-file implementation. Write completion does not
+replace `sync_all()` for persistence.
+
+[Focused validation](cycles/FILE_POSITIONED_CYCLE.md).
 
 ### Raw address confinement
 

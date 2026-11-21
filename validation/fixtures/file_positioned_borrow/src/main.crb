@@ -1,0 +1,22 @@
+use std::io::asyn::File;
+use std::io::FileMode;
+
+// A cold positioned-read Future still retains the File it captured.
+async fn invalid() -> i64 {
+    let path: [u8; 2] = [120, 0];
+    let file = match File::open(&path[..], FileMode::read_only()).await {
+        Ok(file) => { file },
+        Err(error) => { drop(error); return 0; },
+    };
+    let mut bytes: [u8; 1] = [0];
+    let pending = file.read_at(&mut bytes[..], 0);
+    drop(file);
+    let result = pending.await;
+    drop(result);
+    0
+}
+
+fn main() {
+    let execution = runtime::spawn(invalid());
+    drop(execution.join());
+}

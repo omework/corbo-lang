@@ -1,0 +1,98 @@
+use std::io::{FileMode, FilePerm, SeekFrom};
+use std::io::asyn::{File, FileError};
+
+// One small file checks positioned operations independently of sequential I/O.
+async fn probe() -> Result<u64, FileError> {
+    let path: [u8; 11] = [112,111,115,105,116,105,111,110,101,100,0];
+    let renamed: [u8; 6] = [109,111,118,101,100,0];
+    {
+        let mut file = match File::create(&path[..], FileMode::read_write(), FilePerm.DefaultMode).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        let data: [u8; 6] = [97,98,99,100,101,102];
+        let checked0 = match file.write(&data[..]).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked0 != 6 { return Ok(101); }
+        let ignored1 = match file.seek(SeekFrom.Start(2)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        drop(ignored1);
+
+        let mut bytes: [u8; 3] = [0; 3];
+        let checked2 = match file.read_at(&mut bytes[..], 1).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked2 != 3 { return Ok(102); }
+        if bytes[0] != 98 || bytes[1] != 99 || bytes[2] != 100 { return Ok(103); }
+        let checked3 = match file.seek(SeekFrom.Current(0)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked3 != 2 { return Ok(104); }
+
+        let replacement: [u8; 2] = [88,89];
+        let checked4 = match file.write_at(&replacement[..], 4).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked4 != 2 { return Ok(105); }
+        let checked5 = match file.seek(SeekFrom.Current(0)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked5 != 2 { return Ok(106); }
+        let checked6 = match file.read(&mut bytes[..1]).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked6 != 1 || bytes[0] != 99 { return Ok(107); }
+        let checked7 = match file.seek(SeekFrom.Current(0)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked7 != 3 { return Ok(108); }
+
+        // A high word in OVERLAPPED must not be truncated to offset one.
+        let checked8 = match file.read_at(&mut bytes[..], 4294967297).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked8 != 0 { return Ok(109); }
+        let last: [u8; 1] = [90];
+        let checked9 = match file.write(&last[..]).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked9 != 1 { return Ok(110); }
+        let checked10 = match file.seek(SeekFrom.Current(0)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked10 != 4 { return Ok(111); }
+        let empty: [u8; 0] = [];
+        let mut empty_read: [u8; 0] = [];
+        let checked11 = match file.read_at(&mut empty_read[..], 0).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked11 != 0 { return Ok(112); }
+        let checked12 = match file.write_at(&empty[..], 0).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked12 != 0 { return Ok(113); }
+        let invalid: u64 = 18446744073709551615;
+        match file.read_at(&mut bytes[..], invalid).await {
+            Err(error) => { drop(error); },
+            Ok(_) => { return Ok(114); },
+        };
+        let boundary: u64 = 9223372036854775807;
+        match file.write_at(&last[..], boundary).await {
+            Err(error) => { drop(error); },
+            Ok(_) => { return Ok(115); },
+        };
+        let checked13 = match file.seek(SeekFrom.Current(0)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked13 != 4 { return Ok(116); }
+
+        // ReOpenFile uses the open file identity, even after its path changes.
+        match File::rename(&path[..], &renamed[..]).await { Ok(()) => {}, Err(error) => { return Err(error); }, };
+        let checked14 = match file.read_at(&mut bytes[..], 4).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked14 != 2 { return Ok(117); }
+        if bytes[0] != 88 || bytes[1] != 89 { return Ok(118); }
+        let checked15 = match file.seek(SeekFrom.Current(0)).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        if checked15 != 4 { return Ok(119); }
+        let moved = file;
+    }
+    {
+        let readonly = match File::open(&renamed[..], FileMode::read_only()).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        let byte: [u8; 1] = [1];
+        match readonly.write_at(&byte[..], 0).await {
+            Err(error) => { drop(error); },
+            Ok(_) => { return Ok(120); },
+        };
+    }
+    {
+        let writeonly = match File::open(&renamed[..], FileMode::write_only()).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        let mut byte: [u8; 1] = [7];
+        match writeonly.read_at(&mut byte[..], 0).await {
+            Err(error) => { drop(error); },
+            Ok(_) => { return Ok(121); },
+        };
+        if byte[0] != 7 { return Ok(122); }
+    }
+    {
+        let append = match File::open(&renamed[..], FileMode::READ_WRITE | FileMode::APPEND).await { Ok(value) => { value }, Err(error) => { return Err(error); }, };
+        let byte: [u8; 1] = [1];
+        match append.write_at(&byte[..], 0).await {
+            Err(error) => { drop(error); },
+            Ok(_) => { return Ok(123); },
+        };
+    }
+    // Leave the bytes for the independent Python oracle to inspect.
+    Ok(42)
+}
+
+fn main() { let execution = runtime::spawn(probe()); match execution.join() { Ok(result) => { match result { Ok(code) => { print(code); }, Err(error) => { drop(error); print(-1); }, }; }, Err(error) => { drop(error); print(-2); }, }; }

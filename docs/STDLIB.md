@@ -3065,10 +3065,11 @@ Owns an open file and closes the platform handle when destroyed.
 Members:
 
 - [`inner`](../stdlib/src/io/file.crb#L15) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
+- [`mode`](../stdlib/src/io/file.crb#L17) (implementation field): Original access/append flags, retained for positioned-operation validation.
 
 ### `FileError`
 
-[file.crb:19](../stdlib/src/io/file.crb#L19)
+[file.crb:21](../stdlib/src/io/file.crb#L21)
 
 ```rust
 pub enum FileError
@@ -3078,14 +3079,14 @@ Reports invalid path or options, or an error code from the operating system.
 
 Members:
 
-- [`InvalidPath`](../stdlib/src/io/file.crb#L21) (variant): The supplied path violates the platform path-input contract.
-- [`InvalidOptions`](../stdlib/src/io/file.crb#L23) (variant): The requested open-mode combination is invalid.
-- [`Os`](../stdlib/src/io/file.crb#L25) (variant): Preserves the native operating-system error code in code.
-- [`Os.code`](../stdlib/src/io/file.crb#L27) (implementation field): Native operating-system status code preserved by this error.
+- [`InvalidPath`](../stdlib/src/io/file.crb#L23) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/file.crb#L25) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/file.crb#L27) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/file.crb#L29) (implementation field): Native operating-system status code preserved by this error.
 
 ### `File::open`
 
-[file.crb:56](../stdlib/src/io/file.crb#L56)
+[file.crb:59](../stdlib/src/io/file.crb#L59)
 
 ```rust
 fn open(path: &[u8], mode: i64) -> Result<File, FileError>
@@ -3095,7 +3096,7 @@ Opens an existing file with the requested access mode and flags. The path needs 
 
 ### `File::create`
 
-[file.crb:59](../stdlib/src/io/file.crb#L59)
+[file.crb:62](../stdlib/src/io/file.crb#L62)
 
 ```rust
 fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
@@ -3105,7 +3106,7 @@ Opens or creates a file with the requested mode and creation permissions. The pa
 
 ### `File::read`
 
-[file.crb:71](../stdlib/src/io/file.crb#L71)
+[file.crb:74](../stdlib/src/io/file.crb#L74)
 
 ```rust
 fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
@@ -3115,7 +3116,7 @@ Reads into the caller's slice and returns the bytes copied. An empty buffer retu
 
 ### `File::write`
 
-[file.crb:80](../stdlib/src/io/file.crb#L80)
+[file.crb:83](../stdlib/src/io/file.crb#L83)
 
 ```rust
 fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
@@ -3123,9 +3124,31 @@ fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
 
 Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
 
+### `File::read_at`
+
+[file.crb:93](../stdlib/src/io/file.crb#L93)
+
+```rust
+fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError>
+```
+
+Reads into the caller's buffer at offset without moving the cursor; short transfers are allowed.
+Rejects unrepresentable ranges and write-only mode. Valid empty ranges return zero.
+
+### `File::write_at`
+
+[file.crb:108](../stdlib/src/io/file.crb#L108)
+
+```rust
+fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError>
+```
+
+Writes from the caller's buffer at offset without moving the cursor; short transfers are allowed.
+Rejects unrepresentable ranges and read-only/append modes. Valid empty ranges return zero.
+
 ### `File::seek`
 
-[file.crb:89](../stdlib/src/io/file.crb#L89)
+[file.crb:122](../stdlib/src/io/file.crb#L122)
 
 ```rust
 fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
@@ -3135,7 +3158,7 @@ Moves the file cursor relative to the supplied origin and returns its new absolu
 
 ### `File::sync_all`
 
-[file.crb:107](../stdlib/src/io/file.crb#L107)
+[file.crb:140](../stdlib/src/io/file.crb#L140)
 
 ```rust
 fn sync_all(&mut self) -> Result<(), FileError>
@@ -3145,7 +3168,7 @@ Persists this file's contents/metadata; does not sync a parent directory or crea
 
 ### `File::truncate`
 
-[file.crb:116](../stdlib/src/io/file.crb#L116)
+[file.crb:149](../stdlib/src/io/file.crb#L149)
 
 ```rust
 fn truncate(&mut self, length: u64) -> Result<(), FileError>
@@ -3155,7 +3178,7 @@ Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
 
 ### `File::stats`
 
-[file.crb:126](../stdlib/src/io/file.crb#L126)
+[file.crb:159](../stdlib/src/io/file.crb#L159)
 
 ```rust
 fn stats(&self) -> Result<FileStats, FileError>
@@ -3165,7 +3188,7 @@ Returns a snapshot of file metadata from its open handle.
 
 ### `File::rename`
 
-[file.crb:135](../stdlib/src/io/file.crb#L135)
+[file.crb:168](../stdlib/src/io/file.crb#L168)
 
 ```rust
 fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
@@ -3175,7 +3198,7 @@ Renames a file from the source path to the destination path using platform seman
 
 ### `File::delete`
 
-[file.crb:143](../stdlib/src/io/file.crb#L143)
+[file.crb:176](../stdlib/src/io/file.crb#L176)
 
 ```rust
 fn delete(path: &[u8]) -> Result<(), FileError>
@@ -3392,7 +3415,7 @@ Members:
 
 ### `File::open`
 
-[file.crb:95](../stdlib/src/io/asyn/file.crb#L95)
+[file.crb:105](../stdlib/src/io/asyn/file.crb#L105)
 
 ```rust
 async fn open(path: &[u8], mode: i64) -> Result<File, FileError>
@@ -3402,7 +3425,7 @@ Awaits opening an existing file with the selected mode. The path needs one trail
 
 ### `File::create`
 
-[file.crb:100](../stdlib/src/io/asyn/file.crb#L100)
+[file.crb:110](../stdlib/src/io/asyn/file.crb#L110)
 
 ```rust
 async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
@@ -3412,7 +3435,7 @@ Awaits opening or creating a file with the selected mode and permissions. The pa
 
 ### `File::read`
 
-[file.crb:105](../stdlib/src/io/asyn/file.crb#L105)
+[file.crb:115](../stdlib/src/io/asyn/file.crb#L115)
 
 ```rust
 async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
@@ -3422,7 +3445,7 @@ Awaits a read into the caller's buffer and returns the actual byte count.
 
 ### `File::write`
 
-[file.crb:121](../stdlib/src/io/asyn/file.crb#L121)
+[file.crb:131](../stdlib/src/io/asyn/file.crb#L131)
 
 ```rust
 async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
@@ -3430,9 +3453,29 @@ async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
 
 Awaits a write from the caller's buffer and returns the actual byte count.
 
+### `File::read_at`
+
+[file.crb:147](../stdlib/src/io/asyn/file.crb#L147)
+
+```rust
+async fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError>
+```
+
+Awaits a positioned read, preserving the cursor and retaining file/buffer borrows until completion.
+
+### `File::write_at`
+
+[file.crb:166](../stdlib/src/io/asyn/file.crb#L166)
+
+```rust
+async fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError>
+```
+
+Awaits a positioned write, preserving the cursor and retaining file/buffer borrows until completion.
+
 ### `File::seek`
 
-[file.crb:137](../stdlib/src/io/asyn/file.crb#L137)
+[file.crb:185](../stdlib/src/io/asyn/file.crb#L185)
 
 ```rust
 async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
@@ -3442,7 +3485,7 @@ Awaits moving the file cursor and returns the new absolute byte offset.
 
 ### `File::sync_all`
 
-[file.crb:152](../stdlib/src/io/asyn/file.crb#L152)
+[file.crb:200](../stdlib/src/io/asyn/file.crb#L200)
 
 ```rust
 async fn sync_all(&mut self) -> Result<(), FileError>
@@ -3452,7 +3495,7 @@ Awaits sync_all on a blocking worker, retaining mutable permission and the file 
 
 ### `File::truncate`
 
-[file.crb:167](../stdlib/src/io/asyn/file.crb#L167)
+[file.crb:215](../stdlib/src/io/asyn/file.crb#L215)
 
 ```rust
 async fn truncate(&mut self, length: u64) -> Result<(), FileError>
@@ -3462,7 +3505,7 @@ Awaits truncate on a blocking worker, retaining mutable permission and the file 
 
 ### `File::stats`
 
-[file.crb:182](../stdlib/src/io/asyn/file.crb#L182)
+[file.crb:230](../stdlib/src/io/asyn/file.crb#L230)
 
 ```rust
 async fn stats(&self) -> Result<FileStats, FileError>
@@ -3472,7 +3515,7 @@ Awaits a snapshot of the open file's metadata.
 
 ### `File::rename`
 
-[file.crb:197](../stdlib/src/io/asyn/file.crb#L197)
+[file.crb:245](../stdlib/src/io/asyn/file.crb#L245)
 
 ```rust
 async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
@@ -3482,7 +3525,7 @@ Awaits moving a filesystem entry to a different path.
 
 ### `File::delete`
 
-[file.crb:211](../stdlib/src/io/asyn/file.crb#L211)
+[file.crb:259](../stdlib/src/io/asyn/file.crb#L259)
 
 ```rust
 async fn delete(path: &[u8]) -> Result<(), FileError>

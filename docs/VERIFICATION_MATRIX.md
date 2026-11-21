@@ -1,3 +1,13 @@
+## Positioned File APIs
+
+- [x] Implement sync/async read_at and write_at with preserved cursors.
+- [x] Implement pread/pwrite and owned Windows OVERLAPPED companions/events.
+- [x] Execute focused witnesses on macOS ARM64/x86-64, Linux and Windows x86-64.
+- [x] Compile/link Windows ARM64; execution remains deferred.
+- [x] Verify pending-Future ownership refusal; regenerate API documentation.
+
+[Evidence](cycles/FILE_POSITIONED_CYCLE.md).
+
 ## Package check/watch CLI
 
 - [x] Share package resolution and verifier-only mode; no code generation.
