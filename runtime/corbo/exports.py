@@ -6,6 +6,13 @@ def add(group,name,result,*parameters):
     """Register one typed C ABI export; its implementation remains in the corresponding Corbo source function."""
     EXPORTS.append((group,name,result,parameters))
 for name,result,params in [
+ ('channel_create','uintptr_t',[('size_t','capacity'),('size_t','width')]),
+ ('channel_send','int64_t',[('uintptr_t','raw'),('void*','input'),('uint64_t*','epoch'),('bool','blocking')]),
+ ('channel_receive','int64_t',[('uintptr_t','raw'),('void*','output'),('uint64_t*','epoch'),('bool','blocking')]),
+ ('channel_close','void',[('uintptr_t','raw')]),('channel_destroy','void',[('uintptr_t','raw')]),
+ ('channel_poll','bool',[('Task*','task'),('uintptr_t','raw'),('uint64_t','epoch'),('bool','sending')]),
+ ('channel_detach','void',[('Task*','task')])]:add('base_runtime',name,result,*params)
+for name,result,params in [
  ('mutex_create','uintptr_t',[('bool','asynchronous')]),('mutex_acquire','void',[('uintptr_t','raw')]),
  ('mutex_release','void',[('uintptr_t','raw')]),('mutex_destroy','void',[('uintptr_t','raw')]),
  ('mutex_poll','bool',[('Task*','child'),('uintptr_t','raw')]),('mutex_detach','void',[('Task*','child')])]:add('base_runtime',name,result,*params)

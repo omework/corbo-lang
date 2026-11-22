@@ -6,7 +6,7 @@ from pathlib import Path
 from exports import EXPORTS,declaration,wrapper
 ROOT=Path(__file__).resolve().parent
 GROUPS={
- 'mutex_primitives':'base_runtime','mutex':'base_runtime','metrics':'base_runtime','primitives':'base_runtime','memory':'base_runtime','collections':'base_runtime','reclaim':'base_runtime','api':'base_runtime',
+ 'channel_primitives':'base_runtime','channel':'base_runtime','mutex_primitives':'base_runtime','mutex':'base_runtime','metrics':'base_runtime','primitives':'base_runtime','memory':'base_runtime','collections':'base_runtime','reclaim':'base_runtime','api':'base_runtime',
  'thread_primitives':'native_runtime','scheduler':'task_runtime','values':'task_value_runtime','threads':'native_runtime',
  'socket_primitives':'readiness_runtime','readiness':'readiness_runtime',
  'completion_primitives':'completion_runtime','completion':'completion_runtime',

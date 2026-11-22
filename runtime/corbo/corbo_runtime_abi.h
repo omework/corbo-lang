@@ -67,6 +67,9 @@ struct Task {
     uintptr_t mutex_owner;
     /** mutex_reserved: release handed this waiter the next acquisition. */
     bool mutex_reserved;
+    /** channel_wait: selects the channel queue owning this wait record. */
+    /** Distinguishes channel registration from the reused mutex wait fields. */
+    bool channel_wait;
 };
 /** Native mutex storage; its address remains stable until the owner is destroyed. */
 typedef struct CorboMutexState {
@@ -83,6 +86,20 @@ typedef struct CorboMutexState {
     /** reservation: waiter receiving a release-to-next handoff. */
     Task *reservation;
 } CorboMutexState;
+/** Fixed-capacity typed-byte ring and intrusive async waiter queues. All mutable fields require task_lock. */
+/** Bounded erased storage; the STD retains typed ownership and destructor dispatch. */
+typedef struct CorboChannelState {
+    /** Dedicated queue region, independent of the constructor's scope. */
+    Region storage;
+    /** Capacity and descriptor width; live count and oldest ring position. */
+    size_t capacity, width, count, head;
+    /** Readiness change counter, protected with all queue fields by task_lock. */
+    uint64_t epoch;
+    /** Once closed, sends fail and receivers only drain existing values. */
+    bool closed;
+    /** Intrusive receive/send queues; task records outlive their registrations. */
+    Task *heads[2], *tails[2];
+} CorboChannelState;
 static pthread_t task_workers[2];
 static size_t task_worker_count;
 static pthread_mutex_t task_lock = PTHREAD_MUTEX_INITIALIZER;

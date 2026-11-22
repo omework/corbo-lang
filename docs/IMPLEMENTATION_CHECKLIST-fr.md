@@ -1,3 +1,23 @@
+## Canaux sync/async bornés
+
+- [x] FIFO borné, échec d’envoi conservant la valeur et fermeture avec drainage.
+- [x] Attentes natives et inscription async authentifiée sans réveil perdu.
+- [x] Nettoyage typé et restrictions de transfert entre threads.
+- [x] Retour Option possédé dans les Futures.
+- [x] Validation ciblée sur macOS ARM64, Linux x86-64 et Windows x86-64.
+- [x] Compilation/édition de liens Windows ARM64 ; exécution différée à la demande de l’utilisateur.
+- [x] Documentation des limites de charges admises et références API régénérées.
+
+[Résultats](cycles/CHANNELS_CYCLE.md). Pas de nouvelle campagne exhaustive.
+
+## Disposition compacte des enums — prévue
+
+- [x] Consigner un tag et une zone partagée dimensionnée pour la plus grande variante.
+- [ ] Implémenter le stockage partagé et propager la disposition au placement et au C.
+- [ ] Valider les opérations concernées et les dispositions cibles lors de l’implémentation.
+
+[Conception retenue](ENUM_LAYOUT-fr.md). Documentation uniquement ; compilateur inchangé.
+
 ## Motifs d’enums, égalité et copies — EN1 / V3
 
 - [x] Parser if-let, les chaînes else-if et les expressions à résultat via match.

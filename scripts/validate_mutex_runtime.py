@@ -27,7 +27,7 @@ def main():
                     for name in ['c_runtime_header', 'base_runtime'])
     parts = ['corbo_runtime.h', 'memory/metrics_storage.h', 'memory/datastack.c.inc',
              'collections/vector.c.inc', 'memory/region_release.c.inc',
-             'async/task_header.c.inc', 'async/mutex.c.inc']
+             'async/task_header.c.inc', 'async/mutex.c.inc', 'async/channel.c.inc']
     reference = '\n'.join((ROOT / 'runtime' / name).read_text() for name in parts)
     results = []
     for name, runtime in [('corbo', corbo), ('c-reference', reference)]:

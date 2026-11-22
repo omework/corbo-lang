@@ -12,6 +12,8 @@ Regenerate with `python3 scripts/stdlib_docs.py --runtime > docs/RUNTIME.md`.
 ## Modules
 
 - [`runtime::api`](#runtimeapi)
+- [`runtime::channel`](#runtimechannel)
+- [`runtime::channel_primitives`](#runtimechannel_primitives)
 - [`runtime::collections`](#runtimecollections)
 - [`runtime::completion`](#runtimecompletion)
 - [`runtime::completion_primitives`](#runtimecompletion_primitives)
@@ -241,6 +243,388 @@ fn corbo_map_drop(map:usize)
 ```
 
 Clears the caller's map pointer, destroys remaining values with dispose, then releases payload and descriptor storage.
+
+
+## `runtime::channel`
+
+Bounded FIFO channel policy, native waits and persistent async registrations.
+
+### `channel_create`
+
+[channel.crb:5](../runtime/corbo/channel.crb#L5)
+
+```rust
+fn channel_create(capacity:usize,width:usize)->usize
+```
+
+Reserves fixed-capacity ring storage; a zero capacity is not a rendezvous channel.
+
+### `channel_wake_one`
+
+[channel.crb:17](../runtime/corbo/channel.crb#L17)
+
+```rust
+fn channel_wake_one(raw:usize,side:usize)
+```
+
+Selects one FIFO waiter, preserving its registration until its next poll.
+task_enqueue only schedules: it never polls inline while this lock is held.
+
+### `channel_unlink`
+
+[channel.crb:35](../runtime/corbo/channel.crb#L35)
+
+```rust
+fn channel_unlink(task:usize)
+```
+
+Unlinks a queued/notified wait record before its task storage can be reclaimed.
+caller holds task_lock; forwarding a notification avoids leaving ready work asleep.
+
+### `channel_send`
+
+[channel.crb:54](../runtime/corbo/channel.crb#L54)
+
+```rust
+fn channel_send(raw:usize,input:usize,epoch:usize,blocking:bool)->i64
+```
+
+Returns 0 after moving bytes, 1 for full, 2 for closed; records the observed epoch.
+
+### `channel_receive`
+
+[channel.crb:71](../runtime/corbo/channel.crb#L71)
+
+```rust
+fn channel_receive(raw:usize,output:usize,epoch:usize,blocking:bool)->i64
+```
+
+Returns 0 with a moved value, 1 for empty/open, 2 for closed/drained.
+
+### `channel_close`
+
+[channel.crb:90](../runtime/corbo/channel.crb#L90)
+
+```rust
+fn channel_close(raw:usize)
+```
+
+Closes once and wakes both sides; queued values remain available to receivers.
+
+### `channel_poll`
+
+[channel.crb:102](../runtime/corbo/channel.crb#L102)
+
+```rust
+fn channel_poll(task:usize,raw:usize,epoch:u64,sending:bool)->bool
+```
+
+Polls an epoch-based registration atomically with the readiness predicate.
+
+### `channel_detach`
+
+[channel.crb:121](../runtime/corbo/channel.crb#L121)
+
+```rust
+fn channel_detach(task:usize)
+```
+
+Called before releasing every Future frame; no waiter may retain its address.
+
+### `channel_destroy`
+
+[channel.crb:129](../runtime/corbo/channel.crb#L129)
+
+```rust
+fn channel_destroy(raw:usize)
+```
+
+Frees a closed, drained channel after all borrowed users and registrations have ended.
+
+
+## `runtime::channel_primitives`
+
+Native addresses, memory copies and scheduler-lock operations for bounded channels.
+
+### `channel_allocate`
+
+[channel_primitives.crb:5](../runtime/corbo/channel_primitives.crb#L5)
+
+```rust
+fn channel_allocate()->usize
+```
+
+Allocates metadata; payload storage is initialized separately under the runtime lock.
+
+### `channel_storage`
+
+[channel_primitives.crb:11](../runtime/corbo/channel_primitives.crb#L11)
+
+```rust
+fn channel_storage(raw:usize,capacity:usize,width:usize)
+```
+
+Creates a detached managed region retained by the channel until destruction.
+
+### `channel_free`
+
+[channel_primitives.crb:21](../runtime/corbo/channel_primitives.crb#L21)
+
+```rust
+fn channel_free(raw:usize)
+```
+
+Releases detached payload storage before its stable metadata.
+
+### `channel_metadata_size`
+
+[channel_primitives.crb:30](../runtime/corbo/channel_primitives.crb#L30)
+
+```rust
+fn channel_metadata_size()->usize
+```
+
+Exact extent of the stable channel control block.
+
+### `channel_epoch_write`
+
+[channel_primitives.crb:36](../runtime/corbo/channel_primitives.crb#L36)
+
+```rust
+fn channel_epoch_write(pointer:usize,value:u64)
+```
+
+Stores the observed epoch independently of pointer width.
+
+### `channel_lock`
+
+[channel_primitives.crb:40](../runtime/corbo/channel_primitives.crb#L40)
+
+```rust
+fn channel_lock()
+```
+
+Acquires the short scheduler lock even in a program without launched workers.
+
+### `channel_unlock`
+
+[channel_primitives.crb:42](../runtime/corbo/channel_primitives.crb#L42)
+
+```rust
+fn channel_unlock()
+```
+
+Releases the channel/scheduler state lock.
+
+### `channel_condition_wait`
+
+[channel_primitives.crb:44](../runtime/corbo/channel_primitives.crb#L44)
+
+```rust
+fn channel_condition_wait()
+```
+
+Atomically parks a native thread, releasing and reacquiring task_lock.
+
+### `channel_broadcast`
+
+[channel_primitives.crb:46](../runtime/corbo/channel_primitives.crb#L46)
+
+```rust
+fn channel_broadcast()
+```
+
+Wakes native condition waiters; the caller holds task_lock.
+
+### `channel_get_capacity`
+
+[channel_primitives.crb:48](../runtime/corbo/channel_primitives.crb#L48)
+
+```rust
+fn channel_get_capacity(raw:usize)->usize
+```
+
+Reads the channel's capacity; caller holds task_lock.
+
+### `channel_set_capacity`
+
+[channel_primitives.crb:54](../runtime/corbo/channel_primitives.crb#L54)
+
+```rust
+fn channel_set_capacity(raw:usize,value:usize)
+```
+
+Updates the channel's capacity; caller holds task_lock.
+
+### `channel_get_width`
+
+[channel_primitives.crb:56](../runtime/corbo/channel_primitives.crb#L56)
+
+```rust
+fn channel_get_width(raw:usize)->usize
+```
+
+Reads the channel's width; caller holds task_lock.
+
+### `channel_set_width`
+
+[channel_primitives.crb:62](../runtime/corbo/channel_primitives.crb#L62)
+
+```rust
+fn channel_set_width(raw:usize,value:usize)
+```
+
+Updates the channel's width; caller holds task_lock.
+
+### `channel_get_count`
+
+[channel_primitives.crb:64](../runtime/corbo/channel_primitives.crb#L64)
+
+```rust
+fn channel_get_count(raw:usize)->usize
+```
+
+Reads the channel's count; caller holds task_lock.
+
+### `channel_set_count`
+
+[channel_primitives.crb:70](../runtime/corbo/channel_primitives.crb#L70)
+
+```rust
+fn channel_set_count(raw:usize,value:usize)
+```
+
+Updates the channel's count; caller holds task_lock.
+
+### `channel_get_head`
+
+[channel_primitives.crb:72](../runtime/corbo/channel_primitives.crb#L72)
+
+```rust
+fn channel_get_head(raw:usize)->usize
+```
+
+Reads the channel's head; caller holds task_lock.
+
+### `channel_set_head`
+
+[channel_primitives.crb:78](../runtime/corbo/channel_primitives.crb#L78)
+
+```rust
+fn channel_set_head(raw:usize,value:usize)
+```
+
+Updates the channel's head; caller holds task_lock.
+
+### `channel_get_epoch`
+
+[channel_primitives.crb:80](../runtime/corbo/channel_primitives.crb#L80)
+
+```rust
+fn channel_get_epoch(raw:usize)->u64
+```
+
+Reads the channel's epoch; caller holds task_lock.
+
+### `channel_set_epoch`
+
+[channel_primitives.crb:86](../runtime/corbo/channel_primitives.crb#L86)
+
+```rust
+fn channel_set_epoch(raw:usize,value:u64)
+```
+
+Updates the channel's epoch; caller holds task_lock.
+
+### `channel_get_closed`
+
+[channel_primitives.crb:88](../runtime/corbo/channel_primitives.crb#L88)
+
+```rust
+fn channel_get_closed(raw:usize)->bool
+```
+
+Reads the channel's closed; caller holds task_lock.
+
+### `channel_set_closed`
+
+[channel_primitives.crb:94](../runtime/corbo/channel_primitives.crb#L94)
+
+```rust
+fn channel_set_closed(raw:usize,value:bool)
+```
+
+Updates the channel's closed; caller holds task_lock.
+
+### `channel_get_heads`
+
+[channel_primitives.crb:96](../runtime/corbo/channel_primitives.crb#L96)
+
+```rust
+fn channel_get_heads(raw:usize,side:usize)->usize
+```
+
+Reads one side's heads pointer; side 0 receives, side 1 sends.
+
+### `channel_set_heads`
+
+[channel_primitives.crb:102](../runtime/corbo/channel_primitives.crb#L102)
+
+```rust
+fn channel_set_heads(raw:usize,side:usize,value:usize)
+```
+
+Updates one side's heads pointer under task_lock.
+
+### `channel_get_tails`
+
+[channel_primitives.crb:104](../runtime/corbo/channel_primitives.crb#L104)
+
+```rust
+fn channel_get_tails(raw:usize,side:usize)->usize
+```
+
+Reads one side's tails pointer; side 0 receives, side 1 sends.
+
+### `channel_set_tails`
+
+[channel_primitives.crb:110](../runtime/corbo/channel_primitives.crb#L110)
+
+```rust
+fn channel_set_tails(raw:usize,side:usize,value:usize)
+```
+
+Updates one side's tails pointer under task_lock.
+
+### `channel_slot`
+
+[channel_primitives.crb:112](../runtime/corbo/channel_primitives.crb#L112)
+
+```rust
+fn channel_slot(raw:usize,index:usize)->usize
+```
+
+Addresses one aligned slot in the channel's fixed ring.
+
+### `channel_waiting`
+
+[channel_primitives.crb:118](../runtime/corbo/channel_primitives.crb#L118)
+
+```rust
+fn channel_waiting(task:usize)->bool
+```
+
+Reads whether an existing task wait record belongs to a channel.
+
+### `channel_mark`
+
+[channel_primitives.crb:124](../runtime/corbo/channel_primitives.crb#L124)
+
+```rust
+fn channel_mark(task:usize,value:bool)
+```
+
+Marks a task's intrusive record as channel-owned.
 
 
 ## `runtime::collections`
@@ -5534,7 +5918,7 @@ Cleans an untaken result or inactive captures, releases frame storage, and unmap
 
 ### `task_abandoned`
 
-[values.crb:70](../runtime/corbo/values.crb#L70)
+[values.crb:71](../runtime/corbo/values.crb#L71)
 
 ```rust
 fn task_abandoned(task:usize)
@@ -5544,7 +5928,7 @@ Releases a completed abandoned task, including its untaken result.
 
 ### `start_task`
 
-[values.crb:74](../runtime/corbo/values.crb#L74)
+[values.crb:75](../runtime/corbo/values.crb#L75)
 
 ```rust
 fn start_task(value:usize)
@@ -5554,7 +5938,7 @@ Schedules a TaskValue using its poll function and the abandoned-task cleanup cal
 
 ### `discard_handle`
 
-[values.crb:78](../runtime/corbo/values.crb#L78)
+[values.crb:79](../runtime/corbo/values.crb#L79)
 
 ```rust
 fn discard_handle(value:usize)
@@ -5564,7 +5948,7 @@ Marks an active execution abandoned or releases a completed one; native executio
 
 ### `join_task`
 
-[values.crb:98](../runtime/corbo/values.crb#L98)
+[values.crb:99](../runtime/corbo/values.crb#L99)
 
 ```rust
 fn join_task(out:usize,value:usize)
@@ -5574,7 +5958,7 @@ Waits for completion, writes a scalar completion descriptor to out and releases 
 
 ### `join_task_into`
 
-[values.crb:110](../runtime/corbo/values.crb#L110)
+[values.crb:111](../runtime/corbo/values.crb#L111)
 
 ```rust
 fn join_task_into(value:usize,out:usize,bytes:usize)->bool
@@ -5584,7 +5968,7 @@ Waits for completion and moves a successful aggregate payload into caller storag
 
 ### `discard_future`
 
-[values.crb:125](../runtime/corbo/values.crb#L125)
+[values.crb:126](../runtime/corbo/values.crb#L126)
 
 ```rust
 fn discard_future(value:usize)
@@ -5596,6 +5980,38 @@ Destroys captures and storage of a nonempty inactive future descriptor.
 ## C ABI and comparison sources
 
 These declarations describe the C boundary/reference, not new checked-language APIs.
+
+### `runtime/async/channel.c.inc`
+
+- [`CorboChannelState`](../runtime/async/channel.c.inc#L5): Stable queue descriptor; all mutable fields require task_lock.
+
+- [`storage`](../runtime/async/channel.c.inc#L7): Dedicated managed payload storage.
+
+- [`capacity,width,count,head`](../runtime/async/channel.c.inc#L9): Fixed capacity, descriptor width, queued count and oldest ring index.
+
+- [`epoch`](../runtime/async/channel.c.inc#L11): Readiness change sequence, protected by task_lock.
+
+- [`closed`](../runtime/async/channel.c.inc#L13): Prevents sends while permitting queued values to drain.
+
+- [`heads,tails`](../runtime/async/channel.c.inc#L15): Receive/send FIFO registration queues.
+
+- [`channel_wake_one`](../runtime/async/channel.c.inc#L18): Select one registered task; task_lock is held and polling never occurs inline.
+
+- [`channel_unlink`](../runtime/async/channel.c.inc#L28): Remove a persistent wait record before freeing its frame, forwarding a notification.
+
+- [`channel_create`](../runtime/async/channel.c.inc#L41): Reserve a finite byte ring in a detached managed region.
+
+- [`channel_send`](../runtime/async/channel.c.inc#L57): Move one complete typed descriptor into the ring, or leave it untouched on failure.
+
+- [`channel_receive`](../runtime/async/channel.c.inc#L69): Move the oldest descriptor out; closed channels drain before signaling exhaustion.
+
+- [`channel_close`](../runtime/async/channel.c.inc#L81): Close once and wake both waiting senders and receivers.
+
+- [`channel_poll`](../runtime/async/channel.c.inc#L90): Check the epoch and register under the same lock, closing the lost-wakeup window.
+
+- [`channel_detach`](../runtime/async/channel.c.inc#L100): Unregister before frame reclamation.
+
+- [`channel_destroy`](../runtime/async/channel.c.inc#L102): Release drained storage only after all borrowed users have ended.
 
 ### `runtime/async/completion.c.inc`
 
@@ -5709,7 +6125,9 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`mutex_reserved`](../runtime/async/task_header.c.inc#L46): mutex_reserved: release handed this waiter the next acquisition.
 
-- [`task_enqueue`](../runtime/async/task_header.c.inc#L58): Links a task at the queue tail; caller holds the scheduler lock and the task is not already queued.
+- [`channel_wait`](../runtime/async/task_header.c.inc#L48): Distinguishes channel registration from the reused mutex wait fields.
+
+- [`task_enqueue`](../runtime/async/task_header.c.inc#L60): Links a task at the queue tail; caller holds the scheduler lock and the task is not already queued.
 
 ### `runtime/async/threads.c.inc`
 
@@ -5841,17 +6259,17 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`release_future`](../runtime/async/values.c.inc#L106): Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata.
 
-- [`task_abandoned`](../runtime/async/values.c.inc#L111): Releases a completed abandoned task, including its untaken result.
+- [`task_abandoned`](../runtime/async/values.c.inc#L112): Releases a completed abandoned task, including its untaken result.
 
-- [`start_task`](../runtime/async/values.c.inc#L113): Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
+- [`start_task`](../runtime/async/values.c.inc#L114): Schedules a TaskValue using its poll function and the abandoned-task cleanup callback.
 
-- [`discard_handle`](../runtime/async/values.c.inc#L115): Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
+- [`discard_handle`](../runtime/async/values.c.inc#L116): Marks an active execution abandoned or releases a completed one; native executions use their separate ownership path.
 
-- [`join_task`](../runtime/async/values.c.inc#L120): Waits for completion, returns a scalar completion descriptor and releases consumed handle storage.
+- [`join_task`](../runtime/async/values.c.inc#L121): Waits for completion, returns a scalar completion descriptor and releases consumed handle storage.
 
-- [`join_task_into`](../runtime/async/values.c.inc#L123): Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
+- [`join_task_into`](../runtime/async/values.c.inc#L124): Waits for completion and moves a successful aggregate payload into caller storage; returns false on launch failure.
 
-- [`discard_future`](../runtime/async/values.c.inc#L127): Destroys captures and storage of a nonempty inactive future descriptor.
+- [`discard_future`](../runtime/async/values.c.inc#L128): Destroys captures and storage of a nonempty inactive future descriptor.
 
 ### `runtime/collections/hashmap.c.inc`
 
@@ -5937,93 +6355,107 @@ These declarations describe the C boundary/reference, not new checked-language A
 
 - [`mutex_reserved`](../runtime/corbo/corbo_runtime_abi.h#L69): mutex_reserved: release handed this waiter the next acquisition.
 
-- [`CorboMutexState`](../runtime/corbo/corbo_runtime_abi.h#L72): Native mutex storage; its address remains stable until the owner is destroyed.
+- [`channel_wait`](../runtime/corbo/corbo_runtime_abi.h#L72): Distinguishes channel registration from the reused mutex wait fields.
 
-- [`gate`](../runtime/corbo/corbo_runtime_abi.h#L74): gate: native mutex, held through synchronous guard ownership only.
+- [`CorboMutexState`](../runtime/corbo/corbo_runtime_abi.h#L75): Native mutex storage; its address remains stable until the owner is destroyed.
 
-- [`owner`](../runtime/corbo/corbo_runtime_abi.h#L76): owner: thread which acquired the synchronous guard.
+- [`gate`](../runtime/corbo/corbo_runtime_abi.h#L77): gate: native mutex, held through synchronous guard ownership only.
 
-- [`asynchronous`](../runtime/corbo/corbo_runtime_abi.h#L78): asynchronous: chooses logical task ownership instead of native guard ownership.
+- [`owner`](../runtime/corbo/corbo_runtime_abi.h#L79): owner: thread which acquired the synchronous guard.
 
-- [`held`](../runtime/corbo/corbo_runtime_abi.h#L80): held: logical async lock state, protected by task_lock.
+- [`asynchronous`](../runtime/corbo/corbo_runtime_abi.h#L81): asynchronous: chooses logical task ownership instead of native guard ownership.
 
-- [`head,tail`](../runtime/corbo/corbo_runtime_abi.h#L82): head: first queued waiter. tail: FIFO insertion point.
+- [`held`](../runtime/corbo/corbo_runtime_abi.h#L83): held: logical async lock state, protected by task_lock.
 
-- [`reservation`](../runtime/corbo/corbo_runtime_abi.h#L84): reservation: waiter receiving a release-to-next handoff.
+- [`head,tail`](../runtime/corbo/corbo_runtime_abi.h#L85): head: first queued waiter. tail: FIFO insertion point.
 
-- [`TaskResult`](../runtime/corbo/corbo_runtime_abi.h#L96): Inline scalar result union; the generated frame contract determines the active member.
+- [`reservation`](../runtime/corbo/corbo_runtime_abi.h#L87): reservation: waiter receiving a release-to-next handoff.
 
-- [`k1`](../runtime/corbo/corbo_runtime_abi.h#L98): k1: Result storage for i32.
+- [`CorboChannelState`](../runtime/corbo/corbo_runtime_abi.h#L91): Bounded erased storage; the STD retains typed ownership and destructor dispatch.
 
-- [`k2`](../runtime/corbo/corbo_runtime_abi.h#L100): k2: Result storage for i64.
+- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L93): Dedicated queue region, independent of the constructor's scope.
 
-- [`k3`](../runtime/corbo/corbo_runtime_abi.h#L102): k3: Result storage for bool.
+- [`capacity,width,count,head`](../runtime/corbo/corbo_runtime_abi.h#L95): Capacity and descriptor width; live count and oldest ring position.
 
-- [`k4`](../runtime/corbo/corbo_runtime_abi.h#L104): k4: Result storage for u8.
+- [`epoch`](../runtime/corbo/corbo_runtime_abi.h#L97): Readiness change counter, protected with all queue fields by task_lock.
 
-- [`k5`](../runtime/corbo/corbo_runtime_abi.h#L106): k5: Result storage for u16.
+- [`closed`](../runtime/corbo/corbo_runtime_abi.h#L99): Once closed, sends fail and receivers only drain existing values.
 
-- [`k6`](../runtime/corbo/corbo_runtime_abi.h#L108): k6: Result storage for u32.
+- [`heads,tails`](../runtime/corbo/corbo_runtime_abi.h#L101): Intrusive receive/send queues; task records outlive their registrations.
 
-- [`k7`](../runtime/corbo/corbo_runtime_abi.h#L110): k7: Result storage for u64.
+- [`TaskResult`](../runtime/corbo/corbo_runtime_abi.h#L113): Inline scalar result union; the generated frame contract determines the active member.
 
-- [`k8`](../runtime/corbo/corbo_runtime_abi.h#L112): k8: Result storage for f32.
+- [`k1`](../runtime/corbo/corbo_runtime_abi.h#L115): k1: Result storage for i32.
 
-- [`k9`](../runtime/corbo/corbo_runtime_abi.h#L114): k9: Result storage for f64.
+- [`k2`](../runtime/corbo/corbo_runtime_abi.h#L117): k2: Result storage for i64.
 
-- [`ClassicStack`](../runtime/corbo/corbo_runtime_abi.h#L117): Saved thread-local fixed-stack mapping and region-scope context for task suspension/resumption.
+- [`k3`](../runtime/corbo/corbo_runtime_abi.h#L119): k3: Result storage for bool.
 
-- [`base`](../runtime/corbo/corbo_runtime_abi.h#L119): base: saved fixed-stack base.
+- [`k4`](../runtime/corbo/corbo_runtime_abi.h#L121): k4: Result storage for u8.
 
-- [`cursor,limit,committed,page_size,mapped_size`](../runtime/corbo/corbo_runtime_abi.h#L121): cursor: saved next free byte offset. limit: saved fixed-stack capacity. committed: saved committed-byte boundary. page_size: saved OS page size. mapped_size: saved mapping extent.
+- [`k5`](../runtime/corbo/corbo_runtime_abi.h#L123): k5: Result storage for u16.
 
-- [`band`](../runtime/corbo/corbo_runtime_abi.h#L123): band: saved region-scope link.
+- [`k6`](../runtime/corbo/corbo_runtime_abi.h#L125): k6: Result storage for u32.
 
-- [`metric_pools`](../runtime/corbo/corbo_runtime_abi.h#L125): metric_pools: suspended fixed-stack pool accounting chain.
+- [`k7`](../runtime/corbo/corbo_runtime_abi.h#L127): k7: Result storage for u64.
 
-- [`TaskState`](../runtime/corbo/corbo_runtime_abi.h#L128): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
+- [`k8`](../runtime/corbo/corbo_runtime_abi.h#L129): k8: Result storage for f32.
 
-- [`task`](../runtime/corbo/corbo_runtime_abi.h#L130): task: scheduler header at offset zero.
+- [`k9`](../runtime/corbo/corbo_runtime_abi.h#L131): k9: Result storage for f64.
 
-- [`value`](../runtime/corbo/corbo_runtime_abi.h#L132): value: inline scalar result storage.
+- [`ClassicStack`](../runtime/corbo/corbo_runtime_abi.h#L134): Saved thread-local fixed-stack mapping and region-scope context for task suspension/resumption.
 
-- [`payload`](../runtime/corbo/corbo_runtime_abi.h#L134): payload: aggregate result address.
+- [`base`](../runtime/corbo/corbo_runtime_abi.h#L136): base: saved fixed-stack base.
 
-- [`region`](../runtime/corbo/corbo_runtime_abi.h#L136): region: frame-storage region link.
+- [`cursor,limit,committed,page_size,mapped_size`](../runtime/corbo/corbo_runtime_abi.h#L138): cursor: saved next free byte offset. limit: saved fixed-stack capacity. committed: saved committed-byte boundary. page_size: saved OS page size. mapped_size: saved mapping extent.
 
-- [`own_region`](../runtime/corbo/corbo_runtime_abi.h#L138): own_region: separate region-descriptor ownership flag.
+- [`band`](../runtime/corbo/corbo_runtime_abi.h#L140): band: saved region-scope link.
 
-- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L140): dispose: typed capture/result cleanup callback.
+- [`metric_pools`](../runtime/corbo/corbo_runtime_abi.h#L142): metric_pools: suspended fixed-stack pool accounting chain.
 
-- [`classic`](../runtime/corbo/corbo_runtime_abi.h#L142): classic: suspended thread-local datastack context.
+- [`TaskState`](../runtime/corbo/corbo_runtime_abi.h#L145): Task header at offset zero plus result, frame-region ownership, cleanup callback and saved storage context.
 
-- [`TaskValue`](../runtime/corbo/corbo_runtime_abi.h#L145): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
+- [`task`](../runtime/corbo/corbo_runtime_abi.h#L147): task: scheduler header at offset zero.
 
-- [`state`](../runtime/corbo/corbo_runtime_abi.h#L147): state: execution frame address.
+- [`value`](../runtime/corbo/corbo_runtime_abi.h#L149): value: inline scalar result storage.
 
-- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L149): storage: owned backing-region link.
+- [`payload`](../runtime/corbo/corbo_runtime_abi.h#L151): payload: aggregate result address.
 
-- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L151): poll: frame-specific poll callback.
+- [`region`](../runtime/corbo/corbo_runtime_abi.h#L153): region: frame-storage region link.
 
-- [`native`](../runtime/corbo/corbo_runtime_abi.h#L153): native: native-worker ownership selector.
+- [`own_region`](../runtime/corbo/corbo_runtime_abi.h#L155): own_region: separate region-descriptor ownership flag.
 
-- [`TaskCompletion`](../runtime/corbo/corbo_runtime_abi.h#L156): Success flag and inline scalar result moved out by join_task.
+- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L157): dispose: typed capture/result cleanup callback.
 
-- [`ok`](../runtime/corbo/corbo_runtime_abi.h#L158): ok: successful-launch/completion flag.
+- [`classic`](../runtime/corbo/corbo_runtime_abi.h#L159): classic: suspended thread-local datastack context.
 
-- [`value`](../runtime/corbo/corbo_runtime_abi.h#L160): value: moved scalar result bits.
+- [`TaskValue`](../runtime/corbo/corbo_runtime_abi.h#L162): Future/handle descriptor linking an execution frame, backing region, typed poll callback and native-worker mode.
 
-- [`NativeBox`](../runtime/corbo/corbo_runtime_abi.h#L163): Worker metadata with its Region prefix at offset zero; abandonment can transfer final cleanup to the worker.
+- [`state`](../runtime/corbo/corbo_runtime_abi.h#L164): state: execution frame address.
 
-- [`region`](../runtime/corbo/corbo_runtime_abi.h#L165): region: embedded frame region at offset zero.
+- [`storage`](../runtime/corbo/corbo_runtime_abi.h#L166): storage: owned backing-region link.
 
-- [`state`](../runtime/corbo/corbo_runtime_abi.h#L167): state: native frame address.
+- [`poll`](../runtime/corbo/corbo_runtime_abi.h#L168): poll: frame-specific poll callback.
 
-- [`run`](../runtime/corbo/corbo_runtime_abi.h#L169): run: native frame run callback.
+- [`native`](../runtime/corbo/corbo_runtime_abi.h#L170): native: native-worker ownership selector.
 
-- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L171): abandoned: worker-owned cleanup flag.
+- [`TaskCompletion`](../runtime/corbo/corbo_runtime_abi.h#L173): Success flag and inline scalar result moved out by join_task.
 
-- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L173): dispose: capture/result cleanup callback.
+- [`ok`](../runtime/corbo/corbo_runtime_abi.h#L175): ok: successful-launch/completion flag.
+
+- [`value`](../runtime/corbo/corbo_runtime_abi.h#L177): value: moved scalar result bits.
+
+- [`NativeBox`](../runtime/corbo/corbo_runtime_abi.h#L180): Worker metadata with its Region prefix at offset zero; abandonment can transfer final cleanup to the worker.
+
+- [`region`](../runtime/corbo/corbo_runtime_abi.h#L182): region: embedded frame region at offset zero.
+
+- [`state`](../runtime/corbo/corbo_runtime_abi.h#L184): state: native frame address.
+
+- [`run`](../runtime/corbo/corbo_runtime_abi.h#L186): run: native frame run callback.
+
+- [`abandoned`](../runtime/corbo/corbo_runtime_abi.h#L188): abandoned: worker-owned cleanup flag.
+
+- [`dispose`](../runtime/corbo/corbo_runtime_abi.h#L190): dispose: capture/result cleanup callback.
 
 ### `runtime/corbo_runtime.h`
 

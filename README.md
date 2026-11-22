@@ -1451,6 +1451,54 @@ Output: `42`. [Complete package](examples/features/foreign/).
 [Foreign-code contracts](docs/FOREIGN_C.md) explain paired target selection,
 header paths, typed operands and unchecked responsibilities.
 
+#### Bounded channels
+
+The borrowed channel must survive both tasks. Capacity is explicit; async waiting suspends a task when the queue is full or empty.
+
+<!-- example: channels -->
+```rust
+use std::sync::asyn::channel::Channel;
+
+async fn produce(channel: &Channel<i64>) {
+    drop(channel.send(10).await);
+    drop(channel.send(20).await);
+    channel.close();
+}
+
+async fn consume(channel: &Channel<i64>) -> i64 {
+    let mut total: i64 = 0;
+
+    loop {
+        let received = channel.recv().await;
+
+        match received {
+            Some(value) => { total += value; },
+            None => { break; },
+        }
+    }
+
+    total
+}
+
+fn main() {
+    // Only one value can wait in this queue; the producer suspends when full.
+    let channel = Channel<i64>::new(1);
+    let reader = runtime::spawn(consume(&channel));
+    let writer = runtime::spawn(produce(&channel));
+
+    drop(writer.join());
+
+    match reader.join() {
+        Ok(total) => { print(total); },
+        Err(_error) => {},
+    }
+    // The channel is destroyed automatically after both borrowed users finish.
+}
+```
+
+Output: `30`. [API](docs/CHANNELS.md).
+
+
 ## Explore the STD
 
 Import the native collection types with `use std::{Vector, HashMap, String};`.
@@ -1539,6 +1587,7 @@ types use the same lock contracts as user-defined locks.
 | `std::{Pool, Vector, HashMap, String}` | Fixed-capacity pools, vectors, maps, growing UTF-8 strings and inline `String<N>` with a compile-time byte maximum | [Collections](docs/COLLECTIONS_API.md) · [Bounded strings](docs/UTF8_STRINGS.md#bounded-inline-utf-8-strings) |
 | `std::iter` | Iter, Map, Filter, Reduce and instance `collect` | [API](docs/STDLIB.md#stditer) |
 | `std::sync::Mutex`, `std::sync::asyn::Mutex` | Shared-reference acquisition, scope-owned guards and task-parking async waits | [API](docs/ASYNC_API.md#mutex-ownership) |
+| `std::sync::channel`, `std::sync::asyn::channel` | Bounded FIFO channels, owned messages and task-parking async waits | [API](docs/CHANNELS.md) |
 | `std::io`, `std::io::asyn` | File read/write, cursor-preserving read_at/write_at, seek, stats, rename/delete and buffered streams | [API](docs/STDLIB.md#stdio) · [File guide](docs/FILE.md) |
 | `std::net::{tcp, udp}`, `std::net::asyn::{tcp, udp}` | Typed IPv4 endpoints, sockets, partial TCP I/O and borrowed async halves | [Networking](docs/NETWORKING.md) |
 | `std::net::http` | Request/response head parsing, configurable static limits and optional streaming bodies through a reader contract | [HTTP](docs/HTTP.md) |

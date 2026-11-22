@@ -52,6 +52,7 @@ fn make_task(out:usize,size:usize,poll:usize) {
 }
 /// Cleans an untaken result or inactive captures, releases frame storage, and unmaps separately owned metadata.
 fn release_future(state:usize,completed:bool,taken:bool) {
+    channel_detach(copy(state));
     mutex_detach(copy(state));
     let region=g_TaskState_region(copy(state));
     let owned=g_TaskState_own_region(copy(state));

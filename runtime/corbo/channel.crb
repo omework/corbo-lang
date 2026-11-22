@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Bounded FIFO channel policy, native waits and persistent async registrations.
+
+/// Reserves fixed-capacity ring storage; a zero capacity is not a rendezvous channel.
+fn channel_create(capacity:usize,width:usize)->usize {
+    if capacity==0 || width==0 { os_abort(); }
+    let raw=channel_allocate();
+    if raw==0 { os_abort(); }
+    channel_lock();
+    channel_storage(raw,capacity,width);
+    channel_unlock();
+    raw
+}
+
+/// Selects one FIFO waiter, preserving its registration until its next poll.
+/// task_enqueue only schedules: it never polls inline while this lock is held.
+fn channel_wake_one(raw:usize,side:usize) {
+    let task=channel_get_heads(raw,side);
+    if task==0 { return; }
+    channel_set_heads(raw,side,g_mutex_next(task));
+    if channel_get_heads(raw,side)==0 { channel_set_tails(raw,side,0); }
+    s_mutex_next(task,0);
+    s_mutex_reserved(task,true);
+    let parent=g_Task_root(task);
+    let root=if parent!=0 { parent } else { task };
+    s_Task_waiting(root,false);
+    if g_Task_parked(root) {
+        s_Task_parked(root,false);
+        if !g_Task_blocking(root) { task_enqueue(root); }
+    }
+}
+
+/// Unlinks a queued/notified wait record before its task storage can be reclaimed.
+/// caller holds task_lock; forwarding a notification avoids leaving ready work asleep.
+fn channel_unlink(task:usize) {
+    let raw=g_mutex_owner(task);
+    if raw==0 || !channel_waiting(task) { return; }
+    let side:usize=if g_Task_io_write(task) { 1 } else { 0 };
+    if g_mutex_reserved(task) { channel_wake_one(raw,side); }
+    else {
+        let mut previous:usize=0;
+        let mut next=channel_get_heads(raw,side);
+        while next!=0 && next!=task { previous=next;next=g_mutex_next(next); }
+        if next!=0 {
+            let after=g_mutex_next(next);
+            if previous==0 { channel_set_heads(raw,side,after); } else { s_mutex_next(previous,after); }
+            if channel_get_tails(raw,side)==task { channel_set_tails(raw,side,previous); }
+        }
+    }
+    s_mutex_owner(task,0);s_mutex_next(task,0);s_mutex_reserved(task,false);channel_mark(task,false);
+}
+
+/// Returns 0 after moving bytes, 1 for full, 2 for closed; records the observed epoch.
+fn channel_send(raw:usize,input:usize,epoch:usize,blocking:bool)->i64 {
+    channel_lock();
+    while blocking && !channel_get_closed(raw) && channel_get_count(raw)==channel_get_capacity(raw) { channel_condition_wait(); }
+    channel_epoch_write(epoch,channel_get_epoch(raw));
+    if channel_get_closed(raw) { channel_unlock();return 2; }
+    let count=channel_get_count(raw);
+    if count==channel_get_capacity(raw) { channel_unlock();return 1; }
+    let index=(channel_get_head(raw)+count)%channel_get_capacity(raw);
+    memory_copy(channel_slot(raw,index),input,channel_get_width(raw));
+    memory_zero(input,channel_get_width(raw));
+    channel_set_count(raw,count+1);
+    channel_set_epoch(raw,channel_get_epoch(raw)+1);
+    channel_wake_one(raw,0);channel_broadcast();channel_unlock();
+    0
+}
+
+/// Returns 0 with a moved value, 1 for empty/open, 2 for closed/drained.
+fn channel_receive(raw:usize,output:usize,epoch:usize,blocking:bool)->i64 {
+    channel_lock();
+    while blocking && !channel_get_closed(raw) && channel_get_count(raw)==0 { channel_condition_wait(); }
+    channel_epoch_write(epoch,channel_get_epoch(raw));
+    let count=channel_get_count(raw);
+    if count==0 {
+        let result:i64=if channel_get_closed(raw) { 2 } else { 1 };
+        channel_unlock();return result;
+    }
+    let head=channel_get_head(raw);
+    memory_copy(output,channel_slot(raw,head),channel_get_width(raw));
+    memory_zero(channel_slot(raw,head),channel_get_width(raw));
+    channel_set_head(raw,(head+1)%channel_get_capacity(raw));channel_set_count(raw,count-1);
+    channel_set_epoch(raw,channel_get_epoch(raw)+1);
+    channel_wake_one(raw,1);channel_broadcast();channel_unlock();
+    0
+}
+
+/// Closes once and wakes both sides; queued values remain available to receivers.
+fn channel_close(raw:usize) {
+    channel_lock();
+    if !channel_get_closed(raw) {
+        channel_set_closed(raw,true);channel_set_epoch(raw,channel_get_epoch(raw)+1);
+        while channel_get_heads(raw,0)!=0 { channel_wake_one(raw,0); }
+        while channel_get_heads(raw,1)!=0 { channel_wake_one(raw,1); }
+        channel_broadcast();
+    }
+    channel_unlock();
+}
+
+/// Polls an epoch-based registration atomically with the readiness predicate.
+fn channel_poll(task:usize,raw:usize,epoch:u64,sending:bool)->bool {
+    channel_lock();
+    if channel_get_epoch(raw)!=epoch || channel_get_closed(raw) {
+        channel_unlink(task);channel_unlock();return true;
+    }
+    if g_mutex_owner(task)==0 {
+        let side:usize=if sending { 1 } else { 0 };
+        s_mutex_owner(task,raw);s_mutex_next(task,0);s_mutex_reserved(task,false);channel_mark(task,true);
+        s_Task_io_write(task,sending);
+        let tail=channel_get_tails(raw,side);
+        if tail==0 { channel_set_heads(raw,side,task); } else { s_mutex_next(tail,task); }
+        channel_set_tails(raw,side,task);
+    }
+    let parent=g_Task_root(task);
+    let root=if parent!=0 { parent } else { task };
+    s_Task_waiting(root,true);channel_unlock();false
+}
+
+/// Called before releasing every Future frame; no waiter may retain its address.
+fn channel_detach(task:usize) {
+    if !channel_waiting(task) { return; }
+    channel_lock();
+    channel_unlink(task);
+    channel_unlock();
+}
+
+/// Frees a closed, drained channel after all borrowed users and registrations have ended.
+fn channel_destroy(raw:usize) { channel_lock();channel_free(raw);channel_unlock(); }

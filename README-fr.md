@@ -1497,6 +1497,54 @@ Les [contrats du code externe](docs/FOREIGN_C.md) expliquent la sélection de ci
 
 <a id="explore-the-std"></a>
 
+#### Canaux bornés
+
+Le canal emprunté doit survivre aux deux tâches. La capacité est explicite ; l’attente async suspend la tâche quand la file est pleine ou vide.
+
+<!-- example: channels -->
+```rust
+use std::sync::asyn::channel::Channel;
+
+async fn produce(channel: &Channel<i64>) {
+    drop(channel.send(10).await);
+    drop(channel.send(20).await);
+    channel.close();
+}
+
+async fn consume(channel: &Channel<i64>) -> i64 {
+    let mut total: i64 = 0;
+
+    loop {
+        let received = channel.recv().await;
+
+        match received {
+            Some(value) => { total += value; },
+            None => { break; },
+        }
+    }
+
+    total
+}
+
+fn main() {
+    // Une seule valeur peut attendre ; le producteur se suspend si la file est pleine.
+    let channel = Channel<i64>::new(1);
+    let reader = runtime::spawn(consume(&channel));
+    let writer = runtime::spawn(produce(&channel));
+
+    drop(writer.join());
+
+    match reader.join() {
+        Ok(total) => { print(total); },
+        Err(_error) => {},
+    }
+    // Le canal est détruit automatiquement après la fin des deux utilisateurs.
+}
+```
+
+Sortie: `30`. [API](docs/CHANNELS-fr.md).
+
+
 ## Explorer la STD
 
 Importez les types natifs de collections avec `use std::{Vector, HashMap, String};`. Leurs noms publics sont déclarés dans [collections.crb](stdlib/src/collections.crb). Les algorithmes des collections natives se trouvent dans le runtime ; `String<N>` bornée est implémentée dans la STD. Le [guide de l’API des collections](docs/COLLECTIONS_API.md) décrit la construction, la possession des éléments, les emprunts et le nettoyage.
@@ -1577,6 +1625,7 @@ Les contrats de verrouillage ordinaires s'appliquent à ces types.
 | `std::{Pool, Vector, HashMap, String}` | Pools de capacité fixe, vecteurs, maps, chaînes UTF-8 grandissantes et `String<N>` inline avec un maximum en octets connu à la compilation | [Collections](docs/COLLECTIONS_API.md) · [Chaînes bornées](docs/UTF8_STRINGS-fr.md) |
 | `std::iter` | Iter, Map, Filter, Reduce et méthode d’instance `collect` | [API](docs/STDLIB.md#stditer) |
 | `std::sync::Mutex`, `std::sync::asyn::Mutex` | Acquisition par référence partagée, gardes détruites en fin de bloc et attente asynchrone suspendue | [API](docs/ASYNC_API.md#mutex-ownership) |
+| `std::sync::channel`, `std::sync::asyn::channel` | Canaux FIFO bornés, transfert des valeurs et attentes suspendues | [API](docs/CHANNELS-fr.md) |
 | `std::io`, `std::io::asyn` | Lecture/écriture de fichiers, read_at/write_at sans déplacement du curseur, seek, métadonnées, renommage/suppression et flux tamponnés | [API](docs/STDLIB.md#stdio) · [Guide des fichiers](docs/FILE.md) |
 | `std::net::{tcp, udp}`, `std::net::asyn::{tcp, udp}` | Points de terminaison IPv4 typés, sockets, entrées-sorties TCP partielles et demi-connexions asynchrones empruntées | [Réseau](docs/NETWORKING.md) |
 | `std::net::http` | Analyse des en-têtes de requêtes/réponses, limites statiques configurables et corps optionnels en flux via un contrat de lecture | [HTTP](docs/HTTP.md) |

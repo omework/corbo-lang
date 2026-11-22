@@ -1,3 +1,18 @@
+## Channel payload provenance
+
+- Bounded sync/async channels are implemented. Extending their checked payload
+  admission to borrowed values, pool-backed allocations and task-dependent
+  descriptors requires preserving their external dependency summaries in transit.
+  Current admission refuses these payloads; see [channels](CHANNELS.md).
+
+## Compact enum layout — planned
+
+- [x] Record tag plus shared payload storage, sized and aligned for the largest variant.
+- [ ] Implement shared storage and propagate its layout through placement and C declarations.
+- [ ] Validate affected operations and target layouts when implemented.
+
+[Accepted design](ENUM_LAYOUT.md). Documentation only; no compiler changes yet.
+
 # TODO
 
 ## Recorded compiler-composition limitations — resolved witnesses

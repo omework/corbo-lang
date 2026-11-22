@@ -44,6 +44,8 @@ struct Task {
     uintptr_t mutex_owner;
     /** mutex_reserved: release handed this waiter the next acquisition. */
     bool mutex_reserved;
+    /** Distinguishes channel registration from the reused mutex wait fields. */
+    bool channel_wait;
 };
 static pthread_t task_workers[2];
 static size_t task_worker_count;

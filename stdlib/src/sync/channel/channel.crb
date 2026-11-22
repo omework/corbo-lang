@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Bounded FIFO channels. Queue values are owned until received or destroyed.
+
+#(type: T)
+/// A failed send returns ownership of the original value.
+pub enum SendError<T> {
+    /// The channel was closed before the value could enter its queue.
+    Closed {
+        /// Value whose ownership was not transferred into the queue.
+        value: T,
+    },
+}
+
+#(type: T)
+/// Owns a fixed-capacity queue; borrowed users must end before destruction.
+pub struct Channel<T> {
+    /// Stable native metadata and managed ring-storage identity.
+    raw: usize,
+}
+
+impl Channel<T> {
+    /// Reserves a nonzero maximum number of queued values; the queue never grows beyond it.
+    fn new(capacity: usize) -> Channel<T> {
+        let prototype: Option<T> = None;
+        let mut raw: usize = 0;
+        @unchecked { @c { ${raw}=channel_create(${capacity},sizeof(${prototype})); } }
+        Channel { raw: raw }
+    }
+
+    /// Moves a value into the queue; a closed channel returns the unsent value.
+    #(lock: on=self)
+    fn send(&self, value: T) -> Result<(), SendError<T>> {
+        let mut incoming: Option<T> = Some(value);
+        let raw = (*self).raw;
+        let mut status: i64 = 1;
+        let mut epoch: u64 = 0;
+        @unchecked { @c { ${status}=channel_send(${raw},&${incoming},&${epoch},true); } }
+        if status == 0 { return Ok(()); }
+        match incoming {
+            Some(value) => { Err(SendError.Closed { value: value }) },
+            None => { Ok(()) },
+        }
+    }
+
+    /// Receives in FIFO order; closed queues drain before returning None.
+    #(lock: on=self)
+    fn recv(&self) -> Option<T> {
+        let raw = (*self).raw;
+        let mut output: Option<T> = None;
+        let mut status: i64 = 1;
+        let mut epoch: u64 = 0;
+        @unchecked { @c { ${status}=channel_receive(${raw},&${output},&${epoch},true); } }
+        output
+    }
+
+    /// Prevents future sends and wakes waiting producers and consumers.
+    #(lock: on=self)
+    fn close(&self) {
+        let raw = (*self).raw;
+        @unchecked { @c { channel_close(${raw}); } }
+    }
+
+    /// Closes, destroys each queued value once, then releases bounded storage.
+    fn drop(&mut self) {
+        let raw = (*self).raw;
+        @unchecked { @c { channel_close(${raw}); } }
+        loop {
+            let mut output: Option<T> = None;
+            let mut status: i64 = 0;
+            let mut epoch: u64 = 0;
+            @unchecked { @c { ${status}=channel_receive(${raw},&${output},&${epoch},false); } }
+            match output {
+                Some(value) => { drop(value); },
+                None => { break; },
+            }
+        }
+        @unchecked { @c { channel_destroy(${raw}); } }
+    }
+}

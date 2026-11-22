@@ -53,6 +53,8 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 - [`std::num`](#stdnum)
 - [`std::sync`](#stdsync)
 - [`std::sync::asyn`](#stdsyncasyn)
+- [`std::sync::asyn::channel`](#stdsyncasynchannel)
+- [`std::sync::channel`](#stdsyncchannel)
 - [`std::text`](#stdtext)
 - [`std::time`](#stdtime)
 - [`std::time::asyn`](#stdtimeasyn)
@@ -6056,6 +6058,174 @@ fn drop(&mut self)
 ```
 
 Releases ownership before the guard's reference fields are discarded.
+
+
+## `std::sync::asyn::channel`
+
+Bounded FIFO channels. Queue values are owned until received or destroyed.
+
+### `SendError`
+
+[channel.crb:6](../stdlib/src/sync/asyn/channel/channel.crb#L6)
+
+```rust
+pub enum SendError<T>
+```
+
+A failed send returns ownership of the original value.
+
+Members:
+
+- [`Closed`](../stdlib/src/sync/asyn/channel/channel.crb#L8) (variant): The channel was closed before the value could enter its queue.
+- [`Closed.value`](../stdlib/src/sync/asyn/channel/channel.crb#L10) (implementation field): Value whose ownership was not transferred into the queue.
+
+### `Channel`
+
+[channel.crb:16](../stdlib/src/sync/asyn/channel/channel.crb#L16)
+
+```rust
+pub struct Channel<T>
+```
+
+Owns a fixed-capacity queue; borrowed users must end before destruction.
+
+Members:
+
+- [`raw`](../stdlib/src/sync/asyn/channel/channel.crb#L18) (implementation field): Stable native metadata and managed ring-storage identity.
+
+### `Channel::new`
+
+[channel.crb:23](../stdlib/src/sync/asyn/channel/channel.crb#L23)
+
+```rust
+fn new(capacity: usize) -> Channel<T>
+```
+
+Reserves a nonzero maximum number of queued values; the queue never grows beyond it.
+
+### `Channel::send`
+
+[channel.crb:32](../stdlib/src/sync/asyn/channel/channel.crb#L32)
+
+```rust
+async fn send(&self, value: T) -> Result<(), SendError<T>>
+```
+
+Moves a value into the queue; a closed channel returns the unsent value.
+
+### `Channel::recv`
+
+[channel.crb:50](../stdlib/src/sync/asyn/channel/channel.crb#L50)
+
+```rust
+async fn recv(&self) -> Option<T>
+```
+
+Receives in FIFO order; closed queues drain before returning None.
+
+### `Channel::close`
+
+[channel.crb:64](../stdlib/src/sync/asyn/channel/channel.crb#L64)
+
+```rust
+fn close(&self)
+```
+
+Prevents future sends and wakes waiting producers and consumers.
+
+### `Channel::drop`
+
+[channel.crb:70](../stdlib/src/sync/asyn/channel/channel.crb#L70)
+
+```rust
+fn drop(&mut self)
+```
+
+Closes, destroys each queued value once, then releases bounded storage.
+
+
+## `std::sync::channel`
+
+Bounded FIFO channels. Queue values are owned until received or destroyed.
+
+### `SendError`
+
+[channel.crb:6](../stdlib/src/sync/channel/channel.crb#L6)
+
+```rust
+pub enum SendError<T>
+```
+
+A failed send returns ownership of the original value.
+
+Members:
+
+- [`Closed`](../stdlib/src/sync/channel/channel.crb#L8) (variant): The channel was closed before the value could enter its queue.
+- [`Closed.value`](../stdlib/src/sync/channel/channel.crb#L10) (implementation field): Value whose ownership was not transferred into the queue.
+
+### `Channel`
+
+[channel.crb:16](../stdlib/src/sync/channel/channel.crb#L16)
+
+```rust
+pub struct Channel<T>
+```
+
+Owns a fixed-capacity queue; borrowed users must end before destruction.
+
+Members:
+
+- [`raw`](../stdlib/src/sync/channel/channel.crb#L18) (implementation field): Stable native metadata and managed ring-storage identity.
+
+### `Channel::new`
+
+[channel.crb:23](../stdlib/src/sync/channel/channel.crb#L23)
+
+```rust
+fn new(capacity: usize) -> Channel<T>
+```
+
+Reserves a nonzero maximum number of queued values; the queue never grows beyond it.
+
+### `Channel::send`
+
+[channel.crb:32](../stdlib/src/sync/channel/channel.crb#L32)
+
+```rust
+fn send(&self, value: T) -> Result<(), SendError<T>>
+```
+
+Moves a value into the queue; a closed channel returns the unsent value.
+
+### `Channel::recv`
+
+[channel.crb:47](../stdlib/src/sync/channel/channel.crb#L47)
+
+```rust
+fn recv(&self) -> Option<T>
+```
+
+Receives in FIFO order; closed queues drain before returning None.
+
+### `Channel::close`
+
+[channel.crb:58](../stdlib/src/sync/channel/channel.crb#L58)
+
+```rust
+fn close(&self)
+```
+
+Prevents future sends and wakes waiting producers and consumers.
+
+### `Channel::drop`
+
+[channel.crb:64](../stdlib/src/sync/channel/channel.crb#L64)
+
+```rust
+fn drop(&mut self)
+```
+
+Closes, destroys each queued value once, then releases bounded storage.
 
 
 ## `std::text`
