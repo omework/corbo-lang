@@ -147,13 +147,13 @@ affectation         = place, operateur_affectation, expression, ";" ;
 operateur_affectation = "=" | "+=" | "-=" | "*=" | "/=" | "%="
                        | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
 place               = [ "*", [ "*" ] ], ( identifiant | "self" ),
-                      { ".", identifiant | "[", expression, "]" } ;
+                      { ".", ( identifiant | indice_tuple ) | "[", expression, "]" } ;
 retour              = "return", [ expression ], ";" ;
 rupture             = "break", [ expression ], ";" ;
 reprise             = "continue", ";" ;
 suspension          = "yield", ";" ;
 boucle_while        = "while", expression, bloc ;
-boucle_for          = "for", [ "mut" ], identifiant, "in", expression, bloc ;
+boucle_for          = "for", ( liaison_nommee | motif_tuple ), "in", expression, bloc ;
 (* The source is evaluated once. Borrowed arrays/slices yield references;
    next()-based sources yield their Option payload by the existing value rules.
    break/continue target this loop; the binding is local to each iteration. *)
@@ -179,6 +179,7 @@ postfixee           = primaire, { suffixe } ;
    try_slice avec un séparateur .. sélectionne la production plage. *)
 suffixe             = emprunt_suffixe
                     | ".", identifiant, [ "(", [ arguments ], ")" ]
+                    | ".", indice_tuple
                     | ".", ( "new" | "try" ), "(", [ initialisation_pool ], ")"
                     | ".", "try_slice", "(", plage, ")"
                     | ".", "await" | "[", indice, "]" | "?" ;
@@ -369,3 +370,11 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    Neither operation implicitly dereferences an existing reference, copies its
    target, nor grants mutation permission. Both take zero arguments. *)
 emprunt_suffixe     = ".", ( "ref" | "mut_ref" ), "(", ")" ;
+
+(* Tuple projection is a dot followed by a decimal integer, not a leading-dot
+   float after an operand. Chained .0.1 projections stay separate indices. *)
+indice_tuple        = chiffre, { chiffre } ;
+chiffre             = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+(* A for tuple pattern has exact arity. By-value items use ordinary tuple moves
+   and primitive copies. A borrowed item binds references to its fields, with
+   the source's permission and target lifetime; it never moves borrowed fields. *)

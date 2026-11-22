@@ -1571,3 +1571,19 @@ See [thread transfer](THREAD_TRANSFER.md).
 
 [Reference methods and for loops](ITERATION_SYNTAX.md) define the new spellings
 using the existing move, lifetime, mutation and cleanup rules.
+
+### Tuple patterns in for loops
+
+`for (first, second) in source { ... }` uses the existing tuple destructuring
+rules and requires the exact item arity. `mut` may qualify an individual binding.
+Owned iterator items follow the existing move and primitive-copy rules. For
+borrowed array/slice items, each binding is a reference to its original field;
+its permission comes from the source borrow. Reading a primitive field uses
+`*field`; mutation requires a mutable source and uses `*field = value`.
+No field is moved out of borrowed storage. Target validity and branch/lock
+obligations remain governed by N4–N8. The source is evaluated once and each
+iteration keeps its ordinary cleanup scope.
+
+A numeric tuple projection such as `item.0` is distinct from a leading-dot float
+such as `.5` in operand position. Invalid field indices are diagnosed as tuple
+projection errors rather than as a missing following block.
