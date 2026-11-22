@@ -1,3 +1,13 @@
+## Vérification de fichiers et surveillance des dépendances
+
+- [x] Cibles `.crb` autonomes ou avec contexte de paquet, sans génération de code.
+- [x] Résolution des imports STD et vérification des fichiers de bibliothèque sans `main`.
+- [x] Surveillance des dépendances locales transitives et de la STD installée.
+- [x] Actualisation après modification de manifeste ; reprise après erreur ou suppression.
+- [x] Sept observations ciblées et treize régressions de paquet exécutées sur macOS ARM64.
+
+[Validation](cycles/FILE_CHECK_WATCH_CYCLE.md). Pas de changement de règle du langage.
+
 ## Canaux sync/async bornés
 
 - [x] FIFO borné, échec d’envoi conservant la valeur et fermeture avec drainage.

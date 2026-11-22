@@ -196,13 +196,20 @@ Pour vérifier le paquet sans générer de C ni de binaire :
 ```sh
 corboc check
 corboc check chemin/du/paquet --watch
+corboc check src/main.crb --watch
 ```
 
 `--watch` vérifie immédiatement, puis relance après les sauvegardes des fichiers
 `.crb` et des manifestes du projet. Il reste actif après une erreur et ignore les
-répertoires de génération. Les dépendances externes au projet ne sont pas
-surveillées. Arrêt avec Ctrl-C. Les diagnostics actuels du vérificateur sont
-conservés ; l’analyse porte sur le paquet entier à chaque passage.
+répertoires de génération. Les modules importés, les dépendances locales `path`
+transitives et les sources de la STD installée sont aussi surveillés. Une
+modification de manifeste actualise le graphe ; les révisions Git épinglées
+changent via le manifeste, sans interrogation réseau à chaque intervalle.
+Un fichier sous `src/` utilise le contexte du paquet englobant et vérifie ce
+paquet entier. Un fichier autonome utilise la STD installée, sans obligation de
+`main` ; ses voisins sans rapport sont ignorés. Aucun C ni binaire n’est généré.
+Arrêt avec Ctrl-C. Les diagnostics du vérificateur sont conservés ; l’analyse
+n’est pas incrémentale.
 
 
 La convention de nommage ajoute `.exe` sous Windows. Le pilote natif de `build` prend actuellement en charge macOS ARM64 ; les autres pilotes natifs restent à implémenter. Le compilateur installé retrouve sa STD correspondante dans `share/corbo/stdlib/src`. Les [ressources pour éditeurs](ide/README.md) fournissent la coloration des fichiers `.crb` dans Vim, Neovim et VS Code.
