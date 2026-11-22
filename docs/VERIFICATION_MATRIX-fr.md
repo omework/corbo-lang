@@ -1,3 +1,12 @@
+## Copies implicites des primitifs — V3
+
+- [x] Copie par valeur des primitifs ; les sources restent disponibles.
+- [x] Conservation des moves non primitifs, des emprunts, de drop et des provenances.
+- [x] Exécution ciblée des dix types, jonctions et huit refus ; cinq exemples README validés.
+- [x] Mise à jour des règles et références EN/FR. L’exemple Iter reste inchangé (refus de parsing préexistant).
+
+[Validation](cycles/IMPLICIT_PRIMITIVE_COPY_CYCLE.md). Exécution macOS ARM64 ; pas de nouvelle campagne globale.
+
 ## API synchrones et mutex (convention actuelle)
 
 Les chemins synchrones par défaut et leurs variantes `asyn` sont intégrés.

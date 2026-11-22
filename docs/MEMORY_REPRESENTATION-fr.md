@@ -306,9 +306,18 @@ nombre facultatif d’emplacements réservés.
 
 ## Exemple de transfert de responsabilité
 
+Les copies primitives de V3 créent une liaison disponible distincte et laissent
+la source disponible. Elles ne créent ni lien de possession ni dépendance de
+nettoyage vers la source. Une valeur `usize` issue de `addr()` conserve toutefois
+sa dépendance vers la cible et son confinement dans `@unchecked`. Les déplacements
+de valeurs non primitives continuent de marquer la source déplacée au moment
+correspondant.
+
+
+
 Dans une `HashMap<i64, A<i32>>`, on insère `a` avec
-`table.insert(copy(cle), a)` puis on le retire avec
-`table.remove(&cle)`. La copie explicite conserve la liaison `cle`.
+`table.insert(cle, a)` puis on le retire avec
+`table.remove(&cle)`. La clé primitive est copiée implicitement : `cle` reste disponible, tandis que `a` est déplacée.
 
 | Moment | Scope de l'allocation | Owner | Lien de possession |
 | --- | --- | --- | --- |

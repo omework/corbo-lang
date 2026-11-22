@@ -95,7 +95,7 @@ fn main() {
         let mut numbers = vectors.new();
         let mut number: i64 = 0;
         while number < count {
-            numbers.push(copy(number));
+            numbers.push(number);
             number += 1;
         }
         print(numbers.len());
@@ -225,7 +225,7 @@ The examples are synchronized with their source and validated with `corboc`;
 [validation status](#documentation-and-validation-status) records the scope.
 
 - [Basics](#basics): [A synchronous entry point](#hello), [Primitives and checked operators](#numbers), [Expressions and control flow](#control), [Functions, tuples and destructuring](#tuples), [Structs, constants and receiver modes](#methods), [Enums and pattern matching](#enums), [Result, Option and early propagation](#errors).
-- [Memory and lifetimes](#memory-and-lifetimes): [Moves and explicit copies](#moves), [Shared borrows and mutable reborrows](#borrows), [Fixed arrays, structural repetition and slices](#arrays), [Fixed-capacity pools and allocation handles](#pools), [Receivers and placement across scopes](#placement), [Destruction before storage release](#destruction), [Datastack budgets, local regions and page reclamation](#regions).
+- [Memory and lifetimes](#memory-and-lifetimes): [Moves and primitive copies](#moves), [Shared borrows and mutable reborrows](#borrows), [Fixed arrays, structural repetition and slices](#arrays), [Fixed-capacity pools and allocation handles](#pools), [Receivers and placement across scopes](#placement), [Destruction before storage release](#destruction), [Datastack budgets, local regions and page reclamation](#regions).
 - [Collections and pipelines](#collections-and-pipelines): [Vectors and extraction](#vector), [HashMap lookup, replacement and removal](#map), [UTF-8 text and caller-owned bytes](#text), [Bounded inline strings](#bounded-text), [Closures and explicit callable passing](#closures), [STD iterator pipelines](#iter).
 - [Generic code and packages](#generic-code-and-packages): [Contracts on generic structs](#generic), [Static structural type contracts](#contracts), [Packages, modules, visibility and aliases](#modules), [Conditional compilation](#target).
 - [Async and threads](#async-and-threads): [Futures, suspension and execution branches](#async), [Native threads and captured loans](#threads), [Blocking work from an async context](#blocking).
@@ -311,7 +311,7 @@ Functions can return tuples of two or more values. Types are inferred by positio
 <!-- example: tuples -->
 ```rust
 fn measurements(value: i64) -> (i64, i64, bool) {
-    (copy(value) + 1, copy(value) * 2, value > 0)
+    (value + 1, value * 2, value > 0)
 }
 
 fn main() {
@@ -415,9 +415,11 @@ Output: `42`. [Complete package](examples/features/errors/).
 
 <a id="moves"></a>
 
-#### Moves and explicit copies
+<a id="moves-and-explicit-copies"></a>
 
-Assignment transfers a value. Call `copy` explicitly when retaining a primitive source. A move transfers cleanup responsibility; it does not request that an allocation be relocated.
+#### Moves and primitive copies
+
+Primitive values copy implicitly in assignments, arguments and returns: the source remains available. `copy(x)` remains valid but optional for these values. Non-primitive values retain their move rules, including structs containing only primitive fields. A move transfers cleanup responsibility; it does not request that an allocation be relocated.
 
 <!-- example: moves -->
 ```rust
@@ -431,7 +433,7 @@ fn consume(message: Message) {
 
 fn main() {
     let original: i64 = 21;
-    let duplicate = copy(original);
+    let duplicate = original;
     print(original + duplicate);
     let message = Message { value: 7 };
     let received = message;
@@ -635,7 +637,7 @@ fn main() {
         let mut values = vectors.new();
         let mut number: i64 = 0;
         while number < 3 {
-            values.push(copy(number));
+            values.push(number);
             number += 1;
         }
         print(values.len());
@@ -687,7 +689,7 @@ use std::HashMap;
 fn main() {
     let mut values = HashMap<i64, i64>::new();
     let key: i64 = 7;
-    let _previous = values.insert(copy(key), 42);
+    let _previous = values.insert(key, 42);
     match values.get(&key) {
         Some(value) => { print(*value); },
         None => { print(0); },

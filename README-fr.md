@@ -103,7 +103,7 @@ fn main() {
         let mut numbers = vectors.new();
         let mut number: i64 = 0;
         while number < count {
-            numbers.push(copy(number));
+            numbers.push(number);
             number += 1;
         }
         print(numbers.len());
@@ -310,7 +310,7 @@ Les fonctions peuvent retourner des tuples de deux valeurs ou plus. Les types so
 <!-- example: tuples -->
 ```rust
 fn measurements(value: i64) -> (i64, i64, bool) {
-    (copy(value) + 1, copy(value) * 2, value > 0)
+    (value + 1, value * 2, value > 0)
 }
 
 fn main() {
@@ -424,9 +424,9 @@ Sortie : `42`. [Paquet complet](examples/features/errors/).
 
 <a id="moves-and-explicit-copies"></a>
 
-#### Moves et copies explicites
+#### Moves et copies de primitifs
 
-Une affectation transfère une valeur. Appelez `copy` explicitement pour conserver la source d’une valeur primitive. Un move transfère la responsabilité du nettoyage ; il ne demande pas le déplacement de l’allocation en mémoire.
+Les valeurs primitives sont copiées implicitement lors des affectations, des appels et des retours : la source reste utilisable. `copy(x)` reste disponible, mais facultatif pour ces valeurs. Les valeurs non primitives conservent leurs règles de move, y compris les structures ne contenant que des primitifs. Un move transfère la responsabilité du nettoyage ; il ne demande pas le déplacement de l’allocation en mémoire.
 
 <!-- example: moves -->
 ```rust
@@ -440,7 +440,7 @@ fn consume(message: Message) {
 
 fn main() {
     let original: i64 = 21;
-    let duplicate = copy(original);
+    let duplicate = original;
     print(original + duplicate);
     let message = Message { value: 7 };
     let received = message;
@@ -640,7 +640,7 @@ fn main() {
         let mut values = vectors.new();
         let mut number: i64 = 0;
         while number < 3 {
-            values.push(copy(number));
+            values.push(number);
             number += 1;
         }
         print(values.len());
@@ -698,7 +698,7 @@ use std::HashMap;
 fn main() {
     let mut values = HashMap<i64, i64>::new();
     let key: i64 = 7;
-    let _previous = values.insert(copy(key), 42);
+    let _previous = values.insert(key, 42);
     match values.get(&key) {
         Some(value) => { print(*value); },
         None => { print(0); },

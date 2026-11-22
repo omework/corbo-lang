@@ -291,6 +291,8 @@ arguments par valeur. La liaison d'origine est alors indisponible.
 Les règles d'emprunt, de provenance et de nettoyage d'un argument
 ordinaire s'appliquent.
 
+Un receveur primitif pris en charge suit la copie implicite de V3 ; le passage par valeur ne généralise pas la copie aux objets.
+
 ## 5. Exemples de conception
 
 ### Construction, défauts déduits et copies indépendantes

@@ -1,3 +1,12 @@
+## Copies implicites des primitifs — V3
+
+- [x] Copie par valeur des primitifs ; les sources restent disponibles.
+- [x] Conservation des moves non primitifs, des emprunts, de drop et des provenances.
+- [x] Exécution ciblée des dix types, jonctions et huit refus ; cinq exemples README validés.
+- [x] Mise à jour des règles et références EN/FR. L’exemple Iter reste inchangé (refus de parsing préexistant).
+
+[Validation](cycles/IMPLICIT_PRIMITIVE_COPY_CYCLE.md). Exécution macOS ARM64 ; pas de nouvelle campagne globale.
+
 ## API synchrones et mutex (convention actuelle)
 
 Les chemins synchrones par défaut et leurs variantes `asyn` sont intégrés.
@@ -536,9 +545,7 @@ Avancement côté compilateur pour les quatre règles. Validation non exécutée
   écriture gardée si le contrat restitue ce seul handle sans
   l’attendre et que les autres arguments sont des scalaires.
 
-- [x] Backend Rust, V3. La déclaration et le passage par valeur déplacent
-  un primitif. `copy(x)` conserve la liaison primitive et refuse un tableau.
-  Ces quatre formes ont été rejouées avec `check`.
+- [x] Historique du frontend Rust figé, ancien V3 : le passage par valeur déplaçait les primitifs et exigeait `copy(x)`. Le V3 actuel de corboc remplace cette politique ; cette ligne conserve seulement la validation historique.
 
 Le contrôle de destination vérifie aussi les pools du résultat différé
 et les instances associées aux verrous que ce résultat peut porter.

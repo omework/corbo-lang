@@ -293,9 +293,17 @@ limit, its unit and the optional number of reserved locations.
 
 ## Example of transfer of responsibility
 
+V3 primitive copies create a distinct available binding and leave the source
+available. They introduce no ownership or cleanup dependency on the source.
+An addr-derived `usize` nevertheless retains its target dependency and
+`@unchecked` confinement. Non-primitive moves still mark the original binding
+moved at the corresponding program point.
+
+
+
 In a `HashMap<i64, A<i32>>`, we insert `a` with
-`table.insert(copy(cle), a)` Then we take it off with
-`table.remove(&cle)`. The explicit copy keeps the link `cle`.
+`table.insert(cle, a)` Then we take it off with
+`table.remove(&cle)`. The primitive key is copied implicitly: `cle` remains available, while `a` moves.
 
 | Moment | Scope of the allowance | Owner | Link of possession |
 | --- | --- | --- | --- |

@@ -72,7 +72,7 @@ et les documents auxquels elles renvoient fixent le détail des règles.
 | --- | --- | --- |
 | N1 | Une valeur accessible est initialisée et utilisée avec son type. `T`, `A<T>`, `&T` et `&mut T` expriment des formes distinctes. | §2, ST1–ST5, H1 |
 | N2 | Une valeur à détruire n'a qu'un responsable du nettoyage à la fois. Un déplacement transmet cette responsabilité et un emprunt la laisse en place. | §3, §6, H1 |
-| N3 | La syntaxe distingue copie, emprunt et déplacement. Un transfert sortant a besoin d'un receveur pour prendre effet. Les obligations d'usage et les règles propres aux méthodes s'appliquent. | §0, §3, §4, ST17–ST18, ME1–ME4 |
+| N3 | La syntaxe et le type distinguent copie, emprunt et déplacement ; les primitifs sont copiés implicitement par valeur. Un transfert sortant a besoin d'un receveur pour prendre effet. Les obligations d'usage et les règles propres aux méthodes s'appliquent. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | La cible d'un emprunt et le pool source d'une allocation doivent rester valides là où la valeur est transmise. Chaque passage enfant → parent se vérifie séparément, sans promotion implicite de la cible. | §3–§5 |
 | N5 | `&mut T` autorise la mutation sans garantir l’unicité. Les accès concurrents qui se chevauchent et dont au moins un écrit exigent une synchronisation démontrée. Les dépendances de validité restent suivies. | MA1–MA6, §5 |
 | N6 | Chaque chemin qui atteint un usage doit permettre cet usage. L'analyse suit les provenances, les sorties de contrôle et l'ordre d'évaluation, y compris la préparation du remplacement avant la destruction de l'ancienne valeur. | §1–§5, F3–F4 |
@@ -330,20 +330,27 @@ let mut buffer = new Buffer;
 let mut writer = new Writer { buffer: &buffer };
 ```
 
-**V3 — Copie explicite.** Seul un appel explicite à `copy(a)` demande une
-copie. L'argument doit avoir un type primitif du core, parmi `i32`, `i64`,
-`u8`, `u16`, `u32`, `u64`, `bool`, `f32` et `f64`.
-Cette restriction prévaut sur les exemples et règles antérieurs qui
-autorisent `copy` sur d'autres types. Une liaison utilisée par
-valeur en partie droite d'une déclaration ou d'une affectation est déplacée,
-y compris pour un type primitif. La liaison source devient inutilisable.
-`&a` et `&mut a` créent respectivement un emprunt partagé et mutable.
+**V3 — Copies implicites des primitifs.** Les types `i32`, `i64`, `u8`,
+`u16`, `u32`, `u64`, `usize`, `bool`, `f32` et `f64` sont copiés lorsqu’ils sont
+lus par valeur. Une déclaration, une réaffectation, un argument ou un retour
+ne rend donc pas la liaison source indisponible. Cela vaut aussi pour un
+primitif servant à initialiser un champ ou une case. `copy(x)` reste une
+écriture explicite facultative pour les primitifs.
 
-```text
+Les valeurs non primitives conservent leurs règles de déplacement et d’emprunt.
+Une structure, un tableau, un tuple ou une enum ne devient pas implicitement
+copiable parce que ses champs sont primitifs. Ce changement ne copie pas
+implicitement les références et ne duplique pas les allocations `A<T>`.
+Les captures conservent leurs règles existantes. `drop(x)` et les directives
+explicites de transfert conservent leur effet ; une liaison détruite reste
+inutilisable. Une copie de `usize` issu de `addr()` conserve sa provenance et
+reste confinée au bloc `@unchecked` d’origine.
+
+```rust
 let a: i64 = 12;
-let b = a;         // Déplace a.
-let c = copy(b);   // Copie b. b reste utilisable.
-let vue = &c;      // Emprunte c.
+let b = a;         // Copie a ; a reste disponible.
+let c = copy(a);   // Même copie, écrite explicitement.
+let vue = &a;     // Emprunt explicite, distinct d’une copie.
 ```
 
 **V4 — Déclarations, mutations et réaffectations.** Une déclaration utilise
@@ -404,7 +411,7 @@ y compris lors des transferts. Une fois sa vie terminée, son emplacement peut
 
 Pour la syntaxe moderne, le [brouillon 02](../design-buffer/02-marqueur-transfert.md)
 fixe la notation des déplacements par valeur et des captures. Le passage
-par valeur déplace la liaison source, y compris pour un type primitif.
+par valeur copie les primitifs selon V3 et déplace les valeurs non primitives.
 Le receveur d'un résultat de bloc
 est visible et l'accès d'origine ne se réactive pas. `move a;` transfère
 une liaison à l'entrée du bloc enfant. `move { ... }` capture par valeur les

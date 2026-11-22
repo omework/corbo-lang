@@ -286,6 +286,8 @@ declares a by-value receiver. The call `compteur.terminer()` moves
 rules. The original binding becomes unavailable. Borrowing, provenance,
 and cleanup follow the same rules as for any other by-value argument.
 
+A supported primitive receiver follows V3’s implicit-copy rule; by-value passing does not make objects implicitly copyable.
+
 <a id="5-exemples-de-conception"></a>
 
 ## 5. Design examples

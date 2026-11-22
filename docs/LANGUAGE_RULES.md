@@ -70,7 +70,7 @@ references define each obligation in detail.
 | --- | --- | --- |
 | N1 | An accessible value is initialized and used according to its type. `T`, `A<T>`, `&T`, and `&mut T` denote distinct forms. | §2, ST1–ST5, H1 |
 | N2 | A value that needs destruction has exactly one party responsible for cleanup at a time. A move transfers that responsibility. A borrow leaves it in place. | §3, §6, H1 |
-| N3 | The syntax distinguishes copying, borrowing, and moving. An outgoing transfer takes effect when it has a receiver. Usage requirements and method-specific rules apply. | §0, §3, §4, ST17–ST18, ME1–ME4 |
+| N3 | Syntax and type distinguish copying, borrowing, and moving; primitive values copy implicitly by value. An outgoing transfer takes effect when it has a receiver. Usage requirements and method-specific rules apply. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | The target of a borrow and the source pool of an allocation must remain valid wherever the value is passed. Each transfer from a child scope to its parent is checked separately, without implicit promotion of the target. | §3–§5 |
 | N5 | `&mut T` grants mutation permission, not uniqueness. Potentially concurrent overlapping accesses involving a write require established synchronization. Validity dependencies remain tracked. | MA1–MA6, §5 |
 | N6 | Every path reaching a use must permit that use. The analysis tracks provenance, control-flow exits, and evaluation order, including evaluating a replacement before destroying the old value. | §1–§5, F3–F4 |
@@ -337,20 +337,25 @@ let mut buffer = new Buffer;
 let mut writer = new Writer { buffer: &buffer };
 ```
 
-**V3 — Copie explicite.** Only an explicit call to `copy(a)` requests a
-The argument must have a primitive type of core, among which `i32`, `i64`,
-`u8`, `u16`, `u32`, `u64`, `bool`, `f32` and `f64`.
-This restriction prevails over previous examples and rules which
-autorisent `copy` a link used by
-The value in the right part of a declaration or assignment is moved, including for a
-primitive type. The source bond becomes unusable.
-`&a` and `&mut a` create a shared and mutable loan.
+**V3 — Implicit primitive copies.** The types `i32`, `i64`, `u8`, `u16`,
+`u32`, `u64`, `usize`, `bool`, `f32` and `f64` copy when read by value.
+Declarations, reassignment, arguments and returns leave the source binding
+available. A primitive used to initialize a field or element is copied too.
+`copy(x)` remains an optional explicit spelling for primitive copies.
 
-```text
+Non-primitive values retain their existing move and borrowing rules. Structs,
+arrays, tuples and enums do not become implicitly copyable because their fields
+are primitive. This change does not implicitly copy references or duplicate
+`A<T>` allocations. Existing capture rules are retained. Special `drop(x)` and
+explicit scope-transfer directives retain their effects; destroyed bindings
+remain unusable. Copies of an addr-derived `usize` retain its provenance and
+remain confined to the original `@unchecked` block.
+
+```rust
 let a: i64 = 12;
-let b = a;         // Déplace a.
-let c = copy(b);   // Copie b. b reste utilisable.
-let vue = &c;      // Emprunte c.
+let b = a;         // Copies a; a remains available.
+let c = copy(a);   // The same copy, written explicitly.
+let view = &a;    // Explicit borrowing is distinct from copying.
 ```
 
 **V4 — Declarations, transfers and reallocations.** A declaration uses
@@ -410,8 +415,7 @@ does not move bytes.
 ## 3. Travel and transfers
 
 For modern syntax, the [sweet 02](../design-buffer/02-marqueur-transfert.md)
-sets the rating of the value movements and catches. The value passage moves the
-source link, including for a primitive type. The receiver of a block result
+sets the rating of the value movements and catches. By-value use copies primitives under V3 and moves non-primitive bindings. The receiver of a block result
 is visible and the original access does not react. `move a;` transfer
 A connection to the entrance to the child block. `move { ... }` value capture
 The life, identity, borrowing and cleaning checks of this section also apply to these
