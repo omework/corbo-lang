@@ -4,6 +4,11 @@
 
 # Corbo — structures, construction and methods
 
+Current enum behavior follows [EN1 and V3](LANGUAGE_RULES.md#en1--conditional-enum-patterns-and-equality):
+`if let` uses ordinary enum patterns; enums with only empty or direct primitive
+payload variants copy by value and support tag-and-field equality. Other enums
+retain their move and borrowing rules.
+
 Reference permissions follow [MA1–MA6](MUTABLE_ACCESS.md). Earlier exclusion
 descriptions below do not reintroduce `&mut` uniqueness; storage-invalidating
 effects remain constrained by dependencies.

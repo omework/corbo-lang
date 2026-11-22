@@ -1,3 +1,14 @@
+## Motifs d’enums, égalité et copies — EN1 / V3
+
+- [x] Parser if-let, les chaînes else-if et les expressions à résultat via match.
+- [x] Déduire copie et égalité depuis toutes les variantes de l’enum.
+- [x] Conserver les moves, emprunts et destructions uniques des données.
+- [x] Exécuter quatre programmes UBSan fatal, dix refus et les régressions primitives.
+- [x] Reconstruire corboc, comparer le C émis et vérifier le paquet du README.
+- [x] Aligner grammaire, documentation et exemples EN/FR.
+
+[Validation](cycles/ENUM_PATTERNS_CYCLE.md). Exécution macOS ARM64 ; runtime inchangé.
+
 ## Copies implicites des primitifs — V3
 
 - [x] Copie par valeur des primitifs ; les sources restent disponibles.

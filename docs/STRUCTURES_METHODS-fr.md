@@ -2,6 +2,11 @@
 
 # Corbo — structures, construction et méthodes
 
+Les enums suivent [EN1 et V3](LANGUAGE_RULES-fr.md) : `if let` reprend leurs
+motifs ordinaires. Les enums dont chaque variante est vide ou à champs primitifs
+directs sont copiées par valeur et acceptent l’égalité par variante et champs.
+Les autres gardent leurs règles de déplacement et d’emprunt.
+
 Les permissions des références suivent [MA1–MA6](MUTABLE_ACCESS-fr.md).
 Les anciennes descriptions d’exclusion ci-dessous ne réintroduisent pas
 l’unicité de `&mut` ; les effets invalidants restent soumis aux dépendances.

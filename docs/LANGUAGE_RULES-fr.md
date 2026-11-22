@@ -72,7 +72,7 @@ et les documents auxquels elles renvoient fixent le détail des règles.
 | --- | --- | --- |
 | N1 | Une valeur accessible est initialisée et utilisée avec son type. `T`, `A<T>`, `&T` et `&mut T` expriment des formes distinctes. | §2, ST1–ST5, H1 |
 | N2 | Une valeur à détruire n'a qu'un responsable du nettoyage à la fois. Un déplacement transmet cette responsabilité et un emprunt la laisse en place. | §3, §6, H1 |
-| N3 | La syntaxe et le type distinguent copie, emprunt et déplacement ; les primitifs sont copiés implicitement par valeur. Un transfert sortant a besoin d'un receveur pour prendre effet. Les obligations d'usage et les règles propres aux méthodes s'appliquent. | §0, §3, §4, ST17–ST18, ME1–ME4 |
+| N3 | La syntaxe et le type distinguent copie, emprunt et déplacement ; les primitifs et les enums admissibles selon V3 sont copiés implicitement par valeur. Un transfert sortant a besoin d'un receveur pour prendre effet. Les obligations d'usage et les règles propres aux méthodes s'appliquent. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | La cible d'un emprunt et le pool source d'une allocation doivent rester valides là où la valeur est transmise. Chaque passage enfant → parent se vérifie séparément, sans promotion implicite de la cible. | §3–§5 |
 | N5 | `&mut T` autorise la mutation sans garantir l’unicité. Les accès concurrents qui se chevauchent et dont au moins un écrit exigent une synchronisation démontrée. Les dépendances de validité restent suivies. | MA1–MA6, §5 |
 | N6 | Chaque chemin qui atteint un usage doit permettre cet usage. L'analyse suit les provenances, les sorties de contrôle et l'ordre d'évaluation, y compris la préparation du remplacement avant la destruction de l'ancienne valeur. | §1–§5, F3–F4 |
@@ -330,16 +330,43 @@ let mut buffer = new Buffer;
 let mut writer = new Writer { buffer: &buffer };
 ```
 
-**V3 — Copies implicites des primitifs.** Les types `i32`, `i64`, `u8`,
+### EN1 — Motifs conditionnels d’enum et égalité
+
+`if let Motif = expression { ... }` accepte les motifs d’enum de `match`, dont
+les champs positionnels et nommés, Option et Result. L’expression est évaluée
+une seule fois. Les liaisons du motif n’existent que dans le bras correspondant.
+`else`, dont `else if let`, est facultatif ; sans lui, une autre variante ne
+fait rien. Une expression exige le même type de résultat dans chaque branche
+qui continue ; l’absence de else ne fournit pas un résultat non vide.
+
+La possession suit V3 et les règles existantes de match : une enum admissible
+est copiée, une autre est déplacée, un emprunt explicite conserve sa dépendance.
+Les données possédées non retenues sont nettoyées, y compris avant une sortie
+anticipée du else. Un champ emprunté ne peut pas survivre à sa cible. Aucun
+emprunt implicite supplémentaire n’est introduit.
+
+Pour les enums dont chaque variante est vide ou contient uniquement des champs
+primitifs directs, `==` et `!=` comparent la variante puis ses champs actifs
+avec l’égalité primitive. Les deux opérandes doivent avoir le même type d’enum.
+Des variantes différentes sont inégales. Chaque opérande est évalué une fois,
+de gauche à droite ; les champs inactifs et le remplissage mémoire ne sont
+jamais comparés. Les flottants gardent leur égalité primitive, dont le cas NaN.
+Aucun ordre ni égalité récursive d’agrégats n’est ajouté.
+
+**V3 — Copies implicites des primitifs et des enums à champs primitifs.** Les types `i32`, `i64`, `u8`,
 `u16`, `u32`, `u64`, `usize`, `bool`, `f32` et `f64` sont copiés lorsqu’ils sont
 lus par valeur. Une déclaration, une réaffectation, un argument ou un retour
 ne rend donc pas la liaison source indisponible. Cela vaut aussi pour un
 primitif servant à initialiser un champ ou une case. `copy(x)` reste une
-écriture explicite facultative pour les primitifs.
+écriture explicite facultative pour les primitifs et les enums admissibles.
 
-Les valeurs non primitives conservent leurs règles de déplacement et d’emprunt.
-Une structure, un tableau, un tuple ou une enum ne devient pas implicitement
-copiable parce que ses champs sont primitifs. Ce changement ne copie pas
+Une enum est implicitement copiée par valeur si chacune de ses variantes est
+vide ou contient uniquement des champs primitifs directs. Cette propriété dépend
+de sa définition entière, jamais de la variante courante. Cela vaut aussi pour
+les instanciations admissibles d’Option et de Result. Les structures, tableaux
+et tuples gardent leurs règles de déplacement, même à champs primitifs. Un champ
+référence, allocation ou agrégat, dont une enum imbriquée, empêche cette copie.
+Ce changement ne copie pas
 implicitement les références et ne duplique pas les allocations `A<T>`.
 Les captures conservent leurs règles existantes. `drop(x)` et les directives
 explicites de transfert conservent leur effet ; une liaison détruite reste
@@ -411,7 +438,7 @@ y compris lors des transferts. Une fois sa vie terminée, son emplacement peut
 
 Pour la syntaxe moderne, le [brouillon 02](../design-buffer/02-marqueur-transfert.md)
 fixe la notation des déplacements par valeur et des captures. Le passage
-par valeur copie les primitifs selon V3 et déplace les valeurs non primitives.
+par valeur copie les primitifs et les enums admissibles selon V3 ; les autres valeurs sont déplacées.
 Le receveur d'un résultat de bloc
 est visible et l'accès d'origine ne se réactive pas. `move a;` transfère
 une liaison à l'entrée du bloc enfant. `move { ... }` capture par valeur les
@@ -1233,14 +1260,15 @@ closure entre parenthèses peut aussi être appelée directement, comme
 dans `(|x: i64| { x * 2 })(21)`. Les champs de capture sont initialisés
 à la création de la closure.
 Sans `move`, la création de la closure copie automatiquement les valeurs
-primitives capturées. La liaison extérieure reste disponible. Cette copie a
-lieu une seule fois, à la création. Une capture non primitive exige `move`.
-Une référence capturée conserve sa dépendance à la cible empruntée.
+primitives et les enums admissibles selon V3. La liaison extérieure reste disponible. Cette copie a
+lieu une seule fois, à la création. Les autres captures par valeur exigent `move`.
+Les captures existantes de références partagées gardent leur dépendance à la cible.
 
 Le marqueur `move` s'applique à toute la closure. Il transfère les liaisons
 extérieures utilisées dans ses champs, selon le sens de `move` à l'entrée
-d'un bloc. Les liaisons d'origine deviennent inutilisables dès la
-déclaration, y compris dans l'exemple suivant avec des `i64`. La closure
+d'un bloc. Les sources non copiables deviennent inutilisables dès la déclaration.
+Les captures de primitifs et d’enums admissibles sont copiées, même avec `move`,
+et leur source reste disponible. La closure
 prend en charge le nettoyage des valeurs transférées. La syntaxe de
 capture ne prévoit pas de liste de modes individuels.
 

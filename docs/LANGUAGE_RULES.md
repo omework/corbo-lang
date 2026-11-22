@@ -70,7 +70,7 @@ references define each obligation in detail.
 | --- | --- | --- |
 | N1 | An accessible value is initialized and used according to its type. `T`, `A<T>`, `&T`, and `&mut T` denote distinct forms. | §2, ST1–ST5, H1 |
 | N2 | A value that needs destruction has exactly one party responsible for cleanup at a time. A move transfers that responsibility. A borrow leaves it in place. | §3, §6, H1 |
-| N3 | Syntax and type distinguish copying, borrowing, and moving; primitive values copy implicitly by value. An outgoing transfer takes effect when it has a receiver. Usage requirements and method-specific rules apply. | §0, §3, §4, ST17–ST18, ME1–ME4 |
+| N3 | Syntax and type distinguish copying, borrowing, and moving; primitives and eligible enums copy implicitly by value (V3). An outgoing transfer takes effect when it has a receiver. Usage requirements and method-specific rules apply. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | The target of a borrow and the source pool of an allocation must remain valid wherever the value is passed. Each transfer from a child scope to its parent is checked separately, without implicit promotion of the target. | §3–§5 |
 | N5 | `&mut T` grants mutation permission, not uniqueness. Potentially concurrent overlapping accesses involving a write require established synchronization. Validity dependencies remain tracked. | MA1–MA6, §5 |
 | N6 | Every path reaching a use must permit that use. The analysis tracks provenance, control-flow exits, and evaluation order, including evaluating a replacement before destroying the old value. | §1–§5, F3–F4 |
@@ -337,15 +337,41 @@ let mut buffer = new Buffer;
 let mut writer = new Writer { buffer: &buffer };
 ```
 
-**V3 — Implicit primitive copies.** The types `i32`, `i64`, `u8`, `u16`,
+### EN1 — Conditional enum patterns and equality
+
+`if let Pattern = expression { ... }` accepts the enum patterns of `match`,
+including positional and named fields, Option and Result. It evaluates the
+expression once. Pattern bindings exist only in the matching branch. An optional
+`else` (including `else if let`) handles the other variants; omission means no
+operation on a non-match. As an expression, all continuing branches must provide
+the same result type, and an omitted else cannot provide a non-unit result.
+
+Scrutinee ownership follows V3 and the existing match rules: an eligible enum
+is copied; a move-only enum moves; an explicit borrow keeps the dependency on
+the original value. Unmatched owned payloads are cleaned up, including before
+an early exit from the else branch. A matched borrowed field cannot outlive its
+target. No new implicit borrowing is introduced.
+
+For enums whose variants are empty or contain only direct primitive fields,
+`==` and `!=` compare the variant first, then the active fields using their
+primitive equality. Both operands must have the same enum type. Different
+variants are unequal. Each operand is evaluated once, in left-to-right order;
+inactive fields and representation padding are never compared. Floating fields
+retain primitive floating equality, including NaN behavior. No ordering operators
+or recursive aggregate equality are introduced.
+
+**V3 — Implicit primitive and primitive-payload enum copies.** The types `i32`, `i64`, `u8`, `u16`,
 `u32`, `u64`, `usize`, `bool`, `f32` and `f64` copy when read by value.
 Declarations, reassignment, arguments and returns leave the source binding
 available. A primitive used to initialize a field or element is copied too.
-`copy(x)` remains an optional explicit spelling for primitive copies.
+`copy(x)` remains an optional explicit spelling for primitives and eligible enums.
 
-Non-primitive values retain their existing move and borrowing rules. Structs,
-arrays, tuples and enums do not become implicitly copyable because their fields
-are primitive. This change does not implicitly copy references or duplicate
+An enum copies implicitly by value if every variant is empty or contains only
+direct primitive fields. This depends on its complete definition, not its
+current variant, and applies to eligible Option and Result instantiations too.
+Structs, arrays and tuples retain their move rules even with primitive fields.
+An enum containing a reference, allocation, struct, array, tuple or nested enum
+payload remains move-only. This change does not implicitly copy references or duplicate
 `A<T>` allocations. Existing capture rules are retained. Special `drop(x)` and
 explicit scope-transfer directives retain their effects; destroyed bindings
 remain unusable. Copies of an addr-derived `usize` retain its provenance and
@@ -415,7 +441,7 @@ does not move bytes.
 ## 3. Travel and transfers
 
 For modern syntax, the [sweet 02](../design-buffer/02-marqueur-transfert.md)
-sets the rating of the value movements and catches. By-value use copies primitives under V3 and moves non-primitive bindings. The receiver of a block result
+sets the rating of the value movements and catches. By-value use copies primitives and eligible enums under V3; other values move. The receiver of a block result
 is visible and the original access does not react. `move a;` transfer
 A connection to the entrance to the child block. `move { ... }` value capture
 The life, identity, borrowing and cleaning checks of this section also apply to these
@@ -1214,16 +1240,16 @@ Its body is the method executed by
 closure in brackets can also be called directly, as
 in `(|x: i64| { x * 2 })(21)`. Capture fields are initialized
 the creation of the closure.
-Without `move`, creating a closure automatically copies the primitive values it
-captures. The outer binding remains available. Each capture is copied once,
-when the closure is created. A non-primitive capture requires `move`. A captured
-reference retains its dependency on the borrowed target.
+Without `move`, creating a closure automatically copies the primitive values and
+eligible enums (V3) it captures. The outer binding remains available. Each capture is copied once,
+when the closure is created. Other value captures require `move`; existing
+shared-reference captures retain their dependency on the borrowed target.
 
 The marker `move` applies to the entire closure. It transfers the links
 external uses in its fields, according to the meaning of `move` at the entrance
-The original connections become unusable from the moment of the
-Declaration, including in the following example with `i64`. Closing
-Supports the cleaning of transferred values. The capture syntax does not provide a
+Non-copyable source bindings become unavailable at declaration. Primitive and
+eligible enum captures are copied into their fields, even with `move`, and
+leave their source available. The closure cleans up the values it owns. The capture syntax does not provide a
 list of individual modes.
 
 ```rust

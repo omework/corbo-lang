@@ -365,7 +365,11 @@ Sortie : `42`. [Paquet complet](examples/features/methods/).
 
 #### Énumérations et filtrage par motifs
 
-Les variantes peuvent contenir des données nommées ou positionnelles. Un `match` par valeur transfère les données de la variante sélectionnée selon leurs règles habituelles de possession.
+Les variantes peuvent contenir des données nommées ou positionnelles. `if let`
+teste un motif ; `match` traite toutes les variantes. Une enum est implicitement
+copiée si chaque variante est vide ou contient uniquement des champs primitifs.
+Ces enums acceptent `==` et `!=`, qui comparent la variante puis ses champs
+actifs. Les autres enums conservent leurs règles de déplacement et d’emprunt.
 
 <!-- example: enums -->
 ```rust
@@ -376,14 +380,23 @@ enum Reading {
 
 fn main() {
     let reading = Reading.Value(42);
-    match reading {
+    let saved = reading;
+    print(reading == saved);
+
+    if let Reading.Value(value) = reading {
+        print(value);
+    } else {
+        print(0);
+    }
+
+    match saved {
         Reading.Value(value) => { print(value); },
         Reading.Missing => { print(0); },
     }
 }
 ```
 
-Sortie : `42`. [Paquet complet](examples/features/enums/).
+Sortie : `true`, `42`, `42`. [Paquet complet](examples/features/enums/).
 
 <a id="errors"></a>
 
@@ -426,7 +439,7 @@ Sortie : `42`. [Paquet complet](examples/features/errors/).
 
 #### Moves et copies de primitifs
 
-Les valeurs primitives sont copiées implicitement lors des affectations, des appels et des retours : la source reste utilisable. `copy(x)` reste disponible, mais facultatif pour ces valeurs. Les valeurs non primitives conservent leurs règles de move, y compris les structures ne contenant que des primitifs. Un move transfère la responsabilité du nettoyage ; il ne demande pas le déplacement de l’allocation en mémoire.
+Les valeurs primitives sont copiées implicitement lors des affectations, des appels et des retours : la source reste utilisable. `copy(x)` reste disponible, mais facultatif pour ces valeurs. Les enums à variantes vides ou à champs primitifs directs sont également copiées. Les autres valeurs non primitives conservent leurs règles de move, y compris les structures ne contenant que des primitifs. Un move transfère la responsabilité du nettoyage ; il ne demande pas le déplacement de l’allocation en mémoire.
 
 <!-- example: moves -->
 ```rust

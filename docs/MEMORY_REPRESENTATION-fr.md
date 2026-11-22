@@ -306,7 +306,7 @@ nombre facultatif d’emplacements réservés.
 
 ## Exemple de transfert de responsabilité
 
-Les copies primitives de V3 créent une liaison disponible distincte et laissent
+Les copies V3 de primitifs et d’enums admissibles créent une liaison disponible distincte et laissent
 la source disponible. Elles ne créent ni lien de possession ni dépendance de
 nettoyage vers la source. Une valeur `usize` issue de `addr()` conserve toutefois
 sa dépendance vers la cible et son confinement dans `@unchecked`. Les déplacements

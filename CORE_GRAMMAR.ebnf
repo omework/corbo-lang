@@ -214,7 +214,12 @@ valeur_champ        = identifiant, ":", expression ;
 initialisation_pool = initialiseur_structure_pool | valeurs_champs | expression ;
 initialiseur_structure_pool = "{", [ valeurs_champs ], "}" ;
 
-conditionnelle      = "if", expression, bloc, [ "else", ( bloc | conditionnelle ) ] ;
+conditionnelle      = "if", ( expression | "let", motif, "=", expression ),
+                      bloc, [ "else", ( bloc | conditionnelle ) ] ;
+(* if let uses any enum variant pattern from match. The scrutinee is evaluated
+   once. Binders belong only to the matching branch; else is optional.
+   All-empty or direct-primitive-payload enums copy implicitly by value.
+   == and != compare the tag and active primitive fields, never padding. *)
 boucle              = "loop", bloc ;
 match               = "match", expression, "{", bras, { ",", bras }, [ "," ], "}" ;
 bras                = motif, "=>", bloc ;

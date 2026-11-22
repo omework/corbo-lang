@@ -293,7 +293,7 @@ limit, its unit and the optional number of reserved locations.
 
 ## Example of transfer of responsibility
 
-V3 primitive copies create a distinct available binding and leave the source
+V3 copies of primitives and eligible primitive-payload enums create a distinct available binding and leave the source
 available. They introduce no ownership or cleanup dependency on the source.
 An addr-derived `usize` nevertheless retains its target dependency and
 `@unchecked` confinement. Non-primitive moves still mark the original binding

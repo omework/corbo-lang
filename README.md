@@ -362,7 +362,11 @@ Output: `42`. [Complete package](examples/features/methods/).
 
 #### Enums and pattern matching
 
-Variants can carry named or positional payloads. A value match transfers the selected payload according to its ordinary ownership rules.
+Variants can carry named or positional payloads. `if let` tests one enum pattern;
+`match` handles all variants. An enum copies implicitly when every variant is
+empty or contains only primitive fields. Such enums support `==` and `!=`:
+the variant and its active fields are compared. Other enums keep their move
+and borrowing rules.
 
 <!-- example: enums -->
 ```rust
@@ -373,14 +377,23 @@ enum Reading {
 
 fn main() {
     let reading = Reading.Value(42);
-    match reading {
+    let saved = reading;
+    print(reading == saved);
+
+    if let Reading.Value(value) = reading {
+        print(value);
+    } else {
+        print(0);
+    }
+
+    match saved {
         Reading.Value(value) => { print(value); },
         Reading.Missing => { print(0); },
     }
 }
 ```
 
-Output: `42`. [Complete package](examples/features/enums/).
+Output: `true`, `42`, `42`. [Complete package](examples/features/enums/).
 
 <a id="errors"></a>
 
@@ -419,7 +432,7 @@ Output: `42`. [Complete package](examples/features/errors/).
 
 #### Moves and primitive copies
 
-Primitive values copy implicitly in assignments, arguments and returns: the source remains available. `copy(x)` remains valid but optional for these values. Non-primitive values retain their move rules, including structs containing only primitive fields. A move transfers cleanup responsibility; it does not request that an allocation be relocated.
+Primitive values copy implicitly in assignments, arguments and returns: the source remains available. `copy(x)` remains valid but optional for these values. Enums with only empty or primitive-payload variants copy too. Other non-primitive values retain their move rules, including structs containing only primitive fields. A move transfers cleanup responsibility; it does not request that an allocation be relocated.
 
 <!-- example: moves -->
 ```rust
