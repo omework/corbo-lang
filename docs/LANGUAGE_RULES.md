@@ -1566,3 +1566,8 @@ for naming, library linkage and the developer's responsibilities.
 ## Thread transfer eligibility (TR1)
 
 See [thread transfer](THREAD_TRANSFER.md).
+
+## Universal borrowing and iteration syntax
+
+[Reference methods and for loops](ITERATION_SYNTAX.md) define the new spellings
+using the existing move, lifetime, mutation and cleanup rules.

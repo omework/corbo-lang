@@ -1,3 +1,9 @@
+## Universal reference methods and for loops
+
+Grammar and documentation updated. The active compiler passed ten focused
+functional/refusal observations and sixteen diagnostic regressions on macOS ARM64,
+then was rebuilt and installed locally. See [cycle evidence](cycles/ITERATION_SYNTAX_CYCLE.md).
+
 ## File check targets and dependency watching
 
 - [x] Accept standalone and package-backed `.crb` targets with existing static verification.

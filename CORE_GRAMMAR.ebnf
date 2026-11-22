@@ -137,7 +137,7 @@ operande_asm        = "${", identifiant, "}" ;
    est un appel de primitive qui produit un usize. *)
 
 instruction         = liaison | affectation | retour | rupture | reprise | suspension
-                    | boucle_while | expression, ";" | forme_bloc | bloc_unchecked ;
+                    | boucle_while | boucle_for | expression, ";" | forme_bloc | bloc_unchecked ;
 liaison             = "let", ( liaison_nommee | motif_tuple ), [ ":", type ], "=",
                       expression, ";" ;
 liaison_nommee      = [ "mut" ], identifiant ;
@@ -153,6 +153,10 @@ rupture             = "break", [ expression ], ";" ;
 reprise             = "continue", ";" ;
 suspension          = "yield", ";" ;
 boucle_while        = "while", expression, bloc ;
+boucle_for          = "for", [ "mut" ], identifiant, "in", expression, bloc ;
+(* The source is evaluated once. Borrowed arrays/slices yield references;
+   next()-based sources yield their Option payload by the existing value rules.
+   break/continue target this loop; the binding is local to each iteration. *)
 forme_bloc          = bloc | bloc_capture | bloc_unsafe | conditionnelle | match | boucle ;
 
 expression          = disjonction ;
@@ -173,7 +177,8 @@ postfixee           = primaire, { suffixe } ;
    de structure dont le type est fourni par le pool. Les autres blocs
    restent des expressions.
    try_slice avec un séparateur .. sélectionne la production plage. *)
-suffixe             = ".", identifiant, [ "(", [ arguments ], ")" ]
+suffixe             = emprunt_suffixe
+                    | ".", identifiant, [ "(", [ arguments ], ")" ]
                     | ".", ( "new" | "try" ), "(", [ initialisation_pool ], ")"
                     | ".", "try_slice", "(", plage, ")"
                     | ".", "await" | "[", indice, "]" | "?" ;
@@ -358,3 +363,9 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    across threads. Absence means eligible unless owned components restrict it.
    Owned fields, closure capture records and suspended async state propagate
    the restriction. Same-thread moves remain ordinary moves. See TR1. *)
+
+(* Universal borrowing spellings, recognized before ordinary method dispatch:
+   place.ref() is exactly &place; place.mut_ref() is exactly &mut place.
+   Neither operation implicitly dereferences an existing reference, copies its
+   target, nor grants mutation permission. Both take zero arguments. *)
+emprunt_suffixe     = ".", ( "ref" | "mut_ref" ), "(", ")" ;

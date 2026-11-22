@@ -505,6 +505,30 @@ Output: `42, 43`. [Complete package](examples/features/borrows/).
 
 <a id="arrays"></a>
 
+#### Universal borrows and for loops
+
+`ref()` and `mut_ref()` are available on every type as exact spellings of `&`
+and `&mut`. They borrow the selected place; an existing reference is not
+implicitly dereferenced. Mutation permission must already exist.
+
+```rust
+fn main() {
+    let mut values = [10, 20, 30];
+
+    for value in values.mut_ref() {
+        *value += 1;
+    }
+
+    for value in values.ref() {
+        print(*value);
+    }
+}
+```
+
+The source is evaluated once. Borrowed arrays and slices yield references;
+iterator objects yield the payload of `next() -> Option<T>`. Each iteration
+has its own scope, with ordinary move, borrowing and cleanup behavior.
+
 #### Fixed arrays, structural repetition and slices
 
 An array carries its element count in its type. A borrowed slice carries an address and length. Repetition evaluates the initializer once and requires a structurally replicable value; slices retain bounds and lifetime checks.

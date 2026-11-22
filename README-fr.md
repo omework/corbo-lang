@@ -1729,3 +1729,28 @@ La documentation est en anglais par défaut. Les versions françaises utilisent 
 ## Licence
 
 Corbo et sa bibliothèque standard sont disponibles, au choix, sous [licence MIT](LICENSE-MIT) ou sous [licence Apache, version 2.0](LICENSE-APACHE). Les parties dérivées conservent leurs [mentions tierces supplémentaires](stdlib/THIRD_PARTY_NOTICES.txt).
+
+### Emprunts universels et boucles for
+
+`ref()` et `mut_ref()` sont disponibles pour tous les types et sont exactement
+équivalents à `&` et `&mut`. Ils empruntent la place désignée sans déréférencement
+implicite. La permission de mutation doit déjà exister.
+
+```rust
+fn main() {
+    let mut valeurs = [10, 20, 30];
+
+    for valeur in valeurs.mut_ref() {
+        *valeur += 1;
+    }
+
+    for valeur in valeurs.ref() {
+        print(*valeur);
+    }
+}
+```
+
+La source est évaluée une seule fois. Les tableaux et tranches empruntés
+produisent des références ; les itérateurs produisent le contenu de l'Option
+renvoyée par `next()`. Chaque itération conserve les règles de portée,
+de déplacement, d'emprunt et de nettoyage existantes.
