@@ -4,6 +4,13 @@
 
 # Corbo language rules
 
+Enum variants use `Enum::Variant` in constructors, `match` and `if let`.
+The older `Enum.Variant` form remains accepted for compatibility. Both forms
+resolve to the same variant and preserve payload evaluation, copy/move,
+borrowing and destruction semantics. `Type::method(...)` remains an associated
+function call; the separator does not turn methods into variants.
+
+
 The [inline assembly and File design](FILE.md) records `@unchecked`, explicit assembly operands, and target-sized `usize`.
 
 The initial experimental design dates from November 1, 2026. The async and

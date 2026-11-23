@@ -5109,3 +5109,13 @@ creation/exclusivity/truncation/append/SYNC flags and sync/async parity.
 Focused execution passes on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64
 under Wine. Windows ARM64 compiles/links only; exact Windows ACL execution is
 not claimed. See [the report](cycles/FILE_TEXT_MODES_CYCLE.md).
+
+
+## Enum qualification and field method receivers
+
+The active corboc compiler accepts `Enum::Variant` and existing dot spelling
+through one enum representation. Field method receivers preserve root, mutation,
+lifetime and lock-result contracts. Three focused executable fixtures pass under
+fatal UBSan, with five corresponding diagnostic/lifetime refusals and existing
+enum/semantic regressions. See [scope and evidence](ENUM_PATHS_FIELD_RECEIVERS_CYCLE.md).
+The frozen Rust frontend and STD/runtime are unchanged.

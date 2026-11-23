@@ -2,6 +2,12 @@
 
 # Corbo — règles de langage retenues
 
+Les variantes d’énumération s’écrivent `Enum::Variante` dans les constructions,
+`match` et `if let`. L’ancienne forme `Enum.Variante` reste acceptée pour
+compatibilité. Les deux formes partagent les mêmes règles de copie, déplacement,
+emprunt et destruction. `Type::methode(...)` reste un appel de fonction associée.
+
+
 La [conception de File et de l’assembleur intégré](FILE-fr.md) consigne `@unchecked`, les opérandes explicites et le type `usize` déduit de la cible.
 
 État : conception expérimentale, décisions initiales du 1er novembre 2026 ;

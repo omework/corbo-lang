@@ -51,6 +51,10 @@ corps_enumeration    = "enum", identifiant, [ parametres_generiques ], "{",
                       variante, { ",", variante }, [ "," ], "}" ;
 variante            = identifiant, [ "{", [ champs_types ], "}"
                                     | "(", type, { ",", type }, [ "," ], ")" ] ;
+(* :: is the preferred enum-variant separator. Dot remains accepted for
+   compatibility with the existing STD and source corpus. Associated functions
+   keep qualified-call syntax and are distinguished by name resolution. *)
+separateur_variante = "::" | "." ;
 champs_types        = champ_type, { ",", champ_type }, [ "," ] ;
 champ_type          = identifiant, ":", type ;
 implementation      = "impl", chemin, [ parametres_generiques ],
@@ -212,7 +216,7 @@ litteral            = entier | flottant | texte | "true" | "false" ;
 tableau             = "[", [ expression, ( ";", longueur_constante
                              | { ",", expression }, [ "," ] ) ], "]" ;
 construction        = nom_structure, "{", [ valeurs_champs ], "}"
-                    | nom_enum, ".", identifiant, [ "{", [ valeurs_champs ], "}"
+                    | nom_enum, separateur_variante, identifiant, [ "{", [ valeurs_champs ], "}"
                                                   | "(", arguments, ")" ] ;
 valeurs_champs      = valeur_champ, { ",", valeur_champ }, [ "," ] ;
 valeur_champ        = identifiant, ":", expression ;
@@ -231,7 +235,7 @@ boucle              = "loop", bloc ;
 match               = "match", expression, "{", bras, { ",", bras }, [ "," ], "}" ;
 bras                = motif, "=>", bloc ;
 motif               = "_" | "(" , ")" | chemin_valeur, [ "(", motif, ")" ]
-                    | nom_enum, ".", identifiant, [ "{", [ motifs_champs ], "}"
+                    | nom_enum, separateur_variante, identifiant, [ "{", [ motifs_champs ], "}"
                                                   | "(", motif_positionnel, { ",", motif_positionnel }, [ "," ], ")" ] ;
 motif_positionnel   = identifiant | "_" ;
 motifs_champs       = motif_champ, { ",", motif_champ }, [ "," ] ;
