@@ -373,10 +373,14 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    Owned fields, closure capture records and suspended async state propagate
    the restriction. Same-thread moves remain ordinary moves. See TR1. *)
 
-(* Universal borrowing spellings, recognized before ordinary method dispatch:
-   place.ref() is exactly &place; place.mut_ref() is exactly &mut place.
-   Neither operation implicitly dereferences an existing reference, copies its
-   target, nor grants mutation permission. Both take zero arguments. *)
+(* Reference-method spellings take no arguments. Explicit instance methods
+   take precedence over universal helpers. Without a declared method,
+   place.ref() means &place and place.mut_ref() means &mut place, except A<T>:
+   allocation.ref() means &*allocation and mut_ref() means &mut *allocation.
+   Native * on references and A<T> remains unchanged. For nominal wrappers,
+   * uses declared ref(&self)->&T for a read/shared borrow and
+   mut_ref(&mut self)->&mut T for a write/mutable borrow. Both methods expose
+   the same T. Universal helpers alone do not enable wrapper dereferencing. *)
 emprunt_suffixe     = ".", ( "ref" | "mut_ref" ), "(", ")" ;
 
 (* Tuple projection is a dot followed by a decimal integer, not a leading-dot

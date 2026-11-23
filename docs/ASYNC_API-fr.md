@@ -26,7 +26,7 @@ accesseurs en mémoire restent synchrones lorsque cela convient.
 
 Chaque variante possède sa valeur `T`. `new(value)` crée sa ressource native.
 `lock(&self)` produit une garde ; la variante asynchrone doit être attendue.
-`get()` et `get_mut()` sur la garde empruntent la valeur. En Corbo, `&mut`
+`ref()` et `mut_ref()` sur la garde empruntent la valeur. En Corbo, `&mut`
 exprime une permission de mutation, sans exiger l'unicité de la référence.
 Le mutex doit survivre aux gardes et aux attentes en cours.
 

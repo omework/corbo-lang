@@ -1593,12 +1593,12 @@ async fn async_value() -> i64 {
     let mutex = AsyncMutex::new(10);
     {
         let mut guard = mutex.lock().await;
-        let target = guard.get_mut();
+        let target = guard.mut_ref();
         *target = 42;
         yield;
     }
     let guard = mutex.lock().await;
-    let view = guard.get();
+    let view = guard.ref();
     *view
 }
 
@@ -1607,12 +1607,12 @@ fn main() {
     {
         let guard = mutex.lock();
         let mut moved = guard;
-        let target = moved.get_mut();
+        let target = moved.mut_ref();
         *target = 42;
     }
     {
         let guard = mutex.lock();
-        let view = guard.get();
+        let view = guard.ref();
         print(*view);
     }
     let execution = runtime::spawn(async_value());
@@ -1755,9 +1755,17 @@ Corbo et sa bibliothèque standard sont disponibles, au choix, sous [licence MIT
 
 ### Emprunts universels et boucles for
 
-`ref()` et `mut_ref()` sont disponibles pour tous les types et sont exactement
-équivalents à `&` et `&mut`. Ils empruntent la place désignée sans déréférencement
-implicite. La permission de mutation doit déjà exister.
+`ref()` et `mut_ref()` empruntent la place comme `&` et `&mut`, sauf si des
+méthodes d’instance explicites définissent une autre cible. Pour `A<T>`, elles
+empruntent le `T` stocké ; `&allocation` emprunte le handle lui-même.
+Les références existantes ne sont pas implicitement déréférencées et la
+permission de mutation doit déjà exister.
+
+Un objet qui déclare `ref(&self) -> &T` et `mut_ref(&mut self) -> &mut T` peut
+utiliser `*` : lecture via `ref()`, écriture ou emprunt mutable via `mut_ref()`.
+Les deux variantes de `MutexGuard` utilisent ce contrat. Les dépendances de
+durée de vie et de verrou sont conservées.
+[Références et déréférencement](docs/DEREFERENCE-fr.md).
 
 ```rust
 fn main() {

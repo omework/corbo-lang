@@ -1496,3 +1496,7 @@ les constructions `Self { ... }` et les appels `Self::new(...)`. Il n’introdui
 aucune conversion ni règle de copie ou de move. Hors d’un `impl`, `Self` est
 refusé ; `Self<T>` est également refusé car les arguments sont déjà fixés
 par l’implémentation. `self` reste le nom de la liaison receveur.
+
+## Méthodes de référence et déréférencement
+
+[La résolution des méthodes](DEREFERENCE-fr.md) précise la priorité des méthodes explicites, les emprunts de la valeur de A<T> et le déréférencement statique des objets. Les règles de possession, de durée de vie et de verrou restent inchangées.

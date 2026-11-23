@@ -33,7 +33,7 @@ synchronous reader contract. Scope exit automatically cleans owned resources.
 ## Mutex ownership
 
 Both mutex variants own `T`. `new(value)` constructs a stable native resource,
-`lock(&self)` returns a guard, and guard `get()` / `get_mut()` borrow `T`.
+`lock(&self)` returns a guard, and guard `ref()` / `mut_ref()` borrow `T`.
 The async variant's `lock()` returns a Future and requires `.await`.
 The public acquisition uses a shared reference. The trusted implementation
 creates a mutable payload borrow inside `@unchecked`, preserving its target

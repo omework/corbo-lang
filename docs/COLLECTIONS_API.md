@@ -21,8 +21,8 @@ all compositions have been executed.
 | `pool.new()` | Use the element type's valid default initialization; required non-defaultable fields cannot be fabricated. |
 | `pool.try(value)` / `.try({...})` / `.try()` | The same initialization with `Result<A<T>, PoolError>`; `Full` recovers slot exhaustion. |
 | `*allocation` | Access the stored value; this is distinct from the allocation descriptor itself. |
-| `allocation.ref()` / `.mut_ref()` | Borrow the allocation descriptor. |
-| `allocation.vref()` / `.mut_vref()` | Borrow its stored value explicitly. |
+| `allocation.ref()` / `.mut_ref()` | Borrow its stored value as `&T` / `&mut T`. |
+| `&allocation` / `&mut allocation` | Borrow the allocation descriptor as `&A<T>` / `&mut A<T>`. |
 | `drop(allocation)` | Run value cleanup, release the slot, and consume the allocation. |
 
 A move of `A<T>` transfers its cleanup responsibility and preserves its source

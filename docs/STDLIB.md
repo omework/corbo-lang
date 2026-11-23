@@ -5996,22 +5996,22 @@ Members:
 - [`raw`](../stdlib/src/sync/mutex.crb#L37) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
 - [`data`](../stdlib/src/sync/mutex.crb#L39) (implementation field): Mutable payload access under the retained lock contract.
 
-### `MutexGuard::get`
+### `MutexGuard::ref`
 
 [mutex.crb:43](../stdlib/src/sync/mutex.crb#L43)
 
 ```rust
-fn get(&self) -> &T
+fn ref(&self) -> &T
 ```
 
 Borrows the protected value for reading.
 
-### `MutexGuard::get_mut`
+### `MutexGuard::mut_ref`
 
 [mutex.crb:45](../stdlib/src/sync/mutex.crb#L45)
 
 ```rust
-fn get_mut(&mut self) -> &mut T
+fn mut_ref(&mut self) -> &mut T
 ```
 
 Reborrows the protected value with mutation permission.
@@ -6091,22 +6091,22 @@ Members:
 - [`raw`](../stdlib/src/sync/asyn/mutex.crb#L37) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
 - [`data`](../stdlib/src/sync/asyn/mutex.crb#L39) (implementation field): Mutable payload access under the retained lock contract.
 
-### `MutexGuard::get`
+### `MutexGuard::ref`
 
 [mutex.crb:43](../stdlib/src/sync/asyn/mutex.crb#L43)
 
 ```rust
-fn get(&self) -> &T
+fn ref(&self) -> &T
 ```
 
 Borrows the protected value for reading.
 
-### `MutexGuard::get_mut`
+### `MutexGuard::mut_ref`
 
 [mutex.crb:45](../stdlib/src/sync/asyn/mutex.crb#L45)
 
 ```rust
-fn get_mut(&mut self) -> &mut T
+fn mut_ref(&mut self) -> &mut T
 ```
 
 Reborrows the protected value with mutation permission.

@@ -1606,3 +1606,7 @@ constructor literals (`Self { ... }`) and associated calls (`Self::new(...)`).
 It introduces no conversion, copy or move rule. `Self` outside an `impl` is
 rejected; `Self<T>` is rejected because the implementation already fixes the
 arguments. Lowercase `self` remains the receiver binding.
+
+## Reference methods and wrapper dereferencing
+
+[Accepted reference-method resolution](DEREFERENCE.md) defines explicit-method precedence, native A<T> payload borrows and static wrapper dereferencing. Existing ownership, lifetime and lock rules remain unchanged.

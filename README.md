@@ -524,9 +524,16 @@ Output: `42, 43`. [Complete package](examples/features/borrows/).
 
 #### Universal borrows and for loops
 
-`ref()` and `mut_ref()` are available on every type as exact spellings of `&`
-and `&mut`. They borrow the selected place; an existing reference is not
-implicitly dereferenced. Mutation permission must already exist.
+`ref()` and `mut_ref()` borrow the selected place as `&` and `&mut` unless
+explicit instance methods define another target. For `A<T>`, they borrow the
+stored `T`; write `&allocation` to borrow the handle itself. Existing references
+are not implicitly dereferenced. Mutation permission must already exist.
+
+A wrapper with `ref(&self) -> &T` and `mut_ref(&mut self) -> &mut T` can also
+use `*`: reading selects `ref()`, while assignment or a mutable borrow selects
+`mut_ref()`. Both `MutexGuard` variants use this contract. Lifetime and lock
+dependencies remain attached to the returned reference.
+[Dereferencing and reference methods](docs/DEREFERENCE.md).
 
 ```rust
 fn main() {
@@ -1575,12 +1582,12 @@ async fn async_value() -> i64 {
     let mutex = AsyncMutex::new(10);
     {
         let mut guard = mutex.lock().await;
-        let target = guard.get_mut();
+        let target = guard.mut_ref();
         *target = 42;
         yield;
     }
     let guard = mutex.lock().await;
-    let view = guard.get();
+    let view = guard.ref();
     *view
 }
 
@@ -1589,12 +1596,12 @@ fn main() {
     {
         let guard = mutex.lock();
         let mut moved = guard;
-        let target = moved.get_mut();
+        let target = moved.mut_ref();
         *target = 42;
     }
     {
         let guard = mutex.lock();
-        let view = guard.get();
+        let view = guard.ref();
         print(*view);
     }
     let execution = runtime::spawn(async_value());

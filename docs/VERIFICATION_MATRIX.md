@@ -5129,3 +5129,15 @@ The active corboc compiler passes 21 focused native/fatal-UBSan observations plu
 semantic/category diagnostic regressions on macOS ARM64. The Rust frontend and
 STD/runtime sources are unchanged. Fatal failure aborts without unwinding.
 See [the cycle report](CHECKED_EXTRACTION_CYCLE.md).
+
+## General reference methods
+
+Both MutexGuard variants expose ref/mut_ref; A<T>'s methods borrow T rather than
+the handle. Explicit nominal methods supply static * resolution by access mode.
+The active corboc passes 14 focused observations and 13 existing mutex checks;
+executable cases run with fatal UBSan on macOS ARM64. Documentation inventory and
+semantic/parser regressions pass. Runtime/OS implementations and the frozen Rust
+frontend are unchanged. Existing nominal allocation-handle parameter and some
+borrowed enum-return limitations are not claimed as covered.
+See [the decision](DEREFERENCE.md) and the
+[compiler report](https://github.com/omework/corboc/blob/main/docs/REFERENCE_METHODS_CYCLE.md).
