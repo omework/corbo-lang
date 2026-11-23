@@ -1477,3 +1477,12 @@ ne génère aucune synchronisation : l'implémenteur doit respecter le contrat d
 verrouillage. Le même emprunt hors du bloc de confiance reste refusé.
 Les adresses natives ne peuvent toujours pas sortir de leur bloc unchecked.
 Voir [l'API synchrone/asynchrone](ASYNC_API-fr.md).
+
+## Alias de type Self
+
+Dans un bloc `impl`, `Self` désigne le type implémenté avec ses arguments
+génériques. Il peut apparaître dans les signatures (`&Self`, `self: Self`),
+les constructions `Self { ... }` et les appels `Self::new(...)`. Il n’introduit
+aucune conversion ni règle de copie ou de move. Hors d’un `impl`, `Self` est
+refusé ; `Self<T>` est également refusé car les arguments sont déjà fixés
+par l’implémentation. `self` reste le nom de la liaison receveur.

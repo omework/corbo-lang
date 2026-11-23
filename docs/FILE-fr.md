@@ -15,7 +15,7 @@ Le [snippet complet pour Linux x86-64](FILE.md#linux-x86-64-example) montre l’
 `File::open(path, mode)` ouvre un fichier existant. Un mode d’accès comme
 `FileMode::WRITE_ONLY` peut être combiné avec `FileMode::APPEND` ou
 `FileMode::TRUNCATE` via `|`. `File::create(path, mode, perm)`
-crée un fichier exclusivement. `FilePerm.DefaultMode` utilise la politique
+ouvre ou crée un fichier ; EXCLUSIVE et TRUNCATE sont explicites. `FilePerm.DefaultMode` utilise la politique
 de la plateforme. `FilePerm.Perm(0x180)` demande lecture et écriture
 pour le propriétaire (`0600` en octal). Linux tient compte du masque de
 création ou de l’ACL POSIX par défaut. macOS bloque l’héritage de l’ACL et
@@ -48,8 +48,8 @@ threads bloquants du runtime. Son `FileError` ajoute `LaunchFailed`.
 Linux x86-64 et macOS, ou `std::sys::win::File` sur Windows. Le type
 interne possède la ressource et la ferme via son destructeur. Linux appelle le noyau, macOS appelle libSystem et Windows appelle Win32 depuis `@asm`. Windows convertit le chemin UTF-8 en UTF-16, puis possède le `HANDLE` renvoyé par `CreateFileW` et le ferme avec `CloseHandle`.
 
-Le chemin doit se terminer par un seul octet NUL. Un chemin vide ou mal
-terminé renvoie `InvalidPath`. Les erreurs renvoient `Os { code }` avec un errno négatif sur Unix ou un code Win32 négatif sous Windows. La longueur de la tranche mutable
+Le chemin est un `&str` sans terminateur NUL. Un chemin vide, contenant un NUL
+ou dépassant 32767 octets UTF-8 renvoie `InvalidPath`. Les erreurs renvoient `Os { code }` avec un errno négatif sur Unix ou un code Win32 négatif sous Windows. La longueur de la tranche mutable
 fixe le budget de lecture. Un buffer vide ou une fin de fichier donne
 `Ok(0)`.
 
@@ -129,3 +129,16 @@ async utilisent les workers bloquants existants et retiennent les emprunts
 jusqu’à la fin de l’opération.
 
 [Validation ciblée](cycles/FILE_POSITIONED_CYCLE.md).
+
+## Chemins texte et flags combinables
+
+Les chemins de `open`, `create`, `rename` et `delete` sont des `&str` UTF-8,
+sans NUL final, y compris dans `std::io::asyn`. L’API ajoute le terminateur dans
+son tampon interne. Un chemin vide, contenant un NUL ou dépassant 32767 octets
+est refusé. Le backend privé `std::sys` conserve ses chemins binaires terminés.
+
+READ et WRITE se combinent avec `|`. CREATE conserve le contenu d’un fichier
+existant ; TRUNCATE le vide explicitement. CREATE_NEW vaut CREATE | EXCLUSIVE.
+SYNC demande des écritures synchrones au système. `create(path, flags, perm)`
+ajoute CREATE et conserve FilePerm, sans troncature ni exclusivité implicites.
+Les anciens noms READ_ONLY, WRITE_ONLY et READ_WRITE restent des alias.

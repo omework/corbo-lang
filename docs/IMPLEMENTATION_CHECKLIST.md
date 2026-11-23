@@ -1506,3 +1506,11 @@ be refused; this refusal is not a missing feature.
 - [x] Preserve suspended context bookkeeping; no descriptor scans during reads.
 - [x] Focused fatal-UBSan witnesses and supported-target API execution.
 - [x] Windows ARM64 compile-only; source documentation/reference updated.
+
+## File text paths and composable modes
+
+Completed: UTF-8 `&str` public paths, independent READ/WRITE flags, explicit
+creation/exclusivity/truncation/append/SYNC flags and sync/async parity.
+Focused execution passes on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64
+under Wine. Windows ARM64 compiles/links only; exact Windows ACL execution is
+not claimed. See [the report](cycles/FILE_TEXT_MODES_CYCLE.md).

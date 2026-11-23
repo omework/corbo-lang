@@ -77,8 +77,9 @@ contrat_lock        = "#", "(", "lock", ":", "on", "=", "self",
                       [ ",", "through_result", "=", "true" ], ")" ;
 
 type                = "&", [ "mut" ], ( type | type_tranche ) | type_base ;
-type_base           = "(", ")" | type_tuple | type_tableau | type_appelable | type_nomme ;
+type_base           = "(", ")" | type_tuple | type_tableau | type_appelable | type_self | type_nomme ;
 type_tuple          = "(", type, ",", type, { ",", type }, [ "," ], ")" ;
+type_self           = "Self" ; (* Only inside an impl; inherited generic arguments. *)
 type_nomme          = chemin, [ arguments_type ] ;
 arguments_type      = "<", argument_type, { ",", argument_type }, ">" ;
 argument_type       = type | entier ;
@@ -378,3 +379,8 @@ chiffre             = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" 
 (* A for tuple pattern has exact arity. By-value items use ordinary tuple moves
    and primitive copies. A borrowed item binds references to its fields, with
    the source's permission and target lifetime; it never moves borrowed fields. *)
+
+(* Self is a scoped alias for the enclosing impl target, including its generic
+   arguments. It is accepted wherever that type or its constructor/associated
+   name is accepted. Self outside impl and Self<...> are rejected. Lowercase
+   self remains the receiver binding; this alias changes no move/borrow rule. *)

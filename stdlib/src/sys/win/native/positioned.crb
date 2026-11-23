@@ -9,6 +9,7 @@
         let write_access: u64 = if kind == 0 { 0 }
             else if (mode & 4) != 0 { 0x100084 } else { 0x40000000 };
         let access = read_access | write_access;
+        let attributes: u64 = 0x40000000 | (if (mode & 64) != 0 { 0x80000000 } else { 0 });
         let mut reopened: u64 = 0;
         let mut error: i64 = 0;
         @unchecked {
@@ -16,7 +17,7 @@
                 mov x0, ${handle}
                 mov x1, ${access}
                 mov w2, #7
-                mov w3, #0x40000000
+                mov x3, ${attributes}
                 bl ReOpenFile
                 cmn x0, #1
                 b.eq 1f
@@ -185,6 +186,7 @@
         let write_access: u64 = if kind == 0 { 0 }
             else if (mode & 4) != 0 { 0x100084 } else { 0x40000000 };
         let access = read_access | write_access;
+        let attributes: u64 = 0x40000000 | (if (mode & 64) != 0 { 0x80000000 } else { 0 });
         let mut reopened: u64 = 0;
         let mut error: i64 = 0;
         @unchecked {
@@ -193,7 +195,7 @@
                 mov rcx, ${handle}
                 mov rdx, ${access}
                 mov r8d, 7
-                mov r9d, 0x40000000
+                mov r9, ${attributes}
                 call ReOpenFile
                 cmp rax, -1
                 je 1f

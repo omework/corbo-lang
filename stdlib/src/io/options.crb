@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Shared file metadata, permissions and modes for async and explicit sync I/O.
+//! Shared file metadata, permissions and modes for sync and async I/O.
 
     /// Holds the metadata returned by the file API, including its size.
     pub struct FileStats {
@@ -35,12 +35,24 @@
     }
 
     impl FileMode {
-        /// Opens the file for reading only.
-        const READ_ONLY: i64 = 0;
+        /// Enables reading; combine with WRITE for read/write access.
+        const READ: i64 = 1;
+        /// Enables writing; combine with READ, CREATE, APPEND or TRUNCATE.
+        const WRITE: i64 = 2;
+        /// Creates the file if it is absent, without replacing existing contents.
+        const CREATE: i64 = 16;
+        /// Requires CREATE and fails atomically when the path already exists.
+        const EXCLUSIVE: i64 = 32;
+        /// Creates a new file exclusively; equivalent to CREATE | EXCLUSIVE.
+        const CREATE_NEW: i64 = 48;
+        /// Requests synchronous completion of file writes at the OS boundary.
+        const SYNC: i64 = 64;
+        /// Compatibility spelling for READ.
+        const READ_ONLY: i64 = 1;
         /// Opens the file for writing only.
-        const WRITE_ONLY: i64 = 1;
+        const WRITE_ONLY: i64 = 2;
         /// Allows both reading and writing.
-        const READ_WRITE: i64 = 2;
+        const READ_WRITE: i64 = 3;
         /// Requests that writes append to the file.
         const APPEND: i64 = 4;
         /// Requests that an existing file be truncated on open.

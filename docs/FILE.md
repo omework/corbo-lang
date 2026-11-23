@@ -19,8 +19,8 @@ Scope exit or explicit `drop(file)` invokes the inner type's destructor.
 
 | Operation | Behavior |
 | --- | --- |
-| `File::open(path, mode)` | Opens an existing file with the selected access mode and flags. |
-| `File::create(path, mode, perm)` | Creates a new file exclusively with a `FilePerm` creation policy. |
+| `File::open(path, mode)` | Opens a UTF-8 string path; READ and WRITE combine with CREATE, CREATE_NEW, APPEND, TRUNCATE and SYNC. |
+| `File::create(path, mode, perm)` | Opens or creates a UTF-8 string path with a `FilePerm` creation policy; EXCLUSIVE and TRUNCATE remain explicit. |
 | `file.read(&mut buffer[..])` | Reads at most the buffer length and returns the number of bytes read. EOF and empty buffers return zero. |
 | `file.write(&buffer[..])` | Writes up to the buffer length and returns the number of bytes written. An empty buffer writes zero bytes. |
 | `file.read_at(&mut buffer[..], offset)` | Reads at an explicit `u64` byte offset without moving the cursor. EOF and valid empty ranges return zero. |
@@ -46,11 +46,10 @@ a non-seekable handle. [Linux lseek](https://man7.org/linux/man-pages/man2/lseek
 Rename validates both paths before calling the OS. A move across filesystems
 returns an OS error. [Linux rename](https://man7.org/linux/man-pages/man2/rename.2.html) · [Windows MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
 
-Select one access mode from `FileMode::READ_ONLY`,
-`FileMode::WRITE_ONLY` and `FileMode::READ_WRITE`. Combine a writable
-mode with `FileMode::APPEND` or `FileMode::TRUNCATE` using `|`.
-The two flags are mutually exclusive. Invalid mode combinations or
-permission bits outside the nine supported bits return `InvalidOptions`.
+Combine `FileMode::READ` and `FileMode::WRITE` with `|`. At least one is
+required. `APPEND` and `TRUNCATE` require WRITE; `EXCLUSIVE` requires CREATE.
+`CREATE_NEW` combines CREATE and EXCLUSIVE. Unknown flags and permission bits
+outside the nine supported bits return `InvalidOptions`.
 The access mode applies to the returned handle. The creation policy
 applies to future access to the file.
 
@@ -68,8 +67,8 @@ operations on the runtime's blocking workers. Its `FileError` adds
 path alive until completion. `FileStats` is shared by the two APIs and lives
 in `std::io`, alongside `FileMode`, `FilePerm`, and `SeekFrom`.
 
-The API expects a byte path with a single trailing NUL. Empty or malformed
-NUL-terminated paths return `InvalidPath`. OS errors use `Os { code }` with a negative errno on Unix and a negated Win32 error on Windows. Linux uses kernel syscalls, macOS calls libSystem, and Windows calls Win32, all from `@asm`.
+The portable API accepts UTF-8 `&str` paths and adds the native terminator internally.
+Empty paths, embedded NUL bytes and paths over 32767 bytes return `InvalidPath`. OS errors use `Os { code }` with a negative errno on Unix and a negated Win32 error on Windows. Linux uses kernel syscalls, macOS calls libSystem, and Windows calls Win32, all from `@asm`.
 
 - `@unchecked { ... }` marks code whose effects beyond Corbo's static analysis are the developer's responsibility. Ordinary Corbo checks still apply within the block. If assembly hands a buffer address to another thread, the developer must keep the buffer valid until that thread's last access, even after the block exits.
 - `@asm { ... }` contains target assembly only. An operand written `${name}` refers to a Corbo binding in scope. The instructions express the transfers explicitly. For example, `mov rdi, ${address}` reads the binding's value and `mov ${raw}, rax` writes to the mutable binding.
@@ -176,8 +175,7 @@ use std::io::{File, FileError};
 use std::io::{FileMode};
 
 fn main() {
-    // "in.txt" followed by a NUL byte.
-    let path: [u8; 7] = [105, 110, 46, 116, 120, 116, 0];
+    let path = "in.txt";
 
     match File::open(&path[..], FileMode::read_only()) {
         Ok(opened) => {
@@ -235,3 +233,29 @@ persistence protocol requires it.
 
 [Focused validation](cycles/FILE_DURABILITY_SUBDB_CYCLE.md) records the executed
 sync/async cases and platform limits.
+
+## String paths and independent mode flags
+
+All portable File path parameters (`open`, `create`, `rename`, `delete`) accept
+`&str`, in both `std::io` and `std::io::asyn`. Supply normal UTF-8 text without
+an appended NUL. The API uses bounded internal syscall storage, rejects empty
+paths and embedded NUL bytes, and supports at most 32767 UTF-8 bytes per path.
+The private `std::sys` layer retains its NUL-terminated byte ABI.
+
+```rust
+let file = File::open("journal.wal", FileMode::READ | FileMode::WRITE | FileMode::CREATE)?;
+```
+
+READ and WRITE are independent bits. READ_ONLY, WRITE_ONLY and READ_WRITE remain
+aliases. CREATE preserves an existing file; TRUNCATE explicitly clears it.
+CREATE_NEW is CREATE | EXCLUSIVE and fails atomically if the path exists.
+EXCLUSIVE without CREATE, an empty access mode, unknown flags, or write-only
+behaviors without WRITE return InvalidOptions. APPEND and TRUNCATE may combine.
+SYNC requests synchronous OS writes. `create(path, flags, perm)` adds CREATE and
+uses explicit/default permissions; it does not silently request exclusivity or
+truncation. Use CREATE_NEW when creating private key material exclusively.
+
+Unix maps these controls to open flags; Windows uses the corresponding
+CreateFile dispositions and WRITE_THROUGH. Native handles remain non-inheritable.
+[Unix flags](https://man7.org/linux/man-pages/man2/open.2.html),
+[Windows dispositions and flags](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).

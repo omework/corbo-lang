@@ -1,0 +1,82 @@
+use std::io::{File, FileMode, FilePerm, FileError, SeekFrom};
+
+// The focused validator runs this scenario through both File APIs.
+fn probe() -> Result<i64, FileError> {
+    // Paths are ordinary UTF-8 text; no caller-owned terminator is needed.
+    {
+        let mut file = File::open("text-é.bin", FileMode::READ | FileMode::WRITE | FileMode::CREATE | FileMode::TRUNCATE | FileMode::SYNC)?;
+        let bytes: [u8; 3] = [97, 98, 99];
+        if file.write(&bytes[..])? != 3 { return Ok(101); }
+        file.seek(SeekFrom.Start(1))?;
+        let mut first: [u8; 1] = [0; 1];
+        if file.read_at(&mut first[..], 0)? != 1 || first[0] != 97 { return Ok(102); }
+        if file.seek(SeekFrom.Current(0))? != 1 { return Ok(103); }
+    }
+    {
+        // CREATE must preserve existing contents when TRUNCATE is absent.
+        let file = File::open("text-é.bin", FileMode::READ | FileMode::CREATE)?;
+        let stats = file.stats()?;
+        if stats.size() != 3 { return Ok(104); }
+    }
+    match File::open("text-é.bin", FileMode::WRITE | FileMode::CREATE_NEW) {
+        Ok(file) => { drop(file); return Ok(105); },
+        Err(_error) => {},
+    };
+    {
+        let mut file = File::open("text-é.bin", FileMode::WRITE | FileMode::APPEND)?;
+        let byte: [u8; 1] = [33];
+        if file.write(&byte[..])? != 1 { return Ok(106); }
+    }
+    // Reject malformed paths and flag combinations before issuing an OS call.
+    match File::open("", FileMode::READ) {
+        Err(error) => {
+            match error {
+                FileError.InvalidPath => {},
+                _ => { return Ok(107); },
+            }
+        },
+        Ok(_file) => { return Ok(107); },
+    };
+    match File::open("bad\u0000name", FileMode::READ) {
+        Err(error) => {
+            match error {
+                FileError.InvalidPath => {},
+                _ => { return Ok(108); },
+            }
+        },
+        Ok(_file) => { return Ok(108); },
+    };
+    match File::open("text-é.bin", FileMode::READ | FileMode::APPEND) {
+        Err(error) => {
+            match error {
+                FileError.InvalidOptions => {},
+                _ => { return Ok(109); },
+            }
+        },
+        Ok(_file) => { return Ok(109); },
+    };
+    match File::open("text-é.bin", FileMode::WRITE | FileMode::EXCLUSIVE) {
+        Err(error) => {
+            match error {
+                FileError.InvalidOptions => {},
+                _ => { return Ok(110); },
+            }
+        },
+        Ok(_file) => { return Ok(110); },
+    };
+    {
+        // Explicit permissions are still available for newly created secrets.
+        let private = File::create("private.bin", FileMode::WRITE | FileMode::CREATE_NEW, FilePerm.Perm(0x180))?;
+    }
+    File::delete("private.bin")?;
+    File::rename("text-é.bin", "final-é.bin")?;
+    // Retained for an independent byte oracle in the Python validator.
+    Ok(42)
+}
+
+fn main() {
+    match probe() {
+        Ok(value) => { print(value); },
+        Err(_error) => { print(999); },
+    };
+}

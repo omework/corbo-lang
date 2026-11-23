@@ -35,13 +35,13 @@
     }
 
     /// Opens or creates the blocking file from a worker task.
-    async fn open_on_worker(path: &[u8], mode: i64, create: bool, perm: FilePerm) -> Result<BlockingFile, BlockingError> {
+    async fn open_on_worker(path: &str, mode: i64, create: bool, perm: FilePerm) -> Result<BlockingFile, BlockingError> {
         if create { return BlockingFile::create(path, mode, perm); }
         BlockingFile::open(path, mode)
     }
 
     /// Launches and awaits the open worker, then wraps the owned file handle.
-    async fn open_file(path: &[u8], mode: i64, create: bool, perm: FilePerm) -> Result<File, FileError> {
+    async fn open_file(path: &str, mode: i64, create: bool, perm: FilePerm) -> Result<File, FileError> {
         let worker = runtime::spawn_blocking(open_on_worker(path, mode, create, perm));
         match worker.await {
             Ok(result) => {
@@ -86,7 +86,7 @@
     async fn truncate_on_worker(file: &mut BlockingFile, length: u64) -> Result<(), BlockingError> { file.truncate(length) }
 
     /// Renames the filesystem entry on a blocking worker.
-    async fn rename_on_worker(source: &[u8], destination: &[u8]) -> Result<(), BlockingError> {
+    async fn rename_on_worker(source: &str, destination: &str) -> Result<(), BlockingError> {
         BlockingFile::rename(source, destination)
     }
 
@@ -96,18 +96,18 @@
     }
 
     /// Removes the file on a blocking worker.
-    async fn delete_on_worker(path: &[u8]) -> Result<(), BlockingError> {
+    async fn delete_on_worker(path: &str) -> Result<(), BlockingError> {
         BlockingFile::delete(path)
     }
 
     impl File {
-        /// Awaits opening an existing file with the selected mode. The path needs one trailing NUL.
-        async fn open(path: &[u8], mode: i64) -> Result<File, FileError> {
+        /// Awaits opening an existing file with the selected mode. The path is UTF-8 without a trailing NUL.
+        async fn open(path: &str, mode: i64) -> Result<File, FileError> {
             open_file(path, mode, false, FilePerm.DefaultMode).await
         }
 
-        /// Awaits opening or creating a file with the selected mode and permissions. The path needs one trailing NUL.
-        async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError> {
+        /// Awaits opening or creating a file with the selected mode and permissions. The path is UTF-8 without a trailing NUL.
+        async fn create(path: &str, mode: i64, perm: FilePerm) -> Result<File, FileError> {
             open_file(path, mode, true, perm).await
         }
 
@@ -242,7 +242,7 @@
         }
 
         /// Awaits moving a filesystem entry to a different path.
-        async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
+        async fn rename(source: &str, destination: &str) -> Result<(), FileError> {
             let worker = runtime::spawn_blocking(rename_on_worker(source, destination));
             match worker.await {
                 Ok(result) => {
@@ -256,7 +256,7 @@
         }
 
         /// Awaits removing a file by path.
-        async fn delete(path: &[u8]) -> Result<(), FileError> {
+        async fn delete(path: &str) -> Result<(), FileError> {
             let worker = runtime::spawn_blocking(delete_on_worker(path));
             match worker.await {
                 Ok(result) => {

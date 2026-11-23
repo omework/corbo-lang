@@ -39,35 +39,63 @@
     }
 
 
-    /// Validates the access mode and flags before dispatching to the platform backend.
-    fn open_file(path: &[u8], mode: i64, create: bool, perm: u32) -> Result<File, FileError> {
-        if copy(mode) < 0 || copy(mode) > 15 { return Err(FileError.InvalidOptions); }
-        let access = copy(mode) & 3;
-        let flags = copy(mode) & 12;
-        if copy(access) == 3 || (access == 0 && copy(flags) != 0) || flags == 12 {
+    /// Copies a UTF-8 path into bounded syscall storage and adds its NUL.
+    /// Public paths exclude NUL; empty paths, embedded NUL and paths over
+    /// 32767 UTF-8 bytes are rejected before any OS call.
+    fn prepare_path(path: &str, terminated: &mut [u8]) -> bool {
+        let bytes = path.as_bytes();
+        let length = bytes.len();
+        if length == 0 || length >= terminated.len() { return false; }
+        let mut i: usize = 0;
+        while i < length {
+            if bytes[i] == 0 { return false; }
+            terminated[i] = bytes[i];
+            i += 1;
+        }
+        terminated[length] = 0;
+        true
+    }
+
+    /// Validates independent public mode bits and maps access to the native ABI.
+    fn open_file(path: &str, mode: i64, perm: u32) -> Result<File, FileError> {
+        if mode < 0 || (mode & 127) != mode { return Err(FileError.InvalidOptions); }
+        let access = mode & 3;
+        let write = (access & 2) != 0;
+        let create = (mode & 16) != 0;
+        if access == 0 || (!write && (mode & 12) != 0)
+            || ((mode & 32) != 0 && !create) {
             return Err(FileError.InvalidOptions);
         }
-        let stored_mode = copy(mode);
-        match PlatformFile::open(path, mode, create, perm) {
-            Ok(inner) => { Ok(File { inner: inner, mode: stored_mode }) },
+        let native_access: i64 = if access == 1 { 0 } else if access == 2 { 1 } else { 2 };
+        let native_mode = native_access | (mode & 124);
+        let bytes = path.as_bytes();
+        let length = bytes.len();
+        let mut terminated: [u8; 32768] = [0; 32768];
+        if !prepare_path(path, &mut terminated[..]) { return Err(FileError.InvalidPath); }
+        match PlatformFile::open(&terminated[..length + 1], native_mode, create, perm) {
+            Ok(inner) => { Ok(File { inner: inner, mode: native_mode }) },
             Err(error) => { Err(translate_error(error)) },
         }
     }
 
     impl File {
-        /// Opens an existing file with the requested access mode and flags. The path needs one trailing NUL.
-        fn open(path: &[u8], mode: i64) -> Result<File, FileError> { open_file(path, mode, false, 0xffffffff) }
+        /// Opens a UTF-8 path with independent OR-combined FileMode flags.
+        /// CREATE uses default creation permissions; no trailing NUL is required.
+        fn open(path: &str, mode: i64) -> Result<File, FileError> {
+            open_file(path, mode, 0xffffffff)
+        }
 
-        /// Opens or creates a file with the requested mode and creation permissions. The path needs one trailing NUL.
-        fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError> {
+        /// Opens or creates a UTF-8 path with explicit creation permissions.
+        /// CREATE is implied; TRUNCATE and EXCLUSIVE remain explicit flags.
+        fn create(path: &str, mode: i64, perm: FilePerm) -> Result<File, FileError> {
             let bits: u32 = match perm {
                 FilePerm.DefaultMode => { 0xffffffff },
                 FilePerm.Perm(bits) => {
-                    if copy(bits) > 0x1ff { return Err(FileError.InvalidOptions); }
+                    if bits > 0x1ff { return Err(FileError.InvalidOptions); }
                     bits
                 },
             };
-            open_file(path, mode, true, bits)
+            open_file(path, mode | 16, bits)
         }
 
         /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
@@ -165,16 +193,27 @@
         }
 
         /// Renames a file from the source path to the destination path using platform semantics.
-        fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
-            match PlatformFile::rename(source, destination) {
+        fn rename(source: &str, destination: &str) -> Result<(), FileError> {
+            let source_bytes = source.as_bytes();
+            let source_length = source_bytes.len();
+            let destination_bytes = destination.as_bytes();
+            let destination_length = destination_bytes.len();
+            let mut source_z: [u8; 32768] = [0; 32768];
+            let mut destination_z: [u8; 32768] = [0; 32768];
+            if !prepare_path(source, &mut source_z[..]) || !prepare_path(destination, &mut destination_z[..]) { return Err(FileError.InvalidPath); }
+            match PlatformFile::rename(&source_z[..source_length + 1], &destination_z[..destination_length + 1]) {
                 Ok(()) => { Ok(()) },
                 Err(error) => { Err(translate_error(error)) },
             }
         }
 
         /// Removes the file named by the supplied path.
-        fn delete(path: &[u8]) -> Result<(), FileError> {
-            match PlatformFile::delete(path) {
+        fn delete(path: &str) -> Result<(), FileError> {
+            let bytes = path.as_bytes();
+            let length = bytes.len();
+            let mut terminated: [u8; 32768] = [0; 32768];
+            if !prepare_path(path, &mut terminated[..]) { return Err(FileError.InvalidPath); }
+            match PlatformFile::delete(&terminated[..length + 1]) {
                 Ok(()) => { Ok(()) },
                 Err(error) => { Err(translate_error(error)) },
             }

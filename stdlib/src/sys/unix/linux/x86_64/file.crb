@@ -11,9 +11,11 @@
         if !valid_file_path(&path[0..length]) { return (false, 0); }
         let access = copy(mode) & 3;
         let append: i64 = if (copy(mode) & 4) != 0 { 0x400 } else { 0 };
-        let truncate: i64 = if (mode & 8) != 0 { 0x200 } else { 0 };
-        let creation: i64 = if create { 0xc0 } else { 0 };
-        let flags = 0x80000 | access | append | truncate | creation;
+        let truncate: i64 = if (copy(mode) & 8) != 0 { 0x200 } else { 0 };
+        let creation: i64 = if create { 0x40 } else { 0 };
+        let exclusive: i64 = if (copy(mode) & 32) != 0 { 0x80 } else { 0 };
+        let sync: i64 = if (mode & 64) != 0 { 0x101000 } else { 0 };
+        let flags = 0x80000 | access | append | truncate | creation | exclusive | sync;
         let mut raw: i64 = 0;
         @unchecked {
             let address = addr(&path[0]);

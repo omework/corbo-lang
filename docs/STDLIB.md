@@ -3088,27 +3088,29 @@ Members:
 
 ### `File::open`
 
-[file.crb:59](../stdlib/src/io/file.crb#L59)
+[file.crb:84](../stdlib/src/io/file.crb#L84)
 
 ```rust
-fn open(path: &[u8], mode: i64) -> Result<File, FileError>
+fn open(path: &str, mode: i64) -> Result<File, FileError>
 ```
 
-Opens an existing file with the requested access mode and flags. The path needs one trailing NUL.
+Opens a UTF-8 path with independent OR-combined FileMode flags.
+CREATE uses default creation permissions; no trailing NUL is required.
 
 ### `File::create`
 
-[file.crb:62](../stdlib/src/io/file.crb#L62)
+[file.crb:90](../stdlib/src/io/file.crb#L90)
 
 ```rust
-fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
+fn create(path: &str, mode: i64, perm: FilePerm) -> Result<File, FileError>
 ```
 
-Opens or creates a file with the requested mode and creation permissions. The path needs one trailing NUL.
+Opens or creates a UTF-8 path with explicit creation permissions.
+CREATE is implied; TRUNCATE and EXCLUSIVE remain explicit flags.
 
 ### `File::read`
 
-[file.crb:74](../stdlib/src/io/file.crb#L74)
+[file.crb:102](../stdlib/src/io/file.crb#L102)
 
 ```rust
 fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
@@ -3118,7 +3120,7 @@ Reads into the caller's slice and returns the bytes copied. An empty buffer retu
 
 ### `File::write`
 
-[file.crb:83](../stdlib/src/io/file.crb#L83)
+[file.crb:111](../stdlib/src/io/file.crb#L111)
 
 ```rust
 fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
@@ -3128,7 +3130,7 @@ Writes bytes from the caller's slice and returns the number accepted, which may 
 
 ### `File::read_at`
 
-[file.crb:93](../stdlib/src/io/file.crb#L93)
+[file.crb:121](../stdlib/src/io/file.crb#L121)
 
 ```rust
 fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError>
@@ -3139,7 +3141,7 @@ Rejects unrepresentable ranges and write-only mode. Valid empty ranges return ze
 
 ### `File::write_at`
 
-[file.crb:108](../stdlib/src/io/file.crb#L108)
+[file.crb:136](../stdlib/src/io/file.crb#L136)
 
 ```rust
 fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError>
@@ -3150,7 +3152,7 @@ Rejects unrepresentable ranges and read-only/append modes. Valid empty ranges re
 
 ### `File::seek`
 
-[file.crb:122](../stdlib/src/io/file.crb#L122)
+[file.crb:150](../stdlib/src/io/file.crb#L150)
 
 ```rust
 fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
@@ -3160,7 +3162,7 @@ Moves the file cursor relative to the supplied origin and returns its new absolu
 
 ### `File::sync_all`
 
-[file.crb:140](../stdlib/src/io/file.crb#L140)
+[file.crb:168](../stdlib/src/io/file.crb#L168)
 
 ```rust
 fn sync_all(&mut self) -> Result<(), FileError>
@@ -3170,7 +3172,7 @@ Persists this file's contents/metadata; does not sync a parent directory or crea
 
 ### `File::truncate`
 
-[file.crb:149](../stdlib/src/io/file.crb#L149)
+[file.crb:177](../stdlib/src/io/file.crb#L177)
 
 ```rust
 fn truncate(&mut self, length: u64) -> Result<(), FileError>
@@ -3180,7 +3182,7 @@ Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
 
 ### `File::stats`
 
-[file.crb:159](../stdlib/src/io/file.crb#L159)
+[file.crb:187](../stdlib/src/io/file.crb#L187)
 
 ```rust
 fn stats(&self) -> Result<FileStats, FileError>
@@ -3190,26 +3192,26 @@ Returns a snapshot of file metadata from its open handle.
 
 ### `File::rename`
 
-[file.crb:168](../stdlib/src/io/file.crb#L168)
+[file.crb:196](../stdlib/src/io/file.crb#L196)
 
 ```rust
-fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
+fn rename(source: &str, destination: &str) -> Result<(), FileError>
 ```
 
 Renames a file from the source path to the destination path using platform semantics.
 
 ### `File::delete`
 
-[file.crb:176](../stdlib/src/io/file.crb#L176)
+[file.crb:211](../stdlib/src/io/file.crb#L211)
 
 ```rust
-fn delete(path: &[u8]) -> Result<(), FileError>
+fn delete(path: &str) -> Result<(), FileError>
 ```
 
 Removes the file named by the supplied path.
 
 
-Shared file metadata, permissions and modes for async and explicit sync I/O.
+Shared file metadata, permissions and modes for sync and async I/O.
 
 ### `FileStats`
 
@@ -3276,39 +3278,99 @@ pub struct FileMode
 
 Provides the access modes and flags accepted by file open and create.
 
-### `FileMode::READ_ONLY`
+### `FileMode::READ`
 
 [options.crb:39](../stdlib/src/io/options.crb#L39)
 
 ```rust
-const READ_ONLY: i64 = 0
+const READ: i64 = 1
 ```
 
-Opens the file for reading only.
+Enables reading; combine with WRITE for read/write access.
 
-### `FileMode::WRITE_ONLY`
+### `FileMode::WRITE`
 
 [options.crb:41](../stdlib/src/io/options.crb#L41)
 
 ```rust
-const WRITE_ONLY: i64 = 1
+const WRITE: i64 = 2
+```
+
+Enables writing; combine with READ, CREATE, APPEND or TRUNCATE.
+
+### `FileMode::CREATE`
+
+[options.crb:43](../stdlib/src/io/options.crb#L43)
+
+```rust
+const CREATE: i64 = 16
+```
+
+Creates the file if it is absent, without replacing existing contents.
+
+### `FileMode::EXCLUSIVE`
+
+[options.crb:45](../stdlib/src/io/options.crb#L45)
+
+```rust
+const EXCLUSIVE: i64 = 32
+```
+
+Requires CREATE and fails atomically when the path already exists.
+
+### `FileMode::CREATE_NEW`
+
+[options.crb:47](../stdlib/src/io/options.crb#L47)
+
+```rust
+const CREATE_NEW: i64 = 48
+```
+
+Creates a new file exclusively; equivalent to CREATE | EXCLUSIVE.
+
+### `FileMode::SYNC`
+
+[options.crb:49](../stdlib/src/io/options.crb#L49)
+
+```rust
+const SYNC: i64 = 64
+```
+
+Requests synchronous completion of file writes at the OS boundary.
+
+### `FileMode::READ_ONLY`
+
+[options.crb:51](../stdlib/src/io/options.crb#L51)
+
+```rust
+const READ_ONLY: i64 = 1
+```
+
+Compatibility spelling for READ.
+
+### `FileMode::WRITE_ONLY`
+
+[options.crb:53](../stdlib/src/io/options.crb#L53)
+
+```rust
+const WRITE_ONLY: i64 = 2
 ```
 
 Opens the file for writing only.
 
 ### `FileMode::READ_WRITE`
 
-[options.crb:43](../stdlib/src/io/options.crb#L43)
+[options.crb:55](../stdlib/src/io/options.crb#L55)
 
 ```rust
-const READ_WRITE: i64 = 2
+const READ_WRITE: i64 = 3
 ```
 
 Allows both reading and writing.
 
 ### `FileMode::APPEND`
 
-[options.crb:45](../stdlib/src/io/options.crb#L45)
+[options.crb:57](../stdlib/src/io/options.crb#L57)
 
 ```rust
 const APPEND: i64 = 4
@@ -3318,7 +3380,7 @@ Requests that writes append to the file.
 
 ### `FileMode::TRUNCATE`
 
-[options.crb:47](../stdlib/src/io/options.crb#L47)
+[options.crb:59](../stdlib/src/io/options.crb#L59)
 
 ```rust
 const TRUNCATE: i64 = 8
@@ -3328,7 +3390,7 @@ Requests that an existing file be truncated on open.
 
 ### `FileMode::read_only`
 
-[options.crb:50](../stdlib/src/io/options.crb#L50)
+[options.crb:62](../stdlib/src/io/options.crb#L62)
 
 ```rust
 fn read_only() -> i64
@@ -3338,7 +3400,7 @@ Returns the mode for read-only access.
 
 ### `FileMode::write_only`
 
-[options.crb:52](../stdlib/src/io/options.crb#L52)
+[options.crb:64](../stdlib/src/io/options.crb#L64)
 
 ```rust
 fn write_only() -> i64
@@ -3348,7 +3410,7 @@ Returns the mode for write-only access.
 
 ### `FileMode::read_write`
 
-[options.crb:54](../stdlib/src/io/options.crb#L54)
+[options.crb:66](../stdlib/src/io/options.crb#L66)
 
 ```rust
 fn read_write() -> i64
@@ -3358,7 +3420,7 @@ Returns the mode for read and write access.
 
 ### `FileMode::append`
 
-[options.crb:56](../stdlib/src/io/options.crb#L56)
+[options.crb:68](../stdlib/src/io/options.crb#L68)
 
 ```rust
 fn append() -> i64
@@ -3368,7 +3430,7 @@ Returns the append flag to combine with a writable access mode.
 
 ### `FileMode::truncate`
 
-[options.crb:58](../stdlib/src/io/options.crb#L58)
+[options.crb:70](../stdlib/src/io/options.crb#L70)
 
 ```rust
 fn truncate() -> i64
@@ -3420,20 +3482,20 @@ Members:
 [file.crb:105](../stdlib/src/io/asyn/file.crb#L105)
 
 ```rust
-async fn open(path: &[u8], mode: i64) -> Result<File, FileError>
+async fn open(path: &str, mode: i64) -> Result<File, FileError>
 ```
 
-Awaits opening an existing file with the selected mode. The path needs one trailing NUL.
+Awaits opening an existing file with the selected mode. The path is UTF-8 without a trailing NUL.
 
 ### `File::create`
 
 [file.crb:110](../stdlib/src/io/asyn/file.crb#L110)
 
 ```rust
-async fn create(path: &[u8], mode: i64, perm: FilePerm) -> Result<File, FileError>
+async fn create(path: &str, mode: i64, perm: FilePerm) -> Result<File, FileError>
 ```
 
-Awaits opening or creating a file with the selected mode and permissions. The path needs one trailing NUL.
+Awaits opening or creating a file with the selected mode and permissions. The path is UTF-8 without a trailing NUL.
 
 ### `File::read`
 
@@ -3520,7 +3582,7 @@ Awaits a snapshot of the open file's metadata.
 [file.crb:245](../stdlib/src/io/asyn/file.crb#L245)
 
 ```rust
-async fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError>
+async fn rename(source: &str, destination: &str) -> Result<(), FileError>
 ```
 
 Awaits moving a filesystem entry to a different path.
@@ -3530,7 +3592,7 @@ Awaits moving a filesystem entry to a different path.
 [file.crb:259](../stdlib/src/io/asyn/file.crb#L259)
 
 ```rust
-async fn delete(path: &[u8]) -> Result<(), FileError>
+async fn delete(path: &str) -> Result<(), FileError>
 ```
 
 Awaits removing a file by path.

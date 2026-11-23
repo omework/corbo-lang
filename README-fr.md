@@ -1139,12 +1139,18 @@ Sortie : `42`. [Paquet complet](examples/features/blocking/).
 `std::io::asyn::File` utilise `.await` pour ses opérations. Les modes, permissions et origines de seek sont communs avec `std::io::File`. Un bloc interne ferme le fichier avant la suppression du chemin ; les erreurs sont elles aussi détruites automatiquement à la sortie de leur bloc.
 
 <!-- example: async_file -->
+Les chemins de fichier sont des `&str` UTF-8, sans NUL final. Les indicateurs se combinent :
+
+```rust
+File::open("journal.wal", FileMode::READ | FileMode::WRITE | FileMode::CREATE)
+```
+
 ```rust
 use std::io::{FileMode, FilePerm, SeekFrom};
 use std::io::asyn::{File, FileError};
 
 async fn round_trip() -> Result<usize, FileError> {
-    let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
+    let path = "demo.bin";
     let count = {
         let mut file = File::create(
             &path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode
@@ -1192,7 +1198,7 @@ use std::io::{File, FileError};
 use std::io::{FileMode, FilePerm, SeekFrom};
 
 fn run() -> Result<usize, FileError> {
-    let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
+    let path = "demo.bin";
     let count = {
         let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
         let bytes: [u8; 2] = [111, 107];
@@ -1231,7 +1237,7 @@ use std::io::{FileMode, FilePerm};
 use std::io::buffered::BufWriter;
 
 fn main() {
-    let path: [u8; 9] = [100, 101, 109, 111, 46, 98, 105, 110, 0];
+    let path = "demo.bin";
     {
         let mut file = match File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode) {
             Ok(file) => { file },

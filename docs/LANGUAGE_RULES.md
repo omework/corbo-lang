@@ -1587,3 +1587,12 @@ iteration keeps its ordinary cleanup scope.
 A numeric tuple projection such as `item.0` is distinct from a leading-dot float
 such as `.5` in operand position. Invalid field indices are diagnosed as tuple
 projection errors rather than as a missing following block.
+
+## Self type alias
+
+Inside an `impl`, `Self` denotes the implemented type with its enclosing
+generic arguments. It is accepted in signatures (`&Self`, `self: Self`),
+constructor literals (`Self { ... }`) and associated calls (`Self::new(...)`).
+It introduces no conversion, copy or move rule. `Self` outside an `impl` is
+rejected; `Self<T>` is rejected because the implementation already fixes the
+arguments. Lowercase `self` remains the receiver binding.

@@ -5101,3 +5101,11 @@ and were not replayed. Windows ARM64 execution remains deferred.
 [Evidence and limits](RUNTIME_METRICS.md). Eight Corbo observations plus
 C/Corbo ABI concurrent-counter witnesses pass with fatal UBSan. API executes on
 macOS ARM64/x86-64, Linux x86-64 and Windows x86-64; Windows ARM64 compile-only.
+
+## File text paths and composable modes
+
+Completed: UTF-8 `&str` public paths, independent READ/WRITE flags, explicit
+creation/exclusivity/truncation/append/SYNC flags and sync/async parity.
+Focused execution passes on macOS ARM64/x86-64, Linux x86-64 and Windows x86-64
+under Wine. Windows ARM64 compiles/links only; exact Windows ACL execution is
+not claimed. See [the report](cycles/FILE_TEXT_MODES_CYCLE.md).
