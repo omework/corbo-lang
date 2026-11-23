@@ -465,7 +465,7 @@ matches. [Evidence and limits](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md
 | --- | --- | --- |
 | 07 · Primitives, literals and context | The strings and the sign, the same families and widths, parameters, returns, homogeneous table and results of the `if`, `match` and `break`. | P · Digital profile. Fields and compatibility detailed in the integration cycle. |
 | 07 · F4/F5, arithmetic and logical | Overflow, null divider, quotient and remains signed at the terminal, rounded even, null floating result, subflux, short circuit, binary operations and signed offset. | P · Diagnosis of native C constants and controls under UBSan in cases exercised. |
-| 07 · Conversions, indices and lengths | `as` checked on the source type, `try_from` exact value, indices checked before conversion, `len()` Table and slice typed in `u64`. | P · Synchronous conversions, fixed tables and async conversions within the perimeter of the integration cycle. |
+| 07 · Conversions, indices and lengths | Historical: `as` checked on the source type (superseded by [value-exact checked casts](CHECKED_EXTRACTION_CONVERSIONS.md)); `try_from` exact value, indices checked before conversion, `len()` Table and slice typed in `u64`. | P · Synchronous conversions, fixed tables and async conversions within the perimeter of the integration cycle. |
 | 07 · Compound assignments, N4–N5, AS8 | One evaluation of a computed index, bounds check before the RHS, reads and disjoint writes during the reservation, signed shifts, checked arithmetic, and resumption after `.await` even when the index changes. | Rust and Crust: 8 executions, 6 expected runtime traps under fatal UBSan, and 14 compile-time refusals on macOS ARM64. [Witnesses](../validation/check_compound_assignments.py) · [Cycle report](cycles/CORE_COMPOSITION_CYCLE.md#compound-assignments-in-both-compilers). |
 | N2/N7, AS2/AS8, RT7 | Address and type kept through a transfer of `A<u64>`, mutations and re-use of slot. `f32` and `bool` on `yield`, `.await` And join. | P · Synchronous digital pools. Contracts and digital async allocation captures still need to be generalised. |
 
@@ -5119,3 +5119,13 @@ lifetime and lock-result contracts. Three focused executable fixtures pass under
 fatal UBSan, with five corresponding diagnostic/lifetime refusals and existing
 enum/semantic regressions. See [scope and evidence](ENUM_PATHS_FIELD_RECEIVERS_CYCLE.md).
 The frozen Rust frontend and STD/runtime are unchanged.
+
+## Checked extraction and numeric conversion
+
+The [accepted decision](CHECKED_EXTRACTION_CONVERSIONS.md) replaces the earlier
+whole-source-type restriction on `as`. Actual-value checks are shared with
+`try_from`; postfix `!` preserves successful-payload ownership and dependencies.
+The active corboc compiler passes 21 focused native/fatal-UBSan observations plus
+semantic/category diagnostic regressions on macOS ARM64. The Rust frontend and
+STD/runtime sources are unchanged. Fatal failure aborts without unwinding.
+See [the cycle report](CHECKED_EXTRACTION_CYCLE.md).

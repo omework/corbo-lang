@@ -195,9 +195,12 @@ redraw these aspects without necessity. Explicit choices already
 selected for Corbo, including memory management, remain priority: `new`
 with explicit source, scopes, borrowings, `<-`/`->`Allocators and pools.
 
-For entire conversions, draft 07 decision F5 prevails:
-`as` cannot lose any source type value; a conversion likely
-d `try_from` and makes a fallible result explicit.
+For numeric conversions, the checked-conversion decision in
+[Checked extraction and conversions](CHECKED_EXTRACTION_CONVERSIONS.md) supersedes
+the earlier draft-07 restriction on `as`. `value as T` checks the actual value
+for exact representability and stops the program on failure. `T::try_from(value)`
+remains the recoverable alternative. Postfix `!` extracts the successful payload
+of Result/Option and stops on Err/None; prefix `!` remains boolean negation.
 
 This reference refers to a minimalist kernel: legible syntax, simple types,
 functions, blocks, expressions, conditions, loops, enums and pattern matching. It

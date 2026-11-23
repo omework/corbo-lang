@@ -255,7 +255,24 @@ Sortie : `42`. [Paquet complet](examples/features/hello/).
 
 #### Primitives et opérateurs vérifiés
 
-Les entiers ont le type `i64` par défaut, les littéraux décimaux à virgule flottante le type `f64`. Les variables utilisées dans une opération arithmétique doivent avoir des types compatibles. `as` autorise les conversions exactes pour toutes les valeurs du type source ; `try_from` peut échouer. L’arithmétique entière, les décalages et l’indexation conservent leurs contrôles.
+Les entiers ont le type `i64` par défaut, les littéraux décimaux à virgule flottante le type `f64`. Les variables utilisées dans une opération arithmétique doivent avoir des types compatibles. `as` vérifie que la valeur numérique est exactement représentable et arrête le programme en cas d’échec ; `try_from` renvoie un `Result` récupérable. L’arithmétique entière, les décalages et l’indexation conservent leurs contrôles.
+
+Le suffixe `!` extrait `Ok(valeur)` ou `Some(valeur)` et arrête le programme sur
+`Err`/`None`. `?` propage l’échec. Chaque opérateur évalue son opérande une fois.
+
+<!-- example: checked_extraction -->
+```rust
+fn main() {
+    let length: usize = 42;
+    let encoded = length as u16;
+
+    let fallible = u16::try_from(length);
+    let unwrapped = fallible!;
+
+    print(encoded);
+    print(unwrapped);
+}
+```
 
 <!-- example: numbers -->
 ```rust

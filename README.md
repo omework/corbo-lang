@@ -260,7 +260,24 @@ Output: `42`. [Complete package](examples/features/hello/).
 
 #### Primitives and checked operators
 
-Integers default to `i64`, decimal floating-point literals to `f64`. Variables in arithmetic must have compatible types. `as` permits conversions that are exact for every source value; `try_from` is fallible. Integer arithmetic, shifts and indexing retain their checks.
+Integers default to `i64`, decimal floating-point literals to `f64`. Variables in arithmetic must have compatible types. `as` checks that the actual numeric value is exactly representable and stops the program on failure; `try_from` returns a recoverable `Result`. Integer arithmetic, shifts and indexing retain their checks.
+
+Postfix `!` extracts `Ok(value)` or `Some(value)` and stops on `Err`/`None`.
+Use `?` to propagate failure instead. Each operator evaluates its operand once.
+
+<!-- example: checked_extraction -->
+```rust
+fn main() {
+    let length: usize = 42;
+    let encoded = length as u16;
+
+    let fallible = u16::try_from(length);
+    let unwrapped = fallible!;
+
+    print(encoded);
+    print(unwrapped);
+}
+```
 
 <!-- example: numbers -->
 ```rust

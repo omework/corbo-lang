@@ -186,9 +186,13 @@ cherche pas à redessiner ces aspects sans nécessité. Les choix explicites dé
 retenus pour Corbo, notamment la gestion mémoire, restent prioritaires : `new`
 avec source explicite, scopes, emprunts, `<-`/`->`, allocateurs et pools.
 
-Pour les conversions entières, la décision F5 du brouillon 07 prévaut :
-`as` ne peut perdre aucune valeur du type source ; une conversion susceptible
-d’échouer utilise `try_from` et rend un résultat faillible explicite.
+Pour les conversions numériques, la décision de conversion vérifiée dans
+[Extraction et conversions vérifiées](CHECKED_EXTRACTION_CONVERSIONS-fr.md)
+remplace la restriction antérieure du brouillon 07 sur `as`. `valeur as T`
+vérifie la représentabilité exacte de la valeur et arrête le programme en cas
+d’échec. `T::try_from(valeur)` reste l’alternative récupérable. Le suffixe `!`
+extrait le contenu de Ok/Some et arrête le programme sur Err/None ; le préfixe
+`!` reste la négation booléenne.
 
 Cette référence vise un noyau minimaliste : syntaxe lisible, types simples,
 fonctions, blocs, expressions, conditions, boucles, enums et pattern matching.
