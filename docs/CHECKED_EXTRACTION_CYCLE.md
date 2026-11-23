@@ -54,6 +54,10 @@ python3 scripts/validate_checked_extraction.py --compiler /path/to/corboc
 
 ## Build and installation
 
-A rebuild with the new compiler is required before replacing the existing PATH
-binary. The shared-source pin is updated to the accompanying language revision.
-Installation status is recorded in the implementation checklist.
+The updated corboc rebuilds with the new compiler as seed, and all 21 focused
+observations pass again against the rebuilt binary. It is installed at the
+existing shell PATH. Normal `check` and `build` commands accept the new README
+example, whose executable prints `42` twice. The compiler repository records
+installation and machine-readable evidence in its corresponding cycle report.
+STD/runtime source digests remain unchanged; the shared-source pin includes
+this grammar/specification decision. Existing watch processes need restarting.
