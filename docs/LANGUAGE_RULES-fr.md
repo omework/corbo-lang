@@ -80,7 +80,7 @@ et les documents auxquels elles renvoient fixent le détail des règles.
 | N2 | Une valeur à détruire n'a qu'un responsable du nettoyage à la fois. Un déplacement transmet cette responsabilité et un emprunt la laisse en place. | §3, §6, H1 |
 | N3 | La syntaxe et le type distinguent copie, emprunt et déplacement ; les primitifs et les enums admissibles selon V3 sont copiés implicitement par valeur. Un transfert sortant a besoin d'un receveur pour prendre effet. Les obligations d'usage et les règles propres aux méthodes s'appliquent. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | La cible d'un emprunt et le pool source d'une allocation doivent rester valides là où la valeur est transmise. Chaque passage enfant → parent se vérifie séparément, sans promotion implicite de la cible. | §3–§5 |
-| N5 | `&mut T` autorise la mutation sans garantir l’unicité. Les accès concurrents qui se chevauchent et dont au moins un écrit exigent une synchronisation démontrée. Les dépendances de validité restent suivies. | MA1–MA6, §5 |
+| N5 | Un seul emprunt mutable actif par place qui se chevauche dans le prototype. Les places prouvées disjointes restent indépendantes. Durées de vie, synchronisation et branches restent suivies. | MA1–MA6, §5 |
 | N6 | Chaque chemin qui atteint un usage doit permettre cet usage. L'analyse suit les provenances, les sorties de contrôle et l'ordre d'évaluation, y compris la préparation du remplacement avant la destruction de l'ancienne valeur. | §1–§5, F3–F4 |
 | N7 | On détruit une valeur une seule fois avant de récupérer son stockage. Les dépendances contraignent l'ordre de destruction. Un slot réutilisé ne réactive aucun ancien accès. | §6–§8 |
 | N8 | Les obligations de type, de provenance, d'emprunt et de nettoyage se conservent aux frontières. Un appel est vérifié à partir du contrat inféré. | §5, §10 |
@@ -1500,3 +1500,10 @@ par l’implémentation. `self` reste le nom de la liaison receveur.
 ## Méthodes de référence et déréférencement
 
 [La résolution des méthodes](DEREFERENCE-fr.md) précise la priorité des méthodes explicites, les emprunts de la valeur de A<T> et le déréférencement statique des objets. Les règles de possession, de durée de vie et de verrou restent inchangées.
+
+## Restriction actuelle des emprunts mutables — 24 novembre 2026
+
+Un seul emprunt mutable actif par place qui se chevauche. La dernière utilisation
+peut terminer un emprunt ; les champs prouvés disjoints restent indépendants.
+Cette décision remplace les anciennes clauses de coexistence dans ce document.
+Voir [les accès mutables](MUTABLE_ACCESS-fr.md).

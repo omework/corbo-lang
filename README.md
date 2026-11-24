@@ -484,7 +484,7 @@ Output: `42, 7`. [Complete package](examples/features/moves/).
 
 #### Shared borrows and mutable reborrows
 
-References do not transfer cleanup responsibility. `&mut T` grants permission to mutate, not uniqueness: multiple mutable references may coexist. Shared accesses across threads must satisfy the same-lock synchronization requirements, and each target must remain valid through the relevant branch completion points and any surviving borrowed results. Corboc rejects missing proofs. See [mutable access](docs/MUTABLE_ACCESS.md).
+References do not transfer cleanup responsibility. `&mut T` grants permission to mutate. The current prototype permits one active mutable borrow per overlapping place; proven disjoint fields may be borrowed independently. Shared accesses across threads must satisfy the same-lock synchronization requirements, and each target must remain valid through the relevant branch completion points and any surviving borrowed results. Corboc rejects missing proofs. See [mutable access](docs/MUTABLE_ACCESS.md).
 
 Lock facts come from contracts, not type names. A struct marked `#(lock)` gives
 its public instance methods the `#(lock: on=self)` contract. Private helpers and

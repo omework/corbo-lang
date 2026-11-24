@@ -79,7 +79,7 @@ references define each obligation in detail.
 | N2 | A value that needs destruction has exactly one party responsible for cleanup at a time. A move transfers that responsibility. A borrow leaves it in place. | §3, §6, H1 |
 | N3 | Syntax and type distinguish copying, borrowing, and moving; primitives and eligible enums copy implicitly by value (V3). An outgoing transfer takes effect when it has a receiver. Usage requirements and method-specific rules apply. | §0, §3, §4, ST17–ST18, ME1–ME4 |
 | N4 | The target of a borrow and the source pool of an allocation must remain valid wherever the value is passed. Each transfer from a child scope to its parent is checked separately, without implicit promotion of the target. | §3–§5 |
-| N5 | `&mut T` grants mutation permission, not uniqueness. Potentially concurrent overlapping accesses involving a write require established synchronization. Validity dependencies remain tracked. | MA1–MA6, §5 |
+| N5 | One active mutable borrow per overlapping place in the current prototype. Proven disjoint places may be borrowed independently. Lifetime, synchronization and branch dependencies remain tracked. | MA1–MA6, §5 |
 | N6 | Every path reaching a use must permit that use. The analysis tracks provenance, control-flow exits, and evaluation order, including evaluating a replacement before destroying the old value. | §1–§5, F3–F4 |
 | N7 | A value is destroyed once before its storage is reclaimed. Dependencies constrain destruction order. Reusing a slot never reactivates a previous access. | §6–§8 |
 | N8 | Type, provenance, borrowing, and cleanup obligations carry across boundaries. Calls are checked using the inferred contract. | §5, §10 |
@@ -624,6 +624,11 @@ Dependencies on an allocator follow the specific rules of the section
 <a id="5-emprunts-et-fonctions"></a>
 
 ## 5. Borrowing and functions
+
+**Current restriction (November 24, 2026):** one active mutable borrow per
+overlapping place. Last-use release and proven disjoint fields remain allowed.
+This supersedes older coexistence wording throughout this document; see
+[Mutable access](MUTABLE_ACCESS.md).
 
 **B1 — Reading and mutation.** `&T` grants read access and `&mut T` grants
 mutation permission without implicit uniqueness. MA1–MA6 govern coexistence,

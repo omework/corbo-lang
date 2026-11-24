@@ -7,6 +7,23 @@ core, sans nouvelle syntaxe ni API. Corboc sépare désormais permission
 de mutation, effets sur le contenu et protection par verrou. Une validation ciblée
 est terminée ; les effets et identités de verrou non démontrés restent refusés.
 
+## Restriction actuelle du prototype — 24 novembre 2026
+
+Le prototype autorise à nouveau un seul emprunt mutable actif par place qui se
+chevauche. Cette décision remplace les clauses de coexistence MA1–MA2 ci-dessous.
+La dernière utilisation peut terminer un emprunt avant la fin du bloc ; des
+champs prouvés disjoints peuvent être empruntés indépendamment. Emprunter
+`self.tracker` ne réserve pas `self.file`. Les deux dépendent toujours de la
+durée de vie de `self`.
+
+Permission de mutation, possession, validité, contrats de verrou et fin de
+branche restent distincts. Un verrou ne permet pas à lui seul plusieurs emprunts
+mutables qui se chevauchent. Le partage via une API de verrou en `&self` conserve
+son contrat de synchronisation.
+
+La décision du 21 novembre est conservée ci-dessous comme historique, soumise
+à cette restriction.
+
 **MA1 — Permission, pas unicité.** `&mut T` autorise la mutation de la place
 référencée. Il n'affirme pas l'absence d'autres références, mutables ou partagées.
 Plusieurs références mutables peuvent coexister. `&T` autorise la lecture par

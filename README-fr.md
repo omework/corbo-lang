@@ -493,7 +493,7 @@ Sortie : `42, 7`. [Paquet complet](examples/features/moves/).
 
 #### Emprunts partagés et réemprunts mutables
 
-Les références ne transfèrent pas la responsabilité du nettoyage. `&mut T` donne une permission de mutation, sans unicité : plusieurs références mutables peuvent coexister. Les accès partagés entre threads doivent respecter les exigences de synchronisation par le même verrou. Chaque cible doit rester valide jusqu’aux fins de branche concernées et pour les résultats empruntés qui survivent. Corboc refuse les preuves manquantes. Voir [les accès mutables](docs/MUTABLE_ACCESS-fr.md).
+Les références ne transfèrent pas la responsabilité du nettoyage. `&mut T` donne une permission de mutation. Le prototype autorise un seul emprunt mutable actif par place qui se chevauche ; les champs prouvés disjoints restent indépendants. Les accès partagés entre threads doivent respecter les exigences de synchronisation par le même verrou. Chaque cible doit rester valide jusqu’aux fins de branche concernées et pour les résultats empruntés qui survivent. Corboc refuse les preuves manquantes. Voir [les accès mutables](docs/MUTABLE_ACCESS-fr.md).
 
 Les faits de verrou viennent des contrats, pas des noms de types. Une struct
 marquée `#(lock)` transmet le contrat `#(lock: on=self)` à ses méthodes

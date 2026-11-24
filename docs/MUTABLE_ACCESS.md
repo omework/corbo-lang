@@ -8,7 +8,23 @@ mutation-permission, content-effect and lock-protection facts, with focused
 validation. Unresolved effects/lock identities remain conservative refusals; the
 compiler cycle report records implementation limits and evidence.
 
-## Normative decision
+## Current prototype restriction — November 24, 2026
+
+The prototype again permits only one active mutable borrow of an overlapping
+place at a time. This decision supersedes the coexistence portions of MA1–MA2
+below. Last use can release a borrow before the end of its block, and proven
+disjoint fields may be borrowed independently. A borrow of `self.tracker` does
+not reserve `self.file`; both still depend on the lifetime of `self`.
+
+Mutation permission, ownership, target validity, lock contracts and branch
+completion remain separate facts. A lock contract does not by itself permit
+multiple overlapping mutable borrows. Shared access through a lock's `&self`
+API keeps its existing synchronization contract.
+
+The November 21 decision below is retained as design history, subject to this
+restriction; it no longer authorizes overlapping mutable-reference coexistence.
+
+## Earlier normative decision
 
 **MA1 — Permission, not uniqueness.** `&mut T` grants permission to mutate the
 referenced place. It does not assert that this reference is the only mutable
