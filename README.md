@@ -1714,6 +1714,22 @@ source filenames, an entry point at `src/main.crb` and the matching installed ST
 
 ## Documentation and validation status
 
+The installed compiler bundles an offline HTML reference covering the complete
+STD, compiler-provided types and intrinsics, and runtime implementation sources:
+
+```sh
+corboc doc                    # Open the reference and serve it on localhost
+corboc doc --port 8080        # Choose the local port
+corboc doc --no-open          # Print the URL without opening a browser
+```
+
+Search packages, types and methods with `/` or `Ctrl/Cmd+K`. Follow linked types
+in signatures, browse source snapshots, and inspect target availability.
+The reference uses no CDN or external font and needs no Python at runtime.
+The server binds only to `127.0.0.1`; press `Ctrl+C` to stop it.
+See [the offline reference guide](docs/OFFLINE_REFERENCE.md).
+
+
 Corbo is experimental. The grammar, accepted rules, implemented paths and
 executed validation are separate sources of information. This README's runnable
 examples demonstrate their particular paths; they are not a proof that every

@@ -1711,6 +1711,22 @@ La [référence Rust](rust_frontend/README.md), figée, conserve une ancienne sy
 
 ## Documentation et état de la validation
 
+Le compilateur installé embarque une référence HTML hors ligne couvrant toute
+la STD, les types et primitives fournis par le compilateur et les sources du runtime :
+
+```sh
+corboc doc                    # Ouvrir la référence servie sur localhost
+corboc doc --port 8080        # Choisir le port local
+corboc doc --no-open          # Afficher l’URL sans ouvrir le navigateur
+```
+
+Utilisez `/` ou `Ctrl/Cmd+K` pour rechercher un paquet, un type ou une méthode.
+Les types dans les signatures sont cliquables ; les sources et conditions de
+cible sont consultables. Aucun CDN, police distante ou Python n’est requis à
+l’exécution. Le serveur écoute uniquement sur `127.0.0.1` ; `Ctrl+C` l’arrête.
+Voir [le guide de la référence hors ligne](docs/OFFLINE_REFERENCE-fr.md).
+
+
 Corbo est expérimental. La grammaire, les règles acceptées, les chemins implémentés et les validations exécutées sont des sources d’information distinctes. Les exemples exécutables de ce README illustrent leurs chemins particuliers ; ils ne prouvent pas que toute composition est implémentée ou sûre du point de vue mémoire.
 
 Les appels de fonctions et de closures, ainsi que leur passage explicite, fonctionnent indépendamment des adaptateurs d’itérateurs. Les dix formes refusées lors du premier travail de documentation sont désormais prises en charge, notamment les retours directs d’emprunts, les contrats structurels de fonctions, les opérations numériques et textuelles et les wrappers de branches. Le [suivi de couverture](docs/cycles/DOCUMENTATION_COVERAGE_CYCLE.md) consigne les programmes exécutés, les frontières de rejet et les limites de plateforme ; les [observations historiques](docs/DOCUMENTATION_LIMITS.md) restent disponibles.

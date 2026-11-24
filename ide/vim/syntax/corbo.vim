@@ -21,7 +21,7 @@ syntax keyword corboType A Pool PoolError Vector Option Result Mutex AsyncMutex 
 syntax match corboNamespace /\<\%(std\|runtime\)\>\ze::/
 syntax match corboBuiltin /\<\%(addr\|copy\|drop\|print\)\>\ze\s*(/
 syntax match corboFunction /\%(\<fn\s\+\)\@<=[A-Za-z_][A-Za-z_0-9]*/
-syntax match corboAnnotation /#\s*(\s*\%(if\|endif\|branch\|datastack\|directive\|free_pages\|lock\|stack_region\|type\)\>/
+syntax match corboAnnotation /#\s*(\s*\%(if\|endif\|branch\|datastack\|directive\|free_pages\|lock\|stack_region\|type\|configurable\|override\|thread\)\>/
 syntax match corboUnchecked /@unchecked\>/
 
 syntax match corboOperator /::\|->\|=>\|\.\.\|[+*\/%&|^!~?=<>-]/

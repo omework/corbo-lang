@@ -5158,3 +5158,11 @@ constant. Corboc validation covers 60 methods, explicit bytes, short-buffer
 protection, invalid bools and pre-import selection on macOS ARM64. The complete
 compiler evidence is in `corboc/docs/BINARY_ORDERS_CYCLE.md`. No big-endian-host or
 new Linux/Windows execution is claimed for this wrapper API change.
+
+## Offline searchable reference
+
+The corboc build bundles STD comments, compiler-owned APIs, runtime internals and source examples into a black/charcoal HTML reference served by `corboc doc`. The focused macOS ARM64 validation resolves 94,150 links across 521 pages and 2,181 search entries; actual HTTP assets and browser search/layout were checked. Linux/Windows execution is not claimed for this cycle. See [the compiler report](https://github.com/omework/corboc/blob/main/docs/OFFLINE_REFERENCE_CYCLE.md) and [usage](OFFLINE_REFERENCE.md).
+
+## Annotations in struct and enum bodies
+
+The active compiler accepts configurable associated constants and annotated generic methods/associated functions, including async, with existing annotation target restrictions. Lexical overrides specialize their owning type; lock/branch metadata survives specialization. The macOS ARM64 cycle has seven fatal-UBSan executions, seven expected refusals and six existing method regressions. See [compiler evidence](https://github.com/omework/corboc/blob/main/docs/MEMBER_ANNOTATIONS_CYCLE.md). No new platform-specific runtime behavior is introduced.

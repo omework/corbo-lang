@@ -58,7 +58,7 @@ separateur_variante = "::" | "." ;
 champs_types        = champ_type, { ",", champ_type }, [ "," ] ;
 champ_type          = identifiant, ":", type ;
 champ_definition    = identifiant, ":", type, ";" ;
-membre_definition   = methode | [ "pub" ], constante | selection_membres ;
+membre_definition   = methode | [ annotation_configurable ], [ "pub" ], constante | selection_membres ;
 selection_membres   = "#", "(", "if", ":", condition_cible, ")",
                       { membre_definition }, "#", "(", "endif", ")" ;
 (* Fields/variants precede methods. Method owners remain internal AST nodes;
@@ -72,7 +72,8 @@ annotation_override = "#", "(", "override", ":", remplacement_constante,
                       { ",", remplacement_constante }, [ "," ], ")" ;
 remplacement_constante = chemin, "=", expression ;
 
-methode             = [ contrat_lock ], [ "pub" ], [ "async" ], signature_methode, bloc ;
+methode             = { contrat_type | contrat_branche | contrat_lock },
+                      [ "pub" ], [ "async" ], signature_methode, bloc ;
 exigence_methode    = [ "async" ], signature_methode, ";" ;
 signature_methode   = "fn", ( identifiant | "addr" ), "(",
                       [ receveur, [ ",", [ parametres ] ] | parametres ], ")",

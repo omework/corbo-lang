@@ -1,11 +1,11 @@
-# Configurable package constants
+# Configurable constants
 
 Status: implemented in corboc, with focused host validation. This document specifies
 a core grammar and specialization mechanism, not an HTTP-specific compiler API.
 
 ## CC1 — Explicit configuration defaults
 
-`#(configurable)` immediately precedes a module-level constant declaration,
+`#(configurable)` immediately precedes a module-level or associated constant declaration,
 before `pub` when present. The initializer supplies its default value:
 
 ```rust
@@ -15,8 +15,8 @@ pub const HEADER_LINE_MAX_SIZE: usize = 8192;
 
 Only marked constants may be overridden. Ordinary constants retain their
 existing meaning. Normal name resolution and visibility apply; external callers
-use public package constants. This decision does not extend configurable
-annotations to associated constants or introduce mutable global state.
+use public package constants. Associated constants use their qualified `Type::NAME` identity; they do not
+introduce mutable global state. Both struct and enum definitions support them.
 
 ## CC2 — Lexical override block
 

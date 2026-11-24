@@ -79,8 +79,8 @@ index changes do not relocate live payloads.
 | `map.remove(&key)` | Return `Option<V>` by move and make the old entry slot reusable. |
 | `drop(map)` | Destroy the values still owned by the map before releasing storage. |
 
-Use `copy(key)` explicitly when inserting a primitive key that the caller will
-reuse. Capacity failures and fallible insertion are specified in the
+Primitive keys copy implicitly on insertion, so the caller may reuse them.
+`copy(key)` remains an optional explicit spelling. Capacity failures and fallible insertion are specified in the
 [HashMap rules](HASH_MAP.md). The [map example](../examples/features/map/src/main.crb)
 executes basic insertion, borrowing and extraction.
 

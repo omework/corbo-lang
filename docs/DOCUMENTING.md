@@ -67,3 +67,11 @@ status and prose; do not preserve a rejection just to satisfy the record.
 This documentation workflow is not an independent safety/security audit or a
 replacement for compiler/platform validation. Record executed results and their
 limits in a cycle report and the verification matrix.
+
+## Offline HTML reference
+
+`corboc doc` serves the installed HTML snapshot. Source-defined APIs use the same
+inventory as the Markdown reference. Compiler-owned interfaces use
+`corboc/docs/BUILTIN_REFERENCE.json`, including types whose STD export body is empty.
+The compiler installation automatically invokes its HTML generator. See
+[the offline guide](OFFLINE_REFERENCE.md) for generation and navigation.

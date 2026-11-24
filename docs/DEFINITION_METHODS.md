@@ -85,3 +85,46 @@ Legacy external `impl` blocks and arrow returns remain accepted as bootstrap
 compatibility syntax for older seeds and generated specialization recipes. New
 STD sources, examples and the reference grammar use definition-local methods
 and arrow-free return types. No new runtime mechanism is required.
+
+## Annotations inside definitions
+
+Annotations keep their existing target and meaning inside both struct and enum
+bodies. Put them before `pub`/`async` and the declaration they describe:
+
+- `#(type: ...)` constrains a method or associated function; independently generic
+  associated functions do not need a `self` parameter.
+- `#(branch: ...)` and `#(lock: ...)` describe method effects with the same
+  signature checks as ordinary functions.
+- `#(configurable)` marks an associated constant. Override it by its qualified
+  name (`Settings::LIMIT`); lexical overrides specialize its enclosing type and
+  methods, and restore the previous value outside the override block.
+- `#(if: ...)` / `#(endif)` select members before name resolution.
+- Block annotations (`override`, `stack_region`, `free_pages`) retain their block
+  targets inside method bodies. Object annotations (`lock` and `thread`) remain
+  before their enclosing type declaration, not before a field or constant.
+
+```rust
+struct Settings {
+    #(configurable)
+    pub const LIMIT: i64 = 4;
+
+    #(type: T)
+    pub fn identity(value: T) T {
+        value
+    }
+}
+
+fn main() {
+    print(Settings::LIMIT);
+
+    #(override: Settings::LIMIT=8) {
+        print(Settings::LIMIT);
+        print(Settings::identity(42));
+    }
+
+    print(Settings::LIMIT);
+}
+```
+
+No annotation is silently ignored on an incompatible declaration. Fields and
+variants continue to precede methods and associated constants.
