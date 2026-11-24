@@ -3,7 +3,7 @@
 # Méthodes dans les définitions et receveurs explicites
 
 Les méthodes et constantes associées sont déclarées dans la définition du
-`struct` ou de l’`enum`, après les champs ou variantes. Chaque champ et chaque
+`struct` ou de l’`enum`, sans ordre imposé entre les membres. Chaque champ et chaque
 variante se termine par `;`. Les initialiseurs, paramètres et bras de `match`
 conservent leurs virgules.
 
@@ -54,3 +54,11 @@ Les annotations de bloc restent devant des blocs dans les corps des méthodes.
 Les annotations d'objet restent devant la déclaration du type. Une annotation
 sur une cible incompatible est refusée. Voir les exemples dans la
 [référence anglaise](DEFINITION_METHODS.md#annotations-inside-definitions).
+
+## Ordre des membres et bornes de tableau
+
+Les champs/variantes, constantes associées et méthodes peuvent être intercalés.
+Une borne de tableau
+fixe ou de répétition peut utiliser `Type::CONSTANTE` ou `Self::CONSTANTE` dans
+son type propriétaire. La résolution utilise l'environnement de configuration
+lexical actif ; une valeur runtime ne devient pas une borne fixe.

@@ -6,8 +6,8 @@ This syntax supersedes the external `impl` examples in historical design and
 validation reports. Ownership, borrowing, visibility and destruction rules are
 unchanged. The frozen Rust frontend is not the current syntax reference.
 
-Fields and enum variants end with `;`. Fields/variants precede associated
-constants and methods. Constructors still use comma-separated field values;
+Fields and enum variants end with `;`. Fields/variants, associated constants
+and methods may be declared in any order. Constructors still use comma-separated field values;
 match arms and positional payloads also retain their commas.
 
 ```rust
@@ -127,4 +127,30 @@ fn main() {
 ```
 
 No annotation is silently ignored on an incompatible declaration. Fields and
-variants continue to precede methods and associated constants.
+variants may appear before or after methods and associated constants.
+
+## Associated array bounds
+
+A fixed array length can name a compile-time constant through `Type::NAME` or,
+inside its owning type, `Self::NAME`. The same spelling works in repetition
+expressions. The compiler resolves the constant before layout and uses the
+active lexical configuration when it is marked configurable.
+
+```rust
+struct Tracker {
+    #(configurable)
+    const CONSUMERS: u16 = 5;
+
+    offsets: [usize; Self::CONSUMERS];
+
+    fn new() Tracker {
+        Tracker { offsets: [0; Self::CONSUMERS] }
+    }
+}
+```
+
+Unknown constants and runtime values cannot determine fixed array lengths.
+
+`Self` names the enclosing struct or enum in field types, method signatures and
+method bodies. It does not require a source-level `impl` block. Outside an
+enclosing nominal type it is rejected with an explicit scoped-alias diagnostic.

@@ -5166,3 +5166,7 @@ The corboc build bundles STD comments, compiler-owned APIs, runtime internals an
 ## Annotations in struct and enum bodies
 
 The active compiler accepts configurable associated constants and annotated generic methods/associated functions, including async, with existing annotation target restrictions. Lexical overrides specialize their owning type; lock/branch metadata survives specialization. The macOS ARM64 cycle has seven fatal-UBSan executions, seven expected refusals and six existing method regressions. See [compiler evidence](https://github.com/omework/corboc/blob/main/docs/MEMBER_ANNOTATIONS_CYCLE.md). No new platform-specific runtime behavior is introduced.
+
+## Unrestricted declaration order and Self
+
+Fields/variants, constants and methods may be interleaved. The active compiler resolves Self in nominal definitions and associated constant bounds before layout. The final macOS ARM64 candidate passes 28 focused/regression observations and a qualified temporary WAL snapshot. Documentation inventory and generated-reference freshness pass. See [compiler evidence](https://github.com/omework/corboc/blob/main/docs/MIXED_MEMBERS_CYCLE.md). No source changes were made to SubDB.

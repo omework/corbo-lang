@@ -56,7 +56,7 @@ def split_members(ts, low, high):
 def inventory(source):
     """Read Corbo declaration heads, owners and member positions, skipping native code."""
     ts = tokens(source); entries = []; annotation_ends = {}; conditions = []
-    def scan(low, high, owner=None):
+    def scan(low, high, owner=None, parent_entry=None):
         at = low
         while at < high:
             word = ts[at][0]
@@ -71,6 +71,22 @@ def inventory(source):
                 at += 2
                 if ts[at][0] == '(': at = end_group(ts, at)
                 at = end_group(ts, at); continue
+            if parent_entry is not None and re.fullmatch(r'[A-Za-z_]\w*', word) and word not in ('pub', 'fn', 'async', 'const', 'struct', 'enum', 'type'):
+                data_kind = parent_entry.kind
+                field = data_kind == 'struct' and at + 1 < high and ts[at + 1][0] == ':'
+                variant = data_kind == 'enum'
+                if field or variant:
+                    stop = at + 1
+                    while stop < high and ts[stop][0] not in (';', ','):
+                        if ts[stop][0] in ('(', '[', '{', '<'): stop = end_group(ts, stop)
+                        else: stop += 1
+                    child = Entry('field' if field else 'variant', word, ts[at][1], ts[stop-1][2], parent_entry.public, owner, tuple(conditions))
+                    if variant and at + 1 < stop and ts[at+1][0] == '{':
+                        for first,last in split_members(ts,at+2,stop-1):
+                            child.children.append(Entry('field',ts[first][0],ts[first][1],ts[last-1][2],parent_entry.public,owner+'::'+word,tuple(conditions)))
+                    parent_entry.children.append(child)
+                    at = stop + (stop < high)
+                    continue
             if word in ('fn', 'struct', 'enum', 'impl', 'const', 'type') and at + 1 < high and re.fullmatch(r'\w+', ts[at+1][0]):
                 kind = word; name = ts[at+1][0]; begin = at
                 while begin > low and ts[begin-1][0] in ('pub', 'async', 'extern'): begin -= 1
@@ -86,23 +102,7 @@ def inventory(source):
                     stop=end_group(ts,cursor)
                     if kind=='impl': scan(cursor+1,stop-1,name)
                     elif kind in ('struct','enum'):
-                        member_end = cursor + 1
-                        while member_end < stop - 1:
-                            word = ts[member_end][0]
-                            if word in ('fn', 'async', '#', 'const') or (word == 'pub' and member_end + 1 < stop - 1 and ts[member_end + 1][0] in ('fn', 'async', 'const')):
-                                break
-                            if word in ('(', '[', '{', '<'):
-                                member_end = end_group(ts, member_end)
-                            else:
-                                member_end += 1
-                        for a,b in split_members(ts,cursor+1,member_end):
-                            if ts[a][0]=='pub': a+=1
-                            child=Entry('field' if kind=='struct' else 'variant',ts[a][0],ts[a][1],ts[b-1][2],public,name,tuple(conditions))
-                            if kind=='enum' and a+1<b and ts[a+1][0]=='{':
-                                for first,last in split_members(ts,a+2,b-1):
-                                    child.children.append(Entry('field',ts[first][0],ts[first][1],ts[last-1][2],public,name+'::'+child.name,tuple(conditions)))
-                            entry.children.append(child)
-                        scan(member_end, stop-1, name)
+                        scan(cursor+1, stop-1, name, entry)
                     at=stop
                 else: at=cursor+1
                 continue

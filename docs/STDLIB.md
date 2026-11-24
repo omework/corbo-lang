@@ -4836,6 +4836,7 @@ Members:
 
 - [`previous`](../stdlib/src/iter/iter.crb#L109) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
 - [`mapper`](../stdlib/src/iter/iter.crb#L111) (implementation field): Stored transformation/predicate/reduction function and its captured state.
+- [`finished`](../stdlib/src/iter/iter.crb#L113) (implementation field): Records that this reduction has already consumed its source and must yield no more items.
 
 ### `Reduce::next`
 

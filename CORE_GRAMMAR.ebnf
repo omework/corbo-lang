@@ -44,11 +44,11 @@ resultat_externe    = primitif | "Void" | "(", ")" ;
 
 structure           = { contrat_type | contrat_lock_objet | annotation_thread }, corps_structure ;
 corps_structure     = "struct", identifiant, [ parametres_generiques ],
-                      "{", { champ_definition }, { membre_definition }, "}" ;
+                      "{", { champ_definition | membre_definition }, "}" ;
 parametres_generiques = "<", identifiant, { ",", identifiant }, [ "," ], ">" ;
 enumeration         = { contrat_type | annotation_thread }, corps_enumeration ;
 corps_enumeration    = "enum", identifiant, [ parametres_generiques ], "{",
-                      variante, ";", { variante, ";" }, { membre_definition }, "}" ;
+                      { membre_definition }, variante, ";", { variante, ";" | membre_definition }, "}" ;
 variante            = identifiant, [ "{", { champ_definition }, "}"
                                     | "(", type, { ",", type }, [ "," ], ")" ] ;
 (* :: is the preferred enum-variant separator. Dot remains accepted for
@@ -61,7 +61,8 @@ champ_definition    = identifiant, ":", type, ";" ;
 membre_definition   = methode | [ annotation_configurable ], [ "pub" ], constante | selection_membres ;
 selection_membres   = "#", "(", "if", ":", condition_cible, ")",
                       { membre_definition }, "#", "(", "endif", ")" ;
-(* Fields/variants precede methods. Method owners remain internal AST nodes;
+(* Fields/variants, constants and methods have no required declaration order.
+   Method owners remain internal AST nodes;
    external impl blocks are retained only as bootstrap compatibility syntax. *)
 constante           = "const", identifiant, ":", primitif, "=",
                       ( [ "-" ], ( entier | flottant ) | "true" | "false" ), ";" ;

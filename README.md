@@ -330,7 +330,7 @@ Output: `8, 42`. [Complete package](examples/features/control/).
 
 #### Functions, tuples and destructuring
 
-Return types follow parameters directly, without `->`. Methods are declared inside their struct or enum, after semicolon-terminated fields or variants. See [definition-local methods](docs/DEFINITION_METHODS.md).
+Return types follow parameters directly, without `->`. Methods are declared inside their struct or enum and may be interleaved with semicolon-terminated fields, variants and associated constants. See [definition-local methods](docs/DEFINITION_METHODS.md).
 
 Functions can return tuples of two or more values. Types are inferred by position when no binding annotation is supplied.
 
