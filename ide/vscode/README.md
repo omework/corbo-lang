@@ -7,6 +7,22 @@ ARM64 and x86-64 instructions, registers, labels, and Corbo operands in
 `@asm` blocks. This is editor support. The current compiler only accepts the
 inline assembly form.
 
+## Rust-style keyword colors
+
+Corbo keywords expose the same TextMate categories as VS Code's bundled Rust
+syntax, alongside Corbo-specific scopes. Your current theme chooses the colors:
+`fn`, `let`, `pub`, `mut`, `async`, `use`, declarations and control flow therefore
+use their corresponding Rust categories. The extension does not change your theme
+or add global color overrides. Embedded C and assembly keep their own highlighting.
+
+This aligns syntax colors, not Rust Analyzer's semantic highlighting. Exact colors
+can still differ in themes with rules restricted to an entire `source.rust` context
+or when Rust semantic tokens override syntax colors.
+
+After updating the extension, run **Developer: Reload Window**. To inspect a token,
+use **Developer: Inspect Editor Tokens and Scopes**; keywords should include a
+Rust-compatible scope such as `keyword.other.fn.rust`.
+
 ## Install locally
 
 From the repository root, launch a window with the extension loaded for

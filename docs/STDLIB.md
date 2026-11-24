@@ -2824,6 +2824,852 @@ pub fn write_usize_be(value: usize, output: &mut [u8]) -> Result<usize, Error>
 Writes a pointer-width unsigned integer on supported 64-bit targets.
 
 
+Byte-order namespaces with static conversion methods and no hidden allocation.
+NativeEndian is selected at compilation through target.endian.
+
+### `LittleEndian`
+
+[orders.crb:6](../stdlib/src/encoding/binary/orders.crb#L6)
+
+```rust
+pub struct LittleEndian
+```
+
+Converts primitive values using least-significant-byte-first encoding.
+
+### `BigEndian`
+
+[orders.crb:9](../stdlib/src/encoding/binary/orders.crb#L9)
+
+```rust
+pub struct BigEndian
+```
+
+Converts primitive values using most-significant-byte-first encoding.
+
+### `NativeEndian`
+
+[orders.crb:12](../stdlib/src/encoding/binary/orders.crb#L12)
+
+```rust
+pub struct NativeEndian
+```
+
+Uses the compilation target byte order; prefer explicit order for stored formats.
+
+### `LittleEndian::read_u8`
+
+[orders.crb:16](../stdlib/src/encoding/binary/orders.crb#L16)
+
+```rust
+pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+```
+
+Reads u8 from the start of the caller-provided slice.
+
+### `LittleEndian::write_u8`
+
+[orders.crb:21](../stdlib/src/encoding/binary/orders.crb#L21)
+
+```rust
+pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u8; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_u16`
+
+[orders.crb:26](../stdlib/src/encoding/binary/orders.crb#L26)
+
+```rust
+pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+```
+
+Reads u16 from the start of the caller-provided slice.
+
+### `LittleEndian::write_u16`
+
+[orders.crb:31](../stdlib/src/encoding/binary/orders.crb#L31)
+
+```rust
+pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u16; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_u32`
+
+[orders.crb:36](../stdlib/src/encoding/binary/orders.crb#L36)
+
+```rust
+pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+```
+
+Reads u32 from the start of the caller-provided slice.
+
+### `LittleEndian::write_u32`
+
+[orders.crb:41](../stdlib/src/encoding/binary/orders.crb#L41)
+
+```rust
+pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u32; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_u64`
+
+[orders.crb:46](../stdlib/src/encoding/binary/orders.crb#L46)
+
+```rust
+pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+```
+
+Reads u64 from the start of the caller-provided slice.
+
+### `LittleEndian::write_u64`
+
+[orders.crb:51](../stdlib/src/encoding/binary/orders.crb#L51)
+
+```rust
+pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u64; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_i32`
+
+[orders.crb:56](../stdlib/src/encoding/binary/orders.crb#L56)
+
+```rust
+pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+```
+
+Reads i32 from the start of the caller-provided slice.
+
+### `LittleEndian::write_i32`
+
+[orders.crb:61](../stdlib/src/encoding/binary/orders.crb#L61)
+
+```rust
+pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i32; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_i64`
+
+[orders.crb:66](../stdlib/src/encoding/binary/orders.crb#L66)
+
+```rust
+pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+```
+
+Reads i64 from the start of the caller-provided slice.
+
+### `LittleEndian::write_i64`
+
+[orders.crb:71](../stdlib/src/encoding/binary/orders.crb#L71)
+
+```rust
+pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i64; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_f32`
+
+[orders.crb:76](../stdlib/src/encoding/binary/orders.crb#L76)
+
+```rust
+pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+```
+
+Reads f32 from the start of the caller-provided slice.
+
+### `LittleEndian::write_f32`
+
+[orders.crb:81](../stdlib/src/encoding/binary/orders.crb#L81)
+
+```rust
+pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f32; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_f64`
+
+[orders.crb:86](../stdlib/src/encoding/binary/orders.crb#L86)
+
+```rust
+pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+```
+
+Reads f64 from the start of the caller-provided slice.
+
+### `LittleEndian::write_f64`
+
+[orders.crb:91](../stdlib/src/encoding/binary/orders.crb#L91)
+
+```rust
+pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f64; short-buffer errors leave the output unchanged.
+
+### `LittleEndian::read_bool`
+
+[orders.crb:96](../stdlib/src/encoding/binary/orders.crb#L96)
+
+```rust
+pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+```
+
+Reads bool from the start of the caller-provided slice.
+
+### `LittleEndian::write_bool`
+
+[orders.crb:101](../stdlib/src/encoding/binary/orders.crb#L101)
+
+```rust
+pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes bool; short-buffer errors leave the output unchanged.
+
+Available when `target.pointer_width == "64"`.
+
+### `LittleEndian::read_usize`
+
+[orders.crb:107](../stdlib/src/encoding/binary/orders.crb#L107)
+
+```rust
+pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+```
+
+Reads usize from the start of the caller-provided slice.
+
+### `LittleEndian::write_usize`
+
+[orders.crb:112](../stdlib/src/encoding/binary/orders.crb#L112)
+
+```rust
+pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes usize; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_u8`
+
+[orders.crb:121](../stdlib/src/encoding/binary/orders.crb#L121)
+
+```rust
+pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+```
+
+Reads u8 from the start of the caller-provided slice.
+
+### `BigEndian::write_u8`
+
+[orders.crb:126](../stdlib/src/encoding/binary/orders.crb#L126)
+
+```rust
+pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u8; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_u16`
+
+[orders.crb:131](../stdlib/src/encoding/binary/orders.crb#L131)
+
+```rust
+pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+```
+
+Reads u16 from the start of the caller-provided slice.
+
+### `BigEndian::write_u16`
+
+[orders.crb:136](../stdlib/src/encoding/binary/orders.crb#L136)
+
+```rust
+pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u16; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_u32`
+
+[orders.crb:141](../stdlib/src/encoding/binary/orders.crb#L141)
+
+```rust
+pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+```
+
+Reads u32 from the start of the caller-provided slice.
+
+### `BigEndian::write_u32`
+
+[orders.crb:146](../stdlib/src/encoding/binary/orders.crb#L146)
+
+```rust
+pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u32; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_u64`
+
+[orders.crb:151](../stdlib/src/encoding/binary/orders.crb#L151)
+
+```rust
+pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+```
+
+Reads u64 from the start of the caller-provided slice.
+
+### `BigEndian::write_u64`
+
+[orders.crb:156](../stdlib/src/encoding/binary/orders.crb#L156)
+
+```rust
+pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u64; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_i32`
+
+[orders.crb:161](../stdlib/src/encoding/binary/orders.crb#L161)
+
+```rust
+pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+```
+
+Reads i32 from the start of the caller-provided slice.
+
+### `BigEndian::write_i32`
+
+[orders.crb:166](../stdlib/src/encoding/binary/orders.crb#L166)
+
+```rust
+pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i32; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_i64`
+
+[orders.crb:171](../stdlib/src/encoding/binary/orders.crb#L171)
+
+```rust
+pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+```
+
+Reads i64 from the start of the caller-provided slice.
+
+### `BigEndian::write_i64`
+
+[orders.crb:176](../stdlib/src/encoding/binary/orders.crb#L176)
+
+```rust
+pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i64; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_f32`
+
+[orders.crb:181](../stdlib/src/encoding/binary/orders.crb#L181)
+
+```rust
+pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+```
+
+Reads f32 from the start of the caller-provided slice.
+
+### `BigEndian::write_f32`
+
+[orders.crb:186](../stdlib/src/encoding/binary/orders.crb#L186)
+
+```rust
+pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f32; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_f64`
+
+[orders.crb:191](../stdlib/src/encoding/binary/orders.crb#L191)
+
+```rust
+pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+```
+
+Reads f64 from the start of the caller-provided slice.
+
+### `BigEndian::write_f64`
+
+[orders.crb:196](../stdlib/src/encoding/binary/orders.crb#L196)
+
+```rust
+pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f64; short-buffer errors leave the output unchanged.
+
+### `BigEndian::read_bool`
+
+[orders.crb:201](../stdlib/src/encoding/binary/orders.crb#L201)
+
+```rust
+pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+```
+
+Reads bool from the start of the caller-provided slice.
+
+### `BigEndian::write_bool`
+
+[orders.crb:206](../stdlib/src/encoding/binary/orders.crb#L206)
+
+```rust
+pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes bool; short-buffer errors leave the output unchanged.
+
+Available when `target.pointer_width == "64"`.
+
+### `BigEndian::read_usize`
+
+[orders.crb:212](../stdlib/src/encoding/binary/orders.crb#L212)
+
+```rust
+pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+```
+
+Reads usize from the start of the caller-provided slice.
+
+### `BigEndian::write_usize`
+
+[orders.crb:217](../stdlib/src/encoding/binary/orders.crb#L217)
+
+```rust
+pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes usize; short-buffer errors leave the output unchanged.
+
+Available when `target.endian == "little"`.
+
+### `NativeEndian::read_u8`
+
+[orders.crb:227](../stdlib/src/encoding/binary/orders.crb#L227)
+
+```rust
+pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+```
+
+Reads u8 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u8`
+
+[orders.crb:232](../stdlib/src/encoding/binary/orders.crb#L232)
+
+```rust
+pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u8; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_u16`
+
+[orders.crb:237](../stdlib/src/encoding/binary/orders.crb#L237)
+
+```rust
+pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+```
+
+Reads u16 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u16`
+
+[orders.crb:242](../stdlib/src/encoding/binary/orders.crb#L242)
+
+```rust
+pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u16; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_u32`
+
+[orders.crb:247](../stdlib/src/encoding/binary/orders.crb#L247)
+
+```rust
+pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+```
+
+Reads u32 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u32`
+
+[orders.crb:252](../stdlib/src/encoding/binary/orders.crb#L252)
+
+```rust
+pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u32; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_u64`
+
+[orders.crb:257](../stdlib/src/encoding/binary/orders.crb#L257)
+
+```rust
+pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+```
+
+Reads u64 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u64`
+
+[orders.crb:262](../stdlib/src/encoding/binary/orders.crb#L262)
+
+```rust
+pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u64; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_i32`
+
+[orders.crb:267](../stdlib/src/encoding/binary/orders.crb#L267)
+
+```rust
+pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+```
+
+Reads i32 from the start of the caller-provided slice.
+
+### `NativeEndian::write_i32`
+
+[orders.crb:272](../stdlib/src/encoding/binary/orders.crb#L272)
+
+```rust
+pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i32; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_i64`
+
+[orders.crb:277](../stdlib/src/encoding/binary/orders.crb#L277)
+
+```rust
+pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+```
+
+Reads i64 from the start of the caller-provided slice.
+
+### `NativeEndian::write_i64`
+
+[orders.crb:282](../stdlib/src/encoding/binary/orders.crb#L282)
+
+```rust
+pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i64; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_f32`
+
+[orders.crb:287](../stdlib/src/encoding/binary/orders.crb#L287)
+
+```rust
+pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+```
+
+Reads f32 from the start of the caller-provided slice.
+
+### `NativeEndian::write_f32`
+
+[orders.crb:292](../stdlib/src/encoding/binary/orders.crb#L292)
+
+```rust
+pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f32; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_f64`
+
+[orders.crb:297](../stdlib/src/encoding/binary/orders.crb#L297)
+
+```rust
+pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+```
+
+Reads f64 from the start of the caller-provided slice.
+
+### `NativeEndian::write_f64`
+
+[orders.crb:302](../stdlib/src/encoding/binary/orders.crb#L302)
+
+```rust
+pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f64; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_bool`
+
+[orders.crb:307](../stdlib/src/encoding/binary/orders.crb#L307)
+
+```rust
+pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+```
+
+Reads bool from the start of the caller-provided slice.
+
+### `NativeEndian::write_bool`
+
+[orders.crb:312](../stdlib/src/encoding/binary/orders.crb#L312)
+
+```rust
+pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes bool; short-buffer errors leave the output unchanged.
+
+Available when `target.endian == "little"` and `target.pointer_width == "64"`.
+
+### `NativeEndian::read_usize`
+
+[orders.crb:318](../stdlib/src/encoding/binary/orders.crb#L318)
+
+```rust
+pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+```
+
+Reads usize from the start of the caller-provided slice.
+
+### `NativeEndian::write_usize`
+
+[orders.crb:323](../stdlib/src/encoding/binary/orders.crb#L323)
+
+```rust
+pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes usize; short-buffer errors leave the output unchanged.
+
+Available when `target.endian == "big"`.
+
+### `NativeEndian::read_u8`
+
+[orders.crb:334](../stdlib/src/encoding/binary/orders.crb#L334)
+
+```rust
+pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+```
+
+Reads u8 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u8`
+
+[orders.crb:339](../stdlib/src/encoding/binary/orders.crb#L339)
+
+```rust
+pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u8; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_u16`
+
+[orders.crb:344](../stdlib/src/encoding/binary/orders.crb#L344)
+
+```rust
+pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+```
+
+Reads u16 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u16`
+
+[orders.crb:349](../stdlib/src/encoding/binary/orders.crb#L349)
+
+```rust
+pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u16; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_u32`
+
+[orders.crb:354](../stdlib/src/encoding/binary/orders.crb#L354)
+
+```rust
+pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+```
+
+Reads u32 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u32`
+
+[orders.crb:359](../stdlib/src/encoding/binary/orders.crb#L359)
+
+```rust
+pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u32; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_u64`
+
+[orders.crb:364](../stdlib/src/encoding/binary/orders.crb#L364)
+
+```rust
+pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+```
+
+Reads u64 from the start of the caller-provided slice.
+
+### `NativeEndian::write_u64`
+
+[orders.crb:369](../stdlib/src/encoding/binary/orders.crb#L369)
+
+```rust
+pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes u64; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_i32`
+
+[orders.crb:374](../stdlib/src/encoding/binary/orders.crb#L374)
+
+```rust
+pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+```
+
+Reads i32 from the start of the caller-provided slice.
+
+### `NativeEndian::write_i32`
+
+[orders.crb:379](../stdlib/src/encoding/binary/orders.crb#L379)
+
+```rust
+pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i32; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_i64`
+
+[orders.crb:384](../stdlib/src/encoding/binary/orders.crb#L384)
+
+```rust
+pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+```
+
+Reads i64 from the start of the caller-provided slice.
+
+### `NativeEndian::write_i64`
+
+[orders.crb:389](../stdlib/src/encoding/binary/orders.crb#L389)
+
+```rust
+pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes i64; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_f32`
+
+[orders.crb:394](../stdlib/src/encoding/binary/orders.crb#L394)
+
+```rust
+pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+```
+
+Reads f32 from the start of the caller-provided slice.
+
+### `NativeEndian::write_f32`
+
+[orders.crb:399](../stdlib/src/encoding/binary/orders.crb#L399)
+
+```rust
+pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f32; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_f64`
+
+[orders.crb:404](../stdlib/src/encoding/binary/orders.crb#L404)
+
+```rust
+pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+```
+
+Reads f64 from the start of the caller-provided slice.
+
+### `NativeEndian::write_f64`
+
+[orders.crb:409](../stdlib/src/encoding/binary/orders.crb#L409)
+
+```rust
+pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes f64; short-buffer errors leave the output unchanged.
+
+### `NativeEndian::read_bool`
+
+[orders.crb:414](../stdlib/src/encoding/binary/orders.crb#L414)
+
+```rust
+pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+```
+
+Reads bool from the start of the caller-provided slice.
+
+### `NativeEndian::write_bool`
+
+[orders.crb:419](../stdlib/src/encoding/binary/orders.crb#L419)
+
+```rust
+pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes bool; short-buffer errors leave the output unchanged.
+
+Available when `target.endian == "big"` and `target.pointer_width == "64"`.
+
+### `NativeEndian::read_usize`
+
+[orders.crb:425](../stdlib/src/encoding/binary/orders.crb#L425)
+
+```rust
+pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+```
+
+Reads usize from the start of the caller-provided slice.
+
+### `NativeEndian::write_usize`
+
+[orders.crb:430](../stdlib/src/encoding/binary/orders.crb#L430)
+
+```rust
+pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+```
+
+Writes usize; short-buffer errors leave the output unchanged.
+
+
 ## `std::encoding::der`
 
 Bounds-checked DER framing and validation of common ASN.1 values.

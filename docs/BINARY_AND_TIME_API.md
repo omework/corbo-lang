@@ -9,9 +9,12 @@ evidence from untested paths and platform limitations.
 
 ## `std::encoding::binary`
 
-Read and write primitives using caller-provided slices. Multi-byte operations
-are named `read_TYPE_le`, `read_TYPE_be`, `write_TYPE_le`, and `write_TYPE_be`:
-byte order is always explicit and never defaults to the host order.
+Read and write primitives using caller-provided slices. Prefer the static methods
+on `LittleEndian` or `BigEndian`, such as `BigEndian::read_u32` and
+`LittleEndian::write_u64`. `NativeEndian` exposes the same methods through a
+conditional static implementation selected by `target.endian`; it introduces no runtime dispatch.
+Use explicit byte order for portable disk/network formats. Existing `_le` / `_be`
+functions remain available for compatibility.
 
 - Fixed-width types: `u16`, `u32`, `u64`, `i32`, `i64`, `f32`, `f64`.
 - Single-byte operations: `read_u8` / `write_u8`, `read_bool` / `write_bool`.
@@ -26,15 +29,15 @@ byte order is always explicit and never defaults to the host order.
   representation bits rather than numerically converting them.
 
 ```rust
-use std::encoding::binary;
+use std::encoding::binary::{LittleEndian, BigEndian};
 
 fn main() {
     let mut bytes: [u8; 8] = [0; 8];
-    match binary::write_u32_be(16909060, &mut bytes[..]) {
+    match BigEndian::write_u32(16909060, &mut bytes[..]) {
         Ok(written) => { print(written); },
         Err(error) => { drop(error); return; },
     }
-    match binary::read_u32_le(&bytes[..]) {
+    match LittleEndian::read_u32(&bytes[..]) {
         Ok(value) => { print(value); },
         Err(error) => { drop(error); },
     }

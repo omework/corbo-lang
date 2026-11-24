@@ -1358,21 +1358,23 @@ Sortie : `64`. [Paquet complet](examples/features/encoding/).
 
 #### Primitifs binaires avec un ordre des octets explicite
 
-L’appelant fournit le tampon et choisit l’ordre little-endian ou big-endian. Les mêmes quatre octets donnent ici deux valeurs différentes selon l’ordre demandé.
+L’appelant fournit le tampon et choisit `LittleEndian` ou `BigEndian`.
+`NativeEndian` sélectionne l’ordre des octets de la cible à la compilation.
+Les mêmes quatre octets donnent ici deux valeurs différentes selon l’ordre demandé.
 
 <!-- example: binary -->
 ```rust
-use std::encoding::binary::{write_u32_be, read_u32_be, read_u32_le, Error};
+use std::encoding::binary::{BigEndian, LittleEndian, Error};
 
 fn encode() -> Result<(), Error> {
     let mut bytes: [u8; 4] = [0; 4];
 
     // 0x01020304 becomes the four bytes 01 02 03 04.
-    let written = write_u32_be(16909060, &mut bytes[..])?;
+    let written = BigEndian::write_u32(16909060, &mut bytes[..])?;
     print(written);
 
-    let big = read_u32_be(&bytes[..])?;
-    let little = read_u32_le(&bytes[..])?;
+    let big = BigEndian::read_u32(&bytes[..])?;
+    let little = LittleEndian::read_u32(&bytes[..])?;
     print(big);
     print(little);
 
@@ -1662,7 +1664,7 @@ Les contrats de verrouillage ordinaires s'appliquent à ces types.
 | `std::net::tls` | Dérivation des clés, records, handshake et validation X.509 de TLS 1.3 en natif ; wrapper OpenSSL facultatif | [API](docs/STDLIB.md#stdnettls) |
 | `std::crypto` | AES-GCM/CBC, familles SHA, HMAC/HKDF, Argon2id, aléa, P-256 et conteneurs de clés | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER et PEM avec sortie détenue par l’appelant | [API](docs/STDLIB.md#stdencodinghex) |
-| `std::encoding::binary` | Lecture/écriture de primitifs, ordre little-endian/big-endian explicite et tampons fournis par l’appelant | [API binaire](docs/BINARY_AND_TIME_API-fr.md) |
+| `std::encoding::binary` | Méthodes statiques `LittleEndian`, `BigEndian` et `NativeEndian`, avec tampons fournis par l’appelant | [API binaire](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::time`, `std::time::asyn` | Duration/Instant monotones, sleep et timers réutilisables ; attentes async déléguées à des workers bloquants | [API temporelle](docs/BINARY_AND_TIME_API-fr.md) |
 | `std::compression::{gzip, zstd}` | Codecs natifs bornés, traitement en flux et dictionnaires | [Compression](docs/COMPRESSION.md) |
 | `runtime::metrics` | Compteurs atomiques des octets réservés, engagés et occupés des datastacks/régions | [Métriques](docs/RUNTIME_METRICS-fr.md) |

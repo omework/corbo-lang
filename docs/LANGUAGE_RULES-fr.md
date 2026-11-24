@@ -1507,3 +1507,10 @@ Un seul emprunt mutable actif par place qui se chevauche. La dernière utilisati
 peut terminer un emprunt ; les champs prouvés disjoints restent indépendants.
 Cette décision remplace les anciennes clauses de coexistence dans ce document.
 Voir [les accès mutables](MUTABLE_ACCESS-fr.md).
+
+## Ordre des octets de la cible
+
+`target.endian` est disponible dans `#(if: ...)` avec les valeurs `"little"` et
+`"big"`. La valeur vient de la cible configurée à la construction du compilateur.
+La sélection précède la résolution des imports, comme les autres propriétés
+`target`. Elle ne produit aucun test d’ordre des octets dans le programme final.

@@ -1532,8 +1532,10 @@ the surrounding match type to select its specialization.
 `#(if: condition)` opens a compile-time selection and `#(endif)` closes it.
 The source lies between the annotations, outside their parentheses. Selections
 can nest and introduce no scope. The existing `target.os`, `target.family`,
-`target.arch` and `target.pointer_width` comparisons, `&&` and `||` retain their
-meaning. Selection precedes import resolution and collision checks. Missing
+`target.arch`, `target.pointer_width` and `target.endian` comparisons, `&&` and `||` retain their
+meaning. `target.endian` is `"little"` or `"big"` for the compilation target,
+selected by the compiler target build; it is not a runtime byte-order test.
+Selection precedes import resolution and collision checks. Missing
 and unmatched end markers are syntax errors. The former parenthesized-body
 spelling is replaced in the active compiler and STD; historical Rust-reference
 fixtures retain their old spelling.

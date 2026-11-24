@@ -1,14 +1,14 @@
-use std::encoding::binary::{write_u32_be, read_u32_be, read_u32_le, Error};
+use std::encoding::binary::{BigEndian, LittleEndian, Error};
 
 fn encode() -> Result<(), Error> {
     let mut bytes: [u8; 4] = [0; 4];
 
     // 0x01020304 becomes the four bytes 01 02 03 04.
-    let written = write_u32_be(16909060, &mut bytes[..])?;
+    let written = BigEndian::write_u32(16909060, &mut bytes[..])?;
     print(written);
 
-    let big = read_u32_be(&bytes[..])?;
-    let little = read_u32_le(&bytes[..])?;
+    let big = BigEndian::read_u32(&bytes[..])?;
+    let little = LittleEndian::read_u32(&bytes[..])?;
     print(big);
     print(little);
 

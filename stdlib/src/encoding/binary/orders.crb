@@ -1,0 +1,436 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Byte-order namespaces with static conversion methods and no hidden allocation.
+//! NativeEndian is selected at compilation through target.endian.
+
+/// Converts primitive values using least-significant-byte-first encoding.
+pub struct LittleEndian {}
+
+/// Converts primitive values using most-significant-byte-first encoding.
+pub struct BigEndian {}
+
+/// Uses the compilation target byte order; prefer explicit order for stored formats.
+pub struct NativeEndian {}
+
+impl LittleEndian {
+    /// Reads u8 from the start of the caller-provided slice.
+    pub fn read_u8(input: &[u8]) -> Result<u8, Error> {
+        std::encoding::binary::read_u8(input)
+    }
+
+    /// Writes u8; short-buffer errors leave the output unchanged.
+    pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u8(value, output)
+    }
+
+    /// Reads u16 from the start of the caller-provided slice.
+    pub fn read_u16(input: &[u8]) -> Result<u16, Error> {
+        std::encoding::binary::read_u16_le(input)
+    }
+
+    /// Writes u16; short-buffer errors leave the output unchanged.
+    pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u16_le(value, output)
+    }
+
+    /// Reads u32 from the start of the caller-provided slice.
+    pub fn read_u32(input: &[u8]) -> Result<u32, Error> {
+        std::encoding::binary::read_u32_le(input)
+    }
+
+    /// Writes u32; short-buffer errors leave the output unchanged.
+    pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u32_le(value, output)
+    }
+
+    /// Reads u64 from the start of the caller-provided slice.
+    pub fn read_u64(input: &[u8]) -> Result<u64, Error> {
+        std::encoding::binary::read_u64_le(input)
+    }
+
+    /// Writes u64; short-buffer errors leave the output unchanged.
+    pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u64_le(value, output)
+    }
+
+    /// Reads i32 from the start of the caller-provided slice.
+    pub fn read_i32(input: &[u8]) -> Result<i32, Error> {
+        std::encoding::binary::read_i32_le(input)
+    }
+
+    /// Writes i32; short-buffer errors leave the output unchanged.
+    pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_i32_le(value, output)
+    }
+
+    /// Reads i64 from the start of the caller-provided slice.
+    pub fn read_i64(input: &[u8]) -> Result<i64, Error> {
+        std::encoding::binary::read_i64_le(input)
+    }
+
+    /// Writes i64; short-buffer errors leave the output unchanged.
+    pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_i64_le(value, output)
+    }
+
+    /// Reads f32 from the start of the caller-provided slice.
+    pub fn read_f32(input: &[u8]) -> Result<f32, Error> {
+        std::encoding::binary::read_f32_le(input)
+    }
+
+    /// Writes f32; short-buffer errors leave the output unchanged.
+    pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_f32_le(value, output)
+    }
+
+    /// Reads f64 from the start of the caller-provided slice.
+    pub fn read_f64(input: &[u8]) -> Result<f64, Error> {
+        std::encoding::binary::read_f64_le(input)
+    }
+
+    /// Writes f64; short-buffer errors leave the output unchanged.
+    pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_f64_le(value, output)
+    }
+
+    /// Reads bool from the start of the caller-provided slice.
+    pub fn read_bool(input: &[u8]) -> Result<bool, Error> {
+        std::encoding::binary::read_bool(input)
+    }
+
+    /// Writes bool; short-buffer errors leave the output unchanged.
+    pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_bool(value, output)
+    }
+
+    #(if: target.pointer_width == "64")
+    /// Reads usize from the start of the caller-provided slice.
+    pub fn read_usize(input: &[u8]) -> Result<usize, Error> {
+        std::encoding::binary::read_usize_le(input)
+    }
+
+    /// Writes usize; short-buffer errors leave the output unchanged.
+    pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_usize_le(value, output)
+    }
+
+    #(endif)
+}
+
+impl BigEndian {
+    /// Reads u8 from the start of the caller-provided slice.
+    pub fn read_u8(input: &[u8]) -> Result<u8, Error> {
+        std::encoding::binary::read_u8(input)
+    }
+
+    /// Writes u8; short-buffer errors leave the output unchanged.
+    pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u8(value, output)
+    }
+
+    /// Reads u16 from the start of the caller-provided slice.
+    pub fn read_u16(input: &[u8]) -> Result<u16, Error> {
+        std::encoding::binary::read_u16_be(input)
+    }
+
+    /// Writes u16; short-buffer errors leave the output unchanged.
+    pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u16_be(value, output)
+    }
+
+    /// Reads u32 from the start of the caller-provided slice.
+    pub fn read_u32(input: &[u8]) -> Result<u32, Error> {
+        std::encoding::binary::read_u32_be(input)
+    }
+
+    /// Writes u32; short-buffer errors leave the output unchanged.
+    pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u32_be(value, output)
+    }
+
+    /// Reads u64 from the start of the caller-provided slice.
+    pub fn read_u64(input: &[u8]) -> Result<u64, Error> {
+        std::encoding::binary::read_u64_be(input)
+    }
+
+    /// Writes u64; short-buffer errors leave the output unchanged.
+    pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_u64_be(value, output)
+    }
+
+    /// Reads i32 from the start of the caller-provided slice.
+    pub fn read_i32(input: &[u8]) -> Result<i32, Error> {
+        std::encoding::binary::read_i32_be(input)
+    }
+
+    /// Writes i32; short-buffer errors leave the output unchanged.
+    pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_i32_be(value, output)
+    }
+
+    /// Reads i64 from the start of the caller-provided slice.
+    pub fn read_i64(input: &[u8]) -> Result<i64, Error> {
+        std::encoding::binary::read_i64_be(input)
+    }
+
+    /// Writes i64; short-buffer errors leave the output unchanged.
+    pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_i64_be(value, output)
+    }
+
+    /// Reads f32 from the start of the caller-provided slice.
+    pub fn read_f32(input: &[u8]) -> Result<f32, Error> {
+        std::encoding::binary::read_f32_be(input)
+    }
+
+    /// Writes f32; short-buffer errors leave the output unchanged.
+    pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_f32_be(value, output)
+    }
+
+    /// Reads f64 from the start of the caller-provided slice.
+    pub fn read_f64(input: &[u8]) -> Result<f64, Error> {
+        std::encoding::binary::read_f64_be(input)
+    }
+
+    /// Writes f64; short-buffer errors leave the output unchanged.
+    pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_f64_be(value, output)
+    }
+
+    /// Reads bool from the start of the caller-provided slice.
+    pub fn read_bool(input: &[u8]) -> Result<bool, Error> {
+        std::encoding::binary::read_bool(input)
+    }
+
+    /// Writes bool; short-buffer errors leave the output unchanged.
+    pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_bool(value, output)
+    }
+
+    #(if: target.pointer_width == "64")
+    /// Reads usize from the start of the caller-provided slice.
+    pub fn read_usize(input: &[u8]) -> Result<usize, Error> {
+        std::encoding::binary::read_usize_be(input)
+    }
+
+    /// Writes usize; short-buffer errors leave the output unchanged.
+    pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error> {
+        std::encoding::binary::write_usize_be(value, output)
+    }
+
+    #(endif)
+}
+
+#(if: target.endian == "little")
+impl NativeEndian {
+    /// Reads u8 from the start of the caller-provided slice.
+    pub fn read_u8(input: &[u8]) -> Result<u8, Error> {
+        LittleEndian::read_u8(input)
+    }
+
+    /// Writes u8; short-buffer errors leave the output unchanged.
+    pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_u8(value, output)
+    }
+
+    /// Reads u16 from the start of the caller-provided slice.
+    pub fn read_u16(input: &[u8]) -> Result<u16, Error> {
+        LittleEndian::read_u16(input)
+    }
+
+    /// Writes u16; short-buffer errors leave the output unchanged.
+    pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_u16(value, output)
+    }
+
+    /// Reads u32 from the start of the caller-provided slice.
+    pub fn read_u32(input: &[u8]) -> Result<u32, Error> {
+        LittleEndian::read_u32(input)
+    }
+
+    /// Writes u32; short-buffer errors leave the output unchanged.
+    pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_u32(value, output)
+    }
+
+    /// Reads u64 from the start of the caller-provided slice.
+    pub fn read_u64(input: &[u8]) -> Result<u64, Error> {
+        LittleEndian::read_u64(input)
+    }
+
+    /// Writes u64; short-buffer errors leave the output unchanged.
+    pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_u64(value, output)
+    }
+
+    /// Reads i32 from the start of the caller-provided slice.
+    pub fn read_i32(input: &[u8]) -> Result<i32, Error> {
+        LittleEndian::read_i32(input)
+    }
+
+    /// Writes i32; short-buffer errors leave the output unchanged.
+    pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_i32(value, output)
+    }
+
+    /// Reads i64 from the start of the caller-provided slice.
+    pub fn read_i64(input: &[u8]) -> Result<i64, Error> {
+        LittleEndian::read_i64(input)
+    }
+
+    /// Writes i64; short-buffer errors leave the output unchanged.
+    pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_i64(value, output)
+    }
+
+    /// Reads f32 from the start of the caller-provided slice.
+    pub fn read_f32(input: &[u8]) -> Result<f32, Error> {
+        LittleEndian::read_f32(input)
+    }
+
+    /// Writes f32; short-buffer errors leave the output unchanged.
+    pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_f32(value, output)
+    }
+
+    /// Reads f64 from the start of the caller-provided slice.
+    pub fn read_f64(input: &[u8]) -> Result<f64, Error> {
+        LittleEndian::read_f64(input)
+    }
+
+    /// Writes f64; short-buffer errors leave the output unchanged.
+    pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_f64(value, output)
+    }
+
+    /// Reads bool from the start of the caller-provided slice.
+    pub fn read_bool(input: &[u8]) -> Result<bool, Error> {
+        LittleEndian::read_bool(input)
+    }
+
+    /// Writes bool; short-buffer errors leave the output unchanged.
+    pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_bool(value, output)
+    }
+
+    #(if: target.pointer_width == "64")
+    /// Reads usize from the start of the caller-provided slice.
+    pub fn read_usize(input: &[u8]) -> Result<usize, Error> {
+        LittleEndian::read_usize(input)
+    }
+
+    /// Writes usize; short-buffer errors leave the output unchanged.
+    pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error> {
+        LittleEndian::write_usize(value, output)
+    }
+
+    #(endif)
+}
+#(endif)
+
+#(if: target.endian == "big")
+impl NativeEndian {
+    /// Reads u8 from the start of the caller-provided slice.
+    pub fn read_u8(input: &[u8]) -> Result<u8, Error> {
+        BigEndian::read_u8(input)
+    }
+
+    /// Writes u8; short-buffer errors leave the output unchanged.
+    pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_u8(value, output)
+    }
+
+    /// Reads u16 from the start of the caller-provided slice.
+    pub fn read_u16(input: &[u8]) -> Result<u16, Error> {
+        BigEndian::read_u16(input)
+    }
+
+    /// Writes u16; short-buffer errors leave the output unchanged.
+    pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_u16(value, output)
+    }
+
+    /// Reads u32 from the start of the caller-provided slice.
+    pub fn read_u32(input: &[u8]) -> Result<u32, Error> {
+        BigEndian::read_u32(input)
+    }
+
+    /// Writes u32; short-buffer errors leave the output unchanged.
+    pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_u32(value, output)
+    }
+
+    /// Reads u64 from the start of the caller-provided slice.
+    pub fn read_u64(input: &[u8]) -> Result<u64, Error> {
+        BigEndian::read_u64(input)
+    }
+
+    /// Writes u64; short-buffer errors leave the output unchanged.
+    pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_u64(value, output)
+    }
+
+    /// Reads i32 from the start of the caller-provided slice.
+    pub fn read_i32(input: &[u8]) -> Result<i32, Error> {
+        BigEndian::read_i32(input)
+    }
+
+    /// Writes i32; short-buffer errors leave the output unchanged.
+    pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_i32(value, output)
+    }
+
+    /// Reads i64 from the start of the caller-provided slice.
+    pub fn read_i64(input: &[u8]) -> Result<i64, Error> {
+        BigEndian::read_i64(input)
+    }
+
+    /// Writes i64; short-buffer errors leave the output unchanged.
+    pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_i64(value, output)
+    }
+
+    /// Reads f32 from the start of the caller-provided slice.
+    pub fn read_f32(input: &[u8]) -> Result<f32, Error> {
+        BigEndian::read_f32(input)
+    }
+
+    /// Writes f32; short-buffer errors leave the output unchanged.
+    pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_f32(value, output)
+    }
+
+    /// Reads f64 from the start of the caller-provided slice.
+    pub fn read_f64(input: &[u8]) -> Result<f64, Error> {
+        BigEndian::read_f64(input)
+    }
+
+    /// Writes f64; short-buffer errors leave the output unchanged.
+    pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_f64(value, output)
+    }
+
+    /// Reads bool from the start of the caller-provided slice.
+    pub fn read_bool(input: &[u8]) -> Result<bool, Error> {
+        BigEndian::read_bool(input)
+    }
+
+    /// Writes bool; short-buffer errors leave the output unchanged.
+    pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_bool(value, output)
+    }
+
+    #(if: target.pointer_width == "64")
+    /// Reads usize from the start of the caller-provided slice.
+    pub fn read_usize(input: &[u8]) -> Result<usize, Error> {
+        BigEndian::read_usize(input)
+    }
+
+    /// Writes usize; short-buffer errors leave the output unchanged.
+    pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error> {
+        BigEndian::write_usize(value, output)
+    }
+
+    #(endif)
+}
+#(endif)

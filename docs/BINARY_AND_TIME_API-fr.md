@@ -8,6 +8,11 @@ règle du core. La [référence générée](STDLIB.md) décrit leurs symboles et
 
 ## `std::encoding::binary`
 
+Les types `LittleEndian`, `BigEndian` et `NativeEndian` proposent des méthodes
+statiques `read_TYPE` / `write_TYPE`. `NativeEndian` sélectionne son implémentation à la compilation
+avec `target.endian`, sans dispatch à l’exécution. Pour les formats disque/réseau,
+préférer un ordre explicite. Les fonctions `_le` et `_be` restent disponibles.
+
 Les méthodes `read_TYPE_le/be` et `write_TYPE_le/be` rendent l'ordre des octets
 explicite, indépendamment de l'hôte : `u16`, `u32`, `u64`, `i32`, `i64`, `f32`,
 `f64`. `u8` et `bool` utilisent `read_u8`, `write_u8`, `read_bool`, `write_bool`.

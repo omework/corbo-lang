@@ -1350,21 +1350,22 @@ Output: `64`. [Complete package](examples/features/encoding/).
 
 #### Binary primitives with explicit endianness
 
-The caller provides storage and chooses byte order for every multi-byte read or write.
+The caller provides storage and chooses `LittleEndian` or `BigEndian`.
+`NativeEndian` selects the compilation target’s byte order at compile time.
 
 <!-- example: binary -->
 ```rust
-use std::encoding::binary::{write_u32_be, read_u32_be, read_u32_le, Error};
+use std::encoding::binary::{BigEndian, LittleEndian, Error};
 
 fn encode() -> Result<(), Error> {
     let mut bytes: [u8; 4] = [0; 4];
 
     // 0x01020304 becomes the four bytes 01 02 03 04.
-    let written = write_u32_be(16909060, &mut bytes[..])?;
+    let written = BigEndian::write_u32(16909060, &mut bytes[..])?;
     print(written);
 
-    let big = read_u32_be(&bytes[..])?;
-    let little = read_u32_le(&bytes[..])?;
+    let big = BigEndian::read_u32(&bytes[..])?;
+    let little = LittleEndian::read_u32(&bytes[..])?;
     print(big);
     print(little);
 
@@ -1655,7 +1656,7 @@ types use the same lock contracts as user-defined locks.
 | `std::net::tls` | Native TLS 1.3 key schedule, records, handshake and X.509 validation; optional OpenSSL wrapper | [API](docs/STDLIB.md#stdnettls) |
 | `std::crypto` | AES-GCM/CBC, SHA families, HMAC/HKDF, Argon2id, random, P-256 and key containers | [API](docs/STDLIB.md#stdcryptoaes) |
 | `std::encoding` | Hex, Base64, DER and PEM with caller-owned output | [API](docs/STDLIB.md#stdencodinghex) |
-| `std::encoding::binary` | Primitive reads/writes with explicit little-/big-endian byte order and caller-provided buffers | [Binary API](docs/BINARY_AND_TIME_API.md#stdencodingbinary) |
+| `std::encoding::binary` | Static `LittleEndian`, `BigEndian` and target-selected `NativeEndian` methods with caller-provided buffers | [Binary API](docs/BINARY_AND_TIME_API.md#stdencodingbinary) |
 | `std::time`, `std::time::asyn` | Monotonic Duration/Instant, sleep and reusable deadline timers; async waits use blocking workers | [Time API](docs/BINARY_AND_TIME_API.md) |
 | `std::compression::{gzip, zstd}` | Native bounded codecs, streaming and dictionary support | [Compression](docs/COMPRESSION.md) |
 | `runtime::metrics` | Atomic reserved, committed and occupied datastack/region byte counters | [Metrics](docs/RUNTIME_METRICS.md) |

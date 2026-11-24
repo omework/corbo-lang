@@ -5141,3 +5141,12 @@ frontend are unchanged. Existing nominal allocation-handle parameter and some
 borrowed enum-return limitations are not claimed as covered.
 See [the decision](DEREFERENCE.md) and the
 [compiler report](https://github.com/omework/corboc/blob/main/docs/REFERENCE_METHODS_CYCLE.md).
+
+## Static byte-order API and target.endian
+
+LittleEndian/BigEndian/NativeEndian reuse the existing primitive binary routines.
+The target-selected namespace uses conditional static forwarding and no name
+constant. Corboc validation covers 60 methods, explicit bytes, short-buffer
+protection, invalid bools and pre-import selection on macOS ARM64. The complete
+compiler evidence is in `corboc/docs/BINARY_ORDERS_CYCLE.md`. No big-endian-host or
+new Linux/Windows execution is claimed for this wrapper API change.
