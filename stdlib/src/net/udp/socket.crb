@@ -9,56 +9,33 @@
     /// Owns a UDP socket associated with one remote endpoint.
     pub struct Connection {
         /// Owned native socket storage; the connection/listener closes it on destruction.
-        __din_package_socket: PlatformSocket,
+        __din_package_socket: PlatformSocket;
         /// Cached local IPv4 endpoint, including any OS-assigned port.
-        local_address: SocketAddr,
+        local_address: SocketAddr;
         /// Cached remote IPv4 endpoint.
-        remote_address: SocketAddr,
-    }
+        remote_address: SocketAddr;
 
-    /// Owns a bound UDP socket that can receive from and send to arbitrary endpoints.
-    pub struct Listener {
-        /// Owned native socket storage; the connection/listener closes it on destruction.
-        __din_package_socket: PlatformSocket,
-        /// Cached local IPv4 endpoint, including any OS-assigned port.
-        local_address: SocketAddr,
-    }
-
-    /// Associates a UDP socket with the specified peer without a transport handshake.
-    pub fn connect(address: SocketAddr) -> Result<Connection, SocketError> {
-        let inner = match open_connection(2, address.ipv4_bits(), address.port()) {
-            Ok(value) => { value },
-            Err(error) => { return Err(error); },
-        };
-        let local = match inner.endpoint(0) {
-            Ok(value) => { value },
-            Err(error) => { return Err(error); },
-        };
-        Ok(Connection { __din_package_socket: inner, local_address: local, remote_address: address })
-    }
-
-    impl Connection {
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) -> SocketAddr {
+        fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Returns the remote IPv4 address and port associated with the connection.
-        fn peer(&self) -> SocketAddr {
+        fn peer(&self) SocketAddr {
             let remote = &(*self).remote_address;
             from_parts(remote.ipv4_bits(), remote.port())
         }
 
         /// Sends a complete datagram to the connected peer, including an empty datagram.
-        fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError> {
+        fn send(&mut self, buffer: &[u8]) Result<usize, SocketError> {
             if buffer.len() > 65507 { return Err(SocketError.DatagramTooLarge); }
             let inner = &mut (*self).__din_package_socket;
             inner.send(buffer)
         }
 
         /// Receives one datagram from the connected peer. An oversized payload is consumed and reported.
-        fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError> {
+        fn recv(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             let packet = match inner.receive_from(buffer) {
                 Ok(value) => { value },
@@ -66,11 +43,18 @@
             };
             Ok(packet.count())
         }
-    }
 
-    impl Listener {
+}
+
+    /// Owns a bound UDP socket that can receive from and send to arbitrary endpoints.
+    pub struct Listener {
+        /// Owned native socket storage; the connection/listener closes it on destruction.
+        __din_package_socket: PlatformSocket;
+        /// Cached local IPv4 endpoint, including any OS-assigned port.
+        local_address: SocketAddr;
+
         /// Binds a UDP socket to the supplied local endpoint. Use port zero for an assigned port.
-        fn bind(address: SocketAddr) -> Result<Listener, SocketError> {
+        fn bind(address: SocketAddr) Result<Listener, SocketError> {
             let inner = match open_listener(2, address.ipv4_bits(), address.port(), 0) {
                 Ok(value) => { value },
                 Err(error) => { return Err(error); },
@@ -83,21 +67,38 @@
         }
 
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) -> SocketAddr {
+        fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Receives one datagram with sender metadata. An oversized payload is consumed and reported.
-        fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError> {
+        fn recv(&mut self, buffer: &mut [u8]) Result<Datagram, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             inner.receive_from(buffer)
         }
 
         /// Sends a complete datagram to the supplied destination, including an empty datagram.
-        fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError> {
+        fn send(&mut self, buffer: &[u8], destination: SocketAddr) Result<usize, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             inner.send_to(buffer, destination.ipv4_bits(), destination.port())
         }
+
+}
+
+    /// Associates a UDP socket with the specified peer without a transport handshake.
+    pub fn connect(address: SocketAddr) Result<Connection, SocketError> {
+        let inner = match open_connection(2, address.ipv4_bits(), address.port()) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        let local = match inner.endpoint(0) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        Ok(Connection { __din_package_socket: inner, local_address: local, remote_address: address })
     }
+
+
+
 #(endif)

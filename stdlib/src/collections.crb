@@ -31,13 +31,13 @@ pub struct Pool<T> {
 /// Recoverable failure to allocate a slot in an existing typed pool.
 pub enum PoolError {
     /// No free slot remains in the selected enum arm (or ordinary element pool).
-    Full,
+    Full;
 }
 
 /// Reports content exceeding a bounded inline string's byte capacity.
 pub enum BoundedStringError {
     /// The full UTF-8 input does not fit; the destination remains unchanged.
-    TooLong,
+    TooLong;
 }
 
 /// Fixed-layout template selected by String<N>; length plus N inline bytes.
@@ -45,17 +45,16 @@ pub enum BoundedStringError {
 /// No field is writable outside this STD module; constructors retain UTF-8.
 pub struct BoundedString<N> {
     /// Current UTF-8 byte count, always no greater than N.
-    length: usize,
+    length: usize;
     /// Inline storage; unused bytes are zeroed by construction and set.
-    data: [u8; N],
-}
-impl BoundedString<N> {
+    data: [u8; N];
+
     /// Constructs an empty inline string without an allocation.
-    fn new() -> BoundedString<N> {
+    fn new() BoundedString<N> {
         BoundedString { length: 0, data: [0; N] }
     }
     /// Copies a complete UTF-8 input or returns TooLong without truncation.
-    fn try_from(text: &str) -> Result<BoundedString<N>, BoundedStringError> {
+    fn try_from(text: &str) Result<BoundedString<N>, BoundedStringError> {
         let mut value = BoundedString<N>::new();
         match value.set(text) {
             Ok(()) => { Ok(value) },
@@ -63,11 +62,11 @@ impl BoundedString<N> {
         }
     }
     /// Returns the compile-time byte capacity.
-    fn capacity(&self) -> usize { N }
+    fn capacity(&self) usize { N }
     /// Returns the current byte length, not a character count.
-    fn len(&self) -> usize { (*self).length }
+    fn len(&self) usize { (*self).length }
     /// Replaces the content, retaining the old value if the input is too long.
-    fn set(&mut self, text: &str) -> Result<(), BoundedStringError> {
+    fn set(&mut self, text: &str) Result<(), BoundedStringError> {
         let bytes = text.as_bytes();
         if bytes.len() > N { return Err(BoundedStringError.TooLong); }
         let mut i: usize = 0;
@@ -86,12 +85,12 @@ impl BoundedString<N> {
         Ok(())
     }
     /// Borrows validated UTF-8 text without allocating or copying its payload.
-    fn as_str(&self) -> Result<&str, Utf8Error> {
+    fn as_str(&self) Result<&str, Utf8Error> {
         let bytes = self.as_bytes();
         str::from_utf8(bytes)
     }
     /// Borrows the used bytes; mutation and moves respect the ordinary loan rules.
-    fn as_bytes(&self) -> &[u8] {
+    fn as_bytes(&self) &[u8] {
         let length = (*self).length;
         &(*self).data[..length]
     }

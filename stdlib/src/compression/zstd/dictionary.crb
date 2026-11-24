@@ -3,7 +3,7 @@
 
 /// Validates a dictionary and initializes its entropy tables and repeat offsets; returns its content offset.
 fn load_dictionary(dictionary: &[u8], huffman: &mut [u64], ll: &mut [u64], off: &mut [u64],
-                   ml: &mut [u64], state: &mut State) -> Result<u64, Error> {
+                   ml: &mut [u64], state: &mut State) Result<u64, Error> {
     let size = dictionary.len() as u64;
     if size == 0 { return Ok(0); }
     if size < 8 || size > 0xffffffff { return Err(Error.InvalidDictionary); }
@@ -37,7 +37,7 @@ fn load_dictionary(dictionary: &[u8], huffman: &mut [u64], ll: &mut [u64], off: 
 }
 
 /// Returns a formatted dictionary's identifier, or zero for a raw-content dictionary.
-fn dictionary_number(dictionary: &[u8]) -> u64 {
+fn dictionary_number(dictionary: &[u8]) u64 {
     if dictionary.len() >= 8 && little(&dictionary[0..dictionary.len()], 0, 4) == 0xec30a437 {
         return little(&dictionary[0..dictionary.len()], 4, 4);
     }
@@ -45,7 +45,7 @@ fn dictionary_number(dictionary: &[u8]) -> u64 {
 }
 
 /// Validates encoder dictionary metadata without retaining a reference or allocating storage.
-fn dictionary_start(dictionary: &[u8]) -> Result<u64, Error> {
+fn dictionary_start(dictionary: &[u8]) Result<u64, Error> {
     if dictionary.len() == 0 { return Ok(0); }
     if dictionary.len() < 8 { return Err(Error.InvalidDictionary); }
     if little(&dictionary[0..dictionary.len()], 0, 4) != 0xec30a437 { return Ok(0); }
@@ -56,13 +56,13 @@ fn dictionary_start(dictionary: &[u8]) -> Result<u64, Error> {
 }
 
 /// Reads a virtual concatenation of dictionary history and current input without copying either.
-fn history_byte(dictionary: &[u8], input: &[u8], at: u64) -> u8 {
+fn history_byte(dictionary: &[u8], input: &[u8], at: u64) u8 {
     if at < dictionary.len() as u64 { return dictionary[at]; }
     input[at - dictionary.len() as u64]
 }
 
 /// Computes the encoder hash for four virtual history bytes.
-fn history_hash(dictionary: &[u8], input: &[u8], at: u64) -> u64 {
+fn history_hash(dictionary: &[u8], input: &[u8], at: u64) u64 {
     let a = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], copy(at)) as u64;
     let b = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], at + 1) as u64;
     let c = history_byte(&dictionary[0..dictionary.len()], &input[0..input.len()], at + 2) as u64;

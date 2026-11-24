@@ -1,5 +1,7 @@
 [English](STRUCTURES_METHODS.md)
 
+
+Syntaxe actuelle : [méthodes dans les définitions](DEFINITION_METHODS-fr.md), remplaçant les anciens exemples avec `impl`.
 # Corbo — structures, construction et méthodes
 
 Les enums suivent [EN1 et V3](LANGUAGE_RULES-fr.md) : `if let` reprend leurs

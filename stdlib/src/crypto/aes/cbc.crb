@@ -4,13 +4,13 @@
 /// Reports insufficient storage, invalid ciphertext length, or invalid CBC padding.
 pub enum CbcError {
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall,
+    BufferTooSmall;
     /// The ciphertext length or padding is invalid.
-    InvalidCiphertext
+    InvalidCiphertext;
 }
 
 /// Computes the inverse AES S-box using the inverse affine transform and field inversion.
-fn inverse_substitute(value: u8) -> u8 {
+fn inverse_substitute(value: u8) u8 {
     field_inverse(rotate_byte(copy(value), 1) ^ rotate_byte(copy(value), 3) ^ rotate_byte(value, 6) ^ 5)
 }
 
@@ -73,7 +73,7 @@ fn decrypt_cbc_block(schedule: &[u8; 240], block: &mut [u8; 16]) {
 }
 
 /// Expands the supplied AES-256 key into round-key storage.
-fn cbc_schedule(key: &[u8; 32]) -> [u8; 240] {
+fn cbc_schedule(key: &[u8; 32]) [u8; 240] {
     let mut schedule: [u8; 240] = [0; 240];
     let mut at: u64 = 0;
     while at < 32 {
@@ -86,7 +86,7 @@ fn cbc_schedule(key: &[u8; 32]) -> [u8; 240] {
 
 /// Encrypts bytes with AES-256-CBC and PKCS#7 padding and returns the ciphertext length.
 pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
-                          output: &mut [u8]) -> Result<usize, CbcError> {
+                          output: &mut [u8]) Result<usize, CbcError> {
     let size = input.len();
     let extra: usize = 16 - size % 16;
     let capacity = output.len();
@@ -124,7 +124,7 @@ pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
 /// Decrypts padded AES-256-CBC. Invalid padding clears the decrypted region of output.
 /// On success, the returned length excludes the padding.
 pub fn cbc_decrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
-                          output: &mut [u8]) -> Result<usize, CbcError> {
+                          output: &mut [u8]) Result<usize, CbcError> {
     let size = input.len();
     if size < 16 || size % 16 != 0 { return Err(CbcError.InvalidCiphertext); }
     if size > output.len() { return Err(CbcError.BufferTooSmall); }

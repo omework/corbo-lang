@@ -5,27 +5,19 @@
 /// Pieces borrow the original text; no piece owns or copies its bytes.
 pub struct Split {
     /// Original UTF-8 storage, retained independently of the iterator cursor.
-    text: &str,
+    text: &str;
     /// Literal separator; its storage must remain valid while matching continues.
-    separator: &str,
+    separator: &str;
     /// Byte offset of the next unconsumed piece.
-    position: usize,
+    position: usize;
     /// Records exhaustion, including the final empty piece after a trailing match.
-    finished: bool,
+    finished: bool;
     /// Records whether an empty separator has yielded its leading empty piece.
-    empty_started: bool,
-}
+    empty_started: bool;
 
-/// Borrows text and its separator and constructs a fixed-size iterator descriptor.
-/// Empty pieces are preserved. An empty separator splits at Unicode scalar boundaries.
-pub fn split(text: &str, separator: &str) -> Split {
-    Split { text: text, separator: separator, position: 0, finished: false, empty_started: false }
-}
-
-impl Split {
     /// Returns the next UTF-8 view, or None after exhaustion.
     /// Returned pieces depend on the original text, independently of this cursor.
-    fn next(&mut self) -> Option<&str> {
+    fn next(&mut self) Option<&str> {
         if (*self).finished { return None; }
 
         let text = &(*self).text[..];
@@ -74,4 +66,10 @@ impl Split {
         *finished = true;
         Some(&text[start..length])
     }
+}
+
+/// Borrows text and its separator and constructs a fixed-size iterator descriptor.
+/// Empty pieces are preserved. An empty separator splits at Unicode scalar boundaries.
+pub fn split(text: &str, separator: &str) Split {
+    Split { text: text, separator: separator, position: 0, finished: false, empty_started: false }
 }

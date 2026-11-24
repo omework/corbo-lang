@@ -330,11 +330,13 @@ Output: `8, 42`. [Complete package](examples/features/control/).
 
 #### Functions, tuples and destructuring
 
+Return types follow parameters directly, without `->`. Methods are declared inside their struct or enum, after semicolon-terminated fields or variants. See [definition-local methods](docs/DEFINITION_METHODS.md).
+
 Functions can return tuples of two or more values. Types are inferred by position when no binding annotation is supplied.
 
 <!-- example: tuples -->
 ```rust
-fn measurements(value: i64) -> (i64, i64, bool) {
+fn measurements(value: i64) (i64, i64, bool) {
     (value + 1, value * 2, value > 0)
 }
 
@@ -357,10 +359,8 @@ Receiver signatures determine whether a method borrows, mutably borrows or consu
 <!-- example: methods -->
 ```rust
 struct Counter {
-    value: i64
-}
+    value: i64;
 
-impl Counter {
     const STEP: i64 = 1;
 
     fn increment(&mut self) {
@@ -368,7 +368,7 @@ impl Counter {
         *value += Counter::STEP;
     }
 
-    fn finish(self: Counter) -> i64 {
+    fn finish(self: Counter) i64 {
         self.value
     }
 }
@@ -395,8 +395,8 @@ and borrowing rules.
 <!-- example: enums -->
 ```rust
 enum Reading {
-    Value(i64),
-    Missing
+    Value(i64);
+    Missing;
 }
 
 fn main() {
@@ -423,16 +423,16 @@ Output: `true`, `42`, `42`. [Complete package](examples/features/enums/).
 
 #### Result, Option and early propagation
 
-`?` returns the failure/absence from the enclosing function. Result errors of different types require a statically resolved `Outer::from(Inner) -> Outer`; there is no implicit arbitrary conversion.
+`?` returns the failure/absence from the enclosing function. Result errors of different types require a statically resolved `Outer::from(Inner) Outer`; there is no implicit arbitrary conversion.
 
 <!-- example: errors -->
 ```rust
-fn checked(value: i64) -> Result<i64, bool> {
+fn checked(value: i64) Result<i64, bool> {
     if value < 0 { return Err(false); }
     Ok(value)
 }
 
-fn calculate() -> Result<i64, bool> {
+fn calculate() Result<i64, bool> {
     let value = checked(21)?;
     Ok(value * 2)
 }
@@ -461,7 +461,7 @@ Primitive values copy implicitly in assignments, arguments and returns: the sour
 <!-- example: moves -->
 ```rust
 struct Message {
-    value: i64
+    value: i64;
 }
 
 fn consume(message: Message) {
@@ -529,7 +529,7 @@ explicit instance methods define another target. For `A<T>`, they borrow the
 stored `T`; write `&allocation` to borrow the handle itself. Existing references
 are not implicitly dereferenced. Mutation permission must already exist.
 
-A wrapper with `ref(&self) -> &T` and `mut_ref(&mut self) -> &mut T` can also
+A wrapper with `ref(&self) &T` and `mut_ref(&mut self) &mut T` can also
 use `*`: reading selects `ref()`, while assignment or a mutable borrow selects
 `mut_ref()`. Both `MutexGuard` variants use this contract. Lifetime and lock
 dependencies remain attached to the returned reference.
@@ -550,7 +550,7 @@ fn main() {
 ```
 
 The source is evaluated once. Borrowed arrays and slices yield references;
-iterator objects yield the payload of `next() -> Option<T>`. Each iteration
+iterator objects yield the payload of `next() Option<T>`. Each iteration
 has its own scope, with ordinary move, borrowing and cleanup behavior.
 
 #### Fixed arrays, structural repetition and slices
@@ -560,10 +560,10 @@ An array carries its element count in its type. A borrowed slice carries an addr
 <!-- example: arrays -->
 ```rust
 struct Token {
-    kind: u8
+    kind: u8;
 }
 
-fn sum(values: &[i64]) -> i64 {
+fn sum(values: &[i64]) i64 {
     let mut index: usize = 0;
     let mut result: i64 = 0;
     while index < values.len() {
@@ -666,10 +666,8 @@ Output: `42`. [Complete package](examples/features/placement/).
 <!-- example: destruction -->
 ```rust
 struct Item {
-    number: i64
-}
+    number: i64;
 
-impl Item {
     fn drop(&mut self) {
         print((*self).number);
     }
@@ -848,15 +846,15 @@ A closure is a concrete captured object. Parameters are typed and braces are req
 
 <!-- example: closures -->
 ```rust
-fn apply(f: fn(i64) -> i64, value: i64) -> i64 {
+fn apply(f: fn(i64) i64, value: i64) i64 {
     f(value)
 }
 
-fn inspect(f: &fn(i64) -> i64, value: i64) -> i64 {
+fn inspect(f: &fn(i64) i64, value: i64) i64 {
     f(value)
 }
 
-fn advance(f: &mut fn() -> i64) -> i64 {
+fn advance(f: &mut fn() i64) i64 {
     f()
 }
 
@@ -893,12 +891,10 @@ Only `Iter` borrows the source. Each adapter owns the preceding stage. `collect(
 use std::iter::iter;
 
 struct Counter {
-    position: i64,
-    end: i64
-}
+    position: i64;
+    end: i64;
 
-impl Counter {
-    fn next(&mut self) -> Option<i64> {
+    fn next(&mut self) Option<i64> {
         let value = (*self).position;
         if copy(value) >= (*self).end { return None; }
         let position = &mut (*self).position;
@@ -937,7 +933,7 @@ Type parameters and their constraints also apply to structs. Concrete instantiat
 ```rust
 #(type: T)
 pub struct Holder<T> {
-    value: T
+    value: T;
 }
 
 fn main() {
@@ -958,33 +954,29 @@ A `with` contract requires the listed methods and permits additional ones. The c
 ```rust
 #(type: V)
 struct Boxed<V> {
-    value: V
-}
+    value: V;
 
-impl Boxed<V> {
-    fn new(value: V) -> Boxed<V> {
+    fn new(value: V) Boxed<V> {
         Boxed { value: value }
     }
 
-    fn get(&self) -> V {
+    fn get(&self) V {
         (*self).value
     }
 }
 
 #(type: V)
 #(type: S<V> with {
-    fn get(&self) -> V;
+    fn get(&self) V;
 })
 struct Reader<S, V> {
-    source: S
-}
+    source: S;
 
-impl Reader<S, V> {
-    fn new(source: S) -> Reader<S, V> {
+    fn new(source: S) Reader<S, V> {
         Reader { source: source }
     }
 
-    fn get(&self) -> V {
+    fn get(&self) V {
         let source = &(*self).source;
         source.get()
     }
@@ -1020,11 +1012,11 @@ The imported component is `src/math/numbers.crb`:
 
 <!-- example-file: modules/src/math/numbers.crb -->
 ```rust
-pub fn answer() -> i64 {
+pub fn answer() i64 {
     42
 }
 
-pub fn twice(value: i64) -> i64 {
+pub fn twice(value: i64) i64 {
     value * 2
 }
 ```
@@ -1042,13 +1034,13 @@ Target selection happens before import resolution. Excluded branches cannot intr
 <!-- example: target -->
 ```rust
 #(if: target.family == "unix")
-fn answer() -> i64 {
+fn answer() i64 {
     42
 }
 
 #(endif)
 #(if: target.family == "windows")
-fn answer() -> i64 {
+fn answer() i64 {
     42
 }
 
@@ -1071,12 +1063,12 @@ Calling an async function creates an inactive Future and captures its arguments 
 
 <!-- example: async -->
 ```rust
-async fn twice(value: i64) -> i64 {
+async fn twice(value: i64) i64 {
     yield;
     value * 2
 }
 
-async fn calculate() -> i64 {
+async fn calculate() i64 {
     twice(21).await
 }
 
@@ -1123,11 +1115,11 @@ Output: `42`. [Complete package](examples/features/threads/).
 
 <!-- example: blocking -->
 ```rust
-async fn operation() -> i64 {
+async fn operation() i64 {
     42
 }
 
-async fn calculate() -> i64 {
+async fn calculate() i64 {
     let execution = runtime::spawn_blocking(operation());
     match execution.await {
         Ok(value) => { value },
@@ -1166,7 +1158,7 @@ File::open("journal.wal", FileMode::READ | FileMode::WRITE | FileMode::CREATE)
 use std::io::{FileMode, FilePerm, SeekFrom};
 use std::io::asyn::{File, FileError};
 
-async fn round_trip() -> Result<usize, FileError> {
+async fn round_trip() Result<usize, FileError> {
     let path = "demo.bin";
     let count = {
         let mut file = File::create(
@@ -1212,7 +1204,7 @@ The caller chooses open mode, permissions and buffer size. Paths in this API are
 use std::io::{File, FileError};
 use std::io::{FileMode, FilePerm, SeekFrom};
 
-fn run() -> Result<usize, FileError> {
+fn run() Result<usize, FileError> {
     let path = "demo.bin";
     let count = {
         let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
@@ -1296,7 +1288,7 @@ use std::net::ipv4::{Addr, SocketAddr};
 use std::net::udp::{Listener, connect};
 use std::net::SocketError;
 
-fn exchange() -> Result<usize, SocketError> {
+fn exchange() Result<usize, SocketError> {
     let mut listener = Listener::bind(SocketAddr::new(Addr::new(127, 0, 0, 1), 0))?;
     let mut peer = connect(listener.addr())?;
     let input: [u8; 1] = [42];
@@ -1357,7 +1349,7 @@ The caller provides storage and chooses `LittleEndian` or `BigEndian`.
 ```rust
 use std::encoding::binary::{BigEndian, LittleEndian, Error};
 
-fn encode() -> Result<(), Error> {
+fn encode() Result<(), Error> {
     let mut bytes: [u8; 4] = [0; 4];
 
     // 0x01020304 becomes the four bytes 01 02 03 04.
@@ -1393,7 +1385,7 @@ Duration expresses a span; Instant reads a monotonic clock, and Timer waits for 
 use std::time::{Duration, Instant, Error};
 use std::time::{Timer, sleep};
 
-fn wait() -> Result<(), Error> {
+fn wait() Result<(), Error> {
     let start = Instant::now()?;
     sleep(Duration::from_millis(2))?;
 
@@ -1428,7 +1420,7 @@ Async waits suspend the caller task while an existing blocking worker performs t
 use std::time::{Duration, Error};
 use std::time::asyn::{sleep, Timer};
 
-async fn delayed_value() -> Result<i64, Error> {
+async fn delayed_value() Result<i64, Error> {
     sleep(Duration::from_millis(2)).await?;
 
     let timer = Timer::after(Duration::from_nanos(0))?;
@@ -1527,7 +1519,7 @@ async fn produce(channel: &Channel<i64>) {
     channel.close();
 }
 
-async fn consume(channel: &Channel<i64>) -> i64 {
+async fn consume(channel: &Channel<i64>) i64 {
     let mut total: i64 = 0;
 
     loop {
@@ -1579,7 +1571,7 @@ exit; the async guard below remains valid across `yield`.
 use std::sync::Mutex;
 use std::sync::asyn::Mutex as AsyncMutex;
 
-async fn async_value() -> i64 {
+async fn async_value() i64 {
     let mutex = AsyncMutex::new(10);
     {
         let mut guard = mutex.lock().await;

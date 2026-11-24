@@ -5,7 +5,7 @@
     use std::sys::valid_file_path;
 
     /// Converts a validated UTF-8 path to a zero-terminated UTF-16 path in native storage.
-    fn wide_path(path: &[u8], wide: &mut [u16]) -> bool {
+    fn wide_path(path: &[u8], wide: &mut [u16]) bool {
         let length = path.len();
         if copy(length) > 32768 || !valid_file_path(&path[0..copy(length)]) { return false; }
         let wide_capacity = wide.len();
@@ -28,7 +28,7 @@
     }
 
     /// Opens or creates a file with Windows access settings and returns the native HANDLE on success.
-    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64, u64) {
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) (bool, i64, u64) {
         let mut wide: [u16; 32768] = [0; 32768];
         if !wide_path(path, &mut wide[..]) { return (false, 0, 0); }
         let explicit = copy(perm) != 0xffffffff;
@@ -92,7 +92,7 @@
     }
 
     /// Reads from the HANDLE into caller-owned storage and returns status and byte count.
-    pub fn read(handle: u64, buffer: &mut [u8]) -> (i64, usize) {
+    pub fn read(handle: u64, buffer: &mut [u8]) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -125,7 +125,7 @@
     }
 
     /// Writes caller-owned bytes using the HANDLE and returns status and byte count.
-    pub fn write(handle: u64, buffer: &[u8]) -> (i64, usize) {
+    pub fn write(handle: u64, buffer: &[u8]) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -157,7 +157,7 @@
     }
 
     /// Queries the open HANDLE for the size of the file.
-    pub fn stats(handle: u64) -> (i64, u64) {
+    pub fn stats(handle: u64) (i64, u64) {
         let mut status: i64 = 0;
         let mut size: u64 = 0;
         @unchecked {
@@ -181,7 +181,7 @@
     }
 
     /// Moves the HANDLE's file offset relative to the supplied origin.
-    pub fn seek(handle: u64, offset: i64, origin: i64) -> (i64, u64) {
+    pub fn seek(handle: u64, offset: i64, origin: i64) (i64, u64) {
         let mut status: i64 = 0;
         let mut position: u64 = 0;
         @unchecked {
@@ -208,7 +208,7 @@
     }
 
     /// Converts both paths to UTF-16 and invokes the native rename operation.
-    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+    pub fn rename(source: &[u8], destination: &[u8]) (bool, i64) {
         let mut old_wide: [u16; 32768] = [0; 32768];
         let mut new_wide: [u16; 32768] = [0; 32768];
         if !wide_path(source, &mut old_wide[..]) || !wide_path(destination, &mut new_wide[..]) {
@@ -234,7 +234,7 @@
     }
 
     /// Converts the path to UTF-16 and invokes the native delete operation.
-    pub fn delete(path: &[u8]) -> (bool, i64) {
+    pub fn delete(path: &[u8]) (bool, i64) {
         let mut wide: [u16; 32768] = [0; 32768];
         if !wide_path(path, &mut wide[..]) { return (false, 0); }
         let mut raw: i64 = 0;
@@ -267,7 +267,7 @@
     use std::sys::valid_file_path;
 
     /// Converts a validated UTF-8 path to a zero-terminated UTF-16 path in native storage.
-    fn wide_path(path: &[u8], wide: &mut [u16]) -> bool {
+    fn wide_path(path: &[u8], wide: &mut [u16]) bool {
         let length = path.len();
         if copy(length) > 32768 || !valid_file_path(&path[0..copy(length)]) { return false; }
         let wide_capacity = wide.len();
@@ -294,7 +294,7 @@
     }
 
     /// Opens or creates a file with Windows access settings and returns the native HANDLE on success.
-    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64, u64) {
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) (bool, i64, u64) {
         let mut wide: [u16; 32768] = [0; 32768];
         if !wide_path(path, &mut wide[..]) { return (false, 0, 0); }
         let explicit = copy(perm) != 0xffffffff;
@@ -361,7 +361,7 @@
     }
 
     /// Reads from the HANDLE into caller-owned storage and returns status and byte count.
-    pub fn read(handle: u64, buffer: &mut [u8]) -> (i64, usize) {
+    pub fn read(handle: u64, buffer: &mut [u8]) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -395,7 +395,7 @@
     }
 
     /// Writes caller-owned bytes using the HANDLE and returns status and byte count.
-    pub fn write(handle: u64, buffer: &[u8]) -> (i64, usize) {
+    pub fn write(handle: u64, buffer: &[u8]) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -428,7 +428,7 @@
     }
 
     /// Queries the open HANDLE for the size of the file.
-    pub fn stats(handle: u64) -> (i64, u64) {
+    pub fn stats(handle: u64) (i64, u64) {
         let mut status: i64 = 0;
         let mut size: u64 = 0;
         @unchecked {
@@ -454,7 +454,7 @@
     }
 
     /// Moves the HANDLE's file offset relative to the supplied origin.
-    pub fn seek(handle: u64, offset: i64, origin: i64) -> (i64, u64) {
+    pub fn seek(handle: u64, offset: i64, origin: i64) (i64, u64) {
         let mut status: i64 = 0;
         let mut position: u64 = 0;
         @unchecked {
@@ -482,7 +482,7 @@
     }
 
     /// Converts both paths to UTF-16 and invokes the native rename operation.
-    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+    pub fn rename(source: &[u8], destination: &[u8]) (bool, i64) {
         let mut old_wide: [u16; 32768] = [0; 32768];
         let mut new_wide: [u16; 32768] = [0; 32768];
         if !wide_path(source, &mut old_wide[..]) || !wide_path(destination, &mut new_wide[..]) {
@@ -511,7 +511,7 @@
     }
 
     /// Converts the path to UTF-16 and invokes the native delete operation.
-    pub fn delete(path: &[u8]) -> (bool, i64) {
+    pub fn delete(path: &[u8]) (bool, i64) {
         let mut wide: [u16; 32768] = [0; 32768];
         if !wide_path(path, &mut wide[..]) { return (false, 0); }
         let mut raw: i64 = 0;
@@ -548,7 +548,7 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64")
     /// Flushes file buffers through the native HANDLE; zero indicates success.
-    pub fn sync_all(handle: u64) -> i64 {
+    pub fn sync_all(handle: u64) i64 {
         let mut error: i64 = 0;
         @unchecked {
             @asm {
@@ -563,7 +563,7 @@
         error
     }
     /// Sets FileEndOfFileInfo without moving the file cursor; zero indicates success.
-    pub fn truncate(handle: u64, length: u64) -> i64 {
+    pub fn truncate(handle: u64, length: u64) i64 {
         let mut size = length;
         let mut error: i64 = 0;
         @unchecked {
@@ -586,7 +586,7 @@
 
 #(if: target.os == "windows" && target.arch == "x86_64")
     /// Flushes file buffers through the native HANDLE; zero indicates success.
-    pub fn sync_all(handle: u64) -> i64 {
+    pub fn sync_all(handle: u64) i64 {
         let mut error: i64 = 0;
         @unchecked {
             @asm {
@@ -604,7 +604,7 @@
         error
     }
     /// Sets FileEndOfFileInfo without moving the file cursor; zero indicates success.
-    pub fn truncate(handle: u64, length: u64) -> i64 {
+    pub fn truncate(handle: u64, length: u64) i64 {
         let mut size = length;
         let mut error: i64 = 0;
         @unchecked {

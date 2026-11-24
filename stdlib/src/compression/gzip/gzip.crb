@@ -4,48 +4,47 @@
 /// Reports invalid parameters, bounded storage exhaustion, malformed input or checksum failure.
 pub enum Error {
     /// A parameter is outside this algorithm's supported bounds.
-    InvalidParams,
+    InvalidParams;
     /// The caller-provided scratch buffer cannot hold the required working state.
-    WorkspaceTooSmall,
+    WorkspaceTooSmall;
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall,
+    BufferTooSmall;
     /// The encoded input violates the format or a supported codec constraint.
-    InvalidData,
+    InvalidData;
     /// The encoded input ends before a required field or frame is complete.
-    TruncatedInput,
+    TruncatedInput;
     /// The computed checksum differs from the encoded checksum.
-    ChecksumMismatch,
+    ChecksumMismatch;
     /// The operation is incompatible with the current streaming state.
-    InvalidState,
+    InvalidState;
     /// The frame exceeds the caller's explicit storage budget.
-    FrameTooLarge
+    FrameTooLarge;
 }
 
 /// Controls match-search effort. Level zero stores bytes; levels one through nine compress.
 pub struct Params {
     /// Requested compression effort level; constructors validate the supported range.
-    level: u32
+    level: u32;
+
+    /// Uses level six. Levels express this encoder's search effort, not another library's byte output.
+    fn new() Params { Params { level: 6 } }
 }
 
-impl Params {
-    /// Uses level six. Levels express this encoder's search effort, not another library's byte output.
-    fn new() -> Params { Params { level: 6 } }
-}
 
 /// Tracks a forward bit offset and a sticky error code.
 struct Bits {
     /// Current bit offset in the encoded input/output.
-    bit: u64,
+    bit: u64;
     /// Sticky codec status used to stop after a malformed range or exhausted output.
-    error: i64
+    error: i64;
 }
 
 /// Holds canonical DEFLATE symbol counts and symbols ordered by code length.
 struct Tree {
     /// Huffman symbol counts indexed by code length.
-    counts: [u64; 16],
+    counts: [u64; 16];
     /// Huffman symbols ordered by code length.
-    symbols: [u64; 288]
+    symbols: [u64; 288];
 }
 
 /// Updates bit-reader state through explicit mutable field borrows.
@@ -55,13 +54,13 @@ fn set_bits(bits: &mut Bits, position: u64, error: i64) {
 }
 
 /// Extracts a byte using representable nibble values without a narrowing cast.
-fn octet(value: u64) -> u8 {
+fn octet(value: u64) u8 {
     let digits: [u8; 16] = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
     digits[value & 15] | (digits[(value >> 4) & 15] << 4)
 }
 
 /// Reads at most sixteen little-endian bits, recording truncated input without indexing it.
-fn read_bits(input: &[u8], bits: &mut Bits, count: u64) -> u64 {
+fn read_bits(input: &[u8], bits: &mut Bits, count: u64) u64 {
     let start = (*bits).bit;
     if (*bits).error != 0 { return 0; }
     if count > 16 || start / 8 > input.len() as u64
@@ -100,14 +99,14 @@ fn write_bits(output: &mut [u8], bits: &mut Bits, value: u64, count: u64) {
 }
 
 /// Reverses the low count bits for canonical Huffman code emission.
-fn reverse(value: u64, count: u64) -> u64 {
+fn reverse(value: u64, count: u64) u64 {
     let mut result: u64 = 0; let mut i: u64 = 0;
     while i < count { result = (result << 1) | ((value >> i) & 1); i = i + 1; }
     result
 }
 
 /// Computes the RFC 1952 CRC-32 without an allocation or target dependency.
-fn crc32(input: &[u8]) -> u64 {
+fn crc32(input: &[u8]) u64 {
     let mut crc: u64 = 0xffffffff;
     let mut i: u64 = 0;
     while i < input.len() as u64 {
@@ -123,13 +122,13 @@ fn crc32(input: &[u8]) -> u64 {
 }
 
 /// Reads a little-endian four-byte trailer field from a checked range.
-fn le32(input: &[u8], at: u64) -> u64 {
+fn le32(input: &[u8], at: u64) u64 {
     (input[at] as u64) | ((input[at + 1] as u64) << 8)
         | ((input[at + 2] as u64) << 16) | ((input[at + 3] as u64) << 24)
 }
 
 /// Builds a canonical DEFLATE tree; rejects oversubscribed or invalid incomplete trees.
-fn tree(lengths: &[u64], output: &mut Tree, code_lengths: bool) -> bool {
+fn tree(lengths: &[u64], output: &mut Tree, code_lengths: bool) bool {
     let mut counts: [u64; 16] = [0; 16];
     let mut symbols: [u64; 288] = [0; 288];
     let mut i: u64 = 0;
@@ -160,7 +159,7 @@ fn tree(lengths: &[u64], output: &mut Tree, code_lengths: bool) -> bool {
 }
 
 /// Decodes a canonical Huffman symbol one bit at a time from checked input.
-fn symbol(input: &[u8], bits: &mut Bits, codes: &Tree) -> u64 {
+fn symbol(input: &[u8], bits: &mut Bits, codes: &Tree) u64 {
     let mut code: u64 = 0; let mut first: u64 = 0; let mut index: u64 = 0; let mut length: u64 = 1;
     while length <= 15 {
         code = (code << 1) | read_bits(&input[0..input.len()], &mut *bits, 1);
@@ -173,14 +172,14 @@ fn symbol(input: &[u8], bits: &mut Bits, codes: &Tree) -> u64 {
 }
 
 /// Resolves a DEFLATE length code to its baseline and extra-bit count.
-fn length_info(code: u64) -> (u64, u64) {
+fn length_info(code: u64) (u64, u64) {
     let bases: [u64; 29] = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
     let extra: [u64; 29] = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
     (bases[code], extra[code])
 }
 
 /// Resolves a DEFLATE distance code to its baseline and extra-bit count.
-fn distance_info(code: u64) -> (u64, u64) {
+fn distance_info(code: u64) (u64, u64) {
     let bases: [u64; 30] = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
     let extra: [u64; 30] = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
     (bases[code], extra[code])
@@ -199,7 +198,7 @@ fn fixed(output: &mut [u8], bits: &mut Bits, value: u64) {
 
 /// Compresses one complete Gzip member. The workspace requires 36864 u64 words for levels 1–9.
 /// Output may contain a partial member on an error; input and workspace are never retained.
-pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error> {
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) Result<usize, Error> {
     let level = (*params).level;
     if level > 9 { return Err(Error.InvalidParams); }
     if level != 0 && workspace.len() < 36864 { return Err(Error.WorkspaceTooSmall); }
@@ -274,7 +273,7 @@ pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mu
 }
 
 /// Inflates one DEFLATE stream without allowing references before this Gzip member.
-fn inflate(input: &[u8], bits: &mut Bits, output: &mut [u8], start: u64) -> Result<u64, Error> {
+fn inflate(input: &[u8], bits: &mut Bits, output: &mut [u8], start: u64) Result<u64, Error> {
     let mut written = copy(start);
     loop {
         let last = read_bits(&input[0..input.len()], &mut *bits, 1);
@@ -376,13 +375,13 @@ fn inflate(input: &[u8], bits: &mut Bits, output: &mut [u8], start: u64) -> Resu
 /// Describes the consumed and produced bytes of a complete member.
 struct Frame {
     /// Number of encoded bytes consumed.
-    read: u64,
+    read: u64;
     /// Number of output bytes produced.
-    written: u64
+    written: u64;
 }
 
 /// Decodes one complete member and returns its compressed and decoded sizes.
-fn decode_member(input: &[u8], output: &mut [u8]) -> Result<Frame, Error> {
+fn decode_member(input: &[u8], output: &mut [u8]) Result<Frame, Error> {
     let size = input.len() as u64;
     if size == 0 { return Err(Error.TruncatedInput); }
     let mut at: u64 = 0; let mut written: u64 = 0;
@@ -426,7 +425,7 @@ fn decode_member(input: &[u8], output: &mut [u8]) -> Result<Frame, Error> {
 }
 
 /// Decompresses concatenated members. Errors may leave a partial output prefix.
-pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+pub fn decompress(input: &[u8], output: &mut [u8]) Result<usize, Error> {
     if input.len() == 0 { return Err(Error.TruncatedInput); }
     let mut at: u64 = 0; let mut written: u64 = 0;
     while at < input.len() as u64 {

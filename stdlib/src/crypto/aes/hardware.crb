@@ -3,7 +3,7 @@
 
 #(if: target.os == "macos" && target.arch == "aarch64" && target.pointer_width == "64")
     /// Queries the named Darwin CPU feature using sysctl.
-    fn enabled(name: &[u8]) -> bool {
+    fn enabled(name: &[u8]) bool {
         let mut result: u64 = 0;
         @unchecked {
             let address = addr(&name[0]);
@@ -29,7 +29,7 @@
     }
 
     /// Reports whether this target can execute the AES and carryless multiplication kernels.
-    fn hardware_available() -> bool {
+    fn hardware_available() bool {
         let aes: [u8; 25] = [104, 119, 46, 111, 112, 116, 105, 111, 110, 97, 108, 46, 97, 114, 109, 46, 70, 69, 65, 84, 95, 65, 69, 83, 0];
         let pmull: [u8; 27] = [104, 119, 46, 111, 112, 116, 105, 111, 110, 97, 108, 46, 97, 114, 109, 46, 70, 69, 65, 84, 95, 80, 77, 85, 76, 76, 0];
         enabled(&aes[..]) && enabled(&pmull[..])
@@ -38,7 +38,7 @@
 
 #(if: target.os == "linux" && target.arch == "aarch64" && target.pointer_width == "64")
     /// Reports whether this target can execute the AES and carryless multiplication kernels.
-    fn hardware_available() -> bool {
+    fn hardware_available() bool {
         let mut caps: u64 = 0;
         @unchecked {
             @asm {
@@ -54,7 +54,7 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64" && target.pointer_width == "64")
     /// Reports whether this target can execute the AES and carryless multiplication kernels.
-    fn hardware_available() -> bool {
+    fn hardware_available() bool {
         let mut enabled: u64 = 0;
         @unchecked {
             @asm {
@@ -128,7 +128,7 @@
 
 #(if: target.arch == "x86_64" && target.pointer_width == "64")
     /// Reports whether this target can execute the AES and carryless multiplication kernels.
-    fn hardware_available() -> bool {
+    fn hardware_available() bool {
         let mut supported: u64 = 0;
         @unchecked {
             @asm {
@@ -204,7 +204,7 @@
 
 #(if: target.pointer_width == "32")
     /// Reports whether this target can execute the AES and carryless multiplication kernels.
-    fn hardware_available() -> bool { false }
+    fn hardware_available() bool { false }
 
     /// Runs the target AES block encryption kernel with expanded round keys.
     fn hardware_encrypt(schedule: &[u8; 240], rounds: u64, block: &mut [u8; 16]) {

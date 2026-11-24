@@ -12,7 +12,7 @@
     // Words 15..25 hold the extra socket, the AcceptEx address buffer and
     // the provider's extension function pointer.
     /// Submits a socket operation to the completion reactor and returns its status.
-    async fn execute(socket: u64, request: &mut [u64]) -> i64 {
+    async fn execute(socket: u64, request: &mut [u64]) i64 {
         let length = request.len();
         let status = complete(socket, &mut request[0..length]).await;
         request[8] = 0;
@@ -20,7 +20,7 @@
     }
 
     /// Packs an IPv4 address and port into the Windows socket address representation.
-    fn address_bits(ip: u32, port: u16) -> u64 {
+    fn address_bits(ip: u32, port: u16) u64 {
         let a = ip as u64;
         let p = port as u64;
         2 | ((copy(p) & 255) << 24) | ((p >> 8) << 16)
@@ -29,7 +29,7 @@
     }
 
     /// Converts a received Windows socket address to the shared packed endpoint format.
-    fn peer_bits(address: u64) -> u64 {
+    fn peer_bits(address: u64) u64 {
         let ip = ((copy(address) >> 56) & 255) | ((copy(address) >> 40) & 65280)
           | ((copy(address) >> 24) & 16711680) | ((copy(address) >> 8) & 4278190080);
         let port = ((copy(address) >> 24) & 255) | ((address >> 8) & 65280);
@@ -37,26 +37,26 @@
     }
 
     /// Converts a native completion status into the socket error convention.
-    fn status_code(status: u64) -> i64 {
+    fn status_code(status: u64) i64 {
         // completion_next stores a positive error code in the request.
         raw::completion_error(status)
     }
 
     /// Associates a socket with the Windows completion port.
-    pub fn prepare_async(socket: &PlatformSocket) -> Result<(), SocketError> {
+    pub fn prepare_async(socket: &PlatformSocket) Result<(), SocketError> {
         let status = attach(socket_descriptor(socket));
         if copy(status) != 0 { return Err(socket_error(status)); }
         Ok(())
     }
 
     /// Limits the length of a request to the size supported by Winsock.
-    fn length_limit(length: usize) -> u64 {
+    fn length_limit(length: usize) u64 {
         if copy(length) > 4294967295 { return 4294967295; }
         length as u64
     }
 
     /// Awaits an overlapped socket read and returns the transferred byte count.
-    pub async fn read_nonblocking(socket: u64, buffer: &mut [u8]) -> Result<usize, SocketError> {
+    pub async fn read_nonblocking(socket: u64, buffer: &mut [u8]) Result<usize, SocketError> {
         let length = buffer.len();
         if copy(length) == 0 { return Ok(0); }
         let mut request: [u64; 25] = [0; 25];
@@ -71,7 +71,7 @@
     }
 
     /// Awaits an overlapped socket write and returns the transferred byte count.
-    pub async fn write_nonblocking(socket: u64, buffer: &[u8]) -> Result<usize, SocketError> {
+    pub async fn write_nonblocking(socket: u64, buffer: &[u8]) Result<usize, SocketError> {
         let length = buffer.len();
         if copy(length) == 0 { return Ok(0); }
         let mut request: [u64; 25] = [0; 25];
@@ -86,7 +86,7 @@
     }
 
     /// Awaits a datagram and returns its byte count and sender.
-    pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) -> Result<Datagram, SocketError> {
+    pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) Result<Datagram, SocketError> {
         let length = buffer.len();
         let mut dummy: [u8; 1] = [0];
         let mut request: [u64; 25] = [0; 25];
@@ -109,7 +109,7 @@
     }
 
     /// Awaits transmission of a connected or addressed datagram.
-    pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) -> Result<usize, SocketError> {
+    pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) Result<usize, SocketError> {
         let length = buffer.len();
         if copy(length) > 65507 { return Err(SocketError.DatagramTooLarge); }
         let dummy: [u8; 1] = [0];
@@ -127,7 +127,7 @@
     }
 
     /// Awaits an overlapped connect and adopts the completed connection.
-    pub async fn connect_nonblocking(ip: u32, port: u16) -> Result<PlatformSocket, SocketError> {
+    pub async fn connect_nonblocking(ip: u32, port: u16) Result<PlatformSocket, SocketError> {
         let socket = match make_socket(1) {
             Ok(value) => { value }, Err(error) => { return Err(error); },
         };
@@ -152,7 +152,7 @@
     }
 
     /// Awaits an overlapped accept and adopts the resulting connection.
-    pub async fn accept_nonblocking(listener: &mut PlatformSocket) -> Result<PlatformSocket, SocketError> {
+    pub async fn accept_nonblocking(listener: &mut PlatformSocket) Result<PlatformSocket, SocketError> {
         let descriptor = socket_descriptor(&*listener);
         let socket = match make_socket(1) {
             Ok(value) => { value }, Err(error) => { return Err(error); },

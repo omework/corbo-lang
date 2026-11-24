@@ -6,17 +6,17 @@ use std::crypto::sha256::{hmac, hmac_parts};
 /// Reports zero iterations, a length outside the PBKDF2 output range, or an oversized input.
 pub enum Error {
     /// The derivation iteration count is invalid.
-    InvalidIterations,
+    InvalidIterations;
     /// The derivation output length is invalid.
-    InvalidOutputLength,
+    InvalidOutputLength;
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong
+    InputTooLong;
 }
 
 /// Derives output.len() bytes with PBKDF2-HMAC-SHA-256. The caller sets the salt and iteration count.
 /// Parameter errors leave the output unchanged.
 pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32,
-                      output: &mut [u8]) -> Result<(), Error> {
+                      output: &mut [u8]) Result<(), Error> {
     if iterations == 0 { return Err(Error.InvalidIterations); }
     let length = output.len();
     if length == 0 || (length as u64) > 0xffffffff * 32 { return Err(Error.InvalidOutputLength); }

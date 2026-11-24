@@ -8,44 +8,42 @@ const STREAM_ONE: u64 = 1;
 /// Call process until finished. Destruction discards pending bytes without flushing.
 pub struct Encoder {
     /// Caller-owned frame input storage, borrowed for streaming operation.
-    input: &mut [u8],
+    input: &mut [u8];
     /// Caller-owned encoded-output storage awaiting draining.
-    pending: &mut [u8],
+    pending: &mut [u8];
     /// Caller-owned codec scratch storage; required length is checked before use.
-    workspace: &mut [u64],
+    workspace: &mut [u64];
     /// Requested compression effort level; constructors validate the supported range.
-    level: u32,
+    level: u32;
     /// Whether the encoded frame includes its content checksum.
-    checksum:bool,
+    checksum:bool;
     /// Borrowed optional dictionary bytes; they must outlive the codec.
-    dictionary:&[u8],
+    dictionary:&[u8];
     /// Number of bytes currently accumulated in input/pending storage.
-    used: u64,
+    used: u64;
     /// Number of valid pending-output bytes.
-    count: u64,
+    count: u64;
     /// Offset of the next pending byte to drain.
-    next: u64,
+    next: u64;
     /// Records the caller's end-of-input request.
-    ending: bool,
+    ending: bool;
     /// Records that the current frame has been completely emitted/decoded.
-    done: bool,
+    done: bool;
     /// Tracks whether input/progress has been observed for this frame.
-    seen: bool,
+    seen: bool;
     /// Sticky failure state; subsequent operations must follow the API's failure/reset contract.
-    failed: bool,
+    failed: bool;
     /// Number of input bytes consumed by the latest streaming operation.
-    last_read:u64,
-}
+    last_read:u64;
 
-impl Encoder {
     /// Returns the input accepted by the last successful process call; re-submit the remaining suffix.
-    fn consumed(&self)->usize { (*self).last_read as usize }
+    fn consumed(&self)usize { (*self).last_read as usize }
     /// Reports EOF after all pending output has been drained.
-    fn finished(&self)->bool { (*self).done }
+    fn finished(&self)bool { (*self).done }
 
     /// Borrows staging, pending-output and match-search buffers; snapshots the scalar options.
     /// Pending needs 2*staging.len()+128 bytes. Zstandard also borrows its dictionary (empty means none).
-    fn new(level:u32, checksum:bool, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64], dictionary:&[u8]) -> Encoder {
+    fn new(level:u32, checksum:bool, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64], dictionary:&[u8]) Encoder {
         Encoder { input: input, pending: pending, workspace: workspace,
             level: level, checksum:checksum,dictionary:dictionary,
             used: 0, count: 0, next: 0, ending: false, done: false, seen: false, failed: false,last_read:0 }
@@ -59,7 +57,7 @@ impl Encoder {
 
     /// Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
     /// finish marks EOF only once all supplied input is accepted; an empty output can apply backpressure.
-    fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) -> Result<usize, Error> {
+    fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) Result<usize, Error> {
         if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error.InvalidState); }
         let level=(*self).level; let checksum=(*self).checksum; let dictionary=&*(*self).dictionary;
         let mut used=(*self).used; let mut count=(*self).count; let mut next=(*self).next;
@@ -96,43 +94,42 @@ impl Encoder {
     }
 }
 
+
 /// Buffers one complete encoded and decoded frame before exposing its validated output.
 /// The two borrowed buffers are hard per-frame budgets, not an unbounded-history window.
 pub struct Decoder {
     /// Caller-owned storage for a bounded encoded frame.
-    encoded:&mut [u8],
+    encoded:&mut [u8];
     /// Caller-owned storage for the bounded decoded frame.
-    decoded:&mut [u8],
+    decoded:&mut [u8];
     /// Caller-owned codec scratch storage; required length is checked before use.
-    workspace:&mut [u8],
+    workspace:&mut [u8];
     /// Borrowed optional dictionary bytes; they must outlive the codec.
-    dictionary:&[u8],
+    dictionary:&[u8];
     /// Number of bytes currently accumulated in input/pending storage.
-    used:u64,
+    used:u64;
     /// Number of valid pending-output bytes.
-    count:u64,
+    count:u64;
     /// Offset of the next pending byte to drain.
-    next:u64,
+    next:u64;
     /// Records the caller's end-of-input request.
-    ending:bool,
+    ending:bool;
     /// Records that the current frame has been completely emitted/decoded.
-    done:bool,
+    done:bool;
     /// Tracks whether input/progress has been observed for this frame.
-    seen:bool,
+    seen:bool;
     /// Sticky failure state; subsequent operations must follow the API's failure/reset contract.
-    failed:bool,
+    failed:bool;
     /// Number of input bytes consumed by the latest streaming operation.
-    last_read:u64,
-}
+    last_read:u64;
 
-impl Decoder {
     /// Returns the input accepted by the last successful process call.
-    fn consumed(&self)->usize { (*self).last_read as usize }
+    fn consumed(&self)usize { (*self).last_read as usize }
     /// Reports EOF after all validated output has been drained.
-    fn finished(&self)->bool { (*self).done }
+    fn finished(&self)bool { (*self).done }
 
     /// Borrows maximum-frame storage; Zstandard additionally needs its 128 KiB literal workspace.
-    fn new(encoded:&mut [u8], decoded:&mut [u8] ,workspace:&mut [u8],dictionary:&[u8]) -> Decoder {
+    fn new(encoded:&mut [u8], decoded:&mut [u8] ,workspace:&mut [u8],dictionary:&[u8]) Decoder {
         Decoder { encoded:encoded, decoded:decoded, workspace:workspace,dictionary:dictionary,
             used:0,count:0,next:0,ending:false,done:false,seen:false,failed:false,last_read:0 }
     }
@@ -144,7 +141,7 @@ impl Decoder {
     }
     /// Returns validated output bytes written; consumed() reports accepted input.
     /// Frame, checksum or state errors require reset or destruction; a truncated prefix waits for more input.
-    fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)->Result<usize,Error>{
+    fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)Result<usize,Error>{
         if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error.InvalidState); }
         let dictionary=&*(*self).dictionary;let workspace=&mut *(*self).workspace;
         let mut used=(*self).used;let mut count=(*self).count;let mut next=(*self).next;

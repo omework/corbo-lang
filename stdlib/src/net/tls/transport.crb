@@ -4,15 +4,15 @@
 /// Reports TLS handshake framing, negotiation, authentication or I/O failures.
 pub enum HandshakeError {
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall,
+    BufferTooSmall;
     /// The underlying TCP transport operation failed.
-    Transport,
+    Transport;
     /// The handshake message or negotiation violates the supported TLS profile.
-    Protocol,
+    Protocol;
     /// The peer's handshake authentication failed.
-    Authentication,
+    Authentication;
     /// An underlying cryptographic operation failed.
-    Crypto,
+    Crypto;
 }
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
@@ -24,26 +24,26 @@ pub enum HandshakeError {
     /// Tracks how much of the current handshake record remains to be consumed.
     struct Flight {
         /// Offset of the next unread handshake fragment byte.
-        offset: u64,
+        offset: u64;
         /// Exclusive end of buffered handshake bytes.
-        end: u64,
+        end: u64;
         /// Whether a compatibility ChangeCipherSpec record was observed.
-        ccs: bool,
+        ccs: bool;
     }
 
     /// Creates an empty handshake record cursor.
-    fn new_flight() -> Flight { Flight { offset: 0, end: 0, ccs: false } }
+    fn new_flight() Flight { Flight { offset: 0, end: 0, ccs: false } }
 
     /// Checks whether the buffered handshake record has been consumed.
-    fn flight_empty(flight: &Flight) -> bool { (*flight).offset == (*flight).end }
+    fn flight_empty(flight: &Flight) bool { (*flight).offset == (*flight).end }
 
     /// Checks the minimum working buffer sizes used by the handshake.
-    fn has_workspace(wire: usize, fragment: usize, message: usize) -> bool {
+    fn has_workspace(wire: usize, fragment: usize, message: usize) bool {
         wire >= 16406 && fragment >= 16385 && message >= 256
     }
 
     /// Adds one complete handshake message to the transcript.
-    fn append_message(transcript: &mut Transcript, message: &[u8]) -> Result<(), HandshakeError> {
+    fn append_message(transcript: &mut Transcript, message: &[u8]) Result<(), HandshakeError> {
         let size = message.len();
         match transcript.append(&message[0..size]) {
             Ok(()) => { Ok(()) },
@@ -52,7 +52,7 @@ pub enum HandshakeError {
     }
 
     /// Frames and writes a cleartext hello message to the TCP connection.
-    fn send_hello(socket: &mut Connection, initial: bool, message: &[u8], wire: &mut [u8]) -> Result<(), HandshakeError> {
+    fn send_hello(socket: &mut Connection, initial: bool, message: &[u8], wire: &mut [u8]) Result<(), HandshakeError> {
         let capacity = wire.len();
         let length = message.len();
         let total = match encode_plaintext(HANDSHAKE, initial, &message[0..length], &mut wire[0..capacity]) {
@@ -68,7 +68,7 @@ pub enum HandshakeError {
 
     /// Reads a cleartext hello message into the caller's handshake buffer.
     fn receive_hello(socket: &mut Connection, expected: u8, wire: &mut [u8],
-                     message: &mut [u8]) -> Result<usize, HandshakeError> {
+                     message: &mut [u8]) Result<usize, HandshakeError> {
         let capacity = wire.len();
         let space = message.len();
         let mut written: usize = 0;
@@ -102,7 +102,7 @@ pub enum HandshakeError {
 
     /// Fragments and sends a protected handshake message across record boundaries.
     fn send_handshake_message(socket: &mut Connection, writer: &mut RecordCipher, message: &[u8],
-                              fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError> {
+                              fragment: &mut [u8], wire: &mut [u8]) Result<(), HandshakeError> {
         let end = message.len();
         let space = fragment.len();
         let capacity = wire.len();
@@ -121,7 +121,7 @@ pub enum HandshakeError {
 
     /// Reads and authenticates the next handshake fragment.
     fn pull_handshake_record(socket: &mut Connection, reader: &mut RecordCipher, flight: &mut Flight,
-                             wire: &mut [u8], fragment: &mut [u8]) -> Result<(), HandshakeError> {
+                             wire: &mut [u8], fragment: &mut [u8]) Result<(), HandshakeError> {
         let capacity = wire.len();
         let space = fragment.len();
         while true {
@@ -152,7 +152,7 @@ pub enum HandshakeError {
     /// Collects a complete handshake message across one or more protected records.
     fn receive_handshake_message(socket: &mut Connection, reader: &mut RecordCipher, flight: &mut Flight,
                                  expected: u8, wire: &mut [u8], fragment: &mut [u8],
-                                 message: &mut [u8]) -> Result<usize, HandshakeError> {
+                                 message: &mut [u8]) Result<usize, HandshakeError> {
         let capacity = wire.len();
         let space = fragment.len();
         let maximum = message.len();

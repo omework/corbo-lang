@@ -7,72 +7,71 @@
 /// Reports invalid options, bounded storage exhaustion, malformed frames, checksum failure or dictionary requirements.
 pub enum Error {
     /// A parameter is outside this algorithm's supported bounds.
-    InvalidParams,
+    InvalidParams;
     /// The caller-provided scratch buffer cannot hold the required working state.
-    WorkspaceTooSmall,
+    WorkspaceTooSmall;
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall,
+    BufferTooSmall;
     /// The encoded input violates the format or a supported codec constraint.
-    InvalidData,
+    InvalidData;
     /// The encoded input ends before a required field or frame is complete.
-    TruncatedInput,
+    TruncatedInput;
     /// The computed checksum differs from the encoded checksum.
-    ChecksumMismatch,
+    ChecksumMismatch;
     /// The frame requires a dictionary that was not supplied.
-    DictionaryRequired,
+    DictionaryRequired;
     /// The supplied dictionary encoding is invalid or unsupported.
-    InvalidDictionary,
+    InvalidDictionary;
     /// The supplied dictionary identity does not match the frame.
-    DictionaryMismatch,
+    DictionaryMismatch;
     /// The operation is incompatible with the current streaming state.
-    InvalidState,
+    InvalidState;
     /// The frame exceeds the caller's explicit storage budget.
-    FrameTooLarge
+    FrameTooLarge;
 }
 
 /// Controls native match-search effort and whether a content checksum is emitted.
 pub struct Params {
     /// Requested compression effort level; constructors validate the supported range.
-    level: u32,
+    level: u32;
     /// Whether the encoded frame includes its content checksum.
-    checksum: bool
+    checksum: bool;
+
+    /// Uses search level three and includes a content checksum.
+    fn new() Params { Params { level: 3, checksum: true } }
 }
 
-impl Params {
-    /// Uses search level three and includes a content checksum.
-    fn new() -> Params { Params { level: 3, checksum: true } }
-}
 
 /// Retains frame-local entropy logs, repeated offsets, window bound and output origin.
 struct State {
     /// Workspace offset/state for the current Huffman table.
-    huffman: u64,
+    huffman: u64;
     /// Literal-length entropy-table state.
-    literal: u64,
+    literal: u64;
     /// Offset-code entropy-table state.
-    offset: u64,
+    offset: u64;
     /// Match-length entropy-table state.
-    matched: u64,
+    matched: u64;
     /// Most recent repeat offset.
-    rep1: u64,
+    rep1: u64;
     /// Second most recent repeat offset.
-    rep2: u64,
+    rep2: u64;
     /// Third most recent repeat offset.
-    rep3: u64,
+    rep3: u64;
     /// Maximum history distance allowed by the frame.
-    window: u64,
+    window: u64;
     /// Origin offset used to interpret the current history window.
-    origin: u64
+    origin: u64;
 }
 
 /// Reads a checked little-endian integer of up to eight bytes.
-fn little(input: &[u8], at: u64, count: u64) -> u64 {
+fn little(input: &[u8], at: u64, count: u64) u64 {
     let mut value: u64 = 0; let mut i: u64 = 0;
     while i < count { value = value | ((input[at + i] as u64) << (i * 8)); i = i + 1; } value
 }
 
 /// Returns a literal/match/offset baseline and its number of extra bits.
-fn baseline(kind: u64, symbol: u64) -> u64 {
+fn baseline(kind: u64, symbol: u64) u64 {
     if kind == 1 { return pack_pair(if symbol < 2 { 1 << symbol } else { (1 << symbol) - 3 }, symbol); }
     if kind == 0 {
         if symbol < 16 { return pack_pair(symbol, ZERO); }
@@ -87,7 +86,7 @@ fn baseline(kind: u64, symbol: u64) -> u64 {
 }
 
 /// Selects or reads a sequence table; accuracy log 99 marks a missing table.
-fn sequence_table(input: &[u8], at: u64, kind: u64, mode: u64, table: &mut [u64], previous: u64) -> u64 {
+fn sequence_table(input: &[u8], at: u64, kind: u64, mode: u64, table: &mut [u64], previous: u64) u64 {
     let maximum: u64 = if kind == 0 { 35 } else if kind == 1 { 31 } else { 52 };
     if mode == 0 { predefined(copy(kind), &mut table[0..table.len()]); return pack_pair(if kind == 1 { 5 } else { 6 }, at); }
     if mode == 1 {
@@ -103,7 +102,7 @@ fn sequence_table(input: &[u8], at: u64, kind: u64, mode: u64, table: &mut [u64]
 
 /// Executes the literals and LZ77 sequences of one compressed block.
 fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut [u64],
-              ll: &mut [u64], off: &mut [u64], ml: &mut [u64], state: &mut State, start: u64, dictionary: &[u8]) -> Result<u64, Error> {
+              ll: &mut [u64], off: &mut [u64], ml: &mut [u64], state: &mut State, start: u64, dictionary: &[u8]) Result<u64, Error> {
     let decoded_fields_1 = literals(&input[0..input.len()], &mut scratch[0..scratch.len()], &mut huffman[0..huffman.len()], (*state).huffman); let mut at = decoded_fields_1 >> 32; let literal_count = (decoded_fields_1 >> 8) & 0xffffff; let huff_bits = decoded_fields_1 & 255;
     if at == 0 { return Err(Error.InvalidData); }
     let field = &mut (*state).huffman; *field = huff_bits;
@@ -198,13 +197,13 @@ fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut
 
 /// Decompresses concatenated/skippable frames with a caller-owned literal workspace of at least 128 KiB.
 /// Dictionary-dependent frames report DictionaryRequired. Errors may leave a partial output prefix.
-pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) -> Result<usize, Error> {
+pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) Result<usize, Error> {
     let empty: [u8;0] = [];
     decompress_with_dictionary(input, output, workspace, &empty[..])
 }
 
 /// Decodes frames with a borrowed raw or formatted dictionary. No dictionary bytes are retained.
-pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) -> Result<usize, Error> {
+pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) Result<usize, Error> {
     if workspace.len() < 131072 { return Err(Error.WorkspaceTooSmall); }
     if input.len() == 0 { return Err(Error.TruncatedInput); }
     let mut at: u64 = 0; let size = input.len() as u64; let mut written: u64 = 0;

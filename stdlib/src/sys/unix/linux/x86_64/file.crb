@@ -5,7 +5,7 @@
     use std::sys::valid_file_path;
 
     /// Validates the path and opens or creates a file using the Linux system call ABI.
-    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> (bool, i64) {
+    pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) (bool, i64) {
         let perm: u32 = if copy(perm) == 0xffffffff { 438 } else { perm };
         let length = path.len();
         if !valid_file_path(&path[0..length]) { return (false, 0); }
@@ -46,7 +46,7 @@
     }
 
     /// Reads into the caller's buffer and returns the system call status and byte count.
-    pub fn read(fd: i64, buffer: &mut [u8]) -> (i64, usize) {
+    pub fn read(fd: i64, buffer: &mut [u8]) (i64, usize) {
         let length = buffer.len();
         if length == 0 {
             return (0, 0);
@@ -83,7 +83,7 @@
     }
 
     /// Writes the caller's bytes and returns the system call status and byte count.
-    pub fn write(fd: i64, buffer: &[u8]) -> (i64, usize) {
+    pub fn write(fd: i64, buffer: &[u8]) (i64, usize) {
         let length = buffer.len();
         if length == 0 {
             return (0, 0);
@@ -121,10 +121,10 @@
 
     // The target stat ABI supplies the size field for the already open descriptor.
     /// Returns the platform's error code for unsupported permission bits.
-    pub fn unsupported_permissions() -> i64 { -95 }
+    pub fn unsupported_permissions() i64 { -95 }
 
     /// Uses pread64/pwrite64 syscalls for cursor-independent I/O; interrupted calls are retried.
-    pub fn read_at(fd: i64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+    pub fn read_at(fd: i64, buffer: &mut [u8], offset: u64) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 9223372036854775807 { length = 9223372036854775807; }
@@ -167,7 +167,7 @@
     }
 
     /// Uses pread64/pwrite64 syscalls for cursor-independent I/O; interrupted calls are retried.
-    pub fn write_at(fd: i64, buffer: &[u8], offset: u64) -> (i64, usize) {
+    pub fn write_at(fd: i64, buffer: &[u8], offset: u64) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 9223372036854775807 { length = 9223372036854775807; }
@@ -210,7 +210,7 @@
     }
 
     /// Reads size and mode bits from the descriptor's native stat record.
-    pub fn stats(fd: i64) -> (i64, u64, u32) {
+    pub fn stats(fd: i64) (i64, u64, u32) {
         let mut status: i64 = 0;
         let mut size: u64 = 0;
         let mut permissions: u32 = 0;
@@ -236,7 +236,7 @@
     }
 
     /// Moves the descriptor's file offset relative to the native origin.
-    pub fn seek(fd: i64, offset: i64, origin: i64) -> (i64, u64) {
+    pub fn seek(fd: i64, offset: i64, origin: i64) (i64, u64) {
         let mut status: i64 = 0;
         let mut position: u64 = 0;
         @unchecked {
@@ -259,7 +259,7 @@
     }
 
     /// Invokes the Linux rename system call for two validated byte paths.
-    pub fn rename(source: &[u8], destination: &[u8]) -> (bool, i64) {
+    pub fn rename(source: &[u8], destination: &[u8]) (bool, i64) {
         if !valid_file_path(&source[0..source.len()]) || !valid_file_path(&destination[0..destination.len()]) {
             return (false, 0);
         }
@@ -279,7 +279,7 @@
     }
 
     /// Invokes the Linux unlink system call for a validated byte path.
-    pub fn delete(path: &[u8]) -> (bool, i64) {
+    pub fn delete(path: &[u8]) (bool, i64) {
         let length = path.len();
         if !valid_file_path(&path[0..length]) { return (false, 0); }
         let mut raw: i64 = 0;
@@ -319,7 +319,7 @@
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
     /// Requests persistence of file contents and metadata; retries interrupted calls.
-    pub fn sync_all(fd: i64) -> i64 {
+    pub fn sync_all(fd: i64) i64 {
         let mut status: i64 = 0;
         loop {
             @unchecked {
@@ -335,7 +335,7 @@
         status
     }
     /// Changes file length without changing its cursor; retries interrupted calls.
-    pub fn truncate(fd: i64, length: u64) -> i64 {
+    pub fn truncate(fd: i64, length: u64) i64 {
         let mut status: i64 = 0;
         loop {
             @unchecked {

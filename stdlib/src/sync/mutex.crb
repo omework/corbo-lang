@@ -5,19 +5,18 @@
 #(type: T)
 pub struct Mutex<T> {
     /// Native synchronization handle; never copied as a native mutex object.
-    raw: usize,
+    raw: usize;
     /// Owned payload cleaned after the mutex's own destructor.
-    value: T,
-}
-impl Mutex<T> {
+    value: T;
+
     /// Takes ownership of the payload and constructs its synchronization resource.
-    fn new(value: T) -> Mutex<T> {
+    fn new(value: T) Mutex<T> {
         let raw = mutex_create_binding(false);
         Mutex { raw: raw, value: value }
     }
     /// Blocks this thread until it acquires the native mutex.
     #(lock: on=self, through_result=true)
-    fn lock(&self) -> MutexGuard<T> {
+    fn lock(&self) MutexGuard<T> {
         let raw = (*self).raw;
         mutex_acquire_binding(copy(raw));
         // Native lock ownership permits this tracked interior-mutable borrow.
@@ -34,22 +33,21 @@ impl Mutex<T> {
 #(thread: transfer=false)
 pub struct MutexGuard<T> {
     /// Borrowed native resource identity; the payload borrow retains its owner.
-    raw: usize,
+    raw: usize;
     /// Mutable payload access under the retained lock contract.
-    data: &mut T,
-}
-impl MutexGuard<T> {
+    data: &mut T;
+
     /// Borrows the protected value for reading.
-    fn ref(&self) -> &T { &*(*self).data }
+    fn ref(&self) &T { &*(*self).data }
     /// Reborrows the protected value with mutation permission.
-    fn mut_ref(&mut self) -> &mut T { &mut *(*self).data }
+    fn mut_ref(&mut self) &mut T { &mut *(*self).data }
     /// Releases ownership before the guard's reference fields are discarded.
     fn drop(&mut self) { let raw = (*self).raw; mutex_release_binding(raw); }
 }
 
 // Private bridge: raw resource identities are not a public checked API.
 /// Private binding: allocates stable native state for the selected blocking or asynchronous policy.
-fn mutex_create_binding(asynchronous: bool) -> usize {
+fn mutex_create_binding(asynchronous: bool) usize {
     let mut raw: usize = 0;
     @unchecked { @c { ${raw}=mutex_create(${asynchronous}); } }
     raw

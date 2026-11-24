@@ -12,23 +12,10 @@
     /// Owns a Unix file descriptor and closes it on destruction.
     pub struct File {
         /// Owned Unix file descriptor; drop closes it once after a move.
-        fd: i64,
-    }
+        fd: i64;
 
-    /// Reports an invalid path or native Unix error code.
-    pub enum FileError {
-        /// The supplied path violates the platform path-input contract.
-        InvalidPath,
-        /// Preserves the native operating-system error code in code.
-        Os {
-            /// Native operating-system status code preserved by this error.
-            code: i64
-        },
-    }
-
-    impl File {
         /// Opens or creates a file through the target Unix backend.
-        fn open(path: &[u8], mode: i64, create: bool, perm: u32) -> Result<File, FileError> {
+        fn open(path: &[u8], mode: i64, create: bool, perm: u32) Result<File, FileError> {
             let (valid, fd) = syscalls::open(path, mode, create, copy(perm));
             if !valid {
                 return Err(FileError.InvalidPath);
@@ -52,7 +39,7 @@
         }
 
         /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
-        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
+        fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError> {
             let fd = (*self).fd;
             let (raw, count) = syscalls::read(fd, buffer);
             if raw < 0 {
@@ -62,49 +49,49 @@
         }
 
         /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-        fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError> {
+        fn write(&mut self, buffer: &[u8]) Result<usize, FileError> {
             let (raw, count) = syscalls::write((*self).fd, buffer);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
             Ok(count)
         }
 
         /// Performs a positioned read without changing the original descriptor/handle cursor.
-        fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError> {
+        fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError> {
             let (raw, count) = syscalls::read_at((*self).fd, buffer, offset);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
             Ok(count)
         }
 
         /// Performs a positioned write without changing the original descriptor/handle cursor.
-        fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError> {
+        fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError> {
             let (raw, count) = syscalls::write_at((*self).fd, buffer, offset);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
             Ok(count)
         }
 
         /// Seeks relative to the native origin and returns the resulting offset.
-        fn seek(&mut self, offset: i64, origin: i64) -> Result<u64, FileError> {
+        fn seek(&mut self, offset: i64, origin: i64) Result<u64, FileError> {
             let (raw, position) = syscalls::seek((*self).fd, offset, origin);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
             Ok(position)
         }
 
         /// Persists file contents and metadata, propagating native flush failures.
-        fn sync_all(&mut self) -> Result<(), FileError> {
+        fn sync_all(&mut self) Result<(), FileError> {
             let raw = syscalls::sync_all((*self).fd);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
             Ok(())
         }
 
         /// Changes file length without moving the cursor; growth is zero-filled by the OS.
-        fn truncate(&mut self, length: u64) -> Result<(), FileError> {
+        fn truncate(&mut self, length: u64) Result<(), FileError> {
             let raw = syscalls::truncate((*self).fd, length);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
             Ok(())
         }
 
         /// Queries the file size from the open descriptor.
-        fn size(&self) -> Result<u64, FileError> {
+        fn size(&self) Result<u64, FileError> {
             let (raw, count, permissions) = syscalls::stats((*self).fd);
             drop(permissions);
             if raw < 0 { return Err(FileError.Os { code: raw }); }
@@ -112,7 +99,7 @@
         }
 
         /// Renames a filesystem entry using the Unix backend.
-        fn rename(source: &[u8], destination: &[u8]) -> Result<(), FileError> {
+        fn rename(source: &[u8], destination: &[u8]) Result<(), FileError> {
             let (valid, raw) = syscalls::rename(source, destination);
             if !valid { return Err(FileError.InvalidPath); }
             if raw < 0 { return Err(FileError.Os { code: raw }); }
@@ -120,7 +107,7 @@
         }
 
         /// Removes the named file using the Unix backend.
-        fn delete(path: &[u8]) -> Result<(), FileError> {
+        fn delete(path: &[u8]) Result<(), FileError> {
             let (valid, raw) = syscalls::delete(path);
             if !valid { return Err(FileError.InvalidPath); }
             if raw < 0 { return Err(FileError.Os { code: raw }); }
@@ -131,5 +118,18 @@
         fn drop(&mut self) {
             syscalls::close((*self).fd);
         }
+
+}
+
+    /// Reports an invalid path or native Unix error code.
+    pub enum FileError {
+        /// The supplied path violates the platform path-input contract.
+        InvalidPath;
+        /// Preserves the native operating-system error code in code.
+        Os {
+            /// Native operating-system status code preserved by this error.
+            code: i64;
+        };
     }
+
 #(endif)

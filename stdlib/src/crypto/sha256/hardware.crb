@@ -3,7 +3,7 @@
 
 #(if: target.os == "macos" && target.arch == "aarch64")
     /// Reports whether the SHA-256 hardware path is available on the selected target.
-    fn hardware_available() -> bool {
+    fn hardware_available() bool {
         // hw.optional.arm.FEAT_SHA256
         let feature: [u8; 28] = [104,119,46,111,112,116,105,111,110,97,108,46,97,114,
                                  109,46,70,69,65,84,95,83,72,65,50,53,54,0];
@@ -72,7 +72,7 @@
 
 #(if: target.arch == "x86_64" && target.pointer_width == "64" && target.os == "linux" || target.arch == "x86_64" && target.os == "macos" || target.arch == "x86_64" && target.os == "windows")
     /// Reports whether the SHA-256 hardware path is available on the selected target.
-    fn hardware_available() -> bool {
+    fn hardware_available() bool {
         let mut supported: u64 = 0;
         @unchecked {
             @asm {
@@ -157,7 +157,7 @@
 
 #(if: target.arch == "aarch64" && target.os == "linux" || target.arch == "aarch64" && target.os == "windows" || target.pointer_width == "32")
     /// Reports whether the SHA-256 hardware path is available on the selected target.
-    fn hardware_available() -> bool { false }
+    fn hardware_available() bool { false }
 
     /// Compresses a SHA-256 block using the instruction backend selected by the target.
     fn hardware_rounds(state: &mut [u64; 8], words: &[u64; 64]) {

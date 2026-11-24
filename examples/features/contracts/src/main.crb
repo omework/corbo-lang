@@ -1,32 +1,28 @@
 #(type: V)
 struct Boxed<V> {
-    value: V
-}
+    value: V;
 
-impl Boxed<V> {
-    fn new(value: V) -> Boxed<V> {
+    fn new(value: V) Boxed<V> {
         Boxed { value: value }
     }
 
-    fn get(&self) -> V {
+    fn get(&self) V {
         (*self).value
     }
 }
 
 #(type: V)
 #(type: S<V> with {
-    fn get(&self) -> V;
+    fn get(&self) V;
 })
 struct Reader<S, V> {
-    source: S
-}
+    source: S;
 
-impl Reader<S, V> {
-    fn new(source: S) -> Reader<S, V> {
+    fn new(source: S) Reader<S, V> {
         Reader { source: source }
     }
 
-    fn get(&self) -> V {
+    fn get(&self) V {
         let source = &(*self).source;
         source.get()
     }

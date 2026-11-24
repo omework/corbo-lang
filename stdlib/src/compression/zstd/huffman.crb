@@ -5,7 +5,7 @@
 // Additional BSD-3-Clause terms: stdlib/THIRD_PARTY_NOTICES.txt.
 
 /// Reads an RFC 8878 Huffman tree, including FSE-compressed weights.
-fn read_huffman(input: &[u8], start: u64, table: &mut [u64]) -> u64 {
+fn read_huffman(input: &[u8], start: u64, table: &mut [u64]) u64 {
     if start >= input.len() as u64 { return pack_pair(ZERO, ZERO); }
     let header = input[start] as u64; let mut at = start + 1;
     let mut weights: [u64; 256] = [0; 256]; let mut count: u64 = 0;
@@ -72,7 +72,7 @@ fn read_huffman(input: &[u8], start: u64, table: &mut [u64]) -> u64 {
 }
 
 /// Decodes an exact number of literals and rejects leftover or missing entropy bits.
-fn huffman_stream(input: &[u8], start: u64, end: u64, output: &mut [u8], table: &[u64], bits: u64) -> bool {
+fn huffman_stream(input: &[u8], start: u64, end: u64, output: &mut [u8], table: &[u64], bits: u64) bool {
     let mut reader = reverse_reader(&input[0..input.len()], start, end);
     if reader.bad { return false; }
     let mut i: u64 = 0;
@@ -92,7 +92,7 @@ fn huffman_stream(input: &[u8], start: u64, end: u64, output: &mut [u8], table: 
 }
 
 /// Decodes a literal section into the caller's bounded workspace; returns byte end, literal count and tree log.
-fn literals(input: &[u8], output: &mut [u8], table: &mut [u64], previous_bits: u64) -> u64 {
+fn literals(input: &[u8], output: &mut [u8], table: &mut [u64], previous_bits: u64) u64 {
     if input.len() == 0 { return pack_literals(ZERO, ZERO, ZERO); }
     let header = input[0] as u64; let kind = header & 3; let format = (header >> 2) & 3;
     let mut at: u64 = 1; let mut regenerated: u64 = 0;

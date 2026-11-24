@@ -15,34 +15,106 @@ const SHA3_SUFFIX: u64 = 0x06;
 /// Holds the Keccak lanes and current byte position in the sponge block.
 struct State {
     /// Twenty-five 64-bit Keccak sponge lanes.
-    lanes: [u64; 25],
+    lanes: [u64; 25];
     /// Number of bytes currently accumulated in input/pending storage.
-    used: u64,
+    used: u64;
 }
 
 /// Streaming SHA3-224 sponge with a 28-byte digest.
 pub struct Sha3_224 {
     /// Internal chaining or sponge state retained between updates.
-    state: State
+    state: State;
+
+    /// Creates an empty streaming hasher for this SHA-3 variant.
+    fn new() Sha3_224 {
+        let state = new_state();
+        Sha3_224 { state: state }
+    }
+
+    /// Absorbs the input into this variant's sponge.
+    fn update(&mut self, input: &[u8]) {
+        absorb(&mut (*self).state, SHA3_224_RATE, input);
+    }
+
+    /// Consumes the hasher and returns the fixed-length digest.
+    fn finish(mut self: Sha3_224) [u8; 28] {
+        let mut output: [u8; 28] = [0; 28];
+        finish_state(&mut self.state, SHA3_224_RATE, SHA3_SUFFIX, &mut output[..]);
+        output
+    }
 }
 /// Streaming SHA3-256 sponge with a 32-byte digest.
 pub struct Sha3_256 {
     /// Internal chaining or sponge state retained between updates.
-    state: State
+    state: State;
+
+    /// Creates an empty streaming hasher for this SHA-3 variant.
+    fn new() Sha3_256 {
+        let state = new_state();
+        Sha3_256 { state: state }
+    }
+
+    /// Absorbs the input into this variant's sponge.
+    fn update(&mut self, input: &[u8]) {
+        absorb(&mut (*self).state, SHA3_256_RATE, input);
+    }
+
+    /// Consumes the hasher and returns the fixed-length digest.
+    fn finish(mut self: Sha3_256) [u8; 32] {
+        let mut output: [u8; 32] = [0; 32];
+        finish_state(&mut self.state, SHA3_256_RATE, SHA3_SUFFIX, &mut output[..]);
+        output
+    }
 }
 /// Streaming SHA3-384 sponge with a 48-byte digest.
 pub struct Sha3_384 {
     /// Internal chaining or sponge state retained between updates.
-    state: State
+    state: State;
+
+    /// Creates an empty streaming hasher for this SHA-3 variant.
+    fn new() Sha3_384 {
+        let state = new_state();
+        Sha3_384 { state: state }
+    }
+
+    /// Absorbs the input into this variant's sponge.
+    fn update(&mut self, input: &[u8]) {
+        absorb(&mut (*self).state, SHA3_384_RATE, input);
+    }
+
+    /// Consumes the hasher and returns the fixed-length digest.
+    fn finish(mut self: Sha3_384) [u8; 48] {
+        let mut output: [u8; 48] = [0; 48];
+        finish_state(&mut self.state, SHA3_384_RATE, SHA3_SUFFIX, &mut output[..]);
+        output
+    }
 }
 /// Streaming SHA3-512 sponge with a 64-byte digest.
 pub struct Sha3_512 {
     /// Internal chaining or sponge state retained between updates.
-    state: State
+    state: State;
+
+    /// Creates an empty streaming hasher for this SHA-3 variant.
+    fn new() Sha3_512 {
+        let state = new_state();
+        Sha3_512 { state: state }
+    }
+
+    /// Absorbs the input into this variant's sponge.
+    fn update(&mut self, input: &[u8]) {
+        absorb(&mut (*self).state, SHA3_512_RATE, input);
+    }
+
+    /// Consumes the hasher and returns the fixed-length digest.
+    fn finish(mut self: Sha3_512) [u8; 64] {
+        let mut output: [u8; 64] = [0; 64];
+        finish_state(&mut self.state, SHA3_512_RATE, SHA3_SUFFIX, &mut output[..]);
+        output
+    }
 }
 
 /// Creates an empty sponge state with all lanes set to zero.
-fn new_state() -> State {
+fn new_state() State {
     State { lanes: [0; 25], used: 0 }
 }
 
@@ -67,7 +139,7 @@ fn absorb(state: &mut State, rate: u64, input: &[u8]) {
 
 // Extract one byte without an unchecked narrowing conversion.
 /// Reads one byte from the sponge's little-endian lane representation.
-fn byte_at(word: u64, shift: u64) -> u8 {
+fn byte_at(word: u64, shift: u64) u8 {
     let mut value = word >> shift;
     let mut byte: u8 = 0;
     let mut bit: u64 = 0;
@@ -104,109 +176,34 @@ fn finish_state(state: &mut State, rate: u64, domain: u64, output: &mut [u8]) {
     }
 }
 
-impl Sha3_224 {
-    /// Creates an empty streaming hasher for this SHA-3 variant.
-    fn new() -> Sha3_224 {
-        let state = new_state();
-        Sha3_224 { state: state }
-    }
 
-    /// Absorbs the input into this variant's sponge.
-    fn update(&mut self, input: &[u8]) {
-        absorb(&mut (*self).state, SHA3_224_RATE, input);
-    }
 
-    /// Consumes the hasher and returns the fixed-length digest.
-    fn finish(mut self: Sha3_224) -> [u8; 28] {
-        let mut output: [u8; 28] = [0; 28];
-        finish_state(&mut self.state, SHA3_224_RATE, SHA3_SUFFIX, &mut output[..]);
-        output
-    }
-}
 
-impl Sha3_256 {
-    /// Creates an empty streaming hasher for this SHA-3 variant.
-    fn new() -> Sha3_256 {
-        let state = new_state();
-        Sha3_256 { state: state }
-    }
 
-    /// Absorbs the input into this variant's sponge.
-    fn update(&mut self, input: &[u8]) {
-        absorb(&mut (*self).state, SHA3_256_RATE, input);
-    }
-
-    /// Consumes the hasher and returns the fixed-length digest.
-    fn finish(mut self: Sha3_256) -> [u8; 32] {
-        let mut output: [u8; 32] = [0; 32];
-        finish_state(&mut self.state, SHA3_256_RATE, SHA3_SUFFIX, &mut output[..]);
-        output
-    }
-}
-
-impl Sha3_384 {
-    /// Creates an empty streaming hasher for this SHA-3 variant.
-    fn new() -> Sha3_384 {
-        let state = new_state();
-        Sha3_384 { state: state }
-    }
-
-    /// Absorbs the input into this variant's sponge.
-    fn update(&mut self, input: &[u8]) {
-        absorb(&mut (*self).state, SHA3_384_RATE, input);
-    }
-
-    /// Consumes the hasher and returns the fixed-length digest.
-    fn finish(mut self: Sha3_384) -> [u8; 48] {
-        let mut output: [u8; 48] = [0; 48];
-        finish_state(&mut self.state, SHA3_384_RATE, SHA3_SUFFIX, &mut output[..]);
-        output
-    }
-}
-
-impl Sha3_512 {
-    /// Creates an empty streaming hasher for this SHA-3 variant.
-    fn new() -> Sha3_512 {
-        let state = new_state();
-        Sha3_512 { state: state }
-    }
-
-    /// Absorbs the input into this variant's sponge.
-    fn update(&mut self, input: &[u8]) {
-        absorb(&mut (*self).state, SHA3_512_RATE, input);
-    }
-
-    /// Consumes the hasher and returns the fixed-length digest.
-    fn finish(mut self: Sha3_512) -> [u8; 64] {
-        let mut output: [u8; 64] = [0; 64];
-        finish_state(&mut self.state, SHA3_512_RATE, SHA3_SUFFIX, &mut output[..]);
-        output
-    }
-}
 
 /// Computes a 28-byte SHA3-224 digest.
-pub fn digest224(input: &[u8]) -> [u8; 28] {
+pub fn digest224(input: &[u8]) [u8; 28] {
     let mut hash = Sha3_224::new();
     hash.update(input);
     hash.finish()
 }
 
 /// Computes a 32-byte SHA3-256 digest.
-pub fn digest256(input: &[u8]) -> [u8; 32] {
+pub fn digest256(input: &[u8]) [u8; 32] {
     let mut hash = Sha3_256::new();
     hash.update(input);
     hash.finish()
 }
 
 /// Computes a 48-byte SHA3-384 digest.
-pub fn digest384(input: &[u8]) -> [u8; 48] {
+pub fn digest384(input: &[u8]) [u8; 48] {
     let mut hash = Sha3_384::new();
     hash.update(input);
     hash.finish()
 }
 
 /// Computes a 64-byte SHA3-512 digest.
-pub fn digest512(input: &[u8]) -> [u8; 64] {
+pub fn digest512(input: &[u8]) [u8; 64] {
     let mut hash = Sha3_512::new();
     hash.update(input);
     hash.finish()

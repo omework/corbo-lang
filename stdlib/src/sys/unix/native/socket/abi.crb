@@ -3,13 +3,13 @@
 
 #(if: target.os == "macos" && target.arch == "aarch64")
     /// Initializes the platform socket subsystem where initialization is required.
-    pub fn startup() -> i64 { 0 }
+    pub fn startup() i64 { 0 }
 
     /// Releases platform socket subsystem state acquired by startup.
     pub fn cleanup() {}
 
     /// Creates a Darwin IPv4 socket and returns the native status and descriptor.
-    pub fn open(kind: i64) -> (i64, u64) {
+    pub fn open(kind: i64) (i64, u64) {
         let mut socket: u64 = 0;
         let mut status: i64 = 0;
         @unchecked {
@@ -34,7 +34,7 @@
     }
 
     /// Requests a connection to the IPv4 address and port and returns a native status.
-    pub fn connect(socket: u64, ipv4: u32, port: u16) -> i64 {
+    pub fn connect(socket: u64, ipv4: u32, port: u16) i64 {
         let port_bits = port as usize;
         let ipv4_bits = ipv4 as usize;
         let mut raw: i64 = 0;
@@ -68,7 +68,7 @@
     }
 
     /// Associates a socket with a local IPv4 address and port and returns a native status.
-    pub fn bind(socket: u64, ipv4: u32, port: u16) -> i64 {
+    pub fn bind(socket: u64, ipv4: u32, port: u16) i64 {
         let port_bits = port as usize;
         let ipv4_bits = ipv4 as usize;
         let mut raw: i64 = 0;
@@ -102,7 +102,7 @@
     }
 
     /// Marks a bound stream socket as listening using the supplied backlog.
-    pub fn listen(socket: u64, backlog: i32) -> i64 {
+    pub fn listen(socket: u64, backlog: i32) i64 {
         let backlog_bits = backlog as i64;
         let mut raw: i64 = 0;
         @unchecked {
@@ -123,7 +123,7 @@
     }
 
     /// Accepts a native socket and returns its status and handle.
-    pub fn accept(socket: u64) -> (i64, u64) {
+    pub fn accept(socket: u64) (i64, u64) {
         let mut accepted: u64 = 0;
         let mut error: i64 = 0;
         @unchecked {
@@ -158,7 +158,7 @@
     }
 
     /// Sets the native socket to nonblocking mode.
-    pub fn nonblocking(socket: u64) -> i64 {
+    pub fn nonblocking(socket: u64) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -181,7 +181,7 @@
     }
 
     /// Reads the native error pending after a nonblocking connect.
-    pub fn connect_status(socket: u64) -> i64 {
+    pub fn connect_status(socket: u64) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -211,7 +211,7 @@
     }
 
     /// Applies the platform socket options needed by this backend.
-    pub fn configure(socket: u64) -> i64 {
+    pub fn configure(socket: u64) i64 {
         let mut raw: i64 = 0;
         @unchecked {
             @asm {
@@ -238,7 +238,7 @@
     }
 
     /// Queries the local or peer IPv4 endpoint and returns its native address representation.
-    pub fn endpoint(socket: u64, remote: u64) -> (i64, u64) {
+    pub fn endpoint(socket: u64, remote: u64) (i64, u64) {
         let mut raw: i64 = 0;
         let mut peer_port: u16 = 0;
         let mut peer_ip: u32 = 0;
@@ -278,7 +278,7 @@
     }
 
     /// Extracts packed IPv4 bits and a host-order port from the native endpoint.
-    pub fn decode_peer(peer: u64) -> (u32, u16) {
+    pub fn decode_peer(peer: u64) (u32, u16) {
         let mut ip: u32 = 0;
         let mut port: u16 = 0;
         @unchecked {
@@ -293,7 +293,7 @@
     }
 
     /// Sends bytes to the connected endpoint and returns status and byte count.
-    pub fn send(socket: u64, buffer: &[u8], length: usize) -> (i64, usize) {
+    pub fn send(socket: u64, buffer: &[u8], length: usize) (i64, usize) {
         let mut raw: i64 = 0;
         let mut count: usize = 0;
         @unchecked {
@@ -320,7 +320,7 @@
     }
 
     /// Reads from a connected socket and returns status and byte count.
-    pub fn receive(socket: u64, buffer: &mut [u8]) -> (i64, usize) {
+    pub fn receive(socket: u64, buffer: &mut [u8]) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         let mut raw: i64 = 0;
@@ -347,7 +347,7 @@
     }
 
     /// Sends bytes to a specified native endpoint and returns status and byte count.
-    pub fn send_to(socket: u64, buffer: &[u8], length: usize, ipv4: u32, port: u16) -> (i64, usize) {
+    pub fn send_to(socket: u64, buffer: &[u8], length: usize, ipv4: u32, port: u16) (i64, usize) {
         let mut raw: i64 = 0;
         let mut count: usize = 0;
         let port_bits = port as usize;
@@ -387,7 +387,7 @@
     }
 
     /// Reads one datagram and returns status, byte count and native sender address.
-    pub fn receive_from(socket: u64, buffer: &mut [u8]) -> (i64, usize, u64) {
+    pub fn receive_from(socket: u64, buffer: &mut [u8]) (i64, usize, u64) {
         let mut length = buffer.len();
         let mut raw: i64 = 0;
         let mut count: usize = 0;
@@ -448,13 +448,13 @@
 
 #(if: target.os == "macos" && target.arch == "x86_64")
     /// Initializes the platform socket subsystem where initialization is required.
-    pub fn startup() -> i64 { 0 }
+    pub fn startup() i64 { 0 }
 
     /// Releases platform socket subsystem state acquired by startup.
     pub fn cleanup() {}
 
     /// Creates a Darwin IPv4 socket and returns the native status and descriptor.
-    pub fn open(kind: i64) -> (i64, u64) {
+    pub fn open(kind: i64) (i64, u64) {
         let mut socket: u64 = 0;
         let mut status: i64 = 0;
         @unchecked {
@@ -481,7 +481,7 @@
     }
 
     /// Requests a connection to the IPv4 address and port and returns a native status.
-    pub fn connect(socket: u64, ipv4: u32, port: u16) -> i64 {
+    pub fn connect(socket: u64, ipv4: u32, port: u16) i64 {
         let port_bits = port as usize;
         let ipv4_bits = ipv4 as usize;
         let mut raw: i64 = 0;
@@ -515,7 +515,7 @@
     }
 
     /// Associates a socket with a local IPv4 address and port and returns a native status.
-    pub fn bind(socket: u64, ipv4: u32, port: u16) -> i64 {
+    pub fn bind(socket: u64, ipv4: u32, port: u16) i64 {
         let port_bits = port as usize;
         let ipv4_bits = ipv4 as usize;
         let mut raw: i64 = 0;
@@ -549,7 +549,7 @@
     }
 
     /// Marks a bound stream socket as listening using the supplied backlog.
-    pub fn listen(socket: u64, backlog: i32) -> i64 {
+    pub fn listen(socket: u64, backlog: i32) i64 {
         let backlog_bits = backlog as i64;
         let mut raw: i64 = 0;
         @unchecked {
@@ -571,7 +571,7 @@
     }
 
     /// Accepts a native socket and returns its status and handle.
-    pub fn accept(socket: u64) -> (i64, u64) {
+    pub fn accept(socket: u64) (i64, u64) {
         let mut accepted: u64 = 0;
         let mut error: i64 = 0;
         @unchecked {
@@ -608,7 +608,7 @@
     }
 
     /// Sets the native socket to nonblocking mode.
-    pub fn nonblocking(socket: u64) -> i64 {
+    pub fn nonblocking(socket: u64) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -630,7 +630,7 @@
     }
 
     /// Reads the native error pending after a nonblocking connect.
-    pub fn connect_status(socket: u64) -> i64 {
+    pub fn connect_status(socket: u64) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -660,7 +660,7 @@
     }
 
     /// Applies the platform socket options needed by this backend.
-    pub fn configure(socket: u64) -> i64 {
+    pub fn configure(socket: u64) i64 {
         let mut raw: i64 = 0;
         @unchecked {
             @asm {
@@ -688,7 +688,7 @@
     }
 
     /// Queries the local or peer IPv4 endpoint and returns its native address representation.
-    pub fn endpoint(socket: u64, remote: u64) -> (i64, u64) {
+    pub fn endpoint(socket: u64, remote: u64) (i64, u64) {
         let mut raw: i64 = 0;
         let mut peer_port: u16 = 0;
         let mut peer_ip: u32 = 0;
@@ -729,7 +729,7 @@
     }
 
     /// Extracts packed IPv4 bits and a host-order port from the native endpoint.
-    pub fn decode_peer(peer: u64) -> (u32, u16) {
+    pub fn decode_peer(peer: u64) (u32, u16) {
         let mut ip: u32 = 0;
         let mut port: u16 = 0;
         @unchecked {
@@ -744,7 +744,7 @@
     }
 
     /// Sends bytes to the connected endpoint and returns status and byte count.
-    pub fn send(socket: u64, buffer: &[u8], length: usize) -> (i64, usize) {
+    pub fn send(socket: u64, buffer: &[u8], length: usize) (i64, usize) {
         let mut raw: i64 = 0;
         let mut count: usize = 0;
         @unchecked {
@@ -772,7 +772,7 @@
     }
 
     /// Reads from a connected socket and returns status and byte count.
-    pub fn receive(socket: u64, buffer: &mut [u8]) -> (i64, usize) {
+    pub fn receive(socket: u64, buffer: &mut [u8]) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         let mut raw: i64 = 0;
@@ -800,7 +800,7 @@
     }
 
     /// Sends bytes to a specified native endpoint and returns status and byte count.
-    pub fn send_to(socket: u64, buffer: &[u8], length: usize, ipv4: u32, port: u16) -> (i64, usize) {
+    pub fn send_to(socket: u64, buffer: &[u8], length: usize, ipv4: u32, port: u16) (i64, usize) {
         let mut raw: i64 = 0;
         let mut count: usize = 0;
         let port_bits = port as usize;
@@ -840,7 +840,7 @@
     }
 
     /// Reads one datagram and returns status, byte count and native sender address.
-    pub fn receive_from(socket: u64, buffer: &mut [u8]) -> (i64, usize, u64) {
+    pub fn receive_from(socket: u64, buffer: &mut [u8]) (i64, usize, u64) {
         let mut length = buffer.len();
         let mut raw: i64 = 0;
         let mut count: usize = 0;

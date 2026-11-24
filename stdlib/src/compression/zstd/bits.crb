@@ -11,19 +11,19 @@ const ZERO: u64 = 0;
 const MISSING: u64 = 99;
 
 /// Packs bounded entropy metadata as two unsigned 32-bit fields.
-fn pack_pair(first: u64, second: u64) -> u64 { (first << 32) | second }
+fn pack_pair(first: u64, second: u64) u64 { (first << 32) | second }
 
 /// Packs a bounded literal-section end, literal count and Huffman log.
-fn pack_literals(end: u64, count: u64, bits: u64) -> u64 { (end << 32) | (count << 8) | bits }
+fn pack_literals(end: u64, count: u64, bits: u64) u64 { (end << 32) | (count << 8) | bits }
 
 /// Tracks a bit boundary; reverse readers also retain their first permitted bit.
 struct Reader {
     /// Current bit offset in the encoded input/output.
-    bit: u64,
+    bit: u64;
     /// Lower bound of the backward bit reader.
-    low: u64,
+    low: u64;
     /// Sticky invalid/truncated bitstream flag.
-    bad: bool
+    bad: bool;
 }
 
 /// Sets a reader position through a mutable field borrow.
@@ -33,19 +33,19 @@ fn position(reader: &mut Reader, value: u64) { let slot = &mut (*reader).bit; *s
 fn fail(reader: &mut Reader) { let slot = &mut (*reader).bad; *slot = true; }
 
 /// Extracts a byte with no lossy integer conversion.
-fn byte(value: u64) -> u8 {
+fn byte(value: u64) u8 {
     let digits: [u8; 16] = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
     digits[value & 15] | (digits[(value >> 4) & 15] << 4)
 }
 
 /// Returns floor(log2(value)); callers reject zero where the format requires it.
-fn log2(value: u64) -> u64 {
+fn log2(value: u64) u64 {
     let mut n = value; let mut result: u64 = 0;
     while n > 1 { n = n >> 1; result = result + 1; } result
 }
 
 /// Reads little-endian bits without accessing beyond input.
-fn forward(input: &[u8], reader: &mut Reader, count: u64) -> u64 {
+fn forward(input: &[u8], reader: &mut Reader, count: u64) u64 {
     let start = (*reader).bit;
     if count > 32 || start > input.len() as u64 * 8 || count > input.len() as u64 * 8 - start {
         fail(&mut *reader); return 0;
@@ -59,7 +59,7 @@ fn forward(input: &[u8], reader: &mut Reader, count: u64) -> u64 {
 }
 
 /// Reads a high-to-low group from a reverse stream, excluding its terminal marker.
-fn backward(input: &[u8], reader: &mut Reader, count: u64) -> u64 {
+fn backward(input: &[u8], reader: &mut Reader, count: u64) u64 {
     let start = (*reader).bit;
     if count > 32 || start < (*reader).low || count > start - (*reader).low { fail(&mut *reader); return 0; }
     let mut result: u64 = 0; let mut i: u64 = 0;
@@ -71,7 +71,7 @@ fn backward(input: &[u8], reader: &mut Reader, count: u64) -> u64 {
 }
 
 /// Initializes a reverse reader from the final nonzero marker byte.
-fn reverse_reader(input: &[u8], start: u64, end: u64) -> Reader {
+fn reverse_reader(input: &[u8], start: u64, end: u64) Reader {
     if start >= end || end > input.len() as u64 { return Reader { bit: 0, low: 0, bad: true }; }
     let last = input[end - 1] as u64;
     if last == 0 { return Reader { bit: 0, low: 0, bad: true }; }
@@ -79,7 +79,7 @@ fn reverse_reader(input: &[u8], start: u64, end: u64) -> Reader {
 }
 
 /// Builds an FSE table from normalized probabilities. Entries pack symbol, bit count and next-state base.
-fn build_fse(norm: &[u64], table: &mut [u64], bits: u64) -> bool {
+fn build_fse(norm: &[u64], table: &mut [u64], bits: u64) bool {
     if bits > 9 || (1 << bits) > table.len() as u64 { return false; }
     let size: u64 = 1 << bits; let mut high = size - 1;
     let mut next: [u64; 256] = [0; 256]; let mut i: u64 = 0; let mut total: u64 = 0;
@@ -118,7 +118,7 @@ fn build_fse(norm: &[u64], table: &mut [u64], bits: u64) -> bool {
 }
 
 /// Reads normalized FSE counts from the forward header and returns its accuracy log and byte end.
-fn read_fse(input: &[u8], start: u64, max_symbol: u64, max_bits: u64, table: &mut [u64]) -> u64 {
+fn read_fse(input: &[u8], start: u64, max_symbol: u64, max_bits: u64, table: &mut [u64]) u64 {
     let mut reader = Reader { bit: start * 8, low: 0, bad: false };
     let bits = forward(&input[0..input.len()], &mut reader, 4) + 5;
     if bits > max_bits { return pack_pair(ZERO, ZERO); }

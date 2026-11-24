@@ -6,38 +6,36 @@ use std::crypto::sha256::{digest, hkdf_expand, hkdf_extract, hmac, Sha256};
 /// Reports an invalid key schedule input, hash failure or output length error.
 pub enum KeyError {
     /// The TLS HKDF label exceeds its encoded length limit.
-    InvalidLabel,
+    InvalidLabel;
     /// The TLS HKDF context exceeds its encoded length limit.
-    InvalidContext,
+    InvalidContext;
     /// The supplied TLS secret has an invalid size.
-    InvalidSecret,
+    InvalidSecret;
     /// Requested output exceeds the derivation's algorithmic limit.
-    OutputTooLong,
+    OutputTooLong;
     /// The underlying transcript/HMAC operation failed.
-    HashFailed,
+    HashFailed;
 }
 
 /// Selects the role and handshake or application phase of a traffic secret.
 pub enum Traffic {
     /// Selects client handshake traffic secrets.
-    ClientHandshake,
+    ClientHandshake;
     /// Selects server handshake traffic secrets.
-    ServerHandshake,
+    ServerHandshake;
     /// Selects client application traffic secrets.
-    ClientApplication,
+    ClientApplication;
     /// Selects server application traffic secrets.
-    ServerApplication,
+    ServerApplication;
 }
 
 /// Accumulates the ordered handshake bytes in a streaming SHA-256 state.
 pub struct Transcript {
     /// Streaming handshake transcript hash; record headers are not appended.
-    hash: Sha256,
-}
+    hash: Sha256;
 
-impl Transcript {
     /// Starts an empty handshake transcript.
-    fn new() -> Transcript {
+    fn new() Transcript {
         let hash = Sha256::new();
         Transcript { hash: hash }
     }
@@ -45,7 +43,7 @@ impl Transcript {
     // Hash the encoded handshake bytes, including handshake headers.
     // The caller supplies fragments in wire order without record headers.
     /// Adds handshake bytes in protocol order without record headers.
-    fn append(&mut self, message: &[u8]) -> Result<(), KeyError> {
+    fn append(&mut self, message: &[u8]) Result<(), KeyError> {
         let hash = &mut (*self).hash;
         let length = message.len();
         match hash.update(&message[0..length]) {
@@ -55,14 +53,15 @@ impl Transcript {
     }
 
     /// Returns a snapshot of the current transcript hash.
-    fn digest(&self) -> [u8; 32] {
+    fn digest(&self) [u8; 32] {
         let hash = &(*self).hash;
         hash.snapshot()
     }
 }
 
+
 /// Extracts the low byte of a bounded label or output length.
-fn octet(value: usize) -> u8 {
+fn octet(value: usize) u8 {
     let mut word = value;
     let mut byte: u8 = 0;
     let mut bit: usize = 0;
@@ -77,7 +76,7 @@ fn octet(value: usize) -> u8 {
 
 /// Derives output using the TLS 1.3 label prefix and serialized length and context.
 pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8],
-                         output: &mut [u8]) -> Result<(), KeyError> {
+                         output: &mut [u8]) Result<(), KeyError> {
     let label_size = label.len();
     let context_size = context.len();
     let output_size = output.len();
@@ -114,7 +113,7 @@ pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8],
 }
 
 /// Derives a fixed 32-byte HKDF output with a TLS label.
-fn expand_32(secret: &[u8], label: &[u8], context: &[u8]) -> Result<[u8; 32], KeyError> {
+fn expand_32(secret: &[u8], label: &[u8], context: &[u8]) Result<[u8; 32], KeyError> {
     let mut output: [u8; 32] = [0; 32];
     let size = label.len();
     let context_size = context.len();
@@ -126,7 +125,7 @@ fn expand_32(secret: &[u8], label: &[u8], context: &[u8]) -> Result<[u8; 32], Ke
 }
 
 /// Computes the HKDF extraction step used by the TLS key schedule.
-fn extract(salt: &[u8], input: &[u8]) -> Result<[u8; 32], KeyError> {
+fn extract(salt: &[u8], input: &[u8]) Result<[u8; 32], KeyError> {
     let salt_size = salt.len();
     let size = input.len();
     match hkdf_extract(&salt[0..salt_size], &input[0..size]) {
@@ -137,13 +136,13 @@ fn extract(salt: &[u8], input: &[u8]) -> Result<[u8; 32], KeyError> {
 
 // The initial profile does not negotiate a PSK.
 /// Derives the initial TLS early secret without a configured PSK.
-pub fn early_secret() -> Result<[u8; 32], KeyError> {
+pub fn early_secret() Result<[u8; 32], KeyError> {
     let zeros: [u8; 32] = [0; 32];
     extract(&zeros[..], &zeros[..])
 }
 
 /// Derives a 32-byte secret from the given label and transcript hash.
-pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError> {
+pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) Result<[u8; 32], KeyError> {
     if transcript_hash.len() != 32 { return Err(KeyError.InvalidContext); }
     let label_size = label.len();
     let key_size = secret.len();
@@ -151,7 +150,7 @@ pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) -> Res
 }
 
 /// Derives the intermediate secret used as salt for the next extraction step.
-pub fn derived_secret(secret: &[u8]) -> Result<[u8; 32], KeyError> {
+pub fn derived_secret(secret: &[u8]) Result<[u8; 32], KeyError> {
     let label: [u8; 7] = [100, 101, 114, 105, 118, 101, 100]; // "derived"
     let empty: [u8; 0] = [];
     let empty_hash = match digest(&empty[..]) {
@@ -163,7 +162,7 @@ pub fn derived_secret(secret: &[u8]) -> Result<[u8; 32], KeyError> {
 }
 
 /// Mixes the ECDHE shared secret into the key schedule.
-pub fn handshake_secret(early: &[u8], shared: &[u8]) -> Result<[u8; 32], KeyError> {
+pub fn handshake_secret(early: &[u8], shared: &[u8]) Result<[u8; 32], KeyError> {
     if shared.len() != 32 { return Err(KeyError.InvalidSecret); }
     let size = early.len();
     let salt = match derived_secret(&early[0..size]) {
@@ -174,7 +173,7 @@ pub fn handshake_secret(early: &[u8], shared: &[u8]) -> Result<[u8; 32], KeyErro
 }
 
 /// Derives the master secret for application traffic and subsequent derivations.
-pub fn master_secret(handshake: &[u8]) -> Result<[u8; 32], KeyError> {
+pub fn master_secret(handshake: &[u8]) Result<[u8; 32], KeyError> {
     let zeros: [u8; 32] = [0; 32];
     let size = handshake.len();
     let salt = match derived_secret(&handshake[0..size]) {
@@ -185,7 +184,7 @@ pub fn master_secret(handshake: &[u8]) -> Result<[u8; 32], KeyError> {
 }
 
 /// Derives the requested client or server traffic secret for the selected phase.
-pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) -> Result<[u8; 32], KeyError> {
+pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) Result<[u8; 32], KeyError> {
     let size = secret.len();
     let hash_size = transcript_hash.len();
     let mut label: [u8; 12] = [99, 32, 104, 115, 32, 116, 114, 97, 102, 102, 105, 99]; // "c hs traffic"
@@ -199,7 +198,7 @@ pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) -
 }
 
 /// Derives the 16-byte record encryption key from a traffic secret.
-pub fn aes128_key(traffic: &[u8]) -> Result<[u8; 16], KeyError> {
+pub fn aes128_key(traffic: &[u8]) Result<[u8; 16], KeyError> {
     let label: [u8; 3] = [107, 101, 121]; // "key"
     let empty: [u8; 0] = [];
     let size = traffic.len();
@@ -211,7 +210,7 @@ pub fn aes128_key(traffic: &[u8]) -> Result<[u8; 16], KeyError> {
 }
 
 /// Derives the 12-byte static record IV from a traffic secret.
-pub fn traffic_iv(traffic: &[u8]) -> Result<[u8; 12], KeyError> {
+pub fn traffic_iv(traffic: &[u8]) Result<[u8; 12], KeyError> {
     let label: [u8; 2] = [105, 118]; // "iv"
     let empty: [u8; 0] = [];
     let size = traffic.len();
@@ -223,7 +222,7 @@ pub fn traffic_iv(traffic: &[u8]) -> Result<[u8; 12], KeyError> {
 }
 
 /// Derives the key for Finished authentication.
-pub fn finished_key(handshake_traffic: &[u8]) -> Result<[u8; 32], KeyError> {
+pub fn finished_key(handshake_traffic: &[u8]) Result<[u8; 32], KeyError> {
     let label: [u8; 8] = [102, 105, 110, 105, 115, 104, 101, 100]; // "finished"
     let empty: [u8; 0] = [];
     let size = handshake_traffic.len();
@@ -231,7 +230,7 @@ pub fn finished_key(handshake_traffic: &[u8]) -> Result<[u8; 32], KeyError> {
 }
 
 /// Computes Finished verify_data over the transcript before Finished.
-pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError> {
+pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) Result<[u8; 32], KeyError> {
     if transcript_hash.len() != 32 { return Err(KeyError.InvalidContext); }
     let size = handshake_traffic.len();
     let key = match finished_key(&handshake_traffic[0..size]) {
@@ -245,7 +244,7 @@ pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) ->
 }
 
 /// Checks received verify_data against the expected Finished authentication value.
-pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], received: &[u8]) -> Result<bool, KeyError> {
+pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], received: &[u8]) Result<bool, KeyError> {
     if received.len() != 32 { return Ok(false); }
     let size = handshake_traffic.len();
     let hash_size = transcript_hash.len();

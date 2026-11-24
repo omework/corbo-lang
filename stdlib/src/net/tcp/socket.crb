@@ -9,73 +9,48 @@
     /// Owns a connected IPv4 TCP socket.
     pub struct Connection {
         /// Owned native socket storage; the connection/listener closes it on destruction.
-        __din_package_socket: PlatformSocket,
+        __din_package_socket: PlatformSocket;
         /// Cached local IPv4 endpoint, including any OS-assigned port.
-        local_address: SocketAddr,
+        local_address: SocketAddr;
         /// Cached remote IPv4 endpoint.
-        remote_address: SocketAddr,
-    }
+        remote_address: SocketAddr;
 
-    /// Owns a TCP listening socket and accepts incoming connections.
-    pub struct Listener {
-        /// Owned native socket storage; the connection/listener closes it on destruction.
-        __din_package_socket: PlatformSocket,
-        /// Cached local IPv4 endpoint, including any OS-assigned port.
-        local_address: SocketAddr,
-    }
-
-    /// Wraps a connected platform socket with its local and peer endpoints.
-    fn connection(inner: PlatformSocket) -> Result<Connection, SocketError> {
-        let local = match inner.endpoint(0) {
-            Ok(value) => { value },
-            Err(error) => { return Err(error); },
-        };
-        let remote = match inner.endpoint(1) {
-            Ok(value) => { value },
-            Err(error) => { return Err(error); },
-        };
-        Ok(Connection { __din_package_socket: inner, local_address: local, remote_address: remote })
-    }
-
-    /// Establishes a blocking TCP connection to the supplied endpoint.
-    pub fn connect(address: SocketAddr) -> Result<Connection, SocketError> {
-        let inner = match open_connection(1, address.ipv4_bits(), address.port()) {
-            Ok(value) => { value },
-            Err(error) => { return Err(error); },
-        };
-        connection(inner)
-    }
-
-    impl Connection {
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) -> SocketAddr {
+        fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Returns the remote IPv4 address and port associated with the connection.
-        fn peer(&self) -> SocketAddr {
+        fn peer(&self) SocketAddr {
             let remote = &(*self).remote_address;
             from_parts(remote.ipv4_bits(), remote.port())
         }
 
         /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-        fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError> {
+        fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
             if buffer.len() == 0 { return Ok(0); }
             let inner = &mut (*self).__din_package_socket;
             inner.send(buffer)
         }
 
         /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
-        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError> {
+        fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             inner.receive(buffer)
         }
-    }
 
-    impl Listener {
+}
+
+    /// Owns a TCP listening socket and accepts incoming connections.
+    pub struct Listener {
+        /// Owned native socket storage; the connection/listener closes it on destruction.
+        __din_package_socket: PlatformSocket;
+        /// Cached local IPv4 endpoint, including any OS-assigned port.
+        local_address: SocketAddr;
+
         /// Binds and listens at the supplied endpoint. Use port zero for an assigned port and None for the system maximum backlog.
-        fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError> {
+        fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError> {
             let limit = match backlog {
                 Some(value) => { value },
                 None => { 2147483647 },
@@ -92,13 +67,13 @@
         }
 
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) -> SocketAddr {
+        fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Blocks until it can return an owned accepted TCP connection or an error.
-        fn accept(&mut self) -> Result<Connection, SocketError> {
+        fn accept(&mut self) Result<Connection, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             let accepted = match inner.accept() {
                 Ok(value) => { value },
@@ -106,13 +81,38 @@
             };
             connection(accepted)
         }
-    }
-#(endif)
 
+}
+
+    /// Wraps a connected platform socket with its local and peer endpoints.
+    fn connection(inner: PlatformSocket) Result<Connection, SocketError> {
+        let local = match inner.endpoint(0) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        let remote = match inner.endpoint(1) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        Ok(Connection { __din_package_socket: inner, local_address: local, remote_address: remote })
+    }
+
+    /// Establishes a blocking TCP connection to the supplied endpoint.
+    pub fn connect(address: SocketAddr) Result<Connection, SocketError> {
+        let inner = match open_connection(1, address.ipv4_bits(), address.port()) {
+            Ok(value) => { value },
+            Err(error) => { return Err(error); },
+        };
+        connection(inner)
+    }
+
+
+
+#(endif)
 
 #(if: target.os == "macos" && target.arch == "aarch64")
     /// Exposes the native socket representation needed by standard-library package code.
-    pub fn __din_package_socket(connection: &Connection) -> u64 {
+    pub fn __din_package_socket(connection: &Connection) u64 {
         let inner = &(*connection).__din_package_socket;
         std::sys::net::socket_descriptor(inner)
     }

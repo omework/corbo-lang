@@ -5,14 +5,14 @@
     use std::sys::unix::random::read_random;
 
     /// Identifies whether a platform status requests an interruption retry.
-    fn interrupted(code: i64) -> bool { code == -4 }
+    fn interrupted(code: i64) bool { code == -4 }
 #(endif)
 
 #(if: target.os == "windows")
     use std::sys::win::random::read_random;
 
     /// Identifies whether a platform status requests an interruption retry.
-    fn interrupted(code: i64) -> bool {
+    fn interrupted(code: i64) bool {
         drop(code);
         false
     }
@@ -23,16 +23,16 @@ pub enum RandomError {
     /// Preserves the native operating-system error code in code.
     Os {
             /// Native operating-system status code preserved by this error.
-            code: i64
-    },
+            code: i64;
+    };
     /// The OS returned an invalid byte count.
-    InvalidCount,
+    InvalidCount;
 }
 
 // A successful call fills the entire slice. An error can leave it
 // partially written, and the caller must discard the output.
 /// Fills the caller's buffer with system random bytes. A failure can leave a partially filled buffer.
-pub fn fill(output: &mut [u8]) -> Result<(), RandomError> {
+pub fn fill(output: &mut [u8]) Result<(), RandomError> {
     let length = output.len();
     let mut written: usize = 0;
     while written < length {

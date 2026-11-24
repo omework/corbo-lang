@@ -2,14 +2,14 @@
 //! Allocation-free XXH64 content checksum for Zstandard frames.
 
 /// Adds modulo 2^64 using representable half-word arithmetic.
-fn add64(a: u64, b: u64) -> u64 {
+fn add64(a: u64, b: u64) u64 {
     let low = (a & 0xffffffff) + (b & 0xffffffff);
     let high = ((a >> 32) + (b >> 32) + (low >> 32)) & 0xffffffff;
     (low & 0xffffffff) | (high << 32)
 }
 
 /// Multiplies modulo 2^64 without overflowing a checked intermediate.
-fn mul64(a: u64, b: u64) -> u64 {
+fn mul64(a: u64, b: u64) u64 {
     let low = (a & 0xffffffff) * (b & 0xffffffff);
     let high = ((low >> 32) + (((a >> 32) * (b & 0xffffffff)) & 0xffffffff)
         + (((b >> 32) * (a & 0xffffffff)) & 0xffffffff)) & 0xffffffff;
@@ -17,20 +17,20 @@ fn mul64(a: u64, b: u64) -> u64 {
 }
 
 /// Rotates a word by a nonzero count smaller than sixty-four.
-fn rot(value: u64, count: u64) -> u64 { ((value & (0xffffffffffffffff >> copy(count))) << copy(count)) | (value >> (64 - count)) }
+fn rot(value: u64, count: u64) u64 { ((value & (0xffffffffffffffff >> copy(count))) << copy(count)) | (value >> (64 - count)) }
 
 /// Applies one XXH64 stripe lane round.
-fn round64(state: u64, word: u64) -> u64 {
+fn round64(state: u64, word: u64) u64 {
     mul64(rot(add64(state, mul64(word, 14029467366897019727)), 31), 11400714785074694791)
 }
 
 /// Combines one stripe lane into the content checksum.
-fn merge64(state: u64, word: u64) -> u64 {
+fn merge64(state: u64, word: u64) u64 {
     add64(mul64(state ^ round64(0, word), 11400714785074694791), 9650029242287828579)
 }
 
 /// Computes the seed-zero XXH64 checksum specified for Zstandard content.
-fn checksum(input: &[u8]) -> u64 {
+fn checksum(input: &[u8]) u64 {
     let size = input.len() as u64; let mut at: u64 = 0; let mut hash: u64 = 2870177450012600261;
     if size >= 32 {
         let mut a = add64(11400714785074694791, 14029467366897019727);

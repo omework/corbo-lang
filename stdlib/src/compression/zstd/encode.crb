@@ -7,7 +7,7 @@ fn put_little(output: &mut [u8], at: u64, value: u64, count: u64) {
 }
 
 /// Emits little-endian entropy bits into a prechecked output range.
-fn put_bits(output: &mut [u8], start: u64, value: u64, count: u64) -> u64 {
+fn put_bits(output: &mut [u8], start: u64, value: u64, count: u64) u64 {
     let mut i: u64 = 0;
     while i < count {
         let at = start + i;
@@ -19,7 +19,7 @@ fn put_bits(output: &mut [u8], start: u64, value: u64, count: u64) -> u64 {
 }
 
 /// Returns the smallest literal/match code that represents a length.
-fn length_code(kind: u64, value: u64) -> u64 {
+fn length_code(kind: u64, value: u64) u64 {
     let maximum: u64 = if kind == 0 { 35 } else { 52 }; let mut code: u64 = 0;
     while code < maximum {
         let decoded_fields_0 = baseline(copy(kind), copy(code)); let base = decoded_fields_0 >> 32; let bits = decoded_fields_0 & 0xffffffff;
@@ -29,7 +29,7 @@ fn length_code(kind: u64, value: u64) -> u64 {
 }
 
 /// Writes one compressed block using a literal prefix and a single LZ77 sequence.
-fn sequence_block(output: &mut [u8], start: u64, prefix: &[u8], matched: u64, distance: u64, last: bool) -> Result<u64, Error> {
+fn sequence_block(output: &mut [u8], start: u64, prefix: &[u8], matched: u64, distance: u64, last: bool) Result<u64, Error> {
     let count = prefix.len() as u64;
     let ll_code = length_code(0, copy(count)); let ml_code = length_code(2, copy(matched));
     let off_code = log2(distance + 3);
@@ -56,13 +56,13 @@ fn sequence_block(output: &mut [u8], start: u64, prefix: &[u8], matched: u64, di
 
 /// Compresses one Zstandard frame. Workspace requires 36864 u64 words; no heap allocation occurs.
 /// Levels 1–22 control native chain-search effort; zero selects level three. Partial output may remain on errors.
-pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error> {
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) Result<usize, Error> {
     let empty: [u8;0] = [];
     compress_with_dictionary(input, output, params, workspace, &empty[..])
 }
 
 /// Compresses with borrowed raw or formatted dictionary history; writes the dictionary ID when present.
-pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8]) -> Result<usize, Error> {
+pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8]) Result<usize, Error> {
     let dict_start = match dictionary_start(&dictionary[0..dictionary.len()]) {
         Ok(value) => { value }, Err(error) => { return Err(error); },
     };
@@ -71,7 +71,7 @@ pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params
 }
 
 /// Implements native encoding with a validated dictionary content view.
-fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8], dictionary_id: u64) -> Result<usize, Error> {
+fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8], dictionary_id: u64) Result<usize, Error> {
     let configured = (*params).level;
     if configured > 22 { return Err(Error.InvalidParams); }
     let level: u64 = if configured == 0 { 3 } else { configured as u64 };

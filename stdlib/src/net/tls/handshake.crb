@@ -13,15 +13,13 @@
     /// Holds the read and write ciphers established by a successful TLS handshake.
     pub struct Session {
         /// Owned inbound record cipher established by the handshake.
-        reader: RecordCipher,
+        reader: RecordCipher;
         /// Owned outbound record cipher established by the handshake.
-        writer: RecordCipher,
-    }
+        writer: RecordCipher;
 
-    impl Session {
         /// Protects and sends an application record on the original TCP connection.
         fn write_application(&mut self, socket: &mut Connection, content: &[u8],
-                             fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError> {
+                             fragment: &mut [u8], wire: &mut [u8]) Result<(), HandshakeError> {
             let writer = &mut (*self).writer;
             match writer.send_record(&mut *socket, APPLICATION_DATA, &content[0..content.len()],
                         0, &mut fragment[0..fragment.len()], &mut wire[0..wire.len()]) {
@@ -33,7 +31,7 @@
 
         /// Receives and authenticates an application record, or returns zero on authenticated closure.
         fn read_application(&mut self, socket: &mut Connection, wire: &mut [u8],
-                            output: &mut [u8]) -> Result<u64, HandshakeError> {
+                            output: &mut [u8]) Result<u64, HandshakeError> {
             let reader = &mut (*self).reader;
             let capacity = wire.len();
             let space = output.len();
@@ -53,7 +51,7 @@
 
         /// Sends the authenticated TLS close_notify alert.
         fn shutdown(&mut self, socket: &mut Connection, fragment: &mut [u8],
-                    wire: &mut [u8]) -> Result<(), HandshakeError> {
+                    wire: &mut [u8]) Result<(), HandshakeError> {
             let writer = &mut (*self).writer;
             match writer.close_notify(&mut *socket, &mut fragment[0..fragment.len()],
                       &mut wire[0..wire.len()]) {
@@ -62,10 +60,12 @@
             };
             Ok(())
         }
-    }
+
+}
+
 
     /// Constructs a directional record cipher from the corresponding traffic secret.
-    fn cipher(secret: &[u8], sending: bool) -> Result<RecordCipher, HandshakeError> {
+    fn cipher(secret: &[u8], sending: bool) Result<RecordCipher, HandshakeError> {
         let size = secret.len();
         let key = match aes128_key(&secret[0..size]) {
             Ok(value) => { value },
@@ -84,7 +84,7 @@
     }
 
     /// Derives the P-256 ECDHE secret from the local key and peer public point.
-    fn shared_secret(ephemeral: EphemeralKey, encoded: &[u8]) -> Result<[u8; 32], HandshakeError> {
+    fn shared_secret(ephemeral: EphemeralKey, encoded: &[u8]) Result<[u8; 32], HandshakeError> {
         let size = encoded.len();
         let peer = match PublicKey::from_sec1_uncompressed(&encoded[0..size]) {
             Ok(value) => { value },
@@ -107,7 +107,7 @@
     }
 
     /// Derives the application traffic secrets and installs directional record ciphers.
-    fn application_session(master: &[u8], hash: &[u8], server: bool) -> Result<Session, HandshakeError> {
+    fn application_session(master: &[u8], hash: &[u8], server: bool) Result<Session, HandshakeError> {
         let client = match traffic_secret(&master[0..32], &hash[0..32], Traffic.ClientApplication) {
             Ok(value) => { value },
             Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
@@ -141,7 +141,7 @@
     }
 
     /// Builds a Finished message from the transcript and traffic secret.
-    fn encode_finished(secret: &[u8], hash: &[u8], message: &mut [u8]) -> Result<(), HandshakeError> {
+    fn encode_finished(secret: &[u8], hash: &[u8], message: &mut [u8]) Result<(), HandshakeError> {
         let data = match finished_verify_data(&secret[0..32], &hash[0..32]) {
             Ok(value) => { value },
             Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
@@ -152,7 +152,7 @@
     }
 
     /// Validates Finished framing and verifies the peer's authentication data.
-    fn check_finished(secret: &[u8], hash: &[u8], message: &[u8]) -> Result<(), HandshakeError> {
+    fn check_finished(secret: &[u8], hash: &[u8], message: &[u8]) Result<(), HandshakeError> {
         if message.len() != 36 { return Err(HandshakeError.Protocol); }
         let valid = match verify_finished(&secret[0..32], &hash[0..32], &message[4..36]) {
             Ok(value) => { value },
@@ -166,7 +166,7 @@
     /// Runs the client handshake using a configured leaf certificate and public key pin.
     pub fn client_handshake(socket: &mut Connection, pin: &[u8], peer_key: &PublicKey,
                             wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
-                            -> Result<Session, HandshakeError> {
+                             Result<Session, HandshakeError> {
         let encoded = peer_key.to_sec1_uncompressed();
         let empty: [u8; 0] = [];
         client_negotiate(&mut *socket, &pin[0..pin.len()], &empty[..], &encoded[..], 0,
@@ -177,7 +177,7 @@
     /// Runs the client handshake with an explicit trust anchor and DNS identity check.
     pub fn client_handshake_x509(socket: &mut Connection, hostname: &[u8], anchor: &[u8], now: i64,
                                  wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
-                                 -> Result<Session, HandshakeError> {
+                                  Result<Session, HandshakeError> {
         let size = hostname.len();
         if !valid_dns_name(&hostname[0..size]) || anchor.len() == 0 {
             return Err(HandshakeError.Authentication);
@@ -189,7 +189,7 @@
 
     /// Validates the presented certificate evidence and returns the server verification key.
     fn authenticate_server(certificate: &[u8], identity: &[u8], hostname: &[u8], pinned_key: &[u8],
-                           now: i64) -> Result<X509PublicKey, HandshakeError> {
+                           now: i64) Result<X509PublicKey, HandshakeError> {
         let size = certificate.len();
         let identity_size = identity.len();
         let decoded = match Certificate::from_message(&certificate[0..size]) {
@@ -215,7 +215,7 @@
     /// Executes the client-side handshake and installs application keys after verification.
     fn client_negotiate(socket: &mut Connection, identity: &[u8], hostname: &[u8], pinned_key: &[u8], now: i64,
                         wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
-                        -> Result<Session, HandshakeError> {
+                         Result<Session, HandshakeError> {
         let w = wire.len();
         let f = fragment.len();
         let m = message.len();
@@ -359,7 +359,7 @@
     /// Runs the server handshake with one DER certificate and its signing key.
     pub fn server_handshake(socket: &mut Connection, certificate: &[u8], signing_key: &SigningKey,
                             wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
-                            -> Result<Session, HandshakeError> {
+                             Result<Session, HandshakeError> {
         server_negotiate(&mut *socket, &certificate[0..certificate.len()], false, &*signing_key,
             &mut wire[0..wire.len()], &mut fragment[0..fragment.len()], &mut message[0..message.len()])
     }
@@ -367,7 +367,7 @@
     /// Runs the server handshake with a framed leaf-first certificate list and its signing key.
     pub fn server_handshake_chain(socket: &mut Connection, chain: &[u8], signing_key: &SigningKey,
                                   wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
-                                  -> Result<Session, HandshakeError> {
+                                   Result<Session, HandshakeError> {
         let size = chain.len();
         if !valid_outgoing_chain(&chain[0..size]) { return Err(HandshakeError.Protocol); }
         server_negotiate(&mut *socket, &chain[0..size], true, &*signing_key,
@@ -377,7 +377,7 @@
     /// Executes the server-side handshake and verifies the client's Finished.
     fn server_negotiate(socket: &mut Connection, certificate: &[u8], is_chain: bool, signing_key: &SigningKey,
                         wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
-                        -> Result<Session, HandshakeError> {
+                         Result<Session, HandshakeError> {
         let w = wire.len();
         let f = fragment.len();
         let m = message.len();

@@ -1,5 +1,7 @@
 [English](LANGUAGE_RULES.md)
 
+
+Syntaxe actuelle : [méthodes dans les définitions](DEFINITION_METHODS-fr.md), remplaçant les anciens exemples avec `impl`.
 # Corbo — règles de langage retenues
 
 Les variantes d’énumération s’écrivent `Enum::Variante` dans les constructions,

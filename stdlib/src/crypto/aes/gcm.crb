@@ -4,31 +4,91 @@
 /// Reports a length mismatch, an input limit violation, or a failed authentication tag.
 pub enum Error {
     /// Input/output lengths violate the operation's fixed-size contract.
-    LengthMismatch,
+    LengthMismatch;
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong,
+    InputTooLong;
     /// Authentication failed; the operation must not expose unauthenticated plaintext.
-    AuthenticationFailed
+    AuthenticationFailed;
 }
 
 /// Holds the expanded key and backend choice for AES-128-GCM.
 pub struct AES128GCM {
     /// Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
-    schedule: [u8; 240],
+    schedule: [u8; 240];
     /// Whether this instance uses the available hardware compression/encryption path.
-    accelerated: bool,
+    accelerated: bool;
+
+    /// Builds a GCM context from a 16-byte AES key.
+    fn new(key: &[u8; 16]) AES128GCM {
+        let mut cipher = AES128GCM { schedule: [0; 240], accelerated: hardware_available() };
+        let mut i: u64 = 0;
+        while i < 16 {
+            let byte = &mut cipher.schedule[i];
+            *byte = (*key)[i];
+            i = i + 1;
+        }
+        expand_key(16, &mut cipher.schedule);
+        cipher
+    }
+
+    /// Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
+    /// Use a unique 12-byte nonce for every message under the same key.
+    fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
+        ciphertext: &mut [u8]) Result<[u8; 16], Error> {
+        let accelerated = (*self).accelerated;
+        seal_message(&(*self).schedule, 10, accelerated, &*nonce,
+            &aad[0..aad.len()], &plaintext[0..plaintext.len()], &mut ciphertext[0..ciphertext.len()])
+    }
+
+    /// Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
+    fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
+        plaintext: &mut [u8]) Result<(), Error> {
+        let accelerated = (*self).accelerated;
+        open_message(&(*self).schedule, 10, accelerated, &*nonce,
+            &aad[0..aad.len()], &ciphertext[0..ciphertext.len()], &*tag, &mut plaintext[0..plaintext.len()])
+    }
 }
 
 /// Holds the expanded key and backend choice for AES-256-GCM.
 pub struct AES256GCM {
     /// Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
-    schedule: [u8; 240],
+    schedule: [u8; 240];
     /// Whether this instance uses the available hardware compression/encryption path.
-    accelerated: bool,
+    accelerated: bool;
+
+    /// Builds a GCM context from a 32-byte AES key.
+    fn new(key: &[u8; 32]) AES256GCM {
+        let mut cipher = AES256GCM { schedule: [0; 240], accelerated: hardware_available() };
+        let mut i: u64 = 0;
+        while i < 32 {
+            let byte = &mut cipher.schedule[i];
+            *byte = (*key)[i];
+            i = i + 1;
+        }
+        expand_key(32, &mut cipher.schedule);
+        cipher
+    }
+
+    /// Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
+    /// Use a unique 12-byte nonce for every message under the same key.
+    fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
+        ciphertext: &mut [u8]) Result<[u8; 16], Error> {
+        let accelerated = (*self).accelerated;
+        seal_message(&(*self).schedule, 14, accelerated, &*nonce,
+            &aad[0..aad.len()], &plaintext[0..plaintext.len()], &mut ciphertext[0..ciphertext.len()])
+    }
+
+    /// Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
+    fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
+        plaintext: &mut [u8]) Result<(), Error> {
+        let accelerated = (*self).accelerated;
+        open_message(&(*self).schedule, 14, accelerated, &*nonce,
+            &aad[0..aad.len()], &ciphertext[0..ciphertext.len()], &*tag, &mut plaintext[0..plaintext.len()])
+    }
 }
 
 /// Checks the GCM counter limit and the encodable length of the associated data.
-fn within_limit(length: usize, aad: usize) -> bool {
+fn within_limit(length: usize, aad: usize) bool {
     (length as u64) <= 0xfffffffe0 && (aad as u64) <= 0x1fffffffffffffff
 }
 
@@ -62,7 +122,7 @@ fn crypt(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u8; 12],
 
 /// Computes the detached tag over associated data and ciphertext.
 fn compute_tag(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u8; 12],
-    aad: &[u8], ciphertext: &[u8]) -> [u8; 16] {
+    aad: &[u8], ciphertext: &[u8]) [u8; 16] {
     let mut hash_key: [u8; 16] = [0; 16];
     encrypt_block(&*schedule, copy(rounds), copy(accelerated), &mut hash_key);
     let h = polynomial(&hash_key);
@@ -101,7 +161,7 @@ fn compute_tag(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u8
 
 /// Checks sizes, encrypts the plaintext, and computes the detached tag.
 fn seal_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u8; 12],
-    aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) -> Result<[u8; 16], Error> {
+    aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) Result<[u8; 16], Error> {
     let length = plaintext.len();
     let aad_len = aad.len();
     if length != ciphertext.len() { return Err(Error.LengthMismatch); }
@@ -112,7 +172,7 @@ fn seal_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u
 
 /// Verifies the detached tag before decrypting the ciphertext into the output.
 fn open_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u8; 12],
-    aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) -> Result<(), Error> {
+    aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) Result<(), Error> {
     let length = ciphertext.len();
     let aad_len = aad.len();
     if length != plaintext.len() { return Err(Error.LengthMismatch); }
@@ -128,68 +188,4 @@ fn open_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u
     if difference != 0 { return Err(Error.AuthenticationFailed); }
     crypt(&*schedule, rounds, accelerated, &*nonce, &ciphertext[0..length], &mut plaintext[0..length]);
     Ok(())
-}
-
-impl AES128GCM {
-    /// Builds a GCM context from a 16-byte AES key.
-    fn new(key: &[u8; 16]) -> AES128GCM {
-        let mut cipher = AES128GCM { schedule: [0; 240], accelerated: hardware_available() };
-        let mut i: u64 = 0;
-        while i < 16 {
-            let byte = &mut cipher.schedule[i];
-            *byte = (*key)[i];
-            i = i + 1;
-        }
-        expand_key(16, &mut cipher.schedule);
-        cipher
-    }
-
-    /// Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
-    /// Use a unique 12-byte nonce for every message under the same key.
-    fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
-        ciphertext: &mut [u8]) -> Result<[u8; 16], Error> {
-        let accelerated = (*self).accelerated;
-        seal_message(&(*self).schedule, 10, accelerated, &*nonce,
-            &aad[0..aad.len()], &plaintext[0..plaintext.len()], &mut ciphertext[0..ciphertext.len()])
-    }
-
-    /// Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
-    fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
-        plaintext: &mut [u8]) -> Result<(), Error> {
-        let accelerated = (*self).accelerated;
-        open_message(&(*self).schedule, 10, accelerated, &*nonce,
-            &aad[0..aad.len()], &ciphertext[0..ciphertext.len()], &*tag, &mut plaintext[0..plaintext.len()])
-    }
-}
-
-impl AES256GCM {
-    /// Builds a GCM context from a 32-byte AES key.
-    fn new(key: &[u8; 32]) -> AES256GCM {
-        let mut cipher = AES256GCM { schedule: [0; 240], accelerated: hardware_available() };
-        let mut i: u64 = 0;
-        while i < 32 {
-            let byte = &mut cipher.schedule[i];
-            *byte = (*key)[i];
-            i = i + 1;
-        }
-        expand_key(32, &mut cipher.schedule);
-        cipher
-    }
-
-    /// Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
-    /// Use a unique 12-byte nonce for every message under the same key.
-    fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
-        ciphertext: &mut [u8]) -> Result<[u8; 16], Error> {
-        let accelerated = (*self).accelerated;
-        seal_message(&(*self).schedule, 14, accelerated, &*nonce,
-            &aad[0..aad.len()], &plaintext[0..plaintext.len()], &mut ciphertext[0..ciphertext.len()])
-    }
-
-    /// Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
-    fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
-        plaintext: &mut [u8]) -> Result<(), Error> {
-        let accelerated = (*self).accelerated;
-        open_message(&(*self).schedule, 14, accelerated, &*nonce,
-            &aad[0..aad.len()], &ciphertext[0..ciphertext.len()], &*tag, &mut plaintext[0..plaintext.len()])
-    }
 }

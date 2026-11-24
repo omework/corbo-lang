@@ -7,20 +7,20 @@ use std::encoding::der::bytes_equal;
 /// Reports a malformed PEM envelope, invalid Base64, or an undersized output buffer.
 pub enum Error {
     /// The PEM/DER container is malformed or uses an unsupported envelope.
-    InvalidEnvelope,
+    InvalidEnvelope;
     /// The PEM body is not valid Base64.
-    InvalidBase64,
+    InvalidBase64;
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall
+    BufferTooSmall;
 }
 
 /// Recognizes space, tab, carriage return and line feed in the envelope.
-fn whitespace(byte: u8) -> bool {
+fn whitespace(byte: u8) bool {
     byte == 9 || byte == 10 || byte == 13 || byte == 32
 }
 
 /// Checks a marker prefix, its exact label and its closing dashes at a given offset.
-fn boundary(input: &[u8], at: usize, prefix: &[u8], label: &[u8]) -> usize {
+fn boundary(input: &[u8], at: usize, prefix: &[u8], label: &[u8]) usize {
     let size = input.len();
     let prefix_size = prefix.len();
     let label_size = label.len();
@@ -37,7 +37,7 @@ fn boundary(input: &[u8], at: usize, prefix: &[u8], label: &[u8]) -> usize {
 
 // Read one labelled block. The body is decoded into caller-owned storage.
 /// Decodes one nonempty PEM block with the expected label and returns the DER byte count.
-pub fn decode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+pub fn decode(input: &[u8], label: &[u8], output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
     let label_size = label.len();
     if label_size == 0 || label_size > 64 { return Err(Error.InvalidEnvelope); }
@@ -81,7 +81,7 @@ pub fn decode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Er
 }
 
 /// Checks the supported PEM label spelling and prevents delimiter injection.
-fn valid_label(label: &[u8]) -> bool {
+fn valid_label(label: &[u8]) bool {
     let size = label.len();
     if size == 0 || size > 64 { return false; }
     let mut previous_separator = true;
@@ -123,7 +123,7 @@ fn write_boundary(prefix: &[u8], label: &[u8], output: &mut [u8]) {
 /// Writes one PEM block with 64 Base64 characters per full line and returns the bytes written.
 /// The input must be nonempty. Labels use uppercase ASCII letters and digits with single spaces or hyphens between groups.
 /// Invalid input or insufficient capacity leaves the output unchanged.
-pub fn encode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+pub fn encode(input: &[u8], label: &[u8], output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
     let label_size = label.len();
     if size == 0 || !valid_label(&label[0..label_size]) { return Err(Error.InvalidEnvelope); }

@@ -79,45 +79,45 @@ Members:
 - [`committed_bytes`](../stdlib/src/runtime/metrics/metrics.crb#L9) (implementation field): Committed managed pages, not physical resident memory.
 - [`occupied_bytes`](../stdlib/src/runtime/metrics/metrics.crb#L11) (implementation field): Fixed cursor spans plus live region payload, excluding unused pool slots.
 
-### `memory_stats`
-
-[metrics.crb:15](../stdlib/src/runtime/metrics/metrics.crb#L15)
-
-```rust
-pub fn memory_stats() -> MemoryStats
-```
-
-Samples atomic counters without pausing workers. Fields may reflect adjacent instants.
-
 ### `MemoryStats::reserved`
 
-[metrics.crb:32](../stdlib/src/runtime/metrics/metrics.crb#L32)
+[metrics.crb:14](../stdlib/src/runtime/metrics/metrics.crb#L14)
 
 ```rust
-fn reserved(&self) -> usize
+fn reserved(&self) usize
 ```
 
 Returns sampled reserved virtual address bytes.
 
 ### `MemoryStats::committed`
 
-[metrics.crb:34](../stdlib/src/runtime/metrics/metrics.crb#L34)
+[metrics.crb:16](../stdlib/src/runtime/metrics/metrics.crb#L16)
 
 ```rust
-fn committed(&self) -> usize
+fn committed(&self) usize
 ```
 
 Returns sampled committed managed pages in bytes, independently of OS RSS.
 
 ### `MemoryStats::occupied`
 
-[metrics.crb:36](../stdlib/src/runtime/metrics/metrics.crb#L36)
+[metrics.crb:18](../stdlib/src/runtime/metrics/metrics.crb#L18)
 
 ```rust
-fn occupied(&self) -> usize
+fn occupied(&self) usize
 ```
 
 Returns sampled occupied bytes, excluding unused pool slots.
+
+### `memory_stats`
+
+[metrics.crb:22](../stdlib/src/runtime/metrics/metrics.crb#L22)
+
+```rust
+pub fn memory_stats() MemoryStats
+```
+
+Samples atomic counters without pausing workers. Fields may reflect adjacent instants.
 
 
 ## `std`
@@ -220,70 +220,70 @@ Members:
 
 ### `BoundedString::new`
 
-[collections.crb:54](../stdlib/src/collections.crb#L54)
+[collections.crb:53](../stdlib/src/collections.crb#L53)
 
 ```rust
-fn new() -> BoundedString<N>
+fn new() BoundedString<N>
 ```
 
 Constructs an empty inline string without an allocation.
 
 ### `BoundedString::try_from`
 
-[collections.crb:58](../stdlib/src/collections.crb#L58)
+[collections.crb:57](../stdlib/src/collections.crb#L57)
 
 ```rust
-fn try_from(text: &str) -> Result<BoundedString<N>, BoundedStringError>
+fn try_from(text: &str) Result<BoundedString<N>, BoundedStringError>
 ```
 
 Copies a complete UTF-8 input or returns TooLong without truncation.
 
 ### `BoundedString::capacity`
 
-[collections.crb:66](../stdlib/src/collections.crb#L66)
+[collections.crb:65](../stdlib/src/collections.crb#L65)
 
 ```rust
-fn capacity(&self) -> usize
+fn capacity(&self) usize
 ```
 
 Returns the compile-time byte capacity.
 
 ### `BoundedString::len`
 
-[collections.crb:68](../stdlib/src/collections.crb#L68)
+[collections.crb:67](../stdlib/src/collections.crb#L67)
 
 ```rust
-fn len(&self) -> usize
+fn len(&self) usize
 ```
 
 Returns the current byte length, not a character count.
 
 ### `BoundedString::set`
 
-[collections.crb:70](../stdlib/src/collections.crb#L70)
+[collections.crb:69](../stdlib/src/collections.crb#L69)
 
 ```rust
-fn set(&mut self, text: &str) -> Result<(), BoundedStringError>
+fn set(&mut self, text: &str) Result<(), BoundedStringError>
 ```
 
 Replaces the content, retaining the old value if the input is too long.
 
 ### `BoundedString::as_str`
 
-[collections.crb:89](../stdlib/src/collections.crb#L89)
+[collections.crb:88](../stdlib/src/collections.crb#L88)
 
 ```rust
-fn as_str(&self) -> Result<&str, Utf8Error>
+fn as_str(&self) Result<&str, Utf8Error>
 ```
 
 Borrows validated UTF-8 text without allocating or copying its payload.
 
 ### `BoundedString::as_bytes`
 
-[collections.crb:94](../stdlib/src/collections.crb#L94)
+[collections.crb:93](../stdlib/src/collections.crb#L93)
 
 ```rust
-fn as_bytes(&self) -> &[u8]
+fn as_bytes(&self) &[u8]
 ```
 
 Borrows the used bytes; mutation and moves respect the ordinary loan rules.
@@ -330,20 +330,20 @@ Members:
 
 ### `Params::new`
 
-[gzip.crb:32](../stdlib/src/compression/gzip/gzip.crb#L32)
+[gzip.crb:30](../stdlib/src/compression/gzip/gzip.crb#L30)
 
 ```rust
-fn new() -> Params
+fn new() Params
 ```
 
 Uses level six. Levels express this encoder's search effort, not another library's byte output.
 
 ### `compress`
 
-[gzip.crb:202](../stdlib/src/compression/gzip/gzip.crb#L202)
+[gzip.crb:201](../stdlib/src/compression/gzip/gzip.crb#L201)
 
 ```rust
-pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error>
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) Result<usize, Error>
 ```
 
 Compresses one complete Gzip member. The workspace requires 36864 u64 words for levels 1–9.
@@ -351,10 +351,10 @@ Output may contain a partial member on an error; input and workspace are never r
 
 ### `decompress`
 
-[gzip.crb:429](../stdlib/src/compression/gzip/gzip.crb#L429)
+[gzip.crb:428](../stdlib/src/compression/gzip/gzip.crb#L428)
 
 ```rust
-pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn decompress(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Decompresses concatenated members. Errors may leave a partial output prefix.
@@ -390,30 +390,30 @@ Members:
 
 ### `Encoder::consumed`
 
-[stream.crb:38](../stdlib/src/compression/gzip/stream.crb#L38)
+[stream.crb:36](../stdlib/src/compression/gzip/stream.crb#L36)
 
 ```rust
-fn consumed(&self)->usize
+fn consumed(&self)usize
 ```
 
 Returns the input accepted by the last successful process call; re-submit the remaining suffix.
 
 ### `Encoder::finished`
 
-[stream.crb:40](../stdlib/src/compression/gzip/stream.crb#L40)
+[stream.crb:38](../stdlib/src/compression/gzip/stream.crb#L38)
 
 ```rust
-fn finished(&self)->bool
+fn finished(&self)bool
 ```
 
 Reports EOF after all pending output has been drained.
 
 ### `Encoder::new`
 
-[stream.crb:44](../stdlib/src/compression/gzip/stream.crb#L44)
+[stream.crb:42](../stdlib/src/compression/gzip/stream.crb#L42)
 
 ```rust
-fn new(level:u32, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64]) -> Encoder
+fn new(level:u32, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64]) Encoder
 ```
 
 Borrows staging, pending-output and match-search buffers; snapshots the scalar options.
@@ -421,7 +421,7 @@ Pending needs 2*staging.len()+128 bytes.
 
 ### `Encoder::reset`
 
-[stream.crb:51](../stdlib/src/compression/gzip/stream.crb#L51)
+[stream.crb:49](../stdlib/src/compression/gzip/stream.crb#L49)
 
 ```rust
 fn reset(&mut self)
@@ -431,10 +431,10 @@ Reuses the borrowed buffers and parameters for a fresh stream, discarding pendin
 
 ### `Encoder::process`
 
-[stream.crb:59](../stdlib/src/compression/gzip/stream.crb#L59)
+[stream.crb:57](../stdlib/src/compression/gzip/stream.crb#L57)
 
 ```rust
-fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) -> Result<usize, Error>
+fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) Result<usize, Error>
 ```
 
 Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
@@ -442,7 +442,7 @@ finish marks EOF only once all supplied input is accepted; an empty output can a
 
 ### `Decoder`
 
-[stream.crb:98](../stdlib/src/compression/gzip/stream.crb#L98)
+[stream.crb:97](../stdlib/src/compression/gzip/stream.crb#L97)
 
 ```rust
 pub struct Decoder
@@ -453,50 +453,50 @@ The two borrowed buffers are hard per-frame budgets, not an unbounded-history wi
 
 Members:
 
-- [`encoded`](../stdlib/src/compression/gzip/stream.crb#L100) (implementation field): Caller-owned storage for a bounded encoded frame.
-- [`decoded`](../stdlib/src/compression/gzip/stream.crb#L102) (implementation field): Caller-owned storage for the bounded decoded frame.
-- [`used`](../stdlib/src/compression/gzip/stream.crb#L104) (implementation field): Number of bytes currently accumulated in input/pending storage.
-- [`count`](../stdlib/src/compression/gzip/stream.crb#L106) (implementation field): Number of valid pending-output bytes.
-- [`next`](../stdlib/src/compression/gzip/stream.crb#L108) (implementation field): Offset of the next pending byte to drain.
-- [`ending`](../stdlib/src/compression/gzip/stream.crb#L110) (implementation field): Records the caller's end-of-input request.
-- [`done`](../stdlib/src/compression/gzip/stream.crb#L112) (implementation field): Records that the current frame has been completely emitted/decoded.
-- [`seen`](../stdlib/src/compression/gzip/stream.crb#L114) (implementation field): Tracks whether input/progress has been observed for this frame.
-- [`failed`](../stdlib/src/compression/gzip/stream.crb#L116) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
-- [`last_read`](../stdlib/src/compression/gzip/stream.crb#L118) (implementation field): Number of input bytes consumed by the latest streaming operation.
+- [`encoded`](../stdlib/src/compression/gzip/stream.crb#L99) (implementation field): Caller-owned storage for a bounded encoded frame.
+- [`decoded`](../stdlib/src/compression/gzip/stream.crb#L101) (implementation field): Caller-owned storage for the bounded decoded frame.
+- [`used`](../stdlib/src/compression/gzip/stream.crb#L103) (implementation field): Number of bytes currently accumulated in input/pending storage.
+- [`count`](../stdlib/src/compression/gzip/stream.crb#L105) (implementation field): Number of valid pending-output bytes.
+- [`next`](../stdlib/src/compression/gzip/stream.crb#L107) (implementation field): Offset of the next pending byte to drain.
+- [`ending`](../stdlib/src/compression/gzip/stream.crb#L109) (implementation field): Records the caller's end-of-input request.
+- [`done`](../stdlib/src/compression/gzip/stream.crb#L111) (implementation field): Records that the current frame has been completely emitted/decoded.
+- [`seen`](../stdlib/src/compression/gzip/stream.crb#L113) (implementation field): Tracks whether input/progress has been observed for this frame.
+- [`failed`](../stdlib/src/compression/gzip/stream.crb#L115) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`last_read`](../stdlib/src/compression/gzip/stream.crb#L117) (implementation field): Number of input bytes consumed by the latest streaming operation.
 
 ### `Decoder::consumed`
 
-[stream.crb:123](../stdlib/src/compression/gzip/stream.crb#L123)
+[stream.crb:120](../stdlib/src/compression/gzip/stream.crb#L120)
 
 ```rust
-fn consumed(&self)->usize
+fn consumed(&self)usize
 ```
 
 Returns the input accepted by the last successful process call.
 
 ### `Decoder::finished`
 
-[stream.crb:125](../stdlib/src/compression/gzip/stream.crb#L125)
+[stream.crb:122](../stdlib/src/compression/gzip/stream.crb#L122)
 
 ```rust
-fn finished(&self)->bool
+fn finished(&self)bool
 ```
 
 Reports EOF after all validated output has been drained.
 
 ### `Decoder::new`
 
-[stream.crb:128](../stdlib/src/compression/gzip/stream.crb#L128)
+[stream.crb:125](../stdlib/src/compression/gzip/stream.crb#L125)
 
 ```rust
-fn new(encoded:&mut [u8], decoded:&mut [u8] ) -> Decoder
+fn new(encoded:&mut [u8], decoded:&mut [u8] ) Decoder
 ```
 
 Borrows maximum-frame storage; Zstandard additionally needs its 128 KiB literal workspace.
 
 ### `Decoder::reset`
 
-[stream.crb:134](../stdlib/src/compression/gzip/stream.crb#L134)
+[stream.crb:131](../stdlib/src/compression/gzip/stream.crb#L131)
 
 ```rust
 fn reset(&mut self)
@@ -506,10 +506,10 @@ Starts a new stream with the same storage and dictionary, discarding pending dat
 
 ### `Decoder::process`
 
-[stream.crb:141](../stdlib/src/compression/gzip/stream.crb#L141)
+[stream.crb:138](../stdlib/src/compression/gzip/stream.crb#L138)
 
 ```rust
-fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)->Result<usize,Error>
+fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)Result<usize,Error>
 ```
 
 Returns validated output bytes written; consumed() reports accepted input.
@@ -525,7 +525,7 @@ Native greedy LZ77 Zstandard encoding with raw literals and RLE sequence tables.
 [encode.crb:59](../stdlib/src/compression/zstd/encode.crb#L59)
 
 ```rust
-pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) -> Result<usize, Error>
+pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) Result<usize, Error>
 ```
 
 Compresses one Zstandard frame. Workspace requires 36864 u64 words; no heap allocation occurs.
@@ -536,7 +536,7 @@ Levels 1–22 control native chain-search effort; zero selects level three. Part
 [encode.crb:65](../stdlib/src/compression/zstd/encode.crb#L65)
 
 ```rust
-pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8]) -> Result<usize, Error>
+pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8]) Result<usize, Error>
 ```
 
 Compresses with borrowed raw or formatted dictionary history; writes the dictionary ID when present.
@@ -574,30 +574,30 @@ Members:
 
 ### `Encoder::consumed`
 
-[stream.crb:42](../stdlib/src/compression/zstd/stream.crb#L42)
+[stream.crb:40](../stdlib/src/compression/zstd/stream.crb#L40)
 
 ```rust
-fn consumed(&self)->usize
+fn consumed(&self)usize
 ```
 
 Returns the input accepted by the last successful process call; re-submit the remaining suffix.
 
 ### `Encoder::finished`
 
-[stream.crb:44](../stdlib/src/compression/zstd/stream.crb#L44)
+[stream.crb:42](../stdlib/src/compression/zstd/stream.crb#L42)
 
 ```rust
-fn finished(&self)->bool
+fn finished(&self)bool
 ```
 
 Reports EOF after all pending output has been drained.
 
 ### `Encoder::new`
 
-[stream.crb:48](../stdlib/src/compression/zstd/stream.crb#L48)
+[stream.crb:46](../stdlib/src/compression/zstd/stream.crb#L46)
 
 ```rust
-fn new(level:u32, checksum:bool, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64], dictionary:&[u8]) -> Encoder
+fn new(level:u32, checksum:bool, input: &mut [u8], pending: &mut [u8], workspace: &mut [u64], dictionary:&[u8]) Encoder
 ```
 
 Borrows staging, pending-output and match-search buffers; snapshots the scalar options.
@@ -605,7 +605,7 @@ Pending needs 2*staging.len()+128 bytes. Zstandard also borrows its dictionary (
 
 ### `Encoder::reset`
 
-[stream.crb:54](../stdlib/src/compression/zstd/stream.crb#L54)
+[stream.crb:52](../stdlib/src/compression/zstd/stream.crb#L52)
 
 ```rust
 fn reset(&mut self)
@@ -615,10 +615,10 @@ Reuses the borrowed buffers and parameters for a fresh stream, discarding pendin
 
 ### `Encoder::process`
 
-[stream.crb:62](../stdlib/src/compression/zstd/stream.crb#L62)
+[stream.crb:60](../stdlib/src/compression/zstd/stream.crb#L60)
 
 ```rust
-fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) -> Result<usize, Error>
+fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) Result<usize, Error>
 ```
 
 Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
@@ -626,7 +626,7 @@ finish marks EOF only once all supplied input is accepted; an empty output can a
 
 ### `Decoder`
 
-[stream.crb:101](../stdlib/src/compression/zstd/stream.crb#L101)
+[stream.crb:100](../stdlib/src/compression/zstd/stream.crb#L100)
 
 ```rust
 pub struct Decoder
@@ -637,52 +637,52 @@ The two borrowed buffers are hard per-frame budgets, not an unbounded-history wi
 
 Members:
 
-- [`encoded`](../stdlib/src/compression/zstd/stream.crb#L103) (implementation field): Caller-owned storage for a bounded encoded frame.
-- [`decoded`](../stdlib/src/compression/zstd/stream.crb#L105) (implementation field): Caller-owned storage for the bounded decoded frame.
-- [`workspace`](../stdlib/src/compression/zstd/stream.crb#L107) (implementation field): Caller-owned codec scratch storage; required length is checked before use.
-- [`dictionary`](../stdlib/src/compression/zstd/stream.crb#L109) (implementation field): Borrowed optional dictionary bytes; they must outlive the codec.
-- [`used`](../stdlib/src/compression/zstd/stream.crb#L111) (implementation field): Number of bytes currently accumulated in input/pending storage.
-- [`count`](../stdlib/src/compression/zstd/stream.crb#L113) (implementation field): Number of valid pending-output bytes.
-- [`next`](../stdlib/src/compression/zstd/stream.crb#L115) (implementation field): Offset of the next pending byte to drain.
-- [`ending`](../stdlib/src/compression/zstd/stream.crb#L117) (implementation field): Records the caller's end-of-input request.
-- [`done`](../stdlib/src/compression/zstd/stream.crb#L119) (implementation field): Records that the current frame has been completely emitted/decoded.
-- [`seen`](../stdlib/src/compression/zstd/stream.crb#L121) (implementation field): Tracks whether input/progress has been observed for this frame.
-- [`failed`](../stdlib/src/compression/zstd/stream.crb#L123) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
-- [`last_read`](../stdlib/src/compression/zstd/stream.crb#L125) (implementation field): Number of input bytes consumed by the latest streaming operation.
+- [`encoded`](../stdlib/src/compression/zstd/stream.crb#L102) (implementation field): Caller-owned storage for a bounded encoded frame.
+- [`decoded`](../stdlib/src/compression/zstd/stream.crb#L104) (implementation field): Caller-owned storage for the bounded decoded frame.
+- [`workspace`](../stdlib/src/compression/zstd/stream.crb#L106) (implementation field): Caller-owned codec scratch storage; required length is checked before use.
+- [`dictionary`](../stdlib/src/compression/zstd/stream.crb#L108) (implementation field): Borrowed optional dictionary bytes; they must outlive the codec.
+- [`used`](../stdlib/src/compression/zstd/stream.crb#L110) (implementation field): Number of bytes currently accumulated in input/pending storage.
+- [`count`](../stdlib/src/compression/zstd/stream.crb#L112) (implementation field): Number of valid pending-output bytes.
+- [`next`](../stdlib/src/compression/zstd/stream.crb#L114) (implementation field): Offset of the next pending byte to drain.
+- [`ending`](../stdlib/src/compression/zstd/stream.crb#L116) (implementation field): Records the caller's end-of-input request.
+- [`done`](../stdlib/src/compression/zstd/stream.crb#L118) (implementation field): Records that the current frame has been completely emitted/decoded.
+- [`seen`](../stdlib/src/compression/zstd/stream.crb#L120) (implementation field): Tracks whether input/progress has been observed for this frame.
+- [`failed`](../stdlib/src/compression/zstd/stream.crb#L122) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
+- [`last_read`](../stdlib/src/compression/zstd/stream.crb#L124) (implementation field): Number of input bytes consumed by the latest streaming operation.
 
 ### `Decoder::consumed`
 
-[stream.crb:130](../stdlib/src/compression/zstd/stream.crb#L130)
+[stream.crb:127](../stdlib/src/compression/zstd/stream.crb#L127)
 
 ```rust
-fn consumed(&self)->usize
+fn consumed(&self)usize
 ```
 
 Returns the input accepted by the last successful process call.
 
 ### `Decoder::finished`
 
-[stream.crb:132](../stdlib/src/compression/zstd/stream.crb#L132)
+[stream.crb:129](../stdlib/src/compression/zstd/stream.crb#L129)
 
 ```rust
-fn finished(&self)->bool
+fn finished(&self)bool
 ```
 
 Reports EOF after all validated output has been drained.
 
 ### `Decoder::new`
 
-[stream.crb:135](../stdlib/src/compression/zstd/stream.crb#L135)
+[stream.crb:132](../stdlib/src/compression/zstd/stream.crb#L132)
 
 ```rust
-fn new(encoded:&mut [u8], decoded:&mut [u8] ,workspace:&mut [u8],dictionary:&[u8]) -> Decoder
+fn new(encoded:&mut [u8], decoded:&mut [u8] ,workspace:&mut [u8],dictionary:&[u8]) Decoder
 ```
 
 Borrows maximum-frame storage; Zstandard additionally needs its 128 KiB literal workspace.
 
 ### `Decoder::reset`
 
-[stream.crb:140](../stdlib/src/compression/zstd/stream.crb#L140)
+[stream.crb:137](../stdlib/src/compression/zstd/stream.crb#L137)
 
 ```rust
 fn reset(&mut self)
@@ -692,10 +692,10 @@ Starts a new stream with the same storage and dictionary, discarding pending dat
 
 ### `Decoder::process`
 
-[stream.crb:147](../stdlib/src/compression/zstd/stream.crb#L147)
+[stream.crb:144](../stdlib/src/compression/zstd/stream.crb#L144)
 
 ```rust
-fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)->Result<usize,Error>
+fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)Result<usize,Error>
 ```
 
 Returns validated output bytes written; consumed() reports accepted input.
@@ -745,20 +745,20 @@ Members:
 
 ### `Params::new`
 
-[zstd.crb:43](../stdlib/src/compression/zstd/zstd.crb#L43)
+[zstd.crb:41](../stdlib/src/compression/zstd/zstd.crb#L41)
 
 ```rust
-fn new() -> Params
+fn new() Params
 ```
 
 Uses search level three and includes a content checksum.
 
 ### `decompress`
 
-[zstd.crb:201](../stdlib/src/compression/zstd/zstd.crb#L201)
+[zstd.crb:200](../stdlib/src/compression/zstd/zstd.crb#L200)
 
 ```rust
-pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) -> Result<usize, Error>
+pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) Result<usize, Error>
 ```
 
 Decompresses concatenated/skippable frames with a caller-owned literal workspace of at least 128 KiB.
@@ -766,10 +766,10 @@ Dictionary-dependent frames report DictionaryRequired. Errors may leave a partia
 
 ### `decompress_with_dictionary`
 
-[zstd.crb:207](../stdlib/src/compression/zstd/zstd.crb#L207)
+[zstd.crb:206](../stdlib/src/compression/zstd/zstd.crb#L206)
 
 ```rust
-pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) -> Result<usize, Error>
+pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) Result<usize, Error>
 ```
 
 Decodes frames with a borrowed raw or formatted dictionary. No dictionary bytes are retained.
@@ -799,7 +799,7 @@ Members:
 [cbc.crb:88](../stdlib/src/crypto/aes/cbc.crb#L88)
 
 ```rust
-pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8], output: &mut [u8]) -> Result<usize, CbcError>
+pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8], output: &mut [u8]) Result<usize, CbcError>
 ```
 
 Encrypts bytes with AES-256-CBC and PKCS#7 padding and returns the ciphertext length.
@@ -809,7 +809,7 @@ Encrypts bytes with AES-256-CBC and PKCS#7 padding and returns the ciphertext le
 [cbc.crb:126](../stdlib/src/crypto/aes/cbc.crb#L126)
 
 ```rust
-pub fn cbc_decrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8], output: &mut [u8]) -> Result<usize, CbcError>
+pub fn cbc_decrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8], output: &mut [u8]) Result<usize, CbcError>
 ```
 
 Decrypts padded AES-256-CBC. Invalid padding clears the decrypted region of output.
@@ -849,9 +849,40 @@ Members:
 - [`schedule`](../stdlib/src/crypto/aes/gcm.crb#L17) (implementation field): Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
 - [`accelerated`](../stdlib/src/crypto/aes/gcm.crb#L19) (implementation field): Whether this instance uses the available hardware compression/encryption path.
 
+### `AES128GCM::new`
+
+[gcm.crb:22](../stdlib/src/crypto/aes/gcm.crb#L22)
+
+```rust
+fn new(key: &[u8; 16]) AES128GCM
+```
+
+Builds a GCM context from a 16-byte AES key.
+
+### `AES128GCM::seal`
+
+[gcm.crb:36](../stdlib/src/crypto/aes/gcm.crb#L36)
+
+```rust
+fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) Result<[u8; 16], Error>
+```
+
+Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
+Use a unique 12-byte nonce for every message under the same key.
+
+### `AES128GCM::open`
+
+[gcm.crb:44](../stdlib/src/crypto/aes/gcm.crb#L44)
+
+```rust
+fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) Result<(), Error>
+```
+
+Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
+
 ### `AES256GCM`
 
-[gcm.crb:23](../stdlib/src/crypto/aes/gcm.crb#L23)
+[gcm.crb:53](../stdlib/src/crypto/aes/gcm.crb#L53)
 
 ```rust
 pub struct AES256GCM
@@ -861,56 +892,25 @@ Holds the expanded key and backend choice for AES-256-GCM.
 
 Members:
 
-- [`schedule`](../stdlib/src/crypto/aes/gcm.crb#L25) (implementation field): Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
-- [`accelerated`](../stdlib/src/crypto/aes/gcm.crb#L27) (implementation field): Whether this instance uses the available hardware compression/encryption path.
-
-### `AES128GCM::new`
-
-[gcm.crb:135](../stdlib/src/crypto/aes/gcm.crb#L135)
-
-```rust
-fn new(key: &[u8; 16]) -> AES128GCM
-```
-
-Builds a GCM context from a 16-byte AES key.
-
-### `AES128GCM::seal`
-
-[gcm.crb:149](../stdlib/src/crypto/aes/gcm.crb#L149)
-
-```rust
-fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) -> Result<[u8; 16], Error>
-```
-
-Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
-Use a unique 12-byte nonce for every message under the same key.
-
-### `AES128GCM::open`
-
-[gcm.crb:157](../stdlib/src/crypto/aes/gcm.crb#L157)
-
-```rust
-fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) -> Result<(), Error>
-```
-
-Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
+- [`schedule`](../stdlib/src/crypto/aes/gcm.crb#L55) (implementation field): Expanded AES round-key storage; unused tail bytes accommodate the larger key schedule.
+- [`accelerated`](../stdlib/src/crypto/aes/gcm.crb#L57) (implementation field): Whether this instance uses the available hardware compression/encryption path.
 
 ### `AES256GCM::new`
 
-[gcm.crb:167](../stdlib/src/crypto/aes/gcm.crb#L167)
+[gcm.crb:60](../stdlib/src/crypto/aes/gcm.crb#L60)
 
 ```rust
-fn new(key: &[u8; 32]) -> AES256GCM
+fn new(key: &[u8; 32]) AES256GCM
 ```
 
 Builds a GCM context from a 32-byte AES key.
 
 ### `AES256GCM::seal`
 
-[gcm.crb:181](../stdlib/src/crypto/aes/gcm.crb#L181)
+[gcm.crb:74](../stdlib/src/crypto/aes/gcm.crb#L74)
 
 ```rust
-fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) -> Result<[u8; 16], Error>
+fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) Result<[u8; 16], Error>
 ```
 
 Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
@@ -918,10 +918,10 @@ Use a unique 12-byte nonce for every message under the same key.
 
 ### `AES256GCM::open`
 
-[gcm.crb:189](../stdlib/src/crypto/aes/gcm.crb#L189)
+[gcm.crb:82](../stdlib/src/crypto/aes/gcm.crb#L82)
 
 ```rust
-fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) -> Result<(), Error>
+fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) Result<(), Error>
 ```
 
 Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
@@ -968,7 +968,7 @@ Members:
 [argon2id.crb:361](../stdlib/src/crypto/argon2id/argon2id.crb#L361)
 
 ```rust
-pub fn derive(password: &[u8], salt: &[u8], params: Params, work: &mut [[u64; 128]], output: &mut [u8]) -> Result<(), Error>
+pub fn derive(password: &[u8], salt: &[u8], params: Params, work: &mut [[u64; 128]], output: &mut [u8]) Result<(), Error>
 ```
 
 Derives the requested Argon2id output using the supplied workspace and parameters.
@@ -996,17 +996,17 @@ Members:
 
 ### `Md5::new`
 
-[md5.crb:22](../stdlib/src/crypto/md5/md5.crb#L22)
+[md5.crb:20](../stdlib/src/crypto/md5/md5.crb#L20)
 
 ```rust
-fn new() -> Md5
+fn new() Md5
 ```
 
 Creates a hasher with the standard MD5 initial state.
 
 ### `Md5::update`
 
-[md5.crb:31](../stdlib/src/crypto/md5/md5.crb#L31)
+[md5.crb:29](../stdlib/src/crypto/md5/md5.crb#L29)
 
 ```rust
 fn update(&mut self, input: &[u8])
@@ -1016,20 +1016,20 @@ Absorbs input bytes and compresses full blocks as they become available.
 
 ### `Md5::finish`
 
-[md5.crb:51](../stdlib/src/crypto/md5/md5.crb#L51)
+[md5.crb:49](../stdlib/src/crypto/md5/md5.crb#L49)
 
 ```rust
-fn finish(mut self: Md5) -> [u8; 16]
+fn finish(mut self: Md5) [u8; 16]
 ```
 
 Consumes the state, adds MD5 padding and returns the checksum.
 
 ### `digest`
 
-[md5.crb:164](../stdlib/src/crypto/md5/md5.crb#L164)
+[md5.crb:163](../stdlib/src/crypto/md5/md5.crb#L163)
 
 ```rust
-pub fn digest(input: &[u8]) -> [u8; 16]
+pub fn digest(input: &[u8]) [u8; 16]
 ```
 
 Computes a 16-byte MD5 checksum for interoperability.
@@ -1044,7 +1044,7 @@ DER and PEM serialization for P-256 signing keys and public keys.
 [key_der.crb:21](../stdlib/src/crypto/p256/key_der.crb#L21)
 
 ```rust
-pub fn spki_point_offset(input: &[u8], start: u64, end: u64) -> u64
+pub fn spki_point_offset(input: &[u8], start: u64, end: u64) u64
 ```
 
 Returns the SEC1 point offset inside P-256 SubjectPublicKeyInfo, or zero on invalid framing.
@@ -1085,9 +1085,39 @@ Members:
 
 - [`secret`](../stdlib/src/crypto/p256/p256.crb#L27) (implementation field): Private scalar limbs; never expose these through a public borrowed view.
 
+### `EphemeralKey::generate`
+
+[p256.crb:30](../stdlib/src/crypto/p256/p256.crb#L30)
+
+```rust
+fn generate() Result<EphemeralKey, Error>
+```
+
+Creates a key using a private scalar sampled from system entropy.
+
+### `EphemeralKey::public_key`
+
+[p256.crb:40](../stdlib/src/crypto/p256/p256.crb#L40)
+
+```rust
+fn public_key(&self) PublicKey
+```
+
+Derives the public point corresponding to this private scalar.
+
+### `EphemeralKey::agree`
+
+[p256.crb:46](../stdlib/src/crypto/p256/p256.crb#L46)
+
+```rust
+fn agree(self: EphemeralKey, peer: &PublicKey, output: &mut [u8; 32]) Result<(), Error>
+```
+
+Consumes the ephemeral key and writes the 32-byte ECDHE shared secret.
+
 ### `SigningKey`
 
-[p256.crb:31](../stdlib/src/crypto/p256/p256.crb#L31)
+[p256.crb:66](../stdlib/src/crypto/p256/p256.crb#L66)
 
 ```rust
 pub struct SigningKey
@@ -1097,11 +1127,111 @@ Holds a P-256 private scalar used to derive a public key and sign messages.
 
 Members:
 
-- [`secret`](../stdlib/src/crypto/p256/p256.crb#L33) (implementation field): Private scalar limbs; never expose these through a public borrowed view.
+- [`secret`](../stdlib/src/crypto/p256/p256.crb#L68) (implementation field): Private scalar limbs; never expose these through a public borrowed view.
+
+### `SigningKey::generate`
+
+[p256.crb:71](../stdlib/src/crypto/p256/p256.crb#L71)
+
+```rust
+fn generate() Result<SigningKey, Error>
+```
+
+Creates a key using a private scalar sampled from system entropy.
+
+### `SigningKey::from_bytes`
+
+[p256.crb:81](../stdlib/src/crypto/p256/p256.crb#L81)
+
+```rust
+fn from_bytes(input: &[u8; 32]) Result<SigningKey, Error>
+```
+
+Imports a 32-byte big-endian private scalar after checking its range.
+
+### `SigningKey::public_key`
+
+[p256.crb:101](../stdlib/src/crypto/p256/p256.crb#L101)
+
+```rust
+fn public_key(&self) PublicKey
+```
+
+Derives the public point corresponding to this private scalar.
+
+### `SigningKey::sign_sha256`
+
+[p256.crb:107](../stdlib/src/crypto/p256/p256.crb#L107)
+
+```rust
+fn sign_sha256(&self, message: &[u8], output: &mut [u8; 72]) Result<usize, Error>
+```
+
+Signs a message with deterministic ECDSA and writes the DER signature.
+
+### `SigningKey::from_der`
+
+[p256.crb:126](../stdlib/src/crypto/p256/p256.crb#L126)
+
+```rust
+fn from_der(input: &[u8]) Result<SigningKey, Error>
+```
+
+Imports a P-256 signing key from unencrypted PKCS#8 or SEC1 DER.
+
+### `SigningKey::from_pem`
+
+[p256.crb:137](../stdlib/src/crypto/p256/p256.crb#L137)
+
+```rust
+fn from_pem(input: &[u8], scratch: &mut [u8]) Result<SigningKey, Error>
+```
+
+Imports one PRIVATE KEY or EC PRIVATE KEY block. The scratch buffer retains private DER.
+
+### `SigningKey::to_der`
+
+[p256.crb:165](../stdlib/src/crypto/p256/p256.crb#L165)
+
+```rust
+fn to_der(&self, output: &mut [u8]) Result<usize, Error>
+```
+
+Writes an unencrypted PKCS#8 PrivateKeyInfo and returns its DER length.
+
+### `SigningKey::to_sec1_der`
+
+[p256.crb:178](../stdlib/src/crypto/p256/p256.crb#L178)
+
+```rust
+fn to_sec1_der(&self, output: &mut [u8]) Result<usize, Error>
+```
+
+Writes an unencrypted SEC1 ECPrivateKey and returns its DER length.
+
+### `SigningKey::to_pem`
+
+[p256.crb:185](../stdlib/src/crypto/p256/p256.crb#L185)
+
+```rust
+fn to_pem(&self, output: &mut [u8]) Result<usize, Error>
+```
+
+Writes a PRIVATE KEY PEM block containing an unencrypted PKCS#8 key.
+
+### `SigningKey::to_sec1_pem`
+
+[p256.crb:196](../stdlib/src/crypto/p256/p256.crb#L196)
+
+```rust
+fn to_sec1_pem(&self, output: &mut [u8]) Result<usize, Error>
+```
+
+Writes an EC PRIVATE KEY PEM block containing an unencrypted SEC1 key.
 
 ### `PublicKey`
 
-[p256.crb:37](../stdlib/src/crypto/p256/p256.crb#L37)
+[p256.crb:208](../stdlib/src/crypto/p256/p256.crb#L208)
 
 ```rust
 pub struct PublicKey
@@ -1111,207 +1241,77 @@ Holds a validated P-256 curve point.
 
 Members:
 
-- [`point`](../stdlib/src/crypto/p256/p256.crb#L39) (implementation field): Encoded internal elliptic-curve point representation.
-
-### `EphemeralKey::generate`
-
-[p256.crb:106](../stdlib/src/crypto/p256/p256.crb#L106)
-
-```rust
-fn generate() -> Result<EphemeralKey, Error>
-```
-
-Creates a key using a private scalar sampled from system entropy.
-
-### `EphemeralKey::public_key`
-
-[p256.crb:116](../stdlib/src/crypto/p256/p256.crb#L116)
-
-```rust
-fn public_key(&self) -> PublicKey
-```
-
-Derives the public point corresponding to this private scalar.
-
-### `EphemeralKey::agree`
-
-[p256.crb:122](../stdlib/src/crypto/p256/p256.crb#L122)
-
-```rust
-fn agree(self: EphemeralKey, peer: &PublicKey, output: &mut [u8; 32]) -> Result<(), Error>
-```
-
-Consumes the ephemeral key and writes the 32-byte ECDHE shared secret.
-
-### `SigningKey::generate`
-
-[p256.crb:143](../stdlib/src/crypto/p256/p256.crb#L143)
-
-```rust
-fn generate() -> Result<SigningKey, Error>
-```
-
-Creates a key using a private scalar sampled from system entropy.
-
-### `SigningKey::from_bytes`
-
-[p256.crb:153](../stdlib/src/crypto/p256/p256.crb#L153)
-
-```rust
-fn from_bytes(input: &[u8; 32]) -> Result<SigningKey, Error>
-```
-
-Imports a 32-byte big-endian private scalar after checking its range.
-
-### `SigningKey::public_key`
-
-[p256.crb:173](../stdlib/src/crypto/p256/p256.crb#L173)
-
-```rust
-fn public_key(&self) -> PublicKey
-```
-
-Derives the public point corresponding to this private scalar.
-
-### `SigningKey::sign_sha256`
-
-[p256.crb:179](../stdlib/src/crypto/p256/p256.crb#L179)
-
-```rust
-fn sign_sha256(&self, message: &[u8], output: &mut [u8; 72]) -> Result<usize, Error>
-```
-
-Signs a message with deterministic ECDSA and writes the DER signature.
+- [`point`](../stdlib/src/crypto/p256/p256.crb#L210) (implementation field): Encoded internal elliptic-curve point representation.
 
 ### `PublicKey::from_sec1_uncompressed`
 
-[p256.crb:200](../stdlib/src/crypto/p256/p256.crb#L200)
+[p256.crb:213](../stdlib/src/crypto/p256/p256.crb#L213)
 
 ```rust
-fn from_sec1_uncompressed(input: &[u8]) -> Result<PublicKey, Error>
+fn from_sec1_uncompressed(input: &[u8]) Result<PublicKey, Error>
 ```
 
 Parses a 65-byte SEC1 point and checks its coordinates and curve equation.
 
 ### `PublicKey::to_sec1_uncompressed`
 
-[p256.crb:221](../stdlib/src/crypto/p256/p256.crb#L221)
+[p256.crb:234](../stdlib/src/crypto/p256/p256.crb#L234)
 
 ```rust
-fn to_sec1_uncompressed(&self) -> [u8; 65]
+fn to_sec1_uncompressed(&self) [u8; 65]
 ```
 
 Serializes the public point in uncompressed SEC1 form.
 
-### `verify_sha256`
-
-[p256.crb:230](../stdlib/src/crypto/p256/p256.crb#L230)
-
-```rust
-pub fn verify_sha256(key: &PublicKey, message: &[u8], signature: &[u8]) -> Result<bool, Error>
-```
-
-Verifies a DER-encoded P-256 ECDSA signature over a SHA-256 message digest.
-
-### `SigningKey::from_der`
-
-[p256.crb:261](../stdlib/src/crypto/p256/p256.crb#L261)
-
-```rust
-fn from_der(input: &[u8]) -> Result<SigningKey, Error>
-```
-
-Imports a P-256 signing key from unencrypted PKCS#8 or SEC1 DER.
-
-### `SigningKey::from_pem`
-
-[p256.crb:272](../stdlib/src/crypto/p256/p256.crb#L272)
-
-```rust
-fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<SigningKey, Error>
-```
-
-Imports one PRIVATE KEY or EC PRIVATE KEY block. The scratch buffer retains private DER.
-
 ### `PublicKey::from_der`
 
-[p256.crb:302](../stdlib/src/crypto/p256/p256.crb#L302)
+[p256.crb:242](../stdlib/src/crypto/p256/p256.crb#L242)
 
 ```rust
-fn from_der(input: &[u8]) -> Result<PublicKey, Error>
+fn from_der(input: &[u8]) Result<PublicKey, Error>
 ```
 
 Imports a P-256 SubjectPublicKeyInfo with an uncompressed point.
 
 ### `PublicKey::from_pem`
 
-[p256.crb:312](../stdlib/src/crypto/p256/p256.crb#L312)
+[p256.crb:252](../stdlib/src/crypto/p256/p256.crb#L252)
 
 ```rust
-fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<PublicKey, Error>
+fn from_pem(input: &[u8], scratch: &mut [u8]) Result<PublicKey, Error>
 ```
 
 Decodes one PUBLIC KEY block into scratch and imports its P-256 public point.
 
-### `SigningKey::to_der`
-
-[p256.crb:331](../stdlib/src/crypto/p256/p256.crb#L331)
-
-```rust
-fn to_der(&self, output: &mut [u8]) -> Result<usize, Error>
-```
-
-Writes an unencrypted PKCS#8 PrivateKeyInfo and returns its DER length.
-
-### `SigningKey::to_sec1_der`
-
-[p256.crb:344](../stdlib/src/crypto/p256/p256.crb#L344)
-
-```rust
-fn to_sec1_der(&self, output: &mut [u8]) -> Result<usize, Error>
-```
-
-Writes an unencrypted SEC1 ECPrivateKey and returns its DER length.
-
-### `SigningKey::to_pem`
-
-[p256.crb:351](../stdlib/src/crypto/p256/p256.crb#L351)
-
-```rust
-fn to_pem(&self, output: &mut [u8]) -> Result<usize, Error>
-```
-
-Writes a PRIVATE KEY PEM block containing an unencrypted PKCS#8 key.
-
-### `SigningKey::to_sec1_pem`
-
-[p256.crb:362](../stdlib/src/crypto/p256/p256.crb#L362)
-
-```rust
-fn to_sec1_pem(&self, output: &mut [u8]) -> Result<usize, Error>
-```
-
-Writes an EC PRIVATE KEY PEM block containing an unencrypted SEC1 key.
-
 ### `PublicKey::to_der`
 
-[p256.crb:375](../stdlib/src/crypto/p256/p256.crb#L375)
+[p256.crb:269](../stdlib/src/crypto/p256/p256.crb#L269)
 
 ```rust
-fn to_der(&self, output: &mut [u8]) -> Result<usize, Error>
+fn to_der(&self, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes a DER SubjectPublicKeyInfo with an uncompressed P-256 point.
 
 ### `PublicKey::to_pem`
 
-[p256.crb:390](../stdlib/src/crypto/p256/p256.crb#L390)
+[p256.crb:284](../stdlib/src/crypto/p256/p256.crb#L284)
 
 ```rust
-fn to_pem(&self, output: &mut [u8]) -> Result<usize, Error>
+fn to_pem(&self, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes a PUBLIC KEY PEM block with a P-256 SubjectPublicKeyInfo.
+
+### `verify_sha256`
+
+[p256.crb:362](../stdlib/src/crypto/p256/p256.crb#L362)
+
+```rust
+pub fn verify_sha256(key: &PublicKey, message: &[u8], signature: &[u8]) Result<bool, Error>
+```
+
+Verifies a DER-encoded P-256 ECDSA signature over a SHA-256 message digest.
 
 
 ## `std::crypto::pbkdf2`
@@ -1339,7 +1339,7 @@ Members:
 [pbkdf2.crb:18](../stdlib/src/crypto/pbkdf2/pbkdf2.crb#L18)
 
 ```rust
-pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32, output: &mut [u8]) -> Result<(), Error>
+pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32, output: &mut [u8]) Result<(), Error>
 ```
 
 Derives output.len() bytes with PBKDF2-HMAC-SHA-256. The caller sets the salt and iteration count.
@@ -1376,7 +1376,7 @@ Members:
 [pkcs8.crb:173](../stdlib/src/crypto/pkcs8/pkcs8.crb#L173)
 
 ```rust
-pub fn decrypt_der(input: &[u8], password: &[u8], max_iterations: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn decrypt_der(input: &[u8], password: &[u8], max_iterations: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Decrypts an EncryptedPrivateKeyInfo DER block to version-zero PrivateKeyInfo DER.
@@ -1388,7 +1388,7 @@ The caller sets the maximum accepted PBKDF2 iteration count.
 [pkcs8.crb:245](../stdlib/src/crypto/pkcs8/pkcs8.crb#L245)
 
 ```rust
-pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Protects version-zero PrivateKeyInfo DER using a fresh random salt and IV.
@@ -1399,7 +1399,7 @@ The caller selects a nonzero iteration count and supplies the output buffer.
 [pkcs8.crb:286](../stdlib/src/crypto/pkcs8/pkcs8.crb#L286)
 
 ```rust
-pub fn encrypt_pem(input: &[u8], password: &[u8], iterations: u32, scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn encrypt_pem(input: &[u8], password: &[u8], iterations: u32, scratch: &mut [u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Encrypts a PrivateKeyInfo into ENCRYPTED PRIVATE KEY PEM using DER scratch.
@@ -1409,7 +1409,7 @@ Encrypts a PrivateKeyInfo into ENCRYPTED PRIVATE KEY PEM using DER scratch.
 [pkcs8.crb:299](../stdlib/src/crypto/pkcs8/pkcs8.crb#L299)
 
 ```rust
-pub fn decrypt_pem(input: &[u8], password: &[u8], max_iterations: u32, scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn decrypt_pem(input: &[u8], password: &[u8], max_iterations: u32, scratch: &mut [u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Decodes ENCRYPTED PRIVATE KEY PEM into DER scratch, then decrypts into output.
@@ -1440,7 +1440,7 @@ Members:
 [random.crb:35](../stdlib/src/crypto/random/random.crb#L35)
 
 ```rust
-pub fn fill(output: &mut [u8]) -> Result<(), RandomError>
+pub fn fill(output: &mut [u8]) Result<(), RandomError>
 ```
 
 Fills the caller's buffer with system random bytes. A failure can leave a partially filled buffer.
@@ -1470,7 +1470,7 @@ Members:
 [rsa.crb:88](../stdlib/src/crypto/rsa/rsa.crb#L88)
 
 ```rust
-pub fn public_from_der(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn public_from_der(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Imports a PKCS#1 or SPKI RSA public key and writes canonical PKCS#1 DER.
@@ -1480,7 +1480,7 @@ Imports a PKCS#1 or SPKI RSA public key and writes canonical PKCS#1 DER.
 [rsa.crb:93](../stdlib/src/crypto/rsa/rsa.crb#L93)
 
 ```rust
-pub fn private_from_der(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn private_from_der(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Imports a PKCS#1 or unencrypted PKCS#8 RSA private key and writes canonical PKCS#1 DER.
@@ -1490,7 +1490,7 @@ Imports a PKCS#1 or unencrypted PKCS#8 RSA private key and writes canonical PKCS
 [rsa.crb:129](../stdlib/src/crypto/rsa/rsa.crb#L129)
 
 ```rust
-pub fn public_to_der(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn public_to_der(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Wraps a PKCS#1 RSA public key in DER SubjectPublicKeyInfo.
@@ -1500,7 +1500,7 @@ Wraps a PKCS#1 RSA public key in DER SubjectPublicKeyInfo.
 [rsa.crb:134](../stdlib/src/crypto/rsa/rsa.crb#L134)
 
 ```rust
-pub fn private_to_der(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn private_to_der(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Wraps a PKCS#1 RSA private key in unencrypted DER PrivateKeyInfo.
@@ -1510,7 +1510,7 @@ Wraps a PKCS#1 RSA private key in unencrypted DER PrivateKeyInfo.
 [rsa.crb:166](../stdlib/src/crypto/rsa/rsa.crb#L166)
 
 ```rust
-pub fn public_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn public_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Reads PUBLIC KEY or RSA PUBLIC KEY PEM and writes canonical PKCS#1 DER.
@@ -1520,7 +1520,7 @@ Reads PUBLIC KEY or RSA PUBLIC KEY PEM and writes canonical PKCS#1 DER.
 [rsa.crb:173](../stdlib/src/crypto/rsa/rsa.crb#L173)
 
 ```rust
-pub fn private_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn private_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Reads PRIVATE KEY or RSA PRIVATE KEY PEM and writes canonical PKCS#1 DER.
@@ -1530,7 +1530,7 @@ Reads PRIVATE KEY or RSA PRIVATE KEY PEM and writes canonical PKCS#1 DER.
 [rsa.crb:188](../stdlib/src/crypto/rsa/rsa.crb#L188)
 
 ```rust
-pub fn public_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn public_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes a PUBLIC KEY PEM block using caller-owned DER scratch.
@@ -1540,7 +1540,7 @@ Writes a PUBLIC KEY PEM block using caller-owned DER scratch.
 [rsa.crb:197](../stdlib/src/crypto/rsa/rsa.crb#L197)
 
 ```rust
-pub fn private_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn private_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes an unencrypted PRIVATE KEY PEM block using caller-owned DER scratch.
@@ -1550,7 +1550,7 @@ Writes an unencrypted PRIVATE KEY PEM block using caller-owned DER scratch.
 [rsa.crb:206](../stdlib/src/crypto/rsa/rsa.crb#L206)
 
 ```rust
-pub fn public_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn public_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes an RSA PUBLIC KEY PEM block containing the supplied PKCS#1 key.
@@ -1560,7 +1560,7 @@ Writes an RSA PUBLIC KEY PEM block containing the supplied PKCS#1 key.
 [rsa.crb:214](../stdlib/src/crypto/rsa/rsa.crb#L214)
 
 ```rust
-pub fn private_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn private_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes an unencrypted RSA PRIVATE KEY PEM block containing the supplied PKCS#1 key.
@@ -1591,7 +1591,7 @@ Members:
 [hkdf.crb:15](../stdlib/src/crypto/sha256/hkdf.crb#L15)
 
 ```rust
-pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 32], HashError>
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) Result<[u8; 32], HashError>
 ```
 
 Derives a pseudorandom key from salt and input key material using HMAC.
@@ -1601,7 +1601,7 @@ Derives a pseudorandom key from salt and input key material using HMAC.
 [hkdf.crb:23](../stdlib/src/crypto/sha256/hkdf.crb#L23)
 
 ```rust
-pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError>
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) Result<(), KdfError>
 ```
 
 Fills the output with derived key material using the pseudorandom key and context.
@@ -1615,7 +1615,7 @@ HMAC authentication using SHA-256.
 [hmac.crb:7](../stdlib/src/crypto/sha256/hmac.crb#L7)
 
 ```rust
-pub fn hmac_parts(key: &[u8], prefix: &[u8], message: &[u8], suffix: &[u8]) -> Result<[u8; 32], HashError>
+pub fn hmac_parts(key: &[u8], prefix: &[u8], message: &[u8], suffix: &[u8]) Result<[u8; 32], HashError>
 ```
 
 Computes HMAC over the concatenation of its input fragments.
@@ -1625,7 +1625,7 @@ Computes HMAC over the concatenation of its input fragments.
 [hmac.crb:70](../stdlib/src/crypto/sha256/hmac.crb#L70)
 
 ```rust
-pub fn hmac(key: &[u8], message: &[u8]) -> Result<[u8; 32], HashError>
+pub fn hmac(key: &[u8], message: &[u8]) Result<[u8; 32], HashError>
 ```
 
 Computes the HMAC authentication tag of a message with the supplied key.
@@ -1666,70 +1666,70 @@ Members:
 
 ### `Sha256::portable`
 
-[sha256.crb:27](../stdlib/src/crypto/sha256/sha256.crb#L27)
+[sha256.crb:25](../stdlib/src/crypto/sha256/sha256.crb#L25)
 
 ```rust
-fn portable() -> Sha256
+fn portable() Sha256
 ```
 
 Creates a fresh SHA-256 hasher that uses portable compression.
 
 ### `Sha256::new`
 
-[sha256.crb:38](../stdlib/src/crypto/sha256/sha256.crb#L38)
+[sha256.crb:36](../stdlib/src/crypto/sha256/sha256.crb#L36)
 
 ```rust
-fn new() -> Sha256
+fn new() Sha256
 ```
 
 Creates a fresh SHA-256 hasher and selects an available compression backend.
 
 ### `Sha256::hardware_accelerated`
 
-[sha256.crb:46](../stdlib/src/crypto/sha256/sha256.crb#L46)
+[sha256.crb:44](../stdlib/src/crypto/sha256/sha256.crb#L44)
 
 ```rust
-fn hardware_accelerated(&self) -> bool
+fn hardware_accelerated(&self) bool
 ```
 
 Reports whether this hasher uses the hardware compression path.
 
 ### `Sha256::snapshot`
 
-[sha256.crb:49](../stdlib/src/crypto/sha256/sha256.crb#L49)
+[sha256.crb:47](../stdlib/src/crypto/sha256/sha256.crb#L47)
 
 ```rust
-fn snapshot(&self) -> [u8; 32]
+fn snapshot(&self) [u8; 32]
 ```
 
 Computes the digest of the bytes seen so far while keeping the hasher available.
 
 ### `Sha256::update`
 
-[sha256.crb:71](../stdlib/src/crypto/sha256/sha256.crb#L71)
+[sha256.crb:69](../stdlib/src/crypto/sha256/sha256.crb#L69)
 
 ```rust
-fn update(&mut self, input: &[u8]) -> Result<(), HashError>
+fn update(&mut self, input: &[u8]) Result<(), HashError>
 ```
 
 Feeds a byte slice into the hash, compressing full blocks and retaining the remainder.
 
 ### `Sha256::finish`
 
-[sha256.crb:94](../stdlib/src/crypto/sha256/sha256.crb#L94)
+[sha256.crb:92](../stdlib/src/crypto/sha256/sha256.crb#L92)
 
 ```rust
-fn finish(mut self: Sha256) -> [u8; 32]
+fn finish(mut self: Sha256) [u8; 32]
 ```
 
 Consumes the hasher and returns its 32-byte digest after padding the message.
 
 ### `digest`
 
-[sha256.crb:139](../stdlib/src/crypto/sha256/sha256.crb#L139)
+[sha256.crb:138](../stdlib/src/crypto/sha256/sha256.crb#L138)
 
 ```rust
-pub fn digest(input: &[u8]) -> Result<[u8; 32], HashError>
+pub fn digest(input: &[u8]) Result<[u8; 32], HashError>
 ```
 
 Computes a SHA-256 digest in one call.
@@ -1753,61 +1753,19 @@ Members:
 
 - [`state`](../stdlib/src/crypto/sha3/sha3.crb#L26) (implementation field): Internal chaining or sponge state retained between updates.
 
-### `Sha3_256`
+### `Sha3_224::new`
 
 [sha3.crb:29](../stdlib/src/crypto/sha3/sha3.crb#L29)
 
 ```rust
-pub struct Sha3_256
-```
-
-Streaming SHA3-256 sponge with a 32-byte digest.
-
-Members:
-
-- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L31) (implementation field): Internal chaining or sponge state retained between updates.
-
-### `Sha3_384`
-
-[sha3.crb:34](../stdlib/src/crypto/sha3/sha3.crb#L34)
-
-```rust
-pub struct Sha3_384
-```
-
-Streaming SHA3-384 sponge with a 48-byte digest.
-
-Members:
-
-- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L36) (implementation field): Internal chaining or sponge state retained between updates.
-
-### `Sha3_512`
-
-[sha3.crb:39](../stdlib/src/crypto/sha3/sha3.crb#L39)
-
-```rust
-pub struct Sha3_512
-```
-
-Streaming SHA3-512 sponge with a 64-byte digest.
-
-Members:
-
-- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L41) (implementation field): Internal chaining or sponge state retained between updates.
-
-### `Sha3_224::new`
-
-[sha3.crb:109](../stdlib/src/crypto/sha3/sha3.crb#L109)
-
-```rust
-fn new() -> Sha3_224
+fn new() Sha3_224
 ```
 
 Creates an empty streaming hasher for this SHA-3 variant.
 
 ### `Sha3_224::update`
 
-[sha3.crb:115](../stdlib/src/crypto/sha3/sha3.crb#L115)
+[sha3.crb:35](../stdlib/src/crypto/sha3/sha3.crb#L35)
 
 ```rust
 fn update(&mut self, input: &[u8])
@@ -1817,27 +1775,41 @@ Absorbs the input into this variant's sponge.
 
 ### `Sha3_224::finish`
 
-[sha3.crb:120](../stdlib/src/crypto/sha3/sha3.crb#L120)
+[sha3.crb:40](../stdlib/src/crypto/sha3/sha3.crb#L40)
 
 ```rust
-fn finish(mut self: Sha3_224) -> [u8; 28]
+fn finish(mut self: Sha3_224) [u8; 28]
 ```
 
 Consumes the hasher and returns the fixed-length digest.
 
-### `Sha3_256::new`
+### `Sha3_256`
 
-[sha3.crb:129](../stdlib/src/crypto/sha3/sha3.crb#L129)
+[sha3.crb:47](../stdlib/src/crypto/sha3/sha3.crb#L47)
 
 ```rust
-fn new() -> Sha3_256
+pub struct Sha3_256
+```
+
+Streaming SHA3-256 sponge with a 32-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L49) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_256::new`
+
+[sha3.crb:52](../stdlib/src/crypto/sha3/sha3.crb#L52)
+
+```rust
+fn new() Sha3_256
 ```
 
 Creates an empty streaming hasher for this SHA-3 variant.
 
 ### `Sha3_256::update`
 
-[sha3.crb:135](../stdlib/src/crypto/sha3/sha3.crb#L135)
+[sha3.crb:58](../stdlib/src/crypto/sha3/sha3.crb#L58)
 
 ```rust
 fn update(&mut self, input: &[u8])
@@ -1847,27 +1819,41 @@ Absorbs the input into this variant's sponge.
 
 ### `Sha3_256::finish`
 
-[sha3.crb:140](../stdlib/src/crypto/sha3/sha3.crb#L140)
+[sha3.crb:63](../stdlib/src/crypto/sha3/sha3.crb#L63)
 
 ```rust
-fn finish(mut self: Sha3_256) -> [u8; 32]
+fn finish(mut self: Sha3_256) [u8; 32]
 ```
 
 Consumes the hasher and returns the fixed-length digest.
 
-### `Sha3_384::new`
+### `Sha3_384`
 
-[sha3.crb:149](../stdlib/src/crypto/sha3/sha3.crb#L149)
+[sha3.crb:70](../stdlib/src/crypto/sha3/sha3.crb#L70)
 
 ```rust
-fn new() -> Sha3_384
+pub struct Sha3_384
+```
+
+Streaming SHA3-384 sponge with a 48-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L72) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_384::new`
+
+[sha3.crb:75](../stdlib/src/crypto/sha3/sha3.crb#L75)
+
+```rust
+fn new() Sha3_384
 ```
 
 Creates an empty streaming hasher for this SHA-3 variant.
 
 ### `Sha3_384::update`
 
-[sha3.crb:155](../stdlib/src/crypto/sha3/sha3.crb#L155)
+[sha3.crb:81](../stdlib/src/crypto/sha3/sha3.crb#L81)
 
 ```rust
 fn update(&mut self, input: &[u8])
@@ -1877,27 +1863,41 @@ Absorbs the input into this variant's sponge.
 
 ### `Sha3_384::finish`
 
-[sha3.crb:160](../stdlib/src/crypto/sha3/sha3.crb#L160)
+[sha3.crb:86](../stdlib/src/crypto/sha3/sha3.crb#L86)
 
 ```rust
-fn finish(mut self: Sha3_384) -> [u8; 48]
+fn finish(mut self: Sha3_384) [u8; 48]
 ```
 
 Consumes the hasher and returns the fixed-length digest.
 
-### `Sha3_512::new`
+### `Sha3_512`
 
-[sha3.crb:169](../stdlib/src/crypto/sha3/sha3.crb#L169)
+[sha3.crb:93](../stdlib/src/crypto/sha3/sha3.crb#L93)
 
 ```rust
-fn new() -> Sha3_512
+pub struct Sha3_512
+```
+
+Streaming SHA3-512 sponge with a 64-byte digest.
+
+Members:
+
+- [`state`](../stdlib/src/crypto/sha3/sha3.crb#L95) (implementation field): Internal chaining or sponge state retained between updates.
+
+### `Sha3_512::new`
+
+[sha3.crb:98](../stdlib/src/crypto/sha3/sha3.crb#L98)
+
+```rust
+fn new() Sha3_512
 ```
 
 Creates an empty streaming hasher for this SHA-3 variant.
 
 ### `Sha3_512::update`
 
-[sha3.crb:175](../stdlib/src/crypto/sha3/sha3.crb#L175)
+[sha3.crb:104](../stdlib/src/crypto/sha3/sha3.crb#L104)
 
 ```rust
 fn update(&mut self, input: &[u8])
@@ -1907,50 +1907,50 @@ Absorbs the input into this variant's sponge.
 
 ### `Sha3_512::finish`
 
-[sha3.crb:180](../stdlib/src/crypto/sha3/sha3.crb#L180)
+[sha3.crb:109](../stdlib/src/crypto/sha3/sha3.crb#L109)
 
 ```rust
-fn finish(mut self: Sha3_512) -> [u8; 64]
+fn finish(mut self: Sha3_512) [u8; 64]
 ```
 
 Consumes the hasher and returns the fixed-length digest.
 
 ### `digest224`
 
-[sha3.crb:188](../stdlib/src/crypto/sha3/sha3.crb#L188)
+[sha3.crb:185](../stdlib/src/crypto/sha3/sha3.crb#L185)
 
 ```rust
-pub fn digest224(input: &[u8]) -> [u8; 28]
+pub fn digest224(input: &[u8]) [u8; 28]
 ```
 
 Computes a 28-byte SHA3-224 digest.
 
 ### `digest256`
 
-[sha3.crb:195](../stdlib/src/crypto/sha3/sha3.crb#L195)
+[sha3.crb:192](../stdlib/src/crypto/sha3/sha3.crb#L192)
 
 ```rust
-pub fn digest256(input: &[u8]) -> [u8; 32]
+pub fn digest256(input: &[u8]) [u8; 32]
 ```
 
 Computes a 32-byte SHA3-256 digest.
 
 ### `digest384`
 
-[sha3.crb:202](../stdlib/src/crypto/sha3/sha3.crb#L202)
+[sha3.crb:199](../stdlib/src/crypto/sha3/sha3.crb#L199)
 
 ```rust
-pub fn digest384(input: &[u8]) -> [u8; 48]
+pub fn digest384(input: &[u8]) [u8; 48]
 ```
 
 Computes a 48-byte SHA3-384 digest.
 
 ### `digest512`
 
-[sha3.crb:209](../stdlib/src/crypto/sha3/sha3.crb#L209)
+[sha3.crb:206](../stdlib/src/crypto/sha3/sha3.crb#L206)
 
 ```rust
-pub fn digest512(input: &[u8]) -> [u8; 64]
+pub fn digest512(input: &[u8]) [u8; 64]
 ```
 
 Computes a 64-byte SHA3-512 digest.
@@ -2004,7 +2004,7 @@ Members:
 [hkdf.crb:17](../stdlib/src/crypto/sha384/hkdf.crb#L17)
 
 ```rust
-pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 48], HashError>
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) Result<[u8; 48], HashError>
 ```
 
 Derives a pseudorandom key from salt and input key material using HMAC.
@@ -2014,7 +2014,7 @@ Derives a pseudorandom key from salt and input key material using HMAC.
 [hkdf.crb:25](../stdlib/src/crypto/sha384/hkdf.crb#L25)
 
 ```rust
-pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError>
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) Result<(), KdfError>
 ```
 
 Fills the output with derived key material using the pseudorandom key and context.
@@ -2028,7 +2028,7 @@ HMAC authentication using SHA-384.
 [hmac.crb:72](../stdlib/src/crypto/sha384/hmac.crb#L72)
 
 ```rust
-pub fn hmac(key: &[u8], message: &[u8]) -> Result<[u8; 48], HashError>
+pub fn hmac(key: &[u8], message: &[u8]) Result<[u8; 48], HashError>
 ```
 
 Computes the HMAC authentication tag of a message with the supplied key.
@@ -2066,9 +2066,39 @@ Members:
 
 - [`state`](../stdlib/src/crypto/sha512/sha512.crb#L29) (implementation field): Internal chaining or sponge state retained between updates.
 
-### `Sha512`
+### `Sha384::new`
 
 [sha512.crb:32](../stdlib/src/crypto/sha512/sha512.crb#L32)
+
+```rust
+fn new() Sha384
+```
+
+Creates a fresh hasher with this variant's initial chaining values.
+
+### `Sha384::update`
+
+[sha512.crb:44](../stdlib/src/crypto/sha512/sha512.crb#L44)
+
+```rust
+fn update(&mut self, input: &[u8]) Result<(), HashError>
+```
+
+Adds input bytes and checks the maximum message length.
+
+### `Sha384::finish`
+
+[sha512.crb:49](../stdlib/src/crypto/sha512/sha512.crb#L49)
+
+```rust
+fn finish(mut self: Sha384) [u8; 48]
+```
+
+Consumes the hasher and returns the digest for this variant.
+
+### `Sha512`
+
+[sha512.crb:56](../stdlib/src/crypto/sha512/sha512.crb#L56)
 
 ```rust
 pub struct Sha512
@@ -2078,84 +2108,54 @@ Streaming SHA-512 state with a 64-byte digest.
 
 Members:
 
-- [`state`](../stdlib/src/crypto/sha512/sha512.crb#L34) (implementation field): Internal chaining or sponge state retained between updates.
-
-### `Sha384::new`
-
-[sha512.crb:135](../stdlib/src/crypto/sha512/sha512.crb#L135)
-
-```rust
-fn new() -> Sha384
-```
-
-Creates a fresh hasher with this variant's initial chaining values.
-
-### `Sha384::update`
-
-[sha512.crb:147](../stdlib/src/crypto/sha512/sha512.crb#L147)
-
-```rust
-fn update(&mut self, input: &[u8]) -> Result<(), HashError>
-```
-
-Adds input bytes and checks the maximum message length.
-
-### `Sha384::finish`
-
-[sha512.crb:152](../stdlib/src/crypto/sha512/sha512.crb#L152)
-
-```rust
-fn finish(mut self: Sha384) -> [u8; 48]
-```
-
-Consumes the hasher and returns the digest for this variant.
+- [`state`](../stdlib/src/crypto/sha512/sha512.crb#L58) (implementation field): Internal chaining or sponge state retained between updates.
 
 ### `Sha512::new`
 
-[sha512.crb:161](../stdlib/src/crypto/sha512/sha512.crb#L161)
+[sha512.crb:61](../stdlib/src/crypto/sha512/sha512.crb#L61)
 
 ```rust
-fn new() -> Sha512
+fn new() Sha512
 ```
 
 Creates a fresh hasher with this variant's initial chaining values.
 
 ### `Sha512::update`
 
-[sha512.crb:173](../stdlib/src/crypto/sha512/sha512.crb#L173)
+[sha512.crb:73](../stdlib/src/crypto/sha512/sha512.crb#L73)
 
 ```rust
-fn update(&mut self, input: &[u8]) -> Result<(), HashError>
+fn update(&mut self, input: &[u8]) Result<(), HashError>
 ```
 
 Adds input bytes and checks the maximum message length.
 
 ### `Sha512::finish`
 
-[sha512.crb:178](../stdlib/src/crypto/sha512/sha512.crb#L178)
+[sha512.crb:78](../stdlib/src/crypto/sha512/sha512.crb#L78)
 
 ```rust
-fn finish(mut self: Sha512) -> [u8; 64]
+fn finish(mut self: Sha512) [u8; 64]
 ```
 
 Consumes the hasher and returns the digest for this variant.
 
 ### `digest384`
 
-[sha512.crb:186](../stdlib/src/crypto/sha512/sha512.crb#L186)
+[sha512.crb:184](../stdlib/src/crypto/sha512/sha512.crb#L184)
 
 ```rust
-pub fn digest384(input: &[u8]) -> Result<[u8; 48], HashError>
+pub fn digest384(input: &[u8]) Result<[u8; 48], HashError>
 ```
 
 Computes a 48-byte SHA-384 digest.
 
 ### `digest512`
 
-[sha512.crb:195](../stdlib/src/crypto/sha512/sha512.crb#L195)
+[sha512.crb:193](../stdlib/src/crypto/sha512/sha512.crb#L193)
 
 ```rust
-pub fn digest512(input: &[u8]) -> Result<[u8; 64], HashError>
+pub fn digest512(input: &[u8]) Result<[u8; 64], HashError>
 ```
 
 Computes a 64-byte SHA-512 digest.
@@ -2200,9 +2200,89 @@ Members:
 - [`fingerprint`](../stdlib/src/crypto/x509/certificate.crb#L175) (implementation field): SHA-256 certificate fingerprint binding the wrapper to its original DER bytes.
 - [`encoded_key`](../stdlib/src/crypto/x509/certificate.crb#L177) (implementation field): Uncompressed SEC1 P-256 public-key bytes extracted from the certificate.
 
+### `Certificate::from_der`
+
+[certificate.crb:180](../stdlib/src/crypto/x509/certificate.crb#L180)
+
+```rust
+fn from_der(input: &[u8], now: i64) Result<Certificate, CertificateError>
+```
+
+Parses one DER certificate and validates its time window at the supplied Unix time.
+
+### `Certificate::from_pem`
+
+[certificate.crb:208](../stdlib/src/crypto/x509/certificate.crb#L208)
+
+```rust
+fn from_pem(input: &[u8], scratch: &mut [u8], now: i64) Result<Certificate, CertificateError>
+```
+
+Decodes one CERTIFICATE block into scratch and parses its DER at the supplied Unix time.
+
+### `Certificate::der_len`
+
+[certificate.crb:225](../stdlib/src/crypto/x509/certificate.crb#L225)
+
+```rust
+fn der_len(&self) u64
+```
+
+Returns the exact DER length for slicing the caller's original or decoded bytes.
+
+### `Certificate::to_der`
+
+[certificate.crb:231](../stdlib/src/crypto/x509/certificate.crb#L231)
+
+```rust
+fn to_der(&self, input: &[u8], output: &mut [u8]) Result<usize, CertificateError>
+```
+
+Verifies the caller's backing DER and writes its original signed bytes to output.
+
+### `Certificate::to_pem`
+
+[certificate.crb:244](../stdlib/src/crypto/x509/certificate.crb#L244)
+
+```rust
+fn to_pem(&self, input: &[u8], output: &mut [u8]) Result<usize, CertificateError>
+```
+
+Verifies the backing DER and writes it in a CERTIFICATE PEM block.
+
+### `Certificate::public_key`
+
+[certificate.crb:256](../stdlib/src/crypto/x509/certificate.crb#L256)
+
+```rust
+fn public_key(&self) Result<PublicKey, CertificateError>
+```
+
+Returns a validated P-256 verification key from the certificate's encoded public point.
+
+### `Certificate::matches_dns_name`
+
+[certificate.crb:267](../stdlib/src/crypto/x509/certificate.crb#L267)
+
+```rust
+fn matches_dns_name(&self, input: &[u8], name: &[u8]) Result<bool, CertificateError>
+```
+
+Checks a reference DNS name against the certificate's DNS SANs using its original DER.
+
+### `Certificate::verify_issued_by`
+
+[certificate.crb:279](../stdlib/src/crypto/x509/certificate.crb#L279)
+
+```rust
+fn verify_issued_by(&self, input: &[u8], issuer: &Certificate, issuer_der: &[u8]) Result<bool, CertificateError>
+```
+
+Checks the original DER of both certificates, then verifies the issuer name and signature.
+
 ### `PublicKey`
 
-[certificate.crb:181](../stdlib/src/crypto/x509/certificate.crb#L181)
+[certificate.crb:293](../stdlib/src/crypto/x509/certificate.crb#L293)
 
 ```rust
 pub struct PublicKey
@@ -2212,164 +2292,84 @@ Wraps the P-256 verification key used by the X.509 profile.
 
 Members:
 
-- [`p256`](../stdlib/src/crypto/x509/certificate.crb#L183) (implementation field): Owned parsed P-256 verification key.
+- [`p256`](../stdlib/src/crypto/x509/certificate.crb#L295) (implementation field): Owned parsed P-256 verification key.
 
 ### `PublicKey::from_p256_sec1`
 
-[certificate.crb:188](../stdlib/src/crypto/x509/certificate.crb#L188)
+[certificate.crb:298](../stdlib/src/crypto/x509/certificate.crb#L298)
 
 ```rust
-fn from_p256_sec1(encoded: &[u8]) -> Result<PublicKey, CertificateError>
+fn from_p256_sec1(encoded: &[u8]) Result<PublicKey, CertificateError>
 ```
 
 Checks and wraps a P-256 public point encoded in uncompressed SEC1 form.
 
 ### `PublicKey::from_der`
 
-[certificate.crb:199](../stdlib/src/crypto/x509/certificate.crb#L199)
+[certificate.crb:309](../stdlib/src/crypto/x509/certificate.crb#L309)
 
 ```rust
-fn from_der(input: &[u8]) -> Result<PublicKey, CertificateError>
+fn from_der(input: &[u8]) Result<PublicKey, CertificateError>
 ```
 
 Imports a P-256 SubjectPublicKeyInfo for X.509 signature verification.
 
 ### `PublicKey::from_pem`
 
-[certificate.crb:210](../stdlib/src/crypto/x509/certificate.crb#L210)
+[certificate.crb:320](../stdlib/src/crypto/x509/certificate.crb#L320)
 
 ```rust
-fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<PublicKey, CertificateError>
+fn from_pem(input: &[u8], scratch: &mut [u8]) Result<PublicKey, CertificateError>
 ```
 
 Imports one PEM PUBLIC KEY block using caller-owned scratch.
 
 ### `PublicKey::to_der`
 
-[certificate.crb:231](../stdlib/src/crypto/x509/certificate.crb#L231)
+[certificate.crb:341](../stdlib/src/crypto/x509/certificate.crb#L341)
 
 ```rust
-fn to_der(&self, output: &mut [u8]) -> Result<usize, CertificateError>
+fn to_der(&self, output: &mut [u8]) Result<usize, CertificateError>
 ```
 
 Writes the public key as DER SubjectPublicKeyInfo and returns the bytes written.
 
 ### `PublicKey::to_pem`
 
-[certificate.crb:240](../stdlib/src/crypto/x509/certificate.crb#L240)
+[certificate.crb:350](../stdlib/src/crypto/x509/certificate.crb#L350)
 
 ```rust
-fn to_pem(&self, output: &mut [u8]) -> Result<usize, CertificateError>
+fn to_pem(&self, output: &mut [u8]) Result<usize, CertificateError>
 ```
 
 Writes the public key as one PUBLIC KEY PEM block and returns the bytes written.
 
 ### `PublicKey::verify_ecdsa_sha256`
 
-[certificate.crb:249](../stdlib/src/crypto/x509/certificate.crb#L249)
+[certificate.crb:359](../stdlib/src/crypto/x509/certificate.crb#L359)
 
 ```rust
-fn verify_ecdsa_sha256(&self, message: &[u8], signature: &[u8]) -> Result<bool, CertificateError>
+fn verify_ecdsa_sha256(&self, message: &[u8], signature: &[u8]) Result<bool, CertificateError>
 ```
 
 Verifies a DER ECDSA signature over the SHA-256 digest of the supplied message.
 
-### `Certificate::from_der`
-
-[certificate.crb:276](../stdlib/src/crypto/x509/certificate.crb#L276)
-
-```rust
-fn from_der(input: &[u8], now: i64) -> Result<Certificate, CertificateError>
-```
-
-Parses one DER certificate and validates its time window at the supplied Unix time.
-
-### `Certificate::from_pem`
-
-[certificate.crb:304](../stdlib/src/crypto/x509/certificate.crb#L304)
-
-```rust
-fn from_pem(input: &[u8], scratch: &mut [u8], now: i64) -> Result<Certificate, CertificateError>
-```
-
-Decodes one CERTIFICATE block into scratch and parses its DER at the supplied Unix time.
-
-### `Certificate::der_len`
-
-[certificate.crb:321](../stdlib/src/crypto/x509/certificate.crb#L321)
-
-```rust
-fn der_len(&self) -> u64
-```
-
-Returns the exact DER length for slicing the caller's original or decoded bytes.
-
-### `Certificate::to_der`
-
-[certificate.crb:327](../stdlib/src/crypto/x509/certificate.crb#L327)
-
-```rust
-fn to_der(&self, input: &[u8], output: &mut [u8]) -> Result<usize, CertificateError>
-```
-
-Verifies the caller's backing DER and writes its original signed bytes to output.
-
-### `Certificate::to_pem`
-
-[certificate.crb:340](../stdlib/src/crypto/x509/certificate.crb#L340)
-
-```rust
-fn to_pem(&self, input: &[u8], output: &mut [u8]) -> Result<usize, CertificateError>
-```
-
-Verifies the backing DER and writes it in a CERTIFICATE PEM block.
-
-### `Certificate::public_key`
-
-[certificate.crb:352](../stdlib/src/crypto/x509/certificate.crb#L352)
-
-```rust
-fn public_key(&self) -> Result<PublicKey, CertificateError>
-```
-
-Returns a validated P-256 verification key from the certificate's encoded public point.
-
-### `Certificate::matches_dns_name`
-
-[certificate.crb:363](../stdlib/src/crypto/x509/certificate.crb#L363)
-
-```rust
-fn matches_dns_name(&self, input: &[u8], name: &[u8]) -> Result<bool, CertificateError>
-```
-
-Checks a reference DNS name against the certificate's DNS SANs using its original DER.
-
-### `Certificate::verify_issued_by`
-
-[certificate.crb:375](../stdlib/src/crypto/x509/certificate.crb#L375)
-
-```rust
-fn verify_issued_by(&self, input: &[u8], issuer: &Certificate, issuer_der: &[u8]) -> Result<bool, CertificateError>
-```
-
-Checks the original DER of both certificates, then verifies the issuer name and signature.
-
 ### `validate_server_path`
 
-[certificate.crb:443](../stdlib/src/crypto/x509/certificate.crb#L443)
+[certificate.crb:441](../stdlib/src/crypto/x509/certificate.crb#L441)
 
 ```rust
-pub fn validate_server_path(chain: &[u8], ranges: &[u64; 16], count: u64, anchor: &[u8], hostname: &[u8], now: i64) -> Result<PublicKey, CertificateError>
+pub fn validate_server_path(chain: &[u8], ranges: &[u64; 16], count: u64, anchor: &[u8], hostname: &[u8], now: i64) Result<PublicKey, CertificateError>
 ```
 
 Validates ranged DER entries in a leaf-first chain and returns the verified DNS server key.
 
 ### `validate_server_chain`
 
-[certificate.crb:483](../stdlib/src/crypto/x509/certificate.crb#L483)
+[certificate.crb:481](../stdlib/src/crypto/x509/certificate.crb#L481)
 
 ```rust
-pub fn validate_server_chain(chain: &[u8], anchor: &[u8], hostname: &[u8], now: i64) -> Result<PublicKey, CertificateError>
+pub fn validate_server_chain(chain: &[u8], anchor: &[u8], hostname: &[u8], now: i64) Result<PublicKey, CertificateError>
 ```
 
 Validates up to eight concatenated DER certificates against the trust anchor and DNS name.
@@ -2382,7 +2382,7 @@ X.509 DNS identity matching and certificate validity time parsing.
 [identity.crb:12](../stdlib/src/crypto/x509/identity.crb#L12)
 
 ```rust
-pub fn valid_dns_name(name: &[u8]) -> bool
+pub fn valid_dns_name(name: &[u8]) bool
 ```
 
 Checks the syntax and size bounds of a reference DNS name.
@@ -2414,7 +2414,7 @@ Members:
 [base64.crb:37](../stdlib/src/encoding/base64/base64.crb#L37)
 
 ```rust
-pub fn encode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn encode(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes standard padded Base64 and returns the bytes written. A short output is left unchanged.
@@ -2424,7 +2424,7 @@ Writes standard padded Base64 and returns the bytes written. A short output is l
 [base64.crb:119](../stdlib/src/encoding/base64/base64.crb#L119)
 
 ```rust
-pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn decode(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Decodes canonical padded Base64 without whitespace. Errors leave the output unchanged.
@@ -2434,7 +2434,7 @@ Decodes canonical padded Base64 without whitespace. Errors leave the output unch
 [base64.crb:125](../stdlib/src/encoding/base64/base64.crb#L125)
 
 ```rust
-pub fn decode_wrapped(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn decode_wrapped(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Decodes canonical Base64 while allowing ASCII spaces, tabs, CR and LF.
@@ -2466,7 +2466,7 @@ Members:
 [binary.crb:15](../stdlib/src/encoding/binary/binary.crb#L15)
 
 ```rust
-pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+pub fn read_u8(input: &[u8]) Result<u8, Error>
 ```
 
 Reads 1 bytes as u8.
@@ -2476,7 +2476,7 @@ Reads 1 bytes as u8.
 [binary.crb:22](../stdlib/src/encoding/binary/binary.crb#L22)
 
 ```rust
-pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 1 bytes of u8; short-buffer errors leave output unchanged.
@@ -2486,7 +2486,7 @@ Writes 1 bytes of u8; short-buffer errors leave output unchanged.
 [binary.crb:31](../stdlib/src/encoding/binary/binary.crb#L31)
 
 ```rust
-pub fn read_u16_le(input: &[u8]) -> Result<u16, Error>
+pub fn read_u16_le(input: &[u8]) Result<u16, Error>
 ```
 
 Reads 2 bytes as u16 in le order.
@@ -2496,7 +2496,7 @@ Reads 2 bytes as u16 in le order.
 [binary.crb:47](../stdlib/src/encoding/binary/binary.crb#L47)
 
 ```rust
-pub fn write_u16_le(value: u16, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u16_le(value: u16, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 2 bytes of u16; short-buffer errors leave output unchanged.
@@ -2506,7 +2506,7 @@ Writes 2 bytes of u16; short-buffer errors leave output unchanged.
 [binary.crb:64](../stdlib/src/encoding/binary/binary.crb#L64)
 
 ```rust
-pub fn read_u16_be(input: &[u8]) -> Result<u16, Error>
+pub fn read_u16_be(input: &[u8]) Result<u16, Error>
 ```
 
 Reads 2 bytes as u16 in be order.
@@ -2516,7 +2516,7 @@ Reads 2 bytes as u16 in be order.
 [binary.crb:80](../stdlib/src/encoding/binary/binary.crb#L80)
 
 ```rust
-pub fn write_u16_be(value: u16, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u16_be(value: u16, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 2 bytes of u16; short-buffer errors leave output unchanged.
@@ -2526,7 +2526,7 @@ Writes 2 bytes of u16; short-buffer errors leave output unchanged.
 [binary.crb:97](../stdlib/src/encoding/binary/binary.crb#L97)
 
 ```rust
-pub fn read_u32_le(input: &[u8]) -> Result<u32, Error>
+pub fn read_u32_le(input: &[u8]) Result<u32, Error>
 ```
 
 Reads 4 bytes as u32 in le order.
@@ -2536,7 +2536,7 @@ Reads 4 bytes as u32 in le order.
 [binary.crb:113](../stdlib/src/encoding/binary/binary.crb#L113)
 
 ```rust
-pub fn write_u32_le(value: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u32_le(value: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 4 bytes of u32; short-buffer errors leave output unchanged.
@@ -2546,7 +2546,7 @@ Writes 4 bytes of u32; short-buffer errors leave output unchanged.
 [binary.crb:130](../stdlib/src/encoding/binary/binary.crb#L130)
 
 ```rust
-pub fn read_u32_be(input: &[u8]) -> Result<u32, Error>
+pub fn read_u32_be(input: &[u8]) Result<u32, Error>
 ```
 
 Reads 4 bytes as u32 in be order.
@@ -2556,7 +2556,7 @@ Reads 4 bytes as u32 in be order.
 [binary.crb:146](../stdlib/src/encoding/binary/binary.crb#L146)
 
 ```rust
-pub fn write_u32_be(value: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u32_be(value: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 4 bytes of u32; short-buffer errors leave output unchanged.
@@ -2566,7 +2566,7 @@ Writes 4 bytes of u32; short-buffer errors leave output unchanged.
 [binary.crb:163](../stdlib/src/encoding/binary/binary.crb#L163)
 
 ```rust
-pub fn read_u64_le(input: &[u8]) -> Result<u64, Error>
+pub fn read_u64_le(input: &[u8]) Result<u64, Error>
 ```
 
 Reads 8 bytes as u64 in le order.
@@ -2576,7 +2576,7 @@ Reads 8 bytes as u64 in le order.
 [binary.crb:179](../stdlib/src/encoding/binary/binary.crb#L179)
 
 ```rust
-pub fn write_u64_le(value: u64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u64_le(value: u64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 8 bytes of u64; short-buffer errors leave output unchanged.
@@ -2586,7 +2586,7 @@ Writes 8 bytes of u64; short-buffer errors leave output unchanged.
 [binary.crb:196](../stdlib/src/encoding/binary/binary.crb#L196)
 
 ```rust
-pub fn read_u64_be(input: &[u8]) -> Result<u64, Error>
+pub fn read_u64_be(input: &[u8]) Result<u64, Error>
 ```
 
 Reads 8 bytes as u64 in be order.
@@ -2596,7 +2596,7 @@ Reads 8 bytes as u64 in be order.
 [binary.crb:212](../stdlib/src/encoding/binary/binary.crb#L212)
 
 ```rust
-pub fn write_u64_be(value: u64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u64_be(value: u64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes 8 bytes of u64; short-buffer errors leave output unchanged.
@@ -2606,7 +2606,7 @@ Writes 8 bytes of u64; short-buffer errors leave output unchanged.
 [binary.crb:309](../stdlib/src/encoding/binary/binary.crb#L309)
 
 ```rust
-pub fn read_i32_le(input: &[u8]) -> Result<i32, Error>
+pub fn read_i32_le(input: &[u8]) Result<i32, Error>
 ```
 
 Reads the 4-byte i32 representation in le order.
@@ -2616,7 +2616,7 @@ Reads the 4-byte i32 representation in le order.
 [binary.crb:314](../stdlib/src/encoding/binary/binary.crb#L314)
 
 ```rust
-pub fn write_i32_le(value: i32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i32_le(value: i32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 4-byte i32 representation in le order.
@@ -2626,7 +2626,7 @@ Writes the 4-byte i32 representation in le order.
 [binary.crb:319](../stdlib/src/encoding/binary/binary.crb#L319)
 
 ```rust
-pub fn read_i32_be(input: &[u8]) -> Result<i32, Error>
+pub fn read_i32_be(input: &[u8]) Result<i32, Error>
 ```
 
 Reads the 4-byte i32 representation in be order.
@@ -2636,7 +2636,7 @@ Reads the 4-byte i32 representation in be order.
 [binary.crb:324](../stdlib/src/encoding/binary/binary.crb#L324)
 
 ```rust
-pub fn write_i32_be(value: i32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i32_be(value: i32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 4-byte i32 representation in be order.
@@ -2646,7 +2646,7 @@ Writes the 4-byte i32 representation in be order.
 [binary.crb:409](../stdlib/src/encoding/binary/binary.crb#L409)
 
 ```rust
-pub fn read_i64_le(input: &[u8]) -> Result<i64, Error>
+pub fn read_i64_le(input: &[u8]) Result<i64, Error>
 ```
 
 Reads the 8-byte i64 representation in le order.
@@ -2656,7 +2656,7 @@ Reads the 8-byte i64 representation in le order.
 [binary.crb:414](../stdlib/src/encoding/binary/binary.crb#L414)
 
 ```rust
-pub fn write_i64_le(value: i64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i64_le(value: i64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 8-byte i64 representation in le order.
@@ -2666,7 +2666,7 @@ Writes the 8-byte i64 representation in le order.
 [binary.crb:419](../stdlib/src/encoding/binary/binary.crb#L419)
 
 ```rust
-pub fn read_i64_be(input: &[u8]) -> Result<i64, Error>
+pub fn read_i64_be(input: &[u8]) Result<i64, Error>
 ```
 
 Reads the 8-byte i64 representation in be order.
@@ -2676,7 +2676,7 @@ Reads the 8-byte i64 representation in be order.
 [binary.crb:424](../stdlib/src/encoding/binary/binary.crb#L424)
 
 ```rust
-pub fn write_i64_be(value: i64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i64_be(value: i64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 8-byte i64 representation in be order.
@@ -2686,7 +2686,7 @@ Writes the 8-byte i64 representation in be order.
 [binary.crb:509](../stdlib/src/encoding/binary/binary.crb#L509)
 
 ```rust
-pub fn read_f32_le(input: &[u8]) -> Result<f32, Error>
+pub fn read_f32_le(input: &[u8]) Result<f32, Error>
 ```
 
 Reads the 4-byte f32 representation in le order.
@@ -2696,7 +2696,7 @@ Reads the 4-byte f32 representation in le order.
 [binary.crb:514](../stdlib/src/encoding/binary/binary.crb#L514)
 
 ```rust
-pub fn write_f32_le(value: f32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f32_le(value: f32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 4-byte f32 representation in le order.
@@ -2706,7 +2706,7 @@ Writes the 4-byte f32 representation in le order.
 [binary.crb:519](../stdlib/src/encoding/binary/binary.crb#L519)
 
 ```rust
-pub fn read_f32_be(input: &[u8]) -> Result<f32, Error>
+pub fn read_f32_be(input: &[u8]) Result<f32, Error>
 ```
 
 Reads the 4-byte f32 representation in be order.
@@ -2716,7 +2716,7 @@ Reads the 4-byte f32 representation in be order.
 [binary.crb:524](../stdlib/src/encoding/binary/binary.crb#L524)
 
 ```rust
-pub fn write_f32_be(value: f32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f32_be(value: f32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 4-byte f32 representation in be order.
@@ -2726,7 +2726,7 @@ Writes the 4-byte f32 representation in be order.
 [binary.crb:609](../stdlib/src/encoding/binary/binary.crb#L609)
 
 ```rust
-pub fn read_f64_le(input: &[u8]) -> Result<f64, Error>
+pub fn read_f64_le(input: &[u8]) Result<f64, Error>
 ```
 
 Reads the 8-byte f64 representation in le order.
@@ -2736,7 +2736,7 @@ Reads the 8-byte f64 representation in le order.
 [binary.crb:614](../stdlib/src/encoding/binary/binary.crb#L614)
 
 ```rust
-pub fn write_f64_le(value: f64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f64_le(value: f64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 8-byte f64 representation in le order.
@@ -2746,7 +2746,7 @@ Writes the 8-byte f64 representation in le order.
 [binary.crb:619](../stdlib/src/encoding/binary/binary.crb#L619)
 
 ```rust
-pub fn read_f64_be(input: &[u8]) -> Result<f64, Error>
+pub fn read_f64_be(input: &[u8]) Result<f64, Error>
 ```
 
 Reads the 8-byte f64 representation in be order.
@@ -2756,7 +2756,7 @@ Reads the 8-byte f64 representation in be order.
 [binary.crb:624](../stdlib/src/encoding/binary/binary.crb#L624)
 
 ```rust
-pub fn write_f64_be(value: f64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f64_be(value: f64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes the 8-byte f64 representation in be order.
@@ -2766,7 +2766,7 @@ Writes the 8-byte f64 representation in be order.
 [binary.crb:629](../stdlib/src/encoding/binary/binary.crb#L629)
 
 ```rust
-pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+pub fn read_bool(input: &[u8]) Result<bool, Error>
 ```
 
 Reads canonical bool encoding; rejects bytes other than zero and one.
@@ -2776,7 +2776,7 @@ Reads canonical bool encoding; rejects bytes other than zero and one.
 [binary.crb:636](../stdlib/src/encoding/binary/binary.crb#L636)
 
 ```rust
-pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes one byte: zero for false, one for true.
@@ -2788,7 +2788,7 @@ Available when `target.pointer_width == "64"`.
 [binary.crb:644](../stdlib/src/encoding/binary/binary.crb#L644)
 
 ```rust
-pub fn read_usize_le(input: &[u8]) -> Result<usize, Error>
+pub fn read_usize_le(input: &[u8]) Result<usize, Error>
 ```
 
 Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed widths on disk.
@@ -2798,7 +2798,7 @@ Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed
 [binary.crb:649](../stdlib/src/encoding/binary/binary.crb#L649)
 
 ```rust
-pub fn write_usize_le(value: usize, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_usize_le(value: usize, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes a pointer-width unsigned integer on supported 64-bit targets.
@@ -2808,7 +2808,7 @@ Writes a pointer-width unsigned integer on supported 64-bit targets.
 [binary.crb:654](../stdlib/src/encoding/binary/binary.crb#L654)
 
 ```rust
-pub fn read_usize_be(input: &[u8]) -> Result<usize, Error>
+pub fn read_usize_be(input: &[u8]) Result<usize, Error>
 ```
 
 Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed widths on disk.
@@ -2818,7 +2818,7 @@ Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed
 [binary.crb:659](../stdlib/src/encoding/binary/binary.crb#L659)
 
 ```rust
-pub fn write_usize_be(value: usize, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_usize_be(value: usize, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes a pointer-width unsigned integer on supported 64-bit targets.
@@ -2837,202 +2837,182 @@ pub struct LittleEndian
 
 Converts primitive values using least-significant-byte-first encoding.
 
-### `BigEndian`
-
-[orders.crb:9](../stdlib/src/encoding/binary/orders.crb#L9)
-
-```rust
-pub struct BigEndian
-```
-
-Converts primitive values using most-significant-byte-first encoding.
-
-### `NativeEndian`
-
-[orders.crb:12](../stdlib/src/encoding/binary/orders.crb#L12)
-
-```rust
-pub struct NativeEndian
-```
-
-Uses the compilation target byte order; prefer explicit order for stored formats.
-
 ### `LittleEndian::read_u8`
 
-[orders.crb:16](../stdlib/src/encoding/binary/orders.crb#L16)
+[orders.crb:8](../stdlib/src/encoding/binary/orders.crb#L8)
 
 ```rust
-pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+pub fn read_u8(input: &[u8]) Result<u8, Error>
 ```
 
 Reads u8 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_u8`
 
-[orders.crb:21](../stdlib/src/encoding/binary/orders.crb#L21)
+[orders.crb:13](../stdlib/src/encoding/binary/orders.crb#L13)
 
 ```rust
-pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u8; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_u16`
 
-[orders.crb:26](../stdlib/src/encoding/binary/orders.crb#L26)
+[orders.crb:18](../stdlib/src/encoding/binary/orders.crb#L18)
 
 ```rust
-pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+pub fn read_u16(input: &[u8]) Result<u16, Error>
 ```
 
 Reads u16 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_u16`
 
-[orders.crb:31](../stdlib/src/encoding/binary/orders.crb#L31)
+[orders.crb:23](../stdlib/src/encoding/binary/orders.crb#L23)
 
 ```rust
-pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u16(value: u16, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u16; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_u32`
 
-[orders.crb:36](../stdlib/src/encoding/binary/orders.crb#L36)
+[orders.crb:28](../stdlib/src/encoding/binary/orders.crb#L28)
 
 ```rust
-pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+pub fn read_u32(input: &[u8]) Result<u32, Error>
 ```
 
 Reads u32 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_u32`
 
-[orders.crb:41](../stdlib/src/encoding/binary/orders.crb#L41)
+[orders.crb:33](../stdlib/src/encoding/binary/orders.crb#L33)
 
 ```rust
-pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u32(value: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u32; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_u64`
 
-[orders.crb:46](../stdlib/src/encoding/binary/orders.crb#L46)
+[orders.crb:38](../stdlib/src/encoding/binary/orders.crb#L38)
 
 ```rust
-pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+pub fn read_u64(input: &[u8]) Result<u64, Error>
 ```
 
 Reads u64 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_u64`
 
-[orders.crb:51](../stdlib/src/encoding/binary/orders.crb#L51)
+[orders.crb:43](../stdlib/src/encoding/binary/orders.crb#L43)
 
 ```rust
-pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u64(value: u64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u64; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_i32`
 
-[orders.crb:56](../stdlib/src/encoding/binary/orders.crb#L56)
+[orders.crb:48](../stdlib/src/encoding/binary/orders.crb#L48)
 
 ```rust
-pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+pub fn read_i32(input: &[u8]) Result<i32, Error>
 ```
 
 Reads i32 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_i32`
 
-[orders.crb:61](../stdlib/src/encoding/binary/orders.crb#L61)
+[orders.crb:53](../stdlib/src/encoding/binary/orders.crb#L53)
 
 ```rust
-pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i32(value: i32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i32; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_i64`
 
-[orders.crb:66](../stdlib/src/encoding/binary/orders.crb#L66)
+[orders.crb:58](../stdlib/src/encoding/binary/orders.crb#L58)
 
 ```rust
-pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+pub fn read_i64(input: &[u8]) Result<i64, Error>
 ```
 
 Reads i64 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_i64`
 
-[orders.crb:71](../stdlib/src/encoding/binary/orders.crb#L71)
+[orders.crb:63](../stdlib/src/encoding/binary/orders.crb#L63)
 
 ```rust
-pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i64(value: i64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i64; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_f32`
 
-[orders.crb:76](../stdlib/src/encoding/binary/orders.crb#L76)
+[orders.crb:68](../stdlib/src/encoding/binary/orders.crb#L68)
 
 ```rust
-pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+pub fn read_f32(input: &[u8]) Result<f32, Error>
 ```
 
 Reads f32 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_f32`
 
-[orders.crb:81](../stdlib/src/encoding/binary/orders.crb#L81)
+[orders.crb:73](../stdlib/src/encoding/binary/orders.crb#L73)
 
 ```rust
-pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f32(value: f32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f32; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_f64`
 
-[orders.crb:86](../stdlib/src/encoding/binary/orders.crb#L86)
+[orders.crb:78](../stdlib/src/encoding/binary/orders.crb#L78)
 
 ```rust
-pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+pub fn read_f64(input: &[u8]) Result<f64, Error>
 ```
 
 Reads f64 from the start of the caller-provided slice.
 
 ### `LittleEndian::write_f64`
 
-[orders.crb:91](../stdlib/src/encoding/binary/orders.crb#L91)
+[orders.crb:83](../stdlib/src/encoding/binary/orders.crb#L83)
 
 ```rust
-pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f64(value: f64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f64; short-buffer errors leave the output unchanged.
 
 ### `LittleEndian::read_bool`
 
-[orders.crb:96](../stdlib/src/encoding/binary/orders.crb#L96)
+[orders.crb:88](../stdlib/src/encoding/binary/orders.crb#L88)
 
 ```rust
-pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+pub fn read_bool(input: &[u8]) Result<bool, Error>
 ```
 
 Reads bool from the start of the caller-provided slice.
 
 ### `LittleEndian::write_bool`
 
-[orders.crb:101](../stdlib/src/encoding/binary/orders.crb#L101)
+[orders.crb:93](../stdlib/src/encoding/binary/orders.crb#L93)
 
 ```rust
-pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes bool; short-buffer errors leave the output unchanged.
@@ -3041,200 +3021,210 @@ Available when `target.pointer_width == "64"`.
 
 ### `LittleEndian::read_usize`
 
-[orders.crb:107](../stdlib/src/encoding/binary/orders.crb#L107)
+[orders.crb:99](../stdlib/src/encoding/binary/orders.crb#L99)
 
 ```rust
-pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+pub fn read_usize(input: &[u8]) Result<usize, Error>
 ```
 
 Reads usize from the start of the caller-provided slice.
 
 ### `LittleEndian::write_usize`
 
-[orders.crb:112](../stdlib/src/encoding/binary/orders.crb#L112)
+[orders.crb:104](../stdlib/src/encoding/binary/orders.crb#L104)
 
 ```rust
-pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_usize(value: usize, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes usize; short-buffer errors leave the output unchanged.
 
-### `BigEndian::read_u8`
+### `BigEndian`
 
-[orders.crb:121](../stdlib/src/encoding/binary/orders.crb#L121)
+[orders.crb:112](../stdlib/src/encoding/binary/orders.crb#L112)
 
 ```rust
-pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+pub struct BigEndian
+```
+
+Converts primitive values using most-significant-byte-first encoding.
+
+### `BigEndian::read_u8`
+
+[orders.crb:114](../stdlib/src/encoding/binary/orders.crb#L114)
+
+```rust
+pub fn read_u8(input: &[u8]) Result<u8, Error>
 ```
 
 Reads u8 from the start of the caller-provided slice.
 
 ### `BigEndian::write_u8`
 
-[orders.crb:126](../stdlib/src/encoding/binary/orders.crb#L126)
+[orders.crb:119](../stdlib/src/encoding/binary/orders.crb#L119)
 
 ```rust
-pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u8; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_u16`
 
-[orders.crb:131](../stdlib/src/encoding/binary/orders.crb#L131)
+[orders.crb:124](../stdlib/src/encoding/binary/orders.crb#L124)
 
 ```rust
-pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+pub fn read_u16(input: &[u8]) Result<u16, Error>
 ```
 
 Reads u16 from the start of the caller-provided slice.
 
 ### `BigEndian::write_u16`
 
-[orders.crb:136](../stdlib/src/encoding/binary/orders.crb#L136)
+[orders.crb:129](../stdlib/src/encoding/binary/orders.crb#L129)
 
 ```rust
-pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u16(value: u16, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u16; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_u32`
 
-[orders.crb:141](../stdlib/src/encoding/binary/orders.crb#L141)
+[orders.crb:134](../stdlib/src/encoding/binary/orders.crb#L134)
 
 ```rust
-pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+pub fn read_u32(input: &[u8]) Result<u32, Error>
 ```
 
 Reads u32 from the start of the caller-provided slice.
 
 ### `BigEndian::write_u32`
 
-[orders.crb:146](../stdlib/src/encoding/binary/orders.crb#L146)
+[orders.crb:139](../stdlib/src/encoding/binary/orders.crb#L139)
 
 ```rust
-pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u32(value: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u32; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_u64`
 
-[orders.crb:151](../stdlib/src/encoding/binary/orders.crb#L151)
+[orders.crb:144](../stdlib/src/encoding/binary/orders.crb#L144)
 
 ```rust
-pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+pub fn read_u64(input: &[u8]) Result<u64, Error>
 ```
 
 Reads u64 from the start of the caller-provided slice.
 
 ### `BigEndian::write_u64`
 
-[orders.crb:156](../stdlib/src/encoding/binary/orders.crb#L156)
+[orders.crb:149](../stdlib/src/encoding/binary/orders.crb#L149)
 
 ```rust
-pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u64(value: u64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u64; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_i32`
 
-[orders.crb:161](../stdlib/src/encoding/binary/orders.crb#L161)
+[orders.crb:154](../stdlib/src/encoding/binary/orders.crb#L154)
 
 ```rust
-pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+pub fn read_i32(input: &[u8]) Result<i32, Error>
 ```
 
 Reads i32 from the start of the caller-provided slice.
 
 ### `BigEndian::write_i32`
 
-[orders.crb:166](../stdlib/src/encoding/binary/orders.crb#L166)
+[orders.crb:159](../stdlib/src/encoding/binary/orders.crb#L159)
 
 ```rust
-pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i32(value: i32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i32; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_i64`
 
-[orders.crb:171](../stdlib/src/encoding/binary/orders.crb#L171)
+[orders.crb:164](../stdlib/src/encoding/binary/orders.crb#L164)
 
 ```rust
-pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+pub fn read_i64(input: &[u8]) Result<i64, Error>
 ```
 
 Reads i64 from the start of the caller-provided slice.
 
 ### `BigEndian::write_i64`
 
-[orders.crb:176](../stdlib/src/encoding/binary/orders.crb#L176)
+[orders.crb:169](../stdlib/src/encoding/binary/orders.crb#L169)
 
 ```rust
-pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i64(value: i64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i64; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_f32`
 
-[orders.crb:181](../stdlib/src/encoding/binary/orders.crb#L181)
+[orders.crb:174](../stdlib/src/encoding/binary/orders.crb#L174)
 
 ```rust
-pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+pub fn read_f32(input: &[u8]) Result<f32, Error>
 ```
 
 Reads f32 from the start of the caller-provided slice.
 
 ### `BigEndian::write_f32`
 
-[orders.crb:186](../stdlib/src/encoding/binary/orders.crb#L186)
+[orders.crb:179](../stdlib/src/encoding/binary/orders.crb#L179)
 
 ```rust
-pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f32(value: f32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f32; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_f64`
 
-[orders.crb:191](../stdlib/src/encoding/binary/orders.crb#L191)
+[orders.crb:184](../stdlib/src/encoding/binary/orders.crb#L184)
 
 ```rust
-pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+pub fn read_f64(input: &[u8]) Result<f64, Error>
 ```
 
 Reads f64 from the start of the caller-provided slice.
 
 ### `BigEndian::write_f64`
 
-[orders.crb:196](../stdlib/src/encoding/binary/orders.crb#L196)
+[orders.crb:189](../stdlib/src/encoding/binary/orders.crb#L189)
 
 ```rust
-pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f64(value: f64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f64; short-buffer errors leave the output unchanged.
 
 ### `BigEndian::read_bool`
 
-[orders.crb:201](../stdlib/src/encoding/binary/orders.crb#L201)
+[orders.crb:194](../stdlib/src/encoding/binary/orders.crb#L194)
 
 ```rust
-pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+pub fn read_bool(input: &[u8]) Result<bool, Error>
 ```
 
 Reads bool from the start of the caller-provided slice.
 
 ### `BigEndian::write_bool`
 
-[orders.crb:206](../stdlib/src/encoding/binary/orders.crb#L206)
+[orders.crb:199](../stdlib/src/encoding/binary/orders.crb#L199)
 
 ```rust
-pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes bool; short-buffer errors leave the output unchanged.
@@ -3243,202 +3233,212 @@ Available when `target.pointer_width == "64"`.
 
 ### `BigEndian::read_usize`
 
-[orders.crb:212](../stdlib/src/encoding/binary/orders.crb#L212)
+[orders.crb:205](../stdlib/src/encoding/binary/orders.crb#L205)
 
 ```rust
-pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+pub fn read_usize(input: &[u8]) Result<usize, Error>
 ```
 
 Reads usize from the start of the caller-provided slice.
 
 ### `BigEndian::write_usize`
 
-[orders.crb:217](../stdlib/src/encoding/binary/orders.crb#L217)
+[orders.crb:210](../stdlib/src/encoding/binary/orders.crb#L210)
 
 ```rust
-pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_usize(value: usize, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes usize; short-buffer errors leave the output unchanged.
+
+### `NativeEndian`
+
+[orders.crb:218](../stdlib/src/encoding/binary/orders.crb#L218)
+
+```rust
+pub struct NativeEndian
+```
+
+Uses the compilation target byte order; prefer explicit order for stored formats.
 
 Available when `target.endian == "little"`.
 
 ### `NativeEndian::read_u8`
 
-[orders.crb:227](../stdlib/src/encoding/binary/orders.crb#L227)
+[orders.crb:221](../stdlib/src/encoding/binary/orders.crb#L221)
 
 ```rust
-pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+pub fn read_u8(input: &[u8]) Result<u8, Error>
 ```
 
 Reads u8 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u8`
 
-[orders.crb:232](../stdlib/src/encoding/binary/orders.crb#L232)
+[orders.crb:226](../stdlib/src/encoding/binary/orders.crb#L226)
 
 ```rust
-pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u8; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_u16`
 
-[orders.crb:237](../stdlib/src/encoding/binary/orders.crb#L237)
+[orders.crb:231](../stdlib/src/encoding/binary/orders.crb#L231)
 
 ```rust
-pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+pub fn read_u16(input: &[u8]) Result<u16, Error>
 ```
 
 Reads u16 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u16`
 
-[orders.crb:242](../stdlib/src/encoding/binary/orders.crb#L242)
+[orders.crb:236](../stdlib/src/encoding/binary/orders.crb#L236)
 
 ```rust
-pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u16(value: u16, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u16; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_u32`
 
-[orders.crb:247](../stdlib/src/encoding/binary/orders.crb#L247)
+[orders.crb:241](../stdlib/src/encoding/binary/orders.crb#L241)
 
 ```rust
-pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+pub fn read_u32(input: &[u8]) Result<u32, Error>
 ```
 
 Reads u32 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u32`
 
-[orders.crb:252](../stdlib/src/encoding/binary/orders.crb#L252)
+[orders.crb:246](../stdlib/src/encoding/binary/orders.crb#L246)
 
 ```rust
-pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u32(value: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u32; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_u64`
 
-[orders.crb:257](../stdlib/src/encoding/binary/orders.crb#L257)
+[orders.crb:251](../stdlib/src/encoding/binary/orders.crb#L251)
 
 ```rust
-pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+pub fn read_u64(input: &[u8]) Result<u64, Error>
 ```
 
 Reads u64 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u64`
 
-[orders.crb:262](../stdlib/src/encoding/binary/orders.crb#L262)
+[orders.crb:256](../stdlib/src/encoding/binary/orders.crb#L256)
 
 ```rust
-pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u64(value: u64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u64; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_i32`
 
-[orders.crb:267](../stdlib/src/encoding/binary/orders.crb#L267)
+[orders.crb:261](../stdlib/src/encoding/binary/orders.crb#L261)
 
 ```rust
-pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+pub fn read_i32(input: &[u8]) Result<i32, Error>
 ```
 
 Reads i32 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_i32`
 
-[orders.crb:272](../stdlib/src/encoding/binary/orders.crb#L272)
+[orders.crb:266](../stdlib/src/encoding/binary/orders.crb#L266)
 
 ```rust
-pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i32(value: i32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i32; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_i64`
 
-[orders.crb:277](../stdlib/src/encoding/binary/orders.crb#L277)
+[orders.crb:271](../stdlib/src/encoding/binary/orders.crb#L271)
 
 ```rust
-pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+pub fn read_i64(input: &[u8]) Result<i64, Error>
 ```
 
 Reads i64 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_i64`
 
-[orders.crb:282](../stdlib/src/encoding/binary/orders.crb#L282)
+[orders.crb:276](../stdlib/src/encoding/binary/orders.crb#L276)
 
 ```rust
-pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i64(value: i64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i64; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_f32`
 
-[orders.crb:287](../stdlib/src/encoding/binary/orders.crb#L287)
+[orders.crb:281](../stdlib/src/encoding/binary/orders.crb#L281)
 
 ```rust
-pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+pub fn read_f32(input: &[u8]) Result<f32, Error>
 ```
 
 Reads f32 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_f32`
 
-[orders.crb:292](../stdlib/src/encoding/binary/orders.crb#L292)
+[orders.crb:286](../stdlib/src/encoding/binary/orders.crb#L286)
 
 ```rust
-pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f32(value: f32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f32; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_f64`
 
-[orders.crb:297](../stdlib/src/encoding/binary/orders.crb#L297)
+[orders.crb:291](../stdlib/src/encoding/binary/orders.crb#L291)
 
 ```rust
-pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+pub fn read_f64(input: &[u8]) Result<f64, Error>
 ```
 
 Reads f64 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_f64`
 
-[orders.crb:302](../stdlib/src/encoding/binary/orders.crb#L302)
+[orders.crb:296](../stdlib/src/encoding/binary/orders.crb#L296)
 
 ```rust
-pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f64(value: f64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f64; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_bool`
 
-[orders.crb:307](../stdlib/src/encoding/binary/orders.crb#L307)
+[orders.crb:301](../stdlib/src/encoding/binary/orders.crb#L301)
 
 ```rust
-pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+pub fn read_bool(input: &[u8]) Result<bool, Error>
 ```
 
 Reads bool from the start of the caller-provided slice.
 
 ### `NativeEndian::write_bool`
 
-[orders.crb:312](../stdlib/src/encoding/binary/orders.crb#L312)
+[orders.crb:306](../stdlib/src/encoding/binary/orders.crb#L306)
 
 ```rust
-pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes bool; short-buffer errors leave the output unchanged.
@@ -3447,20 +3447,20 @@ Available when `target.endian == "little"` and `target.pointer_width == "64"`.
 
 ### `NativeEndian::read_usize`
 
-[orders.crb:318](../stdlib/src/encoding/binary/orders.crb#L318)
+[orders.crb:312](../stdlib/src/encoding/binary/orders.crb#L312)
 
 ```rust
-pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+pub fn read_usize(input: &[u8]) Result<usize, Error>
 ```
 
 Reads usize from the start of the caller-provided slice.
 
 ### `NativeEndian::write_usize`
 
-[orders.crb:323](../stdlib/src/encoding/binary/orders.crb#L323)
+[orders.crb:317](../stdlib/src/encoding/binary/orders.crb#L317)
 
 ```rust
-pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_usize(value: usize, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes usize; short-buffer errors leave the output unchanged.
@@ -3469,180 +3469,180 @@ Available when `target.endian == "big"`.
 
 ### `NativeEndian::read_u8`
 
-[orders.crb:334](../stdlib/src/encoding/binary/orders.crb#L334)
+[orders.crb:326](../stdlib/src/encoding/binary/orders.crb#L326)
 
 ```rust
-pub fn read_u8(input: &[u8]) -> Result<u8, Error>
+pub fn read_u8(input: &[u8]) Result<u8, Error>
 ```
 
 Reads u8 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u8`
 
-[orders.crb:339](../stdlib/src/encoding/binary/orders.crb#L339)
+[orders.crb:331](../stdlib/src/encoding/binary/orders.crb#L331)
 
 ```rust
-pub fn write_u8(value: u8, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u8; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_u16`
 
-[orders.crb:344](../stdlib/src/encoding/binary/orders.crb#L344)
+[orders.crb:336](../stdlib/src/encoding/binary/orders.crb#L336)
 
 ```rust
-pub fn read_u16(input: &[u8]) -> Result<u16, Error>
+pub fn read_u16(input: &[u8]) Result<u16, Error>
 ```
 
 Reads u16 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u16`
 
-[orders.crb:349](../stdlib/src/encoding/binary/orders.crb#L349)
+[orders.crb:341](../stdlib/src/encoding/binary/orders.crb#L341)
 
 ```rust
-pub fn write_u16(value: u16, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u16(value: u16, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u16; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_u32`
 
-[orders.crb:354](../stdlib/src/encoding/binary/orders.crb#L354)
+[orders.crb:346](../stdlib/src/encoding/binary/orders.crb#L346)
 
 ```rust
-pub fn read_u32(input: &[u8]) -> Result<u32, Error>
+pub fn read_u32(input: &[u8]) Result<u32, Error>
 ```
 
 Reads u32 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u32`
 
-[orders.crb:359](../stdlib/src/encoding/binary/orders.crb#L359)
+[orders.crb:351](../stdlib/src/encoding/binary/orders.crb#L351)
 
 ```rust
-pub fn write_u32(value: u32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u32(value: u32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u32; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_u64`
 
-[orders.crb:364](../stdlib/src/encoding/binary/orders.crb#L364)
+[orders.crb:356](../stdlib/src/encoding/binary/orders.crb#L356)
 
 ```rust
-pub fn read_u64(input: &[u8]) -> Result<u64, Error>
+pub fn read_u64(input: &[u8]) Result<u64, Error>
 ```
 
 Reads u64 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_u64`
 
-[orders.crb:369](../stdlib/src/encoding/binary/orders.crb#L369)
+[orders.crb:361](../stdlib/src/encoding/binary/orders.crb#L361)
 
 ```rust
-pub fn write_u64(value: u64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_u64(value: u64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes u64; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_i32`
 
-[orders.crb:374](../stdlib/src/encoding/binary/orders.crb#L374)
+[orders.crb:366](../stdlib/src/encoding/binary/orders.crb#L366)
 
 ```rust
-pub fn read_i32(input: &[u8]) -> Result<i32, Error>
+pub fn read_i32(input: &[u8]) Result<i32, Error>
 ```
 
 Reads i32 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_i32`
 
-[orders.crb:379](../stdlib/src/encoding/binary/orders.crb#L379)
+[orders.crb:371](../stdlib/src/encoding/binary/orders.crb#L371)
 
 ```rust
-pub fn write_i32(value: i32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i32(value: i32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i32; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_i64`
 
-[orders.crb:384](../stdlib/src/encoding/binary/orders.crb#L384)
+[orders.crb:376](../stdlib/src/encoding/binary/orders.crb#L376)
 
 ```rust
-pub fn read_i64(input: &[u8]) -> Result<i64, Error>
+pub fn read_i64(input: &[u8]) Result<i64, Error>
 ```
 
 Reads i64 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_i64`
 
-[orders.crb:389](../stdlib/src/encoding/binary/orders.crb#L389)
+[orders.crb:381](../stdlib/src/encoding/binary/orders.crb#L381)
 
 ```rust
-pub fn write_i64(value: i64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_i64(value: i64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes i64; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_f32`
 
-[orders.crb:394](../stdlib/src/encoding/binary/orders.crb#L394)
+[orders.crb:386](../stdlib/src/encoding/binary/orders.crb#L386)
 
 ```rust
-pub fn read_f32(input: &[u8]) -> Result<f32, Error>
+pub fn read_f32(input: &[u8]) Result<f32, Error>
 ```
 
 Reads f32 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_f32`
 
-[orders.crb:399](../stdlib/src/encoding/binary/orders.crb#L399)
+[orders.crb:391](../stdlib/src/encoding/binary/orders.crb#L391)
 
 ```rust
-pub fn write_f32(value: f32, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f32(value: f32, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f32; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_f64`
 
-[orders.crb:404](../stdlib/src/encoding/binary/orders.crb#L404)
+[orders.crb:396](../stdlib/src/encoding/binary/orders.crb#L396)
 
 ```rust
-pub fn read_f64(input: &[u8]) -> Result<f64, Error>
+pub fn read_f64(input: &[u8]) Result<f64, Error>
 ```
 
 Reads f64 from the start of the caller-provided slice.
 
 ### `NativeEndian::write_f64`
 
-[orders.crb:409](../stdlib/src/encoding/binary/orders.crb#L409)
+[orders.crb:401](../stdlib/src/encoding/binary/orders.crb#L401)
 
 ```rust
-pub fn write_f64(value: f64, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_f64(value: f64, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes f64; short-buffer errors leave the output unchanged.
 
 ### `NativeEndian::read_bool`
 
-[orders.crb:414](../stdlib/src/encoding/binary/orders.crb#L414)
+[orders.crb:406](../stdlib/src/encoding/binary/orders.crb#L406)
 
 ```rust
-pub fn read_bool(input: &[u8]) -> Result<bool, Error>
+pub fn read_bool(input: &[u8]) Result<bool, Error>
 ```
 
 Reads bool from the start of the caller-provided slice.
 
 ### `NativeEndian::write_bool`
 
-[orders.crb:419](../stdlib/src/encoding/binary/orders.crb#L419)
+[orders.crb:411](../stdlib/src/encoding/binary/orders.crb#L411)
 
 ```rust
-pub fn write_bool(value: bool, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes bool; short-buffer errors leave the output unchanged.
@@ -3651,20 +3651,20 @@ Available when `target.endian == "big"` and `target.pointer_width == "64"`.
 
 ### `NativeEndian::read_usize`
 
-[orders.crb:425](../stdlib/src/encoding/binary/orders.crb#L425)
+[orders.crb:417](../stdlib/src/encoding/binary/orders.crb#L417)
 
 ```rust
-pub fn read_usize(input: &[u8]) -> Result<usize, Error>
+pub fn read_usize(input: &[u8]) Result<usize, Error>
 ```
 
 Reads usize from the start of the caller-provided slice.
 
 ### `NativeEndian::write_usize`
 
-[orders.crb:430](../stdlib/src/encoding/binary/orders.crb#L430)
+[orders.crb:422](../stdlib/src/encoding/binary/orders.crb#L422)
 
 ```rust
-pub fn write_usize(value: usize, output: &mut [u8]) -> Result<usize, Error>
+pub fn write_usize(value: usize, output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes usize; short-buffer errors leave the output unchanged.
@@ -3694,7 +3694,7 @@ Members:
 [der.crb:14](../stdlib/src/encoding/der/der.crb#L14)
 
 ```rust
-pub fn invalid_der() -> Der
+pub fn invalid_der() Der
 ```
 
 Returns the sentinel for a malformed or missing DER element.
@@ -3704,7 +3704,7 @@ Returns the sentinel for a malformed or missing DER element.
 [der.crb:17](../stdlib/src/encoding/der/der.crb#L17)
 
 ```rust
-pub fn der(input: &[u8], at: u64, limit: u64, tag: u8) -> Der
+pub fn der(input: &[u8], at: u64, limit: u64, tag: u8) Der
 ```
 
 Parses one element with the expected tag and a canonical definite length within the supplied limit.
@@ -3714,7 +3714,7 @@ Parses one element with the expected tag and a canonical definite length within 
 [der.crb:40](../stdlib/src/encoding/der/der.crb#L40)
 
 ```rust
-pub fn bytes_equal(a: &[u8], b: &[u8]) -> bool
+pub fn bytes_equal(a: &[u8], b: &[u8]) bool
 ```
 
 Compares the length and contents of two byte slices.
@@ -3724,7 +3724,7 @@ Compares the length and contents of two byte slices.
 [der.crb:52](../stdlib/src/encoding/der/der.crb#L52)
 
 ```rust
-pub fn uint_valid(input: &[u8], start: u64, end: u64) -> bool
+pub fn uint_valid(input: &[u8], start: u64, end: u64) bool
 ```
 
 Checks that a byte range is a minimally encoded nonnegative DER integer.
@@ -3734,7 +3734,7 @@ Checks that a byte range is a minimally encoded nonnegative DER integer.
 [der.crb:59](../stdlib/src/encoding/der/der.crb#L59)
 
 ```rust
-pub fn oid_valid(input: &[u8], start: u64, end: u64) -> bool
+pub fn oid_valid(input: &[u8], start: u64, end: u64) bool
 ```
 
 Checks the base-128 component encoding and termination of a DER object identifier.
@@ -3744,7 +3744,7 @@ Checks the base-128 component encoding and termination of a DER object identifie
 [der.crb:73](../stdlib/src/encoding/der/der.crb#L73)
 
 ```rust
-pub fn der_header_size(length: u64) -> u64
+pub fn der_header_size(length: u64) u64
 ```
 
 Returns the width of a DER tag and definite length, or zero when the length exceeds 32 bits.
@@ -3754,7 +3754,7 @@ Returns the width of a DER tag and definite length, or zero when the length exce
 [der.crb:83](../stdlib/src/encoding/der/der.crb#L83)
 
 ```rust
-pub fn der_octet(word: u64, shift: u64) -> u8
+pub fn der_octet(word: u64, shift: u64) u8
 ```
 
 Returns the octet at the supplied position of a word.
@@ -3764,7 +3764,7 @@ Returns the octet at the supplied position of a word.
 [der.crb:97](../stdlib/src/encoding/der/der.crb#L97)
 
 ```rust
-pub fn write_der_header(tag: u8, length: u64, output: &mut [u8]) -> u64
+pub fn write_der_header(tag: u8, length: u64, output: &mut [u8]) u64
 ```
 
 Writes a DER header and returns its width, or zero when the header cannot fit.
@@ -3774,7 +3774,7 @@ Writes a DER header and returns its width, or zero when the header cannot fit.
 [der.crb:115](../stdlib/src/encoding/der/der.crb#L115)
 
 ```rust
-pub fn copy_der(input: &[u8], output: &mut [u8]) -> usize
+pub fn copy_der(input: &[u8], output: &mut [u8]) usize
 ```
 
 Copies a byte slice into caller-owned storage, returning zero on insufficient capacity.
@@ -3805,7 +3805,7 @@ Members:
 [hex.crb:29](../stdlib/src/encoding/hex/hex.crb#L29)
 
 ```rust
-pub fn encode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn encode(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes lowercase hexadecimal and returns the bytes written. Errors leave the output unchanged.
@@ -3815,7 +3815,7 @@ Writes lowercase hexadecimal and returns the bytes written. Errors leave the out
 [hex.crb:42](../stdlib/src/encoding/hex/hex.crb#L42)
 
 ```rust
-pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn decode(input: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Decodes an even number of hexadecimal digits in either case. Errors leave the output unchanged.
@@ -3846,7 +3846,7 @@ Members:
 [pem.crb:40](../stdlib/src/encoding/pem/pem.crb#L40)
 
 ```rust
-pub fn decode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn decode(input: &[u8], label: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Decodes one nonempty PEM block with the expected label and returns the DER byte count.
@@ -3856,7 +3856,7 @@ Decodes one nonempty PEM block with the expected label and returns the DER byte 
 [pem.crb:126](../stdlib/src/encoding/pem/pem.crb#L126)
 
 ```rust
-pub fn encode(input: &[u8], label: &[u8], output: &mut [u8]) -> Result<usize, Error>
+pub fn encode(input: &[u8], label: &[u8], output: &mut [u8]) Result<usize, Error>
 ```
 
 Writes one PEM block with 64 Base64 characters per full line and returns the bytes written.
@@ -3888,7 +3888,7 @@ Members:
 [args.crb:13](../stdlib/src/env/args.crb#L13)
 
 ```rust
-pub fn args() -> Result<&[&str], ArgsError>
+pub fn args() Result<&[&str], ArgsError>
 ```
 
 Returns the current process argument list supplied by the executable entry point.
@@ -3915,9 +3915,133 @@ Members:
 - [`inner`](../stdlib/src/io/file.crb#L15) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
 - [`mode`](../stdlib/src/io/file.crb#L17) (implementation field): Original access/append flags, retained for positioned-operation validation.
 
-### `FileError`
+### `File::open`
 
 [file.crb:21](../stdlib/src/io/file.crb#L21)
+
+```rust
+fn open(path: &str, mode: i64) Result<File, FileError>
+```
+
+Opens a UTF-8 path with independent OR-combined FileMode flags.
+CREATE uses default creation permissions; no trailing NUL is required.
+
+### `File::create`
+
+[file.crb:27](../stdlib/src/io/file.crb#L27)
+
+```rust
+fn create(path: &str, mode: i64, perm: FilePerm) Result<File, FileError>
+```
+
+Opens or creates a UTF-8 path with explicit creation permissions.
+CREATE is implied; TRUNCATE and EXCLUSIVE remain explicit flags.
+
+### `File::read`
+
+[file.crb:39](../stdlib/src/io/file.crb#L39)
+
+```rust
+fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError>
+```
+
+Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+
+### `File::write`
+
+[file.crb:48](../stdlib/src/io/file.crb#L48)
+
+```rust
+fn write(&mut self, buffer: &[u8]) Result<usize, FileError>
+```
+
+Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+
+### `File::read_at`
+
+[file.crb:58](../stdlib/src/io/file.crb#L58)
+
+```rust
+fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError>
+```
+
+Reads into the caller's buffer at offset without moving the cursor; short transfers are allowed.
+Rejects unrepresentable ranges and write-only mode. Valid empty ranges return zero.
+
+### `File::write_at`
+
+[file.crb:73](../stdlib/src/io/file.crb#L73)
+
+```rust
+fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError>
+```
+
+Writes from the caller's buffer at offset without moving the cursor; short transfers are allowed.
+Rejects unrepresentable ranges and read-only/append modes. Valid empty ranges return zero.
+
+### `File::seek`
+
+[file.crb:87](../stdlib/src/io/file.crb#L87)
+
+```rust
+fn seek(&mut self, from: SeekFrom) Result<u64, FileError>
+```
+
+Moves the file cursor relative to the supplied origin and returns its new absolute position.
+
+### `File::sync_all`
+
+[file.crb:105](../stdlib/src/io/file.crb#L105)
+
+```rust
+fn sync_all(&mut self) Result<(), FileError>
+```
+
+Persists this file's contents/metadata; does not sync a parent directory or create a transaction.
+
+### `File::truncate`
+
+[file.crb:114](../stdlib/src/io/file.crb#L114)
+
+```rust
+fn truncate(&mut self, length: u64) Result<(), FileError>
+```
+
+Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
+
+### `File::stats`
+
+[file.crb:124](../stdlib/src/io/file.crb#L124)
+
+```rust
+fn stats(&self) Result<FileStats, FileError>
+```
+
+Returns a snapshot of file metadata from its open handle.
+
+### `File::rename`
+
+[file.crb:133](../stdlib/src/io/file.crb#L133)
+
+```rust
+fn rename(source: &str, destination: &str) Result<(), FileError>
+```
+
+Renames a file from the source path to the destination path using platform semantics.
+
+### `File::delete`
+
+[file.crb:148](../stdlib/src/io/file.crb#L148)
+
+```rust
+fn delete(path: &str) Result<(), FileError>
+```
+
+Removes the file named by the supplied path.
+
+### `FileError`
+
+[file.crb:162](../stdlib/src/io/file.crb#L162)
 
 ```rust
 pub enum FileError
@@ -3927,134 +4051,10 @@ Reports invalid path or options, or an error code from the operating system.
 
 Members:
 
-- [`InvalidPath`](../stdlib/src/io/file.crb#L23) (variant): The supplied path violates the platform path-input contract.
-- [`InvalidOptions`](../stdlib/src/io/file.crb#L25) (variant): The requested open-mode combination is invalid.
-- [`Os`](../stdlib/src/io/file.crb#L27) (variant): Preserves the native operating-system error code in code.
-- [`Os.code`](../stdlib/src/io/file.crb#L29) (implementation field): Native operating-system status code preserved by this error.
-
-### `File::open`
-
-[file.crb:84](../stdlib/src/io/file.crb#L84)
-
-```rust
-fn open(path: &str, mode: i64) -> Result<File, FileError>
-```
-
-Opens a UTF-8 path with independent OR-combined FileMode flags.
-CREATE uses default creation permissions; no trailing NUL is required.
-
-### `File::create`
-
-[file.crb:90](../stdlib/src/io/file.crb#L90)
-
-```rust
-fn create(path: &str, mode: i64, perm: FilePerm) -> Result<File, FileError>
-```
-
-Opens or creates a UTF-8 path with explicit creation permissions.
-CREATE is implied; TRUNCATE and EXCLUSIVE remain explicit flags.
-
-### `File::read`
-
-[file.crb:102](../stdlib/src/io/file.crb#L102)
-
-```rust
-fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
-```
-
-Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
-
-### `File::write`
-
-[file.crb:111](../stdlib/src/io/file.crb#L111)
-
-```rust
-fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
-```
-
-Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-
-### `File::read_at`
-
-[file.crb:121](../stdlib/src/io/file.crb#L121)
-
-```rust
-fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError>
-```
-
-Reads into the caller's buffer at offset without moving the cursor; short transfers are allowed.
-Rejects unrepresentable ranges and write-only mode. Valid empty ranges return zero.
-
-### `File::write_at`
-
-[file.crb:136](../stdlib/src/io/file.crb#L136)
-
-```rust
-fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError>
-```
-
-Writes from the caller's buffer at offset without moving the cursor; short transfers are allowed.
-Rejects unrepresentable ranges and read-only/append modes. Valid empty ranges return zero.
-
-### `File::seek`
-
-[file.crb:150](../stdlib/src/io/file.crb#L150)
-
-```rust
-fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
-```
-
-Moves the file cursor relative to the supplied origin and returns its new absolute position.
-
-### `File::sync_all`
-
-[file.crb:168](../stdlib/src/io/file.crb#L168)
-
-```rust
-fn sync_all(&mut self) -> Result<(), FileError>
-```
-
-Persists this file's contents/metadata; does not sync a parent directory or create a transaction.
-
-### `File::truncate`
-
-[file.crb:177](../stdlib/src/io/file.crb#L177)
-
-```rust
-fn truncate(&mut self, length: u64) -> Result<(), FileError>
-```
-
-Sets the file length, preserving the cursor. Sizes beyond i64::MAX are invalid.
-
-### `File::stats`
-
-[file.crb:187](../stdlib/src/io/file.crb#L187)
-
-```rust
-fn stats(&self) -> Result<FileStats, FileError>
-```
-
-Returns a snapshot of file metadata from its open handle.
-
-### `File::rename`
-
-[file.crb:196](../stdlib/src/io/file.crb#L196)
-
-```rust
-fn rename(source: &str, destination: &str) -> Result<(), FileError>
-```
-
-Renames a file from the source path to the destination path using platform semantics.
-
-### `File::delete`
-
-[file.crb:211](../stdlib/src/io/file.crb#L211)
-
-```rust
-fn delete(path: &str) -> Result<(), FileError>
-```
-
-Removes the file named by the supplied path.
+- [`InvalidPath`](../stdlib/src/io/file.crb#L164) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/file.crb#L166) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/file.crb#L168) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/file.crb#L170) (implementation field): Native operating-system status code preserved by this error.
 
 
 Shared file metadata, permissions and modes for sync and async I/O.
@@ -4075,10 +4075,10 @@ Members:
 
 ### `FileStats::size`
 
-[options.crb:12](../stdlib/src/io/options.crb#L12)
+[options.crb:10](../stdlib/src/io/options.crb#L10)
 
 ```rust
-fn size(&self) -> u64
+fn size(&self) u64
 ```
 
 Returns the file size in bytes captured by the stats operation.
@@ -4126,7 +4126,7 @@ Provides the access modes and flags accepted by file open and create.
 
 ### `FileMode::READ`
 
-[options.crb:39](../stdlib/src/io/options.crb#L39)
+[options.crb:37](../stdlib/src/io/options.crb#L37)
 
 ```rust
 const READ: i64 = 1
@@ -4136,7 +4136,7 @@ Enables reading; combine with WRITE for read/write access.
 
 ### `FileMode::WRITE`
 
-[options.crb:41](../stdlib/src/io/options.crb#L41)
+[options.crb:39](../stdlib/src/io/options.crb#L39)
 
 ```rust
 const WRITE: i64 = 2
@@ -4146,7 +4146,7 @@ Enables writing; combine with READ, CREATE, APPEND or TRUNCATE.
 
 ### `FileMode::CREATE`
 
-[options.crb:43](../stdlib/src/io/options.crb#L43)
+[options.crb:41](../stdlib/src/io/options.crb#L41)
 
 ```rust
 const CREATE: i64 = 16
@@ -4156,7 +4156,7 @@ Creates the file if it is absent, without replacing existing contents.
 
 ### `FileMode::EXCLUSIVE`
 
-[options.crb:45](../stdlib/src/io/options.crb#L45)
+[options.crb:43](../stdlib/src/io/options.crb#L43)
 
 ```rust
 const EXCLUSIVE: i64 = 32
@@ -4166,7 +4166,7 @@ Requires CREATE and fails atomically when the path already exists.
 
 ### `FileMode::CREATE_NEW`
 
-[options.crb:47](../stdlib/src/io/options.crb#L47)
+[options.crb:45](../stdlib/src/io/options.crb#L45)
 
 ```rust
 const CREATE_NEW: i64 = 48
@@ -4176,7 +4176,7 @@ Creates a new file exclusively; equivalent to CREATE | EXCLUSIVE.
 
 ### `FileMode::SYNC`
 
-[options.crb:49](../stdlib/src/io/options.crb#L49)
+[options.crb:47](../stdlib/src/io/options.crb#L47)
 
 ```rust
 const SYNC: i64 = 64
@@ -4186,7 +4186,7 @@ Requests synchronous completion of file writes at the OS boundary.
 
 ### `FileMode::READ_ONLY`
 
-[options.crb:51](../stdlib/src/io/options.crb#L51)
+[options.crb:49](../stdlib/src/io/options.crb#L49)
 
 ```rust
 const READ_ONLY: i64 = 1
@@ -4196,7 +4196,7 @@ Compatibility spelling for READ.
 
 ### `FileMode::WRITE_ONLY`
 
-[options.crb:53](../stdlib/src/io/options.crb#L53)
+[options.crb:51](../stdlib/src/io/options.crb#L51)
 
 ```rust
 const WRITE_ONLY: i64 = 2
@@ -4206,7 +4206,7 @@ Opens the file for writing only.
 
 ### `FileMode::READ_WRITE`
 
-[options.crb:55](../stdlib/src/io/options.crb#L55)
+[options.crb:53](../stdlib/src/io/options.crb#L53)
 
 ```rust
 const READ_WRITE: i64 = 3
@@ -4216,7 +4216,7 @@ Allows both reading and writing.
 
 ### `FileMode::APPEND`
 
-[options.crb:57](../stdlib/src/io/options.crb#L57)
+[options.crb:55](../stdlib/src/io/options.crb#L55)
 
 ```rust
 const APPEND: i64 = 4
@@ -4226,7 +4226,7 @@ Requests that writes append to the file.
 
 ### `FileMode::TRUNCATE`
 
-[options.crb:59](../stdlib/src/io/options.crb#L59)
+[options.crb:57](../stdlib/src/io/options.crb#L57)
 
 ```rust
 const TRUNCATE: i64 = 8
@@ -4236,50 +4236,50 @@ Requests that an existing file be truncated on open.
 
 ### `FileMode::read_only`
 
-[options.crb:62](../stdlib/src/io/options.crb#L62)
+[options.crb:60](../stdlib/src/io/options.crb#L60)
 
 ```rust
-fn read_only() -> i64
+fn read_only() i64
 ```
 
 Returns the mode for read-only access.
 
 ### `FileMode::write_only`
 
-[options.crb:64](../stdlib/src/io/options.crb#L64)
+[options.crb:62](../stdlib/src/io/options.crb#L62)
 
 ```rust
-fn write_only() -> i64
+fn write_only() i64
 ```
 
 Returns the mode for write-only access.
 
 ### `FileMode::read_write`
 
-[options.crb:66](../stdlib/src/io/options.crb#L66)
+[options.crb:64](../stdlib/src/io/options.crb#L64)
 
 ```rust
-fn read_write() -> i64
+fn read_write() i64
 ```
 
 Returns the mode for read and write access.
 
 ### `FileMode::append`
 
-[options.crb:68](../stdlib/src/io/options.crb#L68)
+[options.crb:66](../stdlib/src/io/options.crb#L66)
 
 ```rust
-fn append() -> i64
+fn append() i64
 ```
 
 Returns the append flag to combine with a writable access mode.
 
 ### `FileMode::truncate`
 
-[options.crb:70](../stdlib/src/io/options.crb#L70)
+[options.crb:68](../stdlib/src/io/options.crb#L68)
 
 ```rust
-fn truncate() -> i64
+fn truncate() i64
 ```
 
 Returns the truncate flag to combine with a writable access mode.
@@ -4305,9 +4305,129 @@ Members:
 
 - [`inner`](../stdlib/src/io/asyn/file.crb#L10) (implementation field): Owned platform-specific object used to dispatch this portable wrapper's operations.
 
+### `File::open`
+
+[file.crb:13](../stdlib/src/io/asyn/file.crb#L13)
+
+```rust
+async fn open(path: &str, mode: i64) Result<File, FileError>
+```
+
+Awaits opening an existing file with the selected mode. The path is UTF-8 without a trailing NUL.
+
+### `File::create`
+
+[file.crb:18](../stdlib/src/io/asyn/file.crb#L18)
+
+```rust
+async fn create(path: &str, mode: i64, perm: FilePerm) Result<File, FileError>
+```
+
+Awaits opening or creating a file with the selected mode and permissions. The path is UTF-8 without a trailing NUL.
+
+### `File::read`
+
+[file.crb:23](../stdlib/src/io/asyn/file.crb#L23)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError>
+```
+
+Awaits a read into the caller's buffer and returns the actual byte count.
+
+### `File::write`
+
+[file.crb:39](../stdlib/src/io/asyn/file.crb#L39)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) Result<usize, FileError>
+```
+
+Awaits a write from the caller's buffer and returns the actual byte count.
+
+### `File::read_at`
+
+[file.crb:55](../stdlib/src/io/asyn/file.crb#L55)
+
+```rust
+async fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError>
+```
+
+Awaits a positioned read, preserving the cursor and retaining file/buffer borrows until completion.
+
+### `File::write_at`
+
+[file.crb:74](../stdlib/src/io/asyn/file.crb#L74)
+
+```rust
+async fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError>
+```
+
+Awaits a positioned write, preserving the cursor and retaining file/buffer borrows until completion.
+
+### `File::seek`
+
+[file.crb:93](../stdlib/src/io/asyn/file.crb#L93)
+
+```rust
+async fn seek(&mut self, from: SeekFrom) Result<u64, FileError>
+```
+
+Awaits moving the file cursor and returns the new absolute byte offset.
+
+### `File::sync_all`
+
+[file.crb:108](../stdlib/src/io/asyn/file.crb#L108)
+
+```rust
+async fn sync_all(&mut self) Result<(), FileError>
+```
+
+Awaits sync_all on a blocking worker, retaining mutable permission and the file dependency.
+
+### `File::truncate`
+
+[file.crb:123](../stdlib/src/io/asyn/file.crb#L123)
+
+```rust
+async fn truncate(&mut self, length: u64) Result<(), FileError>
+```
+
+Awaits truncate on a blocking worker, retaining mutable permission and the file dependency.
+
+### `File::stats`
+
+[file.crb:138](../stdlib/src/io/asyn/file.crb#L138)
+
+```rust
+async fn stats(&self) Result<FileStats, FileError>
+```
+
+Awaits a snapshot of the open file's metadata.
+
+### `File::rename`
+
+[file.crb:153](../stdlib/src/io/asyn/file.crb#L153)
+
+```rust
+async fn rename(source: &str, destination: &str) Result<(), FileError>
+```
+
+Awaits moving a filesystem entry to a different path.
+
+### `File::delete`
+
+[file.crb:167](../stdlib/src/io/asyn/file.crb#L167)
+
+```rust
+async fn delete(path: &str) Result<(), FileError>
+```
+
+Awaits removing a file by path.
+
 ### `FileError`
 
-[file.crb:14](../stdlib/src/io/asyn/file.crb#L14)
+[file.crb:183](../stdlib/src/io/asyn/file.crb#L183)
 
 ```rust
 pub enum FileError
@@ -4317,131 +4437,11 @@ Reports file errors or the runtime's failure to launch a worker.
 
 Members:
 
-- [`InvalidPath`](../stdlib/src/io/asyn/file.crb#L16) (variant): The supplied path violates the platform path-input contract.
-- [`InvalidOptions`](../stdlib/src/io/asyn/file.crb#L18) (variant): The requested open-mode combination is invalid.
-- [`Os`](../stdlib/src/io/asyn/file.crb#L20) (variant): Preserves the native operating-system error code in code.
-- [`Os.code`](../stdlib/src/io/asyn/file.crb#L22) (implementation field): Native operating-system status code preserved by this error.
-- [`LaunchFailed`](../stdlib/src/io/asyn/file.crb#L25) (variant): The runtime could not launch the blocking worker.
-
-### `File::open`
-
-[file.crb:105](../stdlib/src/io/asyn/file.crb#L105)
-
-```rust
-async fn open(path: &str, mode: i64) -> Result<File, FileError>
-```
-
-Awaits opening an existing file with the selected mode. The path is UTF-8 without a trailing NUL.
-
-### `File::create`
-
-[file.crb:110](../stdlib/src/io/asyn/file.crb#L110)
-
-```rust
-async fn create(path: &str, mode: i64, perm: FilePerm) -> Result<File, FileError>
-```
-
-Awaits opening or creating a file with the selected mode and permissions. The path is UTF-8 without a trailing NUL.
-
-### `File::read`
-
-[file.crb:115](../stdlib/src/io/asyn/file.crb#L115)
-
-```rust
-async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>
-```
-
-Awaits a read into the caller's buffer and returns the actual byte count.
-
-### `File::write`
-
-[file.crb:131](../stdlib/src/io/asyn/file.crb#L131)
-
-```rust
-async fn write(&mut self, buffer: &[u8]) -> Result<usize, FileError>
-```
-
-Awaits a write from the caller's buffer and returns the actual byte count.
-
-### `File::read_at`
-
-[file.crb:147](../stdlib/src/io/asyn/file.crb#L147)
-
-```rust
-async fn read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize, FileError>
-```
-
-Awaits a positioned read, preserving the cursor and retaining file/buffer borrows until completion.
-
-### `File::write_at`
-
-[file.crb:166](../stdlib/src/io/asyn/file.crb#L166)
-
-```rust
-async fn write_at(&self, buffer: &[u8], offset: u64) -> Result<usize, FileError>
-```
-
-Awaits a positioned write, preserving the cursor and retaining file/buffer borrows until completion.
-
-### `File::seek`
-
-[file.crb:185](../stdlib/src/io/asyn/file.crb#L185)
-
-```rust
-async fn seek(&mut self, from: SeekFrom) -> Result<u64, FileError>
-```
-
-Awaits moving the file cursor and returns the new absolute byte offset.
-
-### `File::sync_all`
-
-[file.crb:200](../stdlib/src/io/asyn/file.crb#L200)
-
-```rust
-async fn sync_all(&mut self) -> Result<(), FileError>
-```
-
-Awaits sync_all on a blocking worker, retaining mutable permission and the file dependency.
-
-### `File::truncate`
-
-[file.crb:215](../stdlib/src/io/asyn/file.crb#L215)
-
-```rust
-async fn truncate(&mut self, length: u64) -> Result<(), FileError>
-```
-
-Awaits truncate on a blocking worker, retaining mutable permission and the file dependency.
-
-### `File::stats`
-
-[file.crb:230](../stdlib/src/io/asyn/file.crb#L230)
-
-```rust
-async fn stats(&self) -> Result<FileStats, FileError>
-```
-
-Awaits a snapshot of the open file's metadata.
-
-### `File::rename`
-
-[file.crb:245](../stdlib/src/io/asyn/file.crb#L245)
-
-```rust
-async fn rename(source: &str, destination: &str) -> Result<(), FileError>
-```
-
-Awaits moving a filesystem entry to a different path.
-
-### `File::delete`
-
-[file.crb:259](../stdlib/src/io/asyn/file.crb#L259)
-
-```rust
-async fn delete(path: &str) -> Result<(), FileError>
-```
-
-Awaits removing a file by path.
+- [`InvalidPath`](../stdlib/src/io/asyn/file.crb#L185) (variant): The supplied path violates the platform path-input contract.
+- [`InvalidOptions`](../stdlib/src/io/asyn/file.crb#L187) (variant): The requested open-mode combination is invalid.
+- [`Os`](../stdlib/src/io/asyn/file.crb#L189) (variant): Preserves the native operating-system error code in code.
+- [`Os.code`](../stdlib/src/io/asyn/file.crb#L191) (implementation field): Native operating-system status code preserved by this error.
+- [`LaunchFailed`](../stdlib/src/io/asyn/file.crb#L194) (variant): The runtime could not launch the blocking worker.
 
 
 ## `std::io::asyn::buffered`
@@ -4485,30 +4485,30 @@ Members:
 
 ### `BufReader::new`
 
-[buffered.crb:36](../stdlib/src/io/asyn/buffered/buffered.crb#L36)
+[buffered.crb:34](../stdlib/src/io/asyn/buffered/buffered.crb#L34)
 
 ```rust
-async fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+async fn new(stream: &mut T, buffer: &mut [u8]) BufReader<T, E>
 ```
 
 Borrows the constrained stream and buffer. An empty buffer uses direct reads.
 
 ### `BufReader::from_tcp`
 
-[buffered.crb:41](../stdlib/src/io/asyn/buffered/buffered.crb#L41)
+[buffered.crb:39](../stdlib/src/io/asyn/buffered/buffered.crb#L39)
 
 ```rust
-async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+async fn from_tcp(stream: &mut T, buffer: &mut [u8]) BufReader<T, E>
 ```
 
 Borrows the TCP connection and buffer. An empty buffer uses direct reads.
 
 ### `BufReader::read`
 
-[buffered.crb:47](../stdlib/src/io/asyn/buffered/buffered.crb#L47)
+[buffered.crb:45](../stdlib/src/io/asyn/buffered/buffered.crb#L45)
 
 ```rust
-async fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
+async fn read(&mut self, output: &mut [u8]) Result<usize, BufferedError<E>>
 ```
 
 Reads into the output, returning the bytes copied. Dropping the reader
@@ -4533,30 +4533,30 @@ Members:
 
 ### `BufWriter::new`
 
-[buffered.crb:103](../stdlib/src/io/asyn/buffered/buffered.crb#L103)
+[buffered.crb:101](../stdlib/src/io/asyn/buffered/buffered.crb#L101)
 
 ```rust
-async fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+async fn new(stream: &mut T, buffer: &mut [u8]) BufWriter<T, E>
 ```
 
 Borrows the constrained stream and buffer. An empty buffer uses direct writes.
 
 ### `BufWriter::from_tcp`
 
-[buffered.crb:108](../stdlib/src/io/asyn/buffered/buffered.crb#L108)
+[buffered.crb:106](../stdlib/src/io/asyn/buffered/buffered.crb#L106)
 
 ```rust
-async fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+async fn from_tcp(stream: &mut T, buffer: &mut [u8]) BufWriter<T, E>
 ```
 
 Borrows the TCP connection and buffer. An empty buffer uses direct writes.
 
 ### `BufWriter::write`
 
-[buffered.crb:114](../stdlib/src/io/asyn/buffered/buffered.crb#L114)
+[buffered.crb:112](../stdlib/src/io/asyn/buffered/buffered.crb#L112)
 
 ```rust
-async fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
+async fn write(&mut self, input: &[u8]) Result<usize, BufferedError<E>>
 ```
 
 Accepts a prefix of the input and returns the number accepted.
@@ -4564,10 +4564,10 @@ Flushes previously buffered bytes when the buffer is already full.
 
 ### `BufWriter::flush`
 
-[buffered.crb:154](../stdlib/src/io/asyn/buffered/buffered.crb#L154)
+[buffered.crb:152](../stdlib/src/io/asyn/buffered/buffered.crb#L152)
 
 ```rust
-async fn flush(&mut self) -> Result<(), BufferedError<E>>
+async fn flush(&mut self) Result<(), BufferedError<E>>
 ```
 
 Writes pending bytes to the stream. After an error, retrying starts at the
@@ -4615,30 +4615,30 @@ Members:
 
 ### `BufReader::new`
 
-[buffered.crb:36](../stdlib/src/io/buffered/buffered.crb#L36)
+[buffered.crb:34](../stdlib/src/io/buffered/buffered.crb#L34)
 
 ```rust
-fn new(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+fn new(stream: &mut T, buffer: &mut [u8]) BufReader<T, E>
 ```
 
 Borrows the constrained stream and buffer. An empty buffer uses direct reads.
 
 ### `BufReader::from_tcp`
 
-[buffered.crb:41](../stdlib/src/io/buffered/buffered.crb#L41)
+[buffered.crb:39](../stdlib/src/io/buffered/buffered.crb#L39)
 
 ```rust
-fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufReader<T, E>
+fn from_tcp(stream: &mut T, buffer: &mut [u8]) BufReader<T, E>
 ```
 
 Borrows the TCP connection and buffer. An empty buffer uses direct reads.
 
 ### `BufReader::read`
 
-[buffered.crb:47](../stdlib/src/io/buffered/buffered.crb#L47)
+[buffered.crb:45](../stdlib/src/io/buffered/buffered.crb#L45)
 
 ```rust
-fn read(&mut self, output: &mut [u8]) -> Result<usize, BufferedError<E>>
+fn read(&mut self, output: &mut [u8]) Result<usize, BufferedError<E>>
 ```
 
 Reads into the output, returning the bytes copied. Dropping the reader
@@ -4663,30 +4663,30 @@ Members:
 
 ### `BufWriter::new`
 
-[buffered.crb:103](../stdlib/src/io/buffered/buffered.crb#L103)
+[buffered.crb:101](../stdlib/src/io/buffered/buffered.crb#L101)
 
 ```rust
-fn new(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+fn new(stream: &mut T, buffer: &mut [u8]) BufWriter<T, E>
 ```
 
 Borrows the constrained stream and buffer. An empty buffer uses direct writes.
 
 ### `BufWriter::from_tcp`
 
-[buffered.crb:108](../stdlib/src/io/buffered/buffered.crb#L108)
+[buffered.crb:106](../stdlib/src/io/buffered/buffered.crb#L106)
 
 ```rust
-fn from_tcp(stream: &mut T, buffer: &mut [u8]) -> BufWriter<T, E>
+fn from_tcp(stream: &mut T, buffer: &mut [u8]) BufWriter<T, E>
 ```
 
 Borrows the TCP connection and buffer. An empty buffer uses direct writes.
 
 ### `BufWriter::write`
 
-[buffered.crb:114](../stdlib/src/io/buffered/buffered.crb#L114)
+[buffered.crb:112](../stdlib/src/io/buffered/buffered.crb#L112)
 
 ```rust
-fn write(&mut self, input: &[u8]) -> Result<usize, BufferedError<E>>
+fn write(&mut self, input: &[u8]) Result<usize, BufferedError<E>>
 ```
 
 Accepts a prefix of the input and returns the number accepted.
@@ -4694,10 +4694,10 @@ Flushes previously buffered bytes when the buffer is already full.
 
 ### `BufWriter::flush`
 
-[buffered.crb:154](../stdlib/src/io/buffered/buffered.crb#L154)
+[buffered.crb:152](../stdlib/src/io/buffered/buffered.crb#L152)
 
 ```rust
-fn flush(&mut self) -> Result<(), BufferedError<E>>
+fn flush(&mut self) Result<(), BufferedError<E>>
 ```
 
 Writes pending bytes to the stream. After an error, retrying starts at the
@@ -4724,27 +4724,27 @@ Members:
 
 ### `Iter::new`
 
-[iter.crb:16](../stdlib/src/iter/iter.crb#L16)
+[iter.crb:14](../stdlib/src/iter/iter.crb#L14)
 
 ```rust
-fn new(source: &mut T) -> Iter<T, V>
+fn new(source: &mut T) Iter<T, V>
 ```
 
 Captures the source reference when the iterator is constructed.
 
 ### `Iter::next`
 
-[iter.crb:21](../stdlib/src/iter/iter.crb#L21)
+[iter.crb:19](../stdlib/src/iter/iter.crb#L19)
 
 ```rust
-fn next(&mut self) -> Option<V>
+fn next(&mut self) Option<V>
 ```
 
 Requests one item through the source's statically resolved method.
 
 ### `Iter::collect`
 
-[iter.crb:28](../stdlib/src/iter/iter.crb#L28)
+[iter.crb:26](../stdlib/src/iter/iter.crb#L26)
 
 ```rust
 fn collect(mut self: Iter<T, V>, destination: &mut D)
@@ -4754,7 +4754,7 @@ Consumes this chain and appends its remaining items to the destination.
 
 ### `Map`
 
-[iter.crb:42](../stdlib/src/iter/iter.crb#L42)
+[iter.crb:41](../stdlib/src/iter/iter.crb#L41)
 
 ```rust
 pub struct Map<T, V, X>
@@ -4764,22 +4764,22 @@ Owns its predecessor and mapper. Items retain their ordinary dependencies.
 
 Members:
 
-- [`previous`](../stdlib/src/iter/iter.crb#L44) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
-- [`mapper`](../stdlib/src/iter/iter.crb#L46) (implementation field): Stored transformation/predicate/reduction function and its captured state.
+- [`previous`](../stdlib/src/iter/iter.crb#L43) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+- [`mapper`](../stdlib/src/iter/iter.crb#L45) (implementation field): Stored transformation/predicate/reduction function and its captured state.
 
 ### `Map::next`
 
-[iter.crb:51](../stdlib/src/iter/iter.crb#L51)
+[iter.crb:48](../stdlib/src/iter/iter.crb#L48)
 
 ```rust
-fn next(&mut self) -> Option<X>
+fn next(&mut self) Option<X>
 ```
 
 Advances the predecessor once and transforms the yielded item.
 
 ### `Map::collect`
 
-[iter.crb:60](../stdlib/src/iter/iter.crb#L60)
+[iter.crb:57](../stdlib/src/iter/iter.crb#L57)
 
 ```rust
 fn collect(mut self: Map<T, V, X>, destination: &mut D)
@@ -4789,7 +4789,7 @@ Consumes this chain and appends its remaining items to the destination.
 
 ### `Filter`
 
-[iter.crb:73](../stdlib/src/iter/iter.crb#L73)
+[iter.crb:71](../stdlib/src/iter/iter.crb#L71)
 
 ```rust
 pub struct Filter<T, V>
@@ -4799,22 +4799,22 @@ Owns its predecessor and predicate; rejected items are destroyed normally.
 
 Members:
 
-- [`previous`](../stdlib/src/iter/iter.crb#L75) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
-- [`mapper`](../stdlib/src/iter/iter.crb#L77) (implementation field): Stored transformation/predicate/reduction function and its captured state.
+- [`previous`](../stdlib/src/iter/iter.crb#L73) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+- [`mapper`](../stdlib/src/iter/iter.crb#L75) (implementation field): Stored transformation/predicate/reduction function and its captured state.
 
 ### `Filter::next`
 
-[iter.crb:82](../stdlib/src/iter/iter.crb#L82)
+[iter.crb:78](../stdlib/src/iter/iter.crb#L78)
 
 ```rust
-fn next(&mut self) -> Option<V>
+fn next(&mut self) Option<V>
 ```
 
 Returns the next accepted item. The predicate borrows it for this call.
 
 ### `Filter::collect`
 
-[iter.crb:97](../stdlib/src/iter/iter.crb#L97)
+[iter.crb:93](../stdlib/src/iter/iter.crb#L93)
 
 ```rust
 fn collect(mut self: Filter<T, V>, destination: &mut D)
@@ -4824,7 +4824,7 @@ Consumes this chain and appends its remaining items to the destination.
 
 ### `Reduce`
 
-[iter.crb:110](../stdlib/src/iter/iter.crb#L110)
+[iter.crb:107](../stdlib/src/iter/iter.crb#L107)
 
 ```rust
 pub struct Reduce<T, V>
@@ -4834,33 +4834,32 @@ Reduces a source once, using its first item as the initial accumulator.
 
 Members:
 
-- [`previous`](../stdlib/src/iter/iter.crb#L112) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
-- [`mapper`](../stdlib/src/iter/iter.crb#L114) (implementation field): Stored transformation/predicate/reduction function and its captured state.
-- [`finished`](../stdlib/src/iter/iter.crb#L116) (implementation field): Records that this reduction has already consumed its source and must yield no more items.
+- [`previous`](../stdlib/src/iter/iter.crb#L109) (implementation field): Owned preceding pipeline stage; dropping this stage also cleans up that predecessor.
+- [`mapper`](../stdlib/src/iter/iter.crb#L111) (implementation field): Stored transformation/predicate/reduction function and its captured state.
 
 ### `Reduce::next`
 
-[iter.crb:121](../stdlib/src/iter/iter.crb#L121)
+[iter.crb:116](../stdlib/src/iter/iter.crb#L116)
 
 ```rust
-fn next(&mut self) -> Option<V>
+fn next(&mut self) Option<V>
 ```
 
 Consumes the remaining source and yields at most one accumulated item.
 
 ### `Reduce::remaining`
 
-[iter.crb:132](../stdlib/src/iter/iter.crb#L132)
+[iter.crb:127](../stdlib/src/iter/iter.crb#L127)
 
 ```rust
-fn remaining(&mut self, mut accumulator: V) -> V
+fn remaining(&mut self, mut accumulator: V) V
 ```
 
 Folds the remainder into an existing accumulator without fabricating a default.
 
 ### `Reduce::collect`
 
-[iter.crb:144](../stdlib/src/iter/iter.crb#L144)
+[iter.crb:139](../stdlib/src/iter/iter.crb#L139)
 
 ```rust
 fn collect(mut self: Reduce<T, V>, destination: &mut D)
@@ -4870,10 +4869,10 @@ Consumes this chain and appends its remaining items to the destination.
 
 ### `iter`
 
-[iter.crb:157](../stdlib/src/iter/iter.crb#L157)
+[iter.crb:153](../stdlib/src/iter/iter.crb#L153)
 
 ```rust
-pub fn iter(source: &mut T) -> Iter<T, V>
+pub fn iter(source: &mut T) Iter<T, V>
 ```
 
 Builds an iterator with explicit mutable permission and a dependency on its source.
@@ -4920,20 +4919,20 @@ Members:
 
 ### `Datagram::count`
 
-[socket.crb:41](../stdlib/src/net/socket.crb#L41)
+[socket.crb:39](../stdlib/src/net/socket.crb#L39)
 
 ```rust
-fn count(&self) -> usize
+fn count(&self) usize
 ```
 
 Returns how many payload bytes were received.
 
 ### `Datagram::sender`
 
-[socket.crb:44](../stdlib/src/net/socket.crb#L44)
+[socket.crb:42](../stdlib/src/net/socket.crb#L42)
 
 ```rust
-fn sender(&self) -> SocketAddr
+fn sender(&self) SocketAddr
 ```
 
 Returns the datagram's source IPv4 address and port.
@@ -4943,7 +4942,7 @@ Returns the datagram's source IPv4 address and port.
 [socket.crb:51](../stdlib/src/net/socket.crb#L51)
 
 ```rust
-pub fn datagram(size: u64, peer: u64) -> Datagram
+pub fn datagram(size: u64, peer: u64) Datagram
 ```
 
 Creates metadata for the byte count and sender returned by a receive operation.
@@ -4973,9 +4972,59 @@ Members:
 - [`read_descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L20) (implementation field): Descriptor view reserved for the read half; the connection retains closure responsibility.
 - [`write_descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L22) (implementation field): Descriptor view reserved for the write half; the connection retains closure responsibility.
 
+### `Connection::split`
+
+[socket.crb:25](../stdlib/src/net/asyn/tcp/socket.crb#L25)
+
+```rust
+fn split(&mut self) (ReadHalf, WriteHalf)
+```
+
+Borrows separate read and write views from the connection, which still owns the socket.
+
+### `Connection::addr`
+
+[socket.crb:32](../stdlib/src/net/asyn/tcp/socket.crb#L32)
+
+```rust
+fn addr(&self) SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:38](../stdlib/src/net/asyn/tcp/socket.crb#L38)
+
+```rust
+fn peer(&self) SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::write`
+
+[socket.crb:44](../stdlib/src/net/asyn/tcp/socket.crb#L44)
+
+```rust
+async fn write(&mut self, buffer: &[u8]) Result<usize, SocketError>
+```
+
+Awaits a write from the borrowed slice and returns the actual byte count.
+
+### `Connection::read`
+
+[socket.crb:51](../stdlib/src/net/asyn/tcp/socket.crb#L51)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError>
+```
+
+Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+
 ### `ReadHalf`
 
-[socket.crb:26](../stdlib/src/net/asyn/tcp/socket.crb#L26)
+[socket.crb:59](../stdlib/src/net/asyn/tcp/socket.crb#L59)
 
 ```rust
 pub struct ReadHalf
@@ -4985,11 +5034,21 @@ Borrows the portion of a TCP connection needed to read without owning its socket
 
 Members:
 
-- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L28) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
+- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L61) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
+
+### `ReadHalf::read`
+
+[socket.crb:64](../stdlib/src/net/asyn/tcp/socket.crb#L64)
+
+```rust
+async fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError>
+```
+
+Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
 
 ### `WriteHalf`
 
-[socket.crb:32](../stdlib/src/net/asyn/tcp/socket.crb#L32)
+[socket.crb:71](../stdlib/src/net/asyn/tcp/socket.crb#L71)
 
 ```rust
 pub struct WriteHalf
@@ -4999,31 +5058,21 @@ Borrows the portion of a TCP connection needed to write without owning its socke
 
 Members:
 
-- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L34) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
-
-### `ReadHalf::read`
-
-[socket.crb:39](../stdlib/src/net/asyn/tcp/socket.crb#L39)
-
-```rust
-async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+- [`descriptor`](../stdlib/src/net/asyn/tcp/socket.crb#L73) (implementation field): Borrowed native descriptor view; its owning connection must outlive this half.
 
 ### `WriteHalf::write`
 
-[socket.crb:46](../stdlib/src/net/asyn/tcp/socket.crb#L46)
+[socket.crb:76](../stdlib/src/net/asyn/tcp/socket.crb#L76)
 
 ```rust
-async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
+async fn write(&mut self, buffer: &[u8]) Result<usize, SocketError>
 ```
 
 Awaits a write from the borrowed slice and returns the actual byte count.
 
 ### `Listener`
 
-[socket.crb:52](../stdlib/src/net/asyn/tcp/socket.crb#L52)
+[socket.crb:85](../stdlib/src/net/asyn/tcp/socket.crb#L85)
 
 ```rust
 pub struct Listener
@@ -5033,98 +5082,48 @@ Owns a nonblocking listening socket for asynchronous accepts.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/asyn/tcp/socket.crb#L54) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/asyn/tcp/socket.crb#L56) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-
-### `connect`
-
-[socket.crb:77](../stdlib/src/net/asyn/tcp/socket.crb#L77)
-
-```rust
-pub async fn connect(address: SocketAddr) -> Result<Connection, SocketError>
-```
-
-Awaits a nonblocking TCP connection to the supplied endpoint.
-
-### `Connection::split`
-
-[socket.crb:87](../stdlib/src/net/asyn/tcp/socket.crb#L87)
-
-```rust
-fn split(&mut self) -> (ReadHalf, WriteHalf)
-```
-
-Borrows separate read and write views from the connection, which still owns the socket.
-
-### `Connection::addr`
-
-[socket.crb:94](../stdlib/src/net/asyn/tcp/socket.crb#L94)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Connection::peer`
-
-[socket.crb:100](../stdlib/src/net/asyn/tcp/socket.crb#L100)
-
-```rust
-fn peer(&self) -> SocketAddr
-```
-
-Returns the remote IPv4 address and port associated with the connection.
-
-### `Connection::write`
-
-[socket.crb:106](../stdlib/src/net/asyn/tcp/socket.crb#L106)
-
-```rust
-async fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Awaits a write from the borrowed slice and returns the actual byte count.
-
-### `Connection::read`
-
-[socket.crb:113](../stdlib/src/net/asyn/tcp/socket.crb#L113)
-
-```rust
-async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
+- [`__din_package_socket`](../stdlib/src/net/asyn/tcp/socket.crb#L87) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/asyn/tcp/socket.crb#L89) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 
 ### `Listener::bind`
 
-[socket.crb:121](../stdlib/src/net/asyn/tcp/socket.crb#L121)
+[socket.crb:92](../stdlib/src/net/asyn/tcp/socket.crb#L92)
 
 ```rust
-fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
+fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError>
 ```
 
 Binds a TCP listener and prepares its native socket for asynchronous accepts.
 
 ### `Listener::addr`
 
-[socket.crb:141](../stdlib/src/net/asyn/tcp/socket.crb#L141)
+[socket.crb:112](../stdlib/src/net/asyn/tcp/socket.crb#L112)
 
 ```rust
-fn addr(&self) -> SocketAddr
+fn addr(&self) SocketAddr
 ```
 
 Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Listener::accept`
 
-[socket.crb:147](../stdlib/src/net/asyn/tcp/socket.crb#L147)
+[socket.crb:118](../stdlib/src/net/asyn/tcp/socket.crb#L118)
 
 ```rust
-async fn accept(&mut self) -> Result<Connection, SocketError>
+async fn accept(&mut self) Result<Connection, SocketError>
 ```
 
 Awaits an incoming TCP connection and returns its owned socket wrapper.
+
+### `connect`
+
+[socket.crb:147](../stdlib/src/net/asyn/tcp/socket.crb#L147)
+
+```rust
+pub async fn connect(address: SocketAddr) Result<Connection, SocketError>
+```
+
+Awaits a nonblocking TCP connection to the supplied endpoint.
 
 
 ## `std::net::asyn::udp`
@@ -5149,9 +5148,49 @@ Members:
 - [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L16) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 - [`remote_address`](../stdlib/src/net/asyn/udp/socket.crb#L18) (implementation field): Cached remote IPv4 endpoint.
 
+### `Connection::addr`
+
+[socket.crb:21](../stdlib/src/net/asyn/udp/socket.crb#L21)
+
+```rust
+fn addr(&self) SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:27](../stdlib/src/net/asyn/udp/socket.crb#L27)
+
+```rust
+fn peer(&self) SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::send`
+
+[socket.crb:33](../stdlib/src/net/asyn/udp/socket.crb#L33)
+
+```rust
+async fn send(&mut self, buffer: &[u8]) Result<usize, SocketError>
+```
+
+Awaits transmission of one complete datagram to the connected peer, including an empty datagram.
+
+### `Connection::recv`
+
+[socket.crb:40](../stdlib/src/net/asyn/udp/socket.crb#L40)
+
+```rust
+async fn recv(&mut self, buffer: &mut [u8]) Result<usize, SocketError>
+```
+
+Awaits one datagram from the connected peer. An oversized payload is consumed and reported.
+
 ### `Listener`
 
-[socket.crb:22](../stdlib/src/net/asyn/udp/socket.crb#L22)
+[socket.crb:52](../stdlib/src/net/asyn/udp/socket.crb#L52)
 
 ```rust
 pub struct Listener
@@ -5161,98 +5200,58 @@ Owns a bound UDP socket prepared for asynchronous addressed I/O.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/asyn/udp/socket.crb#L24) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L26) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
+- [`__din_package_socket`](../stdlib/src/net/asyn/udp/socket.crb#L54) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/asyn/udp/socket.crb#L56) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 
-### `connect`
-
-[socket.crb:30](../stdlib/src/net/asyn/udp/socket.crb#L30)
-
-```rust
-pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
-```
-
-Associates a UDP socket with a peer and prepares it for asynchronous I/O.
-
-### `Connection::addr`
-
-[socket.crb:47](../stdlib/src/net/asyn/udp/socket.crb#L47)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Connection::peer`
-
-[socket.crb:53](../stdlib/src/net/asyn/udp/socket.crb#L53)
-
-```rust
-fn peer(&self) -> SocketAddr
-```
-
-Returns the remote IPv4 address and port associated with the connection.
-
-### `Connection::send`
+### `Listener::bind`
 
 [socket.crb:59](../stdlib/src/net/asyn/udp/socket.crb#L59)
 
 ```rust
-async fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Awaits transmission of one complete datagram to the connected peer, including an empty datagram.
-
-### `Connection::recv`
-
-[socket.crb:66](../stdlib/src/net/asyn/udp/socket.crb#L66)
-
-```rust
-async fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Awaits one datagram from the connected peer. An oversized payload is consumed and reported.
-
-### `Listener::bind`
-
-[socket.crb:78](../stdlib/src/net/asyn/udp/socket.crb#L78)
-
-```rust
-fn bind(address: SocketAddr) -> Result<Listener, SocketError>
+fn bind(address: SocketAddr) Result<Listener, SocketError>
 ```
 
 Binds the supplied endpoint and prepares the socket for asynchronous I/O.
 
 ### `Listener::addr`
 
-[socket.crb:94](../stdlib/src/net/asyn/udp/socket.crb#L94)
+[socket.crb:75](../stdlib/src/net/asyn/udp/socket.crb#L75)
 
 ```rust
-fn addr(&self) -> SocketAddr
+fn addr(&self) SocketAddr
 ```
 
 Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Listener::recv`
 
-[socket.crb:100](../stdlib/src/net/asyn/udp/socket.crb#L100)
+[socket.crb:81](../stdlib/src/net/asyn/udp/socket.crb#L81)
 
 ```rust
-async fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
+async fn recv(&mut self, buffer: &mut [u8]) Result<Datagram, SocketError>
 ```
 
 Awaits one datagram and its sender address. An oversized payload is consumed and reported.
 
 ### `Listener::send`
 
-[socket.crb:106](../stdlib/src/net/asyn/udp/socket.crb#L106)
+[socket.crb:87](../stdlib/src/net/asyn/udp/socket.crb#L87)
 
 ```rust
-async fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
+async fn send(&mut self, buffer: &[u8], destination: SocketAddr) Result<usize, SocketError>
 ```
 
 Awaits transmission of one complete datagram to the supplied destination, including an empty datagram.
+
+### `connect`
+
+[socket.crb:95](../stdlib/src/net/asyn/udp/socket.crb#L95)
+
+```rust
+pub fn connect(address: SocketAddr) Result<Connection, SocketError>
+```
+
+Associates a UDP socket with a peer and prepares it for asynchronous I/O.
 
 
 ## `std::net::http`
@@ -5356,27 +5355,27 @@ Members:
 
 ### `Header::name`
 
-[http.crb:66](../stdlib/src/net/http/http.crb#L66)
+[http.crb:63](../stdlib/src/net/http/http.crb#L63)
 
 ```rust
-fn name(&self) -> &str
+fn name(&self) &str
 ```
 
 Returns the validated ASCII field name.
 
 ### `Header::value`
 
-[http.crb:68](../stdlib/src/net/http/http.crb#L68)
+[http.crb:65](../stdlib/src/net/http/http.crb#L65)
 
 ```rust
-fn value(&self) -> &[u8]
+fn value(&self) &[u8]
 ```
 
 Borrows the original field value bytes, without UTF-8 interpretation.
 
 ### `Headers`
 
-[http.crb:72](../stdlib/src/net/http/http.crb#L72)
+[http.crb:71](../stdlib/src/net/http/http.crb#L71)
 
 ```rust
 pub struct Headers
@@ -5386,33 +5385,33 @@ Owns bounded raw header bytes; traversal needs no separately allocated index.
 
 Members:
 
-- [`bytes`](../stdlib/src/net/http/http.crb#L74) (implementation field): Parsed lines retain CRLF to permit offset-based traversal.
-- [`used`](../stdlib/src/net/http/http.crb#L76) (implementation field): Number of populated bytes, including the final empty line.
-- [`count`](../stdlib/src/net/http/http.crb#L78) (implementation field): Number of fields, including duplicates.
+- [`bytes`](../stdlib/src/net/http/http.crb#L73) (implementation field): Parsed lines retain CRLF to permit offset-based traversal.
+- [`used`](../stdlib/src/net/http/http.crb#L75) (implementation field): Number of populated bytes, including the final empty line.
+- [`count`](../stdlib/src/net/http/http.crb#L77) (implementation field): Number of fields, including duplicates.
 
 ### `Headers::len`
 
-[http.crb:92](../stdlib/src/net/http/http.crb#L92)
+[http.crb:80](../stdlib/src/net/http/http.crb#L80)
 
 ```rust
-fn len(&self) -> usize
+fn len(&self) usize
 ```
 
 Number of header fields; repeated names each count once.
 
 ### `Headers::get`
 
-[http.crb:94](../stdlib/src/net/http/http.crb#L94)
+[http.crb:82](../stdlib/src/net/http/http.crb#L82)
 
 ```rust
-fn get(&self, index: usize) -> Option<Header>
+fn get(&self, index: usize) Option<Header>
 ```
 
 Returns the field at an ordinal, preserving repeats and arrival order.
 
 ### `BodyReader`
 
-[http.crb:208](../stdlib/src/net/http/http.crb#L208)
+[http.crb:206](../stdlib/src/net/http/http.crb#L206)
 
 ```rust
 pub struct BodyReader<R, E>
@@ -5422,65 +5421,65 @@ Borrows a reader and exposes only declared body bytes; dropping never drains.
 
 Members:
 
-- [`source`](../stdlib/src/net/http/http.crb#L210) (implementation field): Injected reader, retained for this message's body lifetime.
-- [`mode`](../stdlib/src/net/http/http.crb#L212) (implementation field): Zero: absent; one: Content-Length; two: chunked.
-- [`remaining`](../stdlib/src/net/http/http.crb#L214) (implementation field): Unread bytes in the current fixed-length body or chunk.
-- [`delimiter`](../stdlib/src/net/http/http.crb#L216) (implementation field): A nonfinal chunk has been consumed and its CRLF is pending.
-- [`finished`](../stdlib/src/net/http/http.crb#L218) (implementation field): The declared body has ended.
+- [`source`](../stdlib/src/net/http/http.crb#L208) (implementation field): Injected reader, retained for this message's body lifetime.
+- [`mode`](../stdlib/src/net/http/http.crb#L210) (implementation field): Zero: absent; one: Content-Length; two: chunked.
+- [`remaining`](../stdlib/src/net/http/http.crb#L212) (implementation field): Unread bytes in the current fixed-length body or chunk.
+- [`delimiter`](../stdlib/src/net/http/http.crb#L214) (implementation field): A nonfinal chunk has been consumed and its CRLF is pending.
+- [`finished`](../stdlib/src/net/http/http.crb#L216) (implementation field): The declared body has ended.
 
 ### `BodyReader::new`
 
-[http.crb:223](../stdlib/src/net/http/http.crb#L223)
+[http.crb:219](../stdlib/src/net/http/http.crb#L219)
 
 ```rust
-fn new(reader: &mut R) -> BodyReader<R, E>
+fn new(reader: &mut R) BodyReader<R, E>
 ```
 
 Captures the reader without performing transport access.
 
 ### `BodyReader::one`
 
-[http.crb:228](../stdlib/src/net/http/http.crb#L228)
+[http.crb:224](../stdlib/src/net/http/http.crb#L224)
 
 ```rust
-fn one(&mut self) -> Result<Option<u8>, ParseError<E>>
+fn one(&mut self) Result<Option<u8>, ParseError<E>>
 ```
 
 Reads exactly one logical byte, preserving any buffered-reader lookahead.
 
 ### `BodyReader::line`
 
-[http.crb:241](../stdlib/src/net/http/http.crb#L241)
+[http.crb:237](../stdlib/src/net/http/http.crb#L237)
 
 ```rust
-fn line(&mut self, output: &mut [u8]) -> Result<Option<usize>, ParseError<E>>
+fn line(&mut self, output: &mut [u8]) Result<Option<usize>, ParseError<E>>
 ```
 
 Reads one strict CRLF line without copying its terminator into output.
 
 ### `BodyReader::headers`
 
-[http.crb:267](../stdlib/src/net/http/http.crb#L267)
+[http.crb:263](../stdlib/src/net/http/http.crb#L263)
 
 ```rust
-fn headers(&mut self) -> Result<Headers, ParseError<E>>
+fn headers(&mut self) Result<Headers, ParseError<E>>
 ```
 
 Reads a bounded section into owned storage, retaining repeated field lines.
 
 ### `BodyReader::read`
 
-[http.crb:294](../stdlib/src/net/http/http.crb#L294)
+[http.crb:290](../stdlib/src/net/http/http.crb#L290)
 
 ```rust
-fn read(&mut self, output: &mut [u8]) -> Result<usize, ParseError<E>>
+fn read(&mut self, output: &mut [u8]) Result<usize, ParseError<E>>
 ```
 
 Reads a body prefix; empty output causes no transport access.
 
 ### `Request`
 
-[http.crb:350](../stdlib/src/net/http/http.crb#L350)
+[http.crb:347](../stdlib/src/net/http/http.crb#L347)
 
 ```rust
 pub struct Request<R, E>
@@ -5490,66 +5489,66 @@ Owns request-head bytes and a reader-dependent optional body descriptor.
 
 Members:
 
-- [`line`](../stdlib/src/net/http/http.crb#L352) (implementation field): Request line bytes, excluding CRLF.
-- [`method_end`](../stdlib/src/net/http/http.crb#L354) (implementation field): End of the method token.
-- [`target_end`](../stdlib/src/net/http/http.crb#L356) (implementation field): End of the request target.
-- [`protocol`](../stdlib/src/net/http/http.crb#L358) (implementation field): Parsed protocol version.
-- [`fields`](../stdlib/src/net/http/http.crb#L360) (implementation field): Owned header section.
-- [`body_reader`](../stdlib/src/net/http/http.crb#L362) (implementation field): Optional body's framing state and reader dependency.
+- [`line`](../stdlib/src/net/http/http.crb#L349) (implementation field): Request line bytes, excluding CRLF.
+- [`method_end`](../stdlib/src/net/http/http.crb#L351) (implementation field): End of the method token.
+- [`target_end`](../stdlib/src/net/http/http.crb#L353) (implementation field): End of the request target.
+- [`protocol`](../stdlib/src/net/http/http.crb#L355) (implementation field): Parsed protocol version.
+- [`fields`](../stdlib/src/net/http/http.crb#L357) (implementation field): Owned header section.
+- [`body_reader`](../stdlib/src/net/http/http.crb#L359) (implementation field): Optional body's framing state and reader dependency.
 
 ### `Request::method`
 
-[http.crb:367](../stdlib/src/net/http/http.crb#L367)
+[http.crb:362](../stdlib/src/net/http/http.crb#L362)
 
 ```rust
-fn method(&self) -> &str
+fn method(&self) &str
 ```
 
 Returns the method as a borrowed ASCII text view, including extensions.
 
 ### `Request::target`
 
-[http.crb:369](../stdlib/src/net/http/http.crb#L369)
+[http.crb:364](../stdlib/src/net/http/http.crb#L364)
 
 ```rust
-fn target(&self) -> &str
+fn target(&self) &str
 ```
 
 Returns the unmodified request target as a borrowed ASCII text view.
 
 ### `Request::version`
 
-[http.crb:371](../stdlib/src/net/http/http.crb#L371)
+[http.crb:366](../stdlib/src/net/http/http.crb#L366)
 
 ```rust
-fn version(&self) -> &Version
+fn version(&self) &Version
 ```
 
 Returns the protocol version without transferring its storage.
 
 ### `Request::headers`
 
-[http.crb:373](../stdlib/src/net/http/http.crb#L373)
+[http.crb:368](../stdlib/src/net/http/http.crb#L368)
 
 ```rust
-fn headers(&self) -> &Headers
+fn headers(&self) &Headers
 ```
 
 Borrows owned headers, retaining repeats.
 
 ### `Request::body`
 
-[http.crb:375](../stdlib/src/net/http/http.crb#L375)
+[http.crb:370](../stdlib/src/net/http/http.crb#L370)
 
 ```rust
-fn body(&mut self) -> Option<&mut BodyReader<R, E>>
+fn body(&mut self) Option<&mut BodyReader<R, E>>
 ```
 
 Borrows the optional framed body; this operation itself performs no reads.
 
 ### `Response`
 
-[http.crb:384](../stdlib/src/net/http/http.crb#L384)
+[http.crb:380](../stdlib/src/net/http/http.crb#L380)
 
 ```rust
 pub struct Response<R, E>
@@ -5559,79 +5558,79 @@ Owns response-head bytes; the caller supplies request-dependent semantics.
 
 Members:
 
-- [`line`](../stdlib/src/net/http/http.crb#L386) (implementation field): Status line bytes, excluding CRLF.
-- [`line_length`](../stdlib/src/net/http/http.crb#L388) (implementation field): Populated status-line bytes.
-- [`code`](../stdlib/src/net/http/http.crb#L390) (implementation field): Three-digit status code.
-- [`protocol`](../stdlib/src/net/http/http.crb#L392) (implementation field): Parsed protocol version.
-- [`fields`](../stdlib/src/net/http/http.crb#L394) (implementation field): Owned header section.
-- [`body_reader`](../stdlib/src/net/http/http.crb#L396) (implementation field): Header-indicated body, which must not be read for a HEAD response.
+- [`line`](../stdlib/src/net/http/http.crb#L382) (implementation field): Status line bytes, excluding CRLF.
+- [`line_length`](../stdlib/src/net/http/http.crb#L384) (implementation field): Populated status-line bytes.
+- [`code`](../stdlib/src/net/http/http.crb#L386) (implementation field): Three-digit status code.
+- [`protocol`](../stdlib/src/net/http/http.crb#L388) (implementation field): Parsed protocol version.
+- [`fields`](../stdlib/src/net/http/http.crb#L390) (implementation field): Owned header section.
+- [`body_reader`](../stdlib/src/net/http/http.crb#L392) (implementation field): Header-indicated body, which must not be read for a HEAD response.
 
 ### `Response::status`
 
-[http.crb:401](../stdlib/src/net/http/http.crb#L401)
+[http.crb:395](../stdlib/src/net/http/http.crb#L395)
 
 ```rust
-fn status(&self) -> u16
+fn status(&self) u16
 ```
 
 Returns the status code.
 
 ### `Response::reason`
 
-[http.crb:403](../stdlib/src/net/http/http.crb#L403)
+[http.crb:397](../stdlib/src/net/http/http.crb#L397)
 
 ```rust
-fn reason(&self) -> &[u8]
+fn reason(&self) &[u8]
 ```
 
 Returns reason-phrase octets without imposing UTF-8.
 
 ### `Response::version`
 
-[http.crb:405](../stdlib/src/net/http/http.crb#L405)
+[http.crb:399](../stdlib/src/net/http/http.crb#L399)
 
 ```rust
-fn version(&self) -> &Version
+fn version(&self) &Version
 ```
 
 Returns the parsed protocol version.
 
 ### `Response::headers`
 
-[http.crb:407](../stdlib/src/net/http/http.crb#L407)
+[http.crb:401](../stdlib/src/net/http/http.crb#L401)
 
 ```rust
-fn headers(&self) -> &Headers
+fn headers(&self) &Headers
 ```
 
 Borrows the response header section.
 
 ### `Response::body`
 
-[http.crb:409](../stdlib/src/net/http/http.crb#L409)
+[http.crb:403](../stdlib/src/net/http/http.crb#L403)
 
 ```rust
-fn body(&mut self) -> Option<&mut BodyReader<R, E>>
+fn body(&mut self) Option<&mut BodyReader<R, E>>
 ```
 
 Returns a header-indicated body; caller handles HEAD and exchange context.
 
 ### `request`
 
-[http.crb:433](../stdlib/src/net/http/http.crb#L433)
+[http.crb:428](../stdlib/src/net/http/http.crb#L428)
 
 ```rust
-pub fn request(reader: &mut R) -> Result<Option<Request<R, E>>, ParseError<E>>
+pub fn request(reader: &mut R) Result<Option<Request<R, E>>, ParseError<E>>
 ```
 
 Parses one request head, without prefetching body or next-request bytes.
 
 ### `response`
 
-[http.crb:461](../stdlib/src/net/http/http.crb#L461)
+[http.crb:456](../stdlib/src/net/http/http.crb#L456)
 
 ```rust
-pub fn response(reader: &mut R) -> Result<Option<Response<R, E>>, ParseError<E>>
+pub fn response(reader: &mut R) Result<Option<Response<R, E>>, ParseError<E>>
 ```
 
 Parses one response head; a declared body is an indication, not HEAD context.
@@ -5655,9 +5654,19 @@ Members:
 
 - [`bits`](../stdlib/src/net/ipv4/address.crb#L7) (implementation field): IPv4 address bits in the representation used by from_parts and octet accessors.
 
+### `Addr::new`
+
+[address.crb:10](../stdlib/src/net/ipv4/address.crb#L10)
+
+```rust
+fn new(a: u8, b: u8, c: u8, d: u8) Addr
+```
+
+Packs four IPv4 octets in network order.
+
 ### `SocketAddr`
 
-[address.crb:11](../stdlib/src/net/ipv4/address.crb#L11)
+[address.crb:16](../stdlib/src/net/ipv4/address.crb#L16)
 
 ```rust
 pub struct SocketAddr
@@ -5667,12 +5676,52 @@ Pairs a packed IPv4 address with a 16-bit port.
 
 Members:
 
-- [`bits`](../stdlib/src/net/ipv4/address.crb#L13) (implementation field): IPv4 address bits in the representation used by from_parts and octet accessors.
-- [`port_number`](../stdlib/src/net/ipv4/address.crb#L15) (implementation field): Transport port number, including zero before OS port allocation.
+- [`bits`](../stdlib/src/net/ipv4/address.crb#L18) (implementation field): IPv4 address bits in the representation used by from_parts and octet accessors.
+- [`port_number`](../stdlib/src/net/ipv4/address.crb#L20) (implementation field): Transport port number, including zero before OS port allocation.
+
+### `SocketAddr::new`
+
+[address.crb:23](../stdlib/src/net/ipv4/address.crb#L23)
+
+```rust
+fn new(ip: Addr, port: u16) SocketAddr
+```
+
+Pairs an IPv4 address with the supplied port number.
+
+### `SocketAddr::ipv4_bits`
+
+[address.crb:28](../stdlib/src/net/ipv4/address.crb#L28)
+
+```rust
+fn ipv4_bits(&self) u32
+```
+
+Returns the address with the first IPv4 octet in the high byte.
+
+### `SocketAddr::port`
+
+[address.crb:31](../stdlib/src/net/ipv4/address.crb#L31)
+
+```rust
+fn port(&self) u16
+```
+
+Returns the socket endpoint's port number.
+
+### `SocketAddr::parse`
+
+[address.crb:34](../stdlib/src/net/ipv4/address.crb#L34)
+
+```rust
+fn parse(text: &str) Result<SocketAddr, ParseError>
+```
+
+Parses an IPv4 endpoint written as four decimal octets, a colon and a decimal port.
 
 ### `ParseError`
 
-[address.crb:19](../stdlib/src/net/ipv4/address.crb#L19)
+[address.crb:71](../stdlib/src/net/ipv4/address.crb#L71)
 
 ```rust
 pub enum ParseError
@@ -5682,64 +5731,14 @@ Reports invalid IPv4 endpoint syntax or an out-of-range address component.
 
 Members:
 
-- [`InvalidAddress`](../stdlib/src/net/ipv4/address.crb#L21) (variant): The IPv4 address or port text is malformed or out of range.
-
-### `Addr::new`
-
-[address.crb:26](../stdlib/src/net/ipv4/address.crb#L26)
-
-```rust
-fn new(a: u8, b: u8, c: u8, d: u8) -> Addr
-```
-
-Packs four IPv4 octets in network order.
-
-### `SocketAddr::new`
-
-[address.crb:33](../stdlib/src/net/ipv4/address.crb#L33)
-
-```rust
-fn new(ip: Addr, port: u16) -> SocketAddr
-```
-
-Pairs an IPv4 address with the supplied port number.
-
-### `SocketAddr::ipv4_bits`
-
-[address.crb:38](../stdlib/src/net/ipv4/address.crb#L38)
-
-```rust
-fn ipv4_bits(&self) -> u32
-```
-
-Returns the address with the first IPv4 octet in the high byte.
-
-### `SocketAddr::port`
-
-[address.crb:41](../stdlib/src/net/ipv4/address.crb#L41)
-
-```rust
-fn port(&self) -> u16
-```
-
-Returns the socket endpoint's port number.
-
-### `SocketAddr::parse`
-
-[address.crb:44](../stdlib/src/net/ipv4/address.crb#L44)
-
-```rust
-fn parse(text: &str) -> Result<SocketAddr, ParseError>
-```
-
-Parses an IPv4 endpoint written as four decimal octets, a colon and a decimal port.
+- [`InvalidAddress`](../stdlib/src/net/ipv4/address.crb#L73) (variant): The IPv4 address or port text is malformed or out of range.
 
 ### `from_parts`
 
-[address.crb:81](../stdlib/src/net/ipv4/address.crb#L81)
+[address.crb:79](../stdlib/src/net/ipv4/address.crb#L79)
 
 ```rust
-pub fn from_parts(ip: u32, port: u16) -> SocketAddr
+pub fn from_parts(ip: u32, port: u16) SocketAddr
 ```
 
 Constructs a socket endpoint from packed IPv4 bits and a port.
@@ -5767,9 +5766,49 @@ Members:
 - [`local_address`](../stdlib/src/net/tcp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 - [`remote_address`](../stdlib/src/net/tcp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
 
+### `Connection::addr`
+
+[socket.crb:19](../stdlib/src/net/tcp/socket.crb#L19)
+
+```rust
+fn addr(&self) SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:25](../stdlib/src/net/tcp/socket.crb#L25)
+
+```rust
+fn peer(&self) SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::write`
+
+[socket.crb:31](../stdlib/src/net/tcp/socket.crb#L31)
+
+```rust
+fn write(&mut self, buffer: &[u8]) Result<usize, SocketError>
+```
+
+Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
+
+### `Connection::read`
+
+[socket.crb:38](../stdlib/src/net/tcp/socket.crb#L38)
+
+```rust
+fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError>
+```
+
+Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+
 ### `Listener`
 
-[socket.crb:20](../stdlib/src/net/tcp/socket.crb#L20)
+[socket.crb:46](../stdlib/src/net/tcp/socket.crb#L46)
 
 ```rust
 pub struct Listener
@@ -5779,88 +5818,48 @@ Owns a TCP listening socket and accepts incoming connections.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/tcp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-
-### `connect`
-
-[socket.crb:41](../stdlib/src/net/tcp/socket.crb#L41)
-
-```rust
-pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
-```
-
-Establishes a blocking TCP connection to the supplied endpoint.
-
-### `Connection::addr`
-
-[socket.crb:51](../stdlib/src/net/tcp/socket.crb#L51)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Connection::peer`
-
-[socket.crb:57](../stdlib/src/net/tcp/socket.crb#L57)
-
-```rust
-fn peer(&self) -> SocketAddr
-```
-
-Returns the remote IPv4 address and port associated with the connection.
-
-### `Connection::write`
-
-[socket.crb:63](../stdlib/src/net/tcp/socket.crb#L63)
-
-```rust
-fn write(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-
-### `Connection::read`
-
-[socket.crb:70](../stdlib/src/net/tcp/socket.crb#L70)
-
-```rust
-fn read(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
+- [`__din_package_socket`](../stdlib/src/net/tcp/socket.crb#L48) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/tcp/socket.crb#L50) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 
 ### `Listener::bind`
 
-[socket.crb:78](../stdlib/src/net/tcp/socket.crb#L78)
+[socket.crb:53](../stdlib/src/net/tcp/socket.crb#L53)
 
 ```rust
-fn bind(address: SocketAddr, backlog: Option<i32>) -> Result<Listener, SocketError>
+fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError>
 ```
 
 Binds and listens at the supplied endpoint. Use port zero for an assigned port and None for the system maximum backlog.
 
 ### `Listener::addr`
 
-[socket.crb:95](../stdlib/src/net/tcp/socket.crb#L95)
+[socket.crb:70](../stdlib/src/net/tcp/socket.crb#L70)
 
 ```rust
-fn addr(&self) -> SocketAddr
+fn addr(&self) SocketAddr
 ```
 
 Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Listener::accept`
 
-[socket.crb:101](../stdlib/src/net/tcp/socket.crb#L101)
+[socket.crb:76](../stdlib/src/net/tcp/socket.crb#L76)
 
 ```rust
-fn accept(&mut self) -> Result<Connection, SocketError>
+fn accept(&mut self) Result<Connection, SocketError>
 ```
 
 Blocks until it can return an owned accepted TCP connection or an error.
+
+### `connect`
+
+[socket.crb:101](../stdlib/src/net/tcp/socket.crb#L101)
+
+```rust
+pub fn connect(address: SocketAddr) Result<Connection, SocketError>
+```
+
+Establishes a blocking TCP connection to the supplied endpoint.
 
 
 ## `std::net::tls`
@@ -5886,80 +5885,80 @@ Members:
 
 ### `Certificate::from_message`
 
-[codec.crb:334](../stdlib/src/net/tls/codec.crb#L334)
+[codec.crb:298](../stdlib/src/net/tls/codec.crb#L298)
 
 ```rust
-fn from_message(input: &[u8]) -> Result<Certificate, HandshakeError>
+fn from_message(input: &[u8]) Result<Certificate, HandshakeError>
 ```
 
 Parses a complete TLS Certificate handshake message and records the ranges in it.
 
 ### `Certificate::context_length`
 
-[codec.crb:348](../stdlib/src/net/tls/codec.crb#L348)
+[codec.crb:312](../stdlib/src/net/tls/codec.crb#L312)
 
 ```rust
-fn context_length(&self) -> u64
+fn context_length(&self) u64
 ```
 
 Returns the request context length in bytes.
 
 ### `Certificate::context_range`
 
-[codec.crb:351](../stdlib/src/net/tls/codec.crb#L351)
+[codec.crb:315](../stdlib/src/net/tls/codec.crb#L315)
 
 ```rust
-fn context_range(&self) -> (u64, u64)
+fn context_range(&self) (u64, u64)
 ```
 
 Returns the start and exclusive end of the request context.
 
 ### `Certificate::count`
 
-[codec.crb:356](../stdlib/src/net/tls/codec.crb#L356)
+[codec.crb:320](../stdlib/src/net/tls/codec.crb#L320)
 
 ```rust
-fn count(&self) -> u64
+fn count(&self) u64
 ```
 
 Returns the number of certificate entries in the handshake message.
 
 ### `Certificate::der_range`
 
-[codec.crb:359](../stdlib/src/net/tls/codec.crb#L359)
+[codec.crb:323](../stdlib/src/net/tls/codec.crb#L323)
 
 ```rust
-fn der_range(&self, index: u64) -> (u64, u64)
+fn der_range(&self, index: u64) (u64, u64)
 ```
 
 Returns the start and exclusive end of the DER bytes for an entry.
 
 ### `Certificate::extensions_range`
 
-[codec.crb:365](../stdlib/src/net/tls/codec.crb#L365)
+[codec.crb:329](../stdlib/src/net/tls/codec.crb#L329)
 
 ```rust
-fn extensions_range(&self, index: u64) -> (u64, u64)
+fn extensions_range(&self, index: u64) (u64, u64)
 ```
 
 Returns the start and exclusive end of the encoded extensions for an entry.
 
 ### `Certificate::supports_server_certificate`
 
-[codec.crb:371](../stdlib/src/net/tls/codec.crb#L371)
+[codec.crb:335](../stdlib/src/net/tls/codec.crb#L335)
 
 ```rust
-fn supports_server_certificate(&self) -> bool
+fn supports_server_certificate(&self) bool
 ```
 
 Checks the request context and entry extensions for the supported server profile.
 
 ### `Certificate::server_key`
 
-[codec.crb:384](../stdlib/src/net/tls/codec.crb#L384)
+[codec.crb:348](../stdlib/src/net/tls/codec.crb#L348)
 
 ```rust
-fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64) -> Result<X509PublicKey, HandshakeError>
+fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64) Result<X509PublicKey, HandshakeError>
 ```
 
 Checks the received certificate against a configured pin and obtains the associated public key.
@@ -5986,30 +5985,30 @@ Members:
 
 ### `Session::write_application`
 
-[handshake.crb:23](../stdlib/src/net/tls/handshake.crb#L23)
+[handshake.crb:21](../stdlib/src/net/tls/handshake.crb#L21)
 
 ```rust
-fn write_application(&mut self, socket: &mut Connection, content: &[u8], fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError>
+fn write_application(&mut self, socket: &mut Connection, content: &[u8], fragment: &mut [u8], wire: &mut [u8]) Result<(), HandshakeError>
 ```
 
 Protects and sends an application record on the original TCP connection.
 
 ### `Session::read_application`
 
-[handshake.crb:35](../stdlib/src/net/tls/handshake.crb#L35)
+[handshake.crb:33](../stdlib/src/net/tls/handshake.crb#L33)
 
 ```rust
-fn read_application(&mut self, socket: &mut Connection, wire: &mut [u8], output: &mut [u8]) -> Result<u64, HandshakeError>
+fn read_application(&mut self, socket: &mut Connection, wire: &mut [u8], output: &mut [u8]) Result<u64, HandshakeError>
 ```
 
 Receives and authenticates an application record, or returns zero on authenticated closure.
 
 ### `Session::shutdown`
 
-[handshake.crb:55](../stdlib/src/net/tls/handshake.crb#L55)
+[handshake.crb:53](../stdlib/src/net/tls/handshake.crb#L53)
 
 ```rust
-fn shutdown(&mut self, socket: &mut Connection, fragment: &mut [u8], wire: &mut [u8]) -> Result<(), HandshakeError>
+fn shutdown(&mut self, socket: &mut Connection, fragment: &mut [u8], wire: &mut [u8]) Result<(), HandshakeError>
 ```
 
 Sends the authenticated TLS close_notify alert.
@@ -6019,7 +6018,7 @@ Sends the authenticated TLS close_notify alert.
 [handshake.crb:167](../stdlib/src/net/tls/handshake.crb#L167)
 
 ```rust
-pub fn client_handshake(socket: &mut Connection, pin: &[u8], peer_key: &PublicKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+pub fn client_handshake(socket: &mut Connection, pin: &[u8], peer_key: &PublicKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) Result<Session, HandshakeError>
 ```
 
 Runs the client handshake using a configured leaf certificate and public key pin.
@@ -6029,7 +6028,7 @@ Runs the client handshake using a configured leaf certificate and public key pin
 [handshake.crb:178](../stdlib/src/net/tls/handshake.crb#L178)
 
 ```rust
-pub fn client_handshake_x509(socket: &mut Connection, hostname: &[u8], anchor: &[u8], now: i64, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+pub fn client_handshake_x509(socket: &mut Connection, hostname: &[u8], anchor: &[u8], now: i64, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) Result<Session, HandshakeError>
 ```
 
 Runs the client handshake with an explicit trust anchor and DNS identity check.
@@ -6039,7 +6038,7 @@ Runs the client handshake with an explicit trust anchor and DNS identity check.
 [handshake.crb:360](../stdlib/src/net/tls/handshake.crb#L360)
 
 ```rust
-pub fn server_handshake(socket: &mut Connection, certificate: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+pub fn server_handshake(socket: &mut Connection, certificate: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) Result<Session, HandshakeError>
 ```
 
 Runs the server handshake with one DER certificate and its signing key.
@@ -6049,7 +6048,7 @@ Runs the server handshake with one DER certificate and its signing key.
 [handshake.crb:368](../stdlib/src/net/tls/handshake.crb#L368)
 
 ```rust
-pub fn server_handshake_chain(socket: &mut Connection, chain: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) -> Result<Session, HandshakeError>
+pub fn server_handshake_chain(socket: &mut Connection, chain: &[u8], signing_key: &SigningKey, wire: &mut [u8], fragment: &mut [u8], message: &mut [u8]) Result<Session, HandshakeError>
 ```
 
 Runs the server handshake with a framed leaf-first certificate list and its signing key.
@@ -6131,150 +6130,150 @@ Members:
 
 ### `Transcript::new`
 
-[keys.crb:40](../stdlib/src/net/tls/keys/keys.crb#L40)
+[keys.crb:38](../stdlib/src/net/tls/keys/keys.crb#L38)
 
 ```rust
-fn new() -> Transcript
+fn new() Transcript
 ```
 
 Starts an empty handshake transcript.
 
 ### `Transcript::append`
 
-[keys.crb:48](../stdlib/src/net/tls/keys/keys.crb#L48)
+[keys.crb:46](../stdlib/src/net/tls/keys/keys.crb#L46)
 
 ```rust
-fn append(&mut self, message: &[u8]) -> Result<(), KeyError>
+fn append(&mut self, message: &[u8]) Result<(), KeyError>
 ```
 
 Adds handshake bytes in protocol order without record headers.
 
 ### `Transcript::digest`
 
-[keys.crb:58](../stdlib/src/net/tls/keys/keys.crb#L58)
+[keys.crb:56](../stdlib/src/net/tls/keys/keys.crb#L56)
 
 ```rust
-fn digest(&self) -> [u8; 32]
+fn digest(&self) [u8; 32]
 ```
 
 Returns a snapshot of the current transcript hash.
 
 ### `hkdf_expand_label`
 
-[keys.crb:79](../stdlib/src/net/tls/keys/keys.crb#L79)
+[keys.crb:78](../stdlib/src/net/tls/keys/keys.crb#L78)
 
 ```rust
-pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8], output: &mut [u8]) -> Result<(), KeyError>
+pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8], output: &mut [u8]) Result<(), KeyError>
 ```
 
 Derives output using the TLS 1.3 label prefix and serialized length and context.
 
 ### `early_secret`
 
-[keys.crb:140](../stdlib/src/net/tls/keys/keys.crb#L140)
+[keys.crb:139](../stdlib/src/net/tls/keys/keys.crb#L139)
 
 ```rust
-pub fn early_secret() -> Result<[u8; 32], KeyError>
+pub fn early_secret() Result<[u8; 32], KeyError>
 ```
 
 Derives the initial TLS early secret without a configured PSK.
 
 ### `derive_secret`
 
-[keys.crb:146](../stdlib/src/net/tls/keys/keys.crb#L146)
+[keys.crb:145](../stdlib/src/net/tls/keys/keys.crb#L145)
 
 ```rust
-pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError>
+pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) Result<[u8; 32], KeyError>
 ```
 
 Derives a 32-byte secret from the given label and transcript hash.
 
 ### `derived_secret`
 
-[keys.crb:154](../stdlib/src/net/tls/keys/keys.crb#L154)
+[keys.crb:153](../stdlib/src/net/tls/keys/keys.crb#L153)
 
 ```rust
-pub fn derived_secret(secret: &[u8]) -> Result<[u8; 32], KeyError>
+pub fn derived_secret(secret: &[u8]) Result<[u8; 32], KeyError>
 ```
 
 Derives the intermediate secret used as salt for the next extraction step.
 
 ### `handshake_secret`
 
-[keys.crb:166](../stdlib/src/net/tls/keys/keys.crb#L166)
+[keys.crb:165](../stdlib/src/net/tls/keys/keys.crb#L165)
 
 ```rust
-pub fn handshake_secret(early: &[u8], shared: &[u8]) -> Result<[u8; 32], KeyError>
+pub fn handshake_secret(early: &[u8], shared: &[u8]) Result<[u8; 32], KeyError>
 ```
 
 Mixes the ECDHE shared secret into the key schedule.
 
 ### `master_secret`
 
-[keys.crb:177](../stdlib/src/net/tls/keys/keys.crb#L177)
+[keys.crb:176](../stdlib/src/net/tls/keys/keys.crb#L176)
 
 ```rust
-pub fn master_secret(handshake: &[u8]) -> Result<[u8; 32], KeyError>
+pub fn master_secret(handshake: &[u8]) Result<[u8; 32], KeyError>
 ```
 
 Derives the master secret for application traffic and subsequent derivations.
 
 ### `traffic_secret`
 
-[keys.crb:188](../stdlib/src/net/tls/keys/keys.crb#L188)
+[keys.crb:187](../stdlib/src/net/tls/keys/keys.crb#L187)
 
 ```rust
-pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) -> Result<[u8; 32], KeyError>
+pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) Result<[u8; 32], KeyError>
 ```
 
 Derives the requested client or server traffic secret for the selected phase.
 
 ### `aes128_key`
 
-[keys.crb:202](../stdlib/src/net/tls/keys/keys.crb#L202)
+[keys.crb:201](../stdlib/src/net/tls/keys/keys.crb#L201)
 
 ```rust
-pub fn aes128_key(traffic: &[u8]) -> Result<[u8; 16], KeyError>
+pub fn aes128_key(traffic: &[u8]) Result<[u8; 16], KeyError>
 ```
 
 Derives the 16-byte record encryption key from a traffic secret.
 
 ### `traffic_iv`
 
-[keys.crb:214](../stdlib/src/net/tls/keys/keys.crb#L214)
+[keys.crb:213](../stdlib/src/net/tls/keys/keys.crb#L213)
 
 ```rust
-pub fn traffic_iv(traffic: &[u8]) -> Result<[u8; 12], KeyError>
+pub fn traffic_iv(traffic: &[u8]) Result<[u8; 12], KeyError>
 ```
 
 Derives the 12-byte static record IV from a traffic secret.
 
 ### `finished_key`
 
-[keys.crb:226](../stdlib/src/net/tls/keys/keys.crb#L226)
+[keys.crb:225](../stdlib/src/net/tls/keys/keys.crb#L225)
 
 ```rust
-pub fn finished_key(handshake_traffic: &[u8]) -> Result<[u8; 32], KeyError>
+pub fn finished_key(handshake_traffic: &[u8]) Result<[u8; 32], KeyError>
 ```
 
 Derives the key for Finished authentication.
 
 ### `finished_verify_data`
 
-[keys.crb:234](../stdlib/src/net/tls/keys/keys.crb#L234)
+[keys.crb:233](../stdlib/src/net/tls/keys/keys.crb#L233)
 
 ```rust
-pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) -> Result<[u8; 32], KeyError>
+pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) Result<[u8; 32], KeyError>
 ```
 
 Computes Finished verify_data over the transcript before Finished.
 
 ### `verify_finished`
 
-[keys.crb:248](../stdlib/src/net/tls/keys/keys.crb#L248)
+[keys.crb:247](../stdlib/src/net/tls/keys/keys.crb#L247)
 
 ```rust
-pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], received: &[u8]) -> Result<bool, KeyError>
+pub fn verify_finished(handshake_traffic: &[u8], transcript_hash: &[u8], received: &[u8]) Result<bool, KeyError>
 ```
 
 Checks received verify_data against the expected Finished authentication value.
@@ -6320,65 +6319,65 @@ Members:
 - [`session`](../stdlib/src/net/tls/openssl/connection.crb#L27) (implementation field): Owned native OpenSSL session address; used only by this optional backend.
 - [`failed`](../stdlib/src/net/tls/openssl/connection.crb#L29) (implementation field): Sticky failure state; subsequent operations must follow the API's failure/reset contract.
 
-### `connect`
-
-[connection.crb:33](../stdlib/src/net/tls/openssl/connection.crb#L33)
-
-```rust
-pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) -> Result<Connection, TlsError>
-```
-
-Consumes a connected TCP socket and performs TLS with a NUL-terminated hostname and trust path.
-
-### `accept`
-
-[connection.crb:56](../stdlib/src/net/tls/openssl/connection.crb#L56)
-
-```rust
-pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) -> Result<Connection, TlsError>
-```
-
-Consumes a connected TCP socket and performs TLS with NUL-terminated certificate and key paths.
-
 ### `Connection::read`
 
-[connection.crb:77](../stdlib/src/net/tls/openssl/connection.crb#L77)
+[connection.crb:32](../stdlib/src/net/tls/openssl/connection.crb#L32)
 
 ```rust
-fn read(&mut self, destination: &mut [u8]) -> Result<usize, TlsError>
+fn read(&mut self, destination: &mut [u8]) Result<usize, TlsError>
 ```
 
 Reads authenticated application data into the caller's slice.
 
 ### `Connection::write`
 
-[connection.crb:90](../stdlib/src/net/tls/openssl/connection.crb#L90)
+[connection.crb:45](../stdlib/src/net/tls/openssl/connection.crb#L45)
 
 ```rust
-fn write(&mut self, source: &[u8]) -> Result<usize, TlsError>
+fn write(&mut self, source: &[u8]) Result<usize, TlsError>
 ```
 
 Sends application bytes and returns the count accepted by the TLS session.
 
 ### `Connection::close`
 
-[connection.crb:104](../stdlib/src/net/tls/openssl/connection.crb#L104)
+[connection.crb:59](../stdlib/src/net/tls/openssl/connection.crb#L59)
 
 ```rust
-fn close(self: Connection) -> Result<(), TlsError>
+fn close(self: Connection) Result<(), TlsError>
 ```
 
 Consumes the connection and requests a TLS shutdown.
 
 ### `Connection::drop`
 
-[connection.crb:111](../stdlib/src/net/tls/openssl/connection.crb#L111)
+[connection.crb:66](../stdlib/src/net/tls/openssl/connection.crb#L66)
 
 ```rust
 fn drop(&mut self)
 ```
 
 Frees the OpenSSL session before the underlying TCP connection is destroyed.
+
+### `connect`
+
+[connection.crb:73](../stdlib/src/net/tls/openssl/connection.crb#L73)
+
+```rust
+pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) Result<Connection, TlsError>
+```
+
+Consumes a connected TCP socket and performs TLS with a NUL-terminated hostname and trust path.
+
+### `accept`
+
+[connection.crb:96](../stdlib/src/net/tls/openssl/connection.crb#L96)
+
+```rust
+pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) Result<Connection, TlsError>
+```
+
+Consumes a connected TCP socket and performs TLS with NUL-terminated certificate and key paths.
 
 
 ## `std::net::tls::record`
@@ -6466,37 +6465,37 @@ Members:
 
 ### `Record::kind`
 
-[record.crb:68](../stdlib/src/net/tls/record/record.crb#L68)
+[record.crb:66](../stdlib/src/net/tls/record/record.crb#L66)
 
 ```rust
-fn kind(&self) -> u8
+fn kind(&self) u8
 ```
 
 Returns the authenticated inner content type.
 
 ### `Record::len`
 
-[record.crb:70](../stdlib/src/net/tls/record/record.crb#L70)
+[record.crb:68](../stdlib/src/net/tls/record/record.crb#L68)
 
 ```rust
-fn len(&self) -> u64
+fn len(&self) u64
 ```
 
 Returns the number of content bytes in the plaintext buffer.
 
 ### `Record::is_close_notify`
 
-[record.crb:72](../stdlib/src/net/tls/record/record.crb#L72)
+[record.crb:70](../stdlib/src/net/tls/record/record.crb#L70)
 
 ```rust
-fn is_close_notify(&self) -> bool
+fn is_close_notify(&self) bool
 ```
 
 Reports whether the authenticated record closes the receive direction.
 
 ### `RecordCipher`
 
-[record.crb:76](../stdlib/src/net/tls/record/record.crb#L76)
+[record.crb:75](../stdlib/src/net/tls/record/record.crb#L75)
 
 ```rust
 pub struct RecordCipher
@@ -6506,78 +6505,110 @@ Holds the key, IV, sequence and state for one record direction.
 
 Members:
 
-- [`aes`](../stdlib/src/net/tls/record/record.crb#L78) (implementation field): Owned AES-GCM key schedule for this traffic direction.
-- [`iv`](../stdlib/src/net/tls/record/record.crb#L80) (implementation field): Per-direction IV used with the record sequence number.
-- [`sequence`](../stdlib/src/net/tls/record/record.crb#L82) (implementation field): Next record sequence number; key limits are checked before further use.
-- [`sending`](../stdlib/src/net/tls/record/record.crb#L84) (implementation field): True for a writer, false for a reader; direction-specific operations validate it.
-- [`status`](../stdlib/src/net/tls/record/record.crb#L86) (implementation field): Internal cipher state encoding active, closed or failed operation.
+- [`aes`](../stdlib/src/net/tls/record/record.crb#L77) (implementation field): Owned AES-GCM key schedule for this traffic direction.
+- [`iv`](../stdlib/src/net/tls/record/record.crb#L79) (implementation field): Per-direction IV used with the record sequence number.
+- [`sequence`](../stdlib/src/net/tls/record/record.crb#L81) (implementation field): Next record sequence number; key limits are checked before further use.
+- [`sending`](../stdlib/src/net/tls/record/record.crb#L83) (implementation field): True for a writer, false for a reader; direction-specific operations validate it.
+- [`status`](../stdlib/src/net/tls/record/record.crb#L85) (implementation field): Internal cipher state encoding active, closed or failed operation.
 
 ### `RecordCipher::writer`
 
-[record.crb:182](../stdlib/src/net/tls/record/record.crb#L182)
+[record.crb:88](../stdlib/src/net/tls/record/record.crb#L88)
 
 ```rust
-fn writer(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher
+fn writer(key: &[u8; 16], iv: &[u8; 12]) RecordCipher
 ```
 
 Creates an outbound record cipher from a traffic key and static IV.
 
 ### `RecordCipher::reader`
 
-[record.crb:184](../stdlib/src/net/tls/record/record.crb#L184)
+[record.crb:90](../stdlib/src/net/tls/record/record.crb#L90)
 
 ```rust
-fn reader(key: &[u8; 16], iv: &[u8; 12]) -> RecordCipher
+fn reader(key: &[u8; 16], iv: &[u8; 12]) RecordCipher
 ```
 
 Creates an inbound record cipher from a traffic key and static IV.
 
 ### `RecordCipher::seal`
 
-[record.crb:188](../stdlib/src/net/tls/record/record.crb#L188)
+[record.crb:94](../stdlib/src/net/tls/record/record.crb#L94)
 
 ```rust
-fn seal(&mut self, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error>
+fn seal(&mut self, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) Result<usize, Error>
 ```
 
 Encrypts one TLS record into caller-owned wire storage with optional padding.
 
 ### `RecordCipher::open`
 
-[record.crb:225](../stdlib/src/net/tls/record/record.crb#L225)
+[record.crb:131](../stdlib/src/net/tls/record/record.crb#L131)
 
 ```rust
-fn open(&mut self, wire: &[u8], plaintext: &mut [u8]) -> Result<Record, Error>
+fn open(&mut self, wire: &[u8], plaintext: &mut [u8]) Result<Record, Error>
 ```
 
 Authenticates and decrypts a complete TLS record into caller-owned storage.
 
 ### `RecordCipher::seal_close_notify`
 
-[record.crb:275](../stdlib/src/net/tls/record/record.crb#L275)
+[record.crb:181](../stdlib/src/net/tls/record/record.crb#L181)
 
 ```rust
-fn seal_close_notify(&mut self, scratch: &mut [u8], wire: &mut [u8]) -> Result<usize, Error>
+fn seal_close_notify(&mut self, scratch: &mut [u8], wire: &mut [u8]) Result<usize, Error>
 ```
 
 Builds a protected close_notify record and closes the write direction.
 
-### `encode_plaintext`
+Available when `target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64" || target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64"`.
 
-[record.crb:292](../stdlib/src/net/tls/record/record.crb#L292)
+### `RecordCipher::send_record`
+
+[record.crb:190](../stdlib/src/net/tls/record/record.crb#L190)
 
 ```rust
-pub fn encode_plaintext(kind: u8, initial_client_hello: bool, content: &[u8], wire: &mut [u8]) -> Result<usize, Error>
+fn send_record(&mut self, socket: &mut Connection, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) Result<(), Error>
+```
+
+Protects and sends one record using the caller's wire and scratch buffers.
+
+### `RecordCipher::receive_record`
+
+[record.crb:207](../stdlib/src/net/tls/record/record.crb#L207)
+
+```rust
+fn receive_record(&mut self, socket: &mut Connection, wire: &mut [u8], plaintext: &mut [u8]) Result<Record, Error>
+```
+
+Reads and authenticates one TLS record using caller-owned buffers.
+
+### `RecordCipher::close_notify`
+
+[record.crb:226](../stdlib/src/net/tls/record/record.crb#L226)
+
+```rust
+fn close_notify(&mut self, socket: &mut Connection, scratch: &mut [u8], wire: &mut [u8]) Result<(), Error>
+```
+
+Sends a protected closure alert over TCP and marks the write direction closed.
+
+### `encode_plaintext`
+
+[record.crb:337](../stdlib/src/net/tls/record/record.crb#L337)
+
+```rust
+pub fn encode_plaintext(kind: u8, initial_client_hello: bool, content: &[u8], wire: &mut [u8]) Result<usize, Error>
 ```
 
 Writes a cleartext TLS record for a supported handshake message.
 
 ### `decode_plaintext`
 
-[record.crb:308](../stdlib/src/net/tls/record/record.crb#L308)
+[record.crb:353](../stdlib/src/net/tls/record/record.crb#L353)
 
 ```rust
-pub fn decode_plaintext(wire: &[u8]) -> Result<Record, Error>
+pub fn decode_plaintext(wire: &[u8]) Result<Record, Error>
 ```
 
 Validates the supplied cleartext record and returns its metadata.
@@ -6586,53 +6617,23 @@ Available when `target.os == "linux" && target.arch == "x86_64" && target.pointe
 
 ### `read_record`
 
-[record.crb:347](../stdlib/src/net/tls/record/record.crb#L347)
+[record.crb:392](../stdlib/src/net/tls/record/record.crb#L392)
 
 ```rust
-pub fn read_record(socket: &mut Connection, wire: &mut [u8]) -> Result<usize, Error>
+pub fn read_record(socket: &mut Connection, wire: &mut [u8]) Result<usize, Error>
 ```
 
 Reads one full framed record, handling partial TCP reads.
 
 ### `write_record`
 
-[record.crb:365](../stdlib/src/net/tls/record/record.crb#L365)
+[record.crb:410](../stdlib/src/net/tls/record/record.crb#L410)
 
 ```rust
-pub fn write_record(socket: &mut Connection, wire: &[u8]) -> Result<(), Error>
+pub fn write_record(socket: &mut Connection, wire: &[u8]) Result<(), Error>
 ```
 
 Writes all record bytes, handling short TCP writes.
-
-### `RecordCipher::send_record`
-
-[record.crb:386](../stdlib/src/net/tls/record/record.crb#L386)
-
-```rust
-fn send_record(&mut self, socket: &mut Connection, kind: u8, content: &[u8], padding: usize, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error>
-```
-
-Protects and sends one record using the caller's wire and scratch buffers.
-
-### `RecordCipher::receive_record`
-
-[record.crb:403](../stdlib/src/net/tls/record/record.crb#L403)
-
-```rust
-fn receive_record(&mut self, socket: &mut Connection, wire: &mut [u8], plaintext: &mut [u8]) -> Result<Record, Error>
-```
-
-Reads and authenticates one TLS record using caller-owned buffers.
-
-### `RecordCipher::close_notify`
-
-[record.crb:422](../stdlib/src/net/tls/record/record.crb#L422)
-
-```rust
-fn close_notify(&mut self, socket: &mut Connection, scratch: &mut [u8], wire: &mut [u8]) -> Result<(), Error>
-```
-
-Sends a protected closure alert over TCP and marks the write direction closed.
 
 
 ## `std::net::udp`
@@ -6657,9 +6658,49 @@ Members:
 - [`local_address`](../stdlib/src/net/udp/socket.crb#L14) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 - [`remote_address`](../stdlib/src/net/udp/socket.crb#L16) (implementation field): Cached remote IPv4 endpoint.
 
+### `Connection::addr`
+
+[socket.crb:19](../stdlib/src/net/udp/socket.crb#L19)
+
+```rust
+fn addr(&self) SocketAddr
+```
+
+Returns the local IPv4 address and port, including a port assigned by the OS.
+
+### `Connection::peer`
+
+[socket.crb:25](../stdlib/src/net/udp/socket.crb#L25)
+
+```rust
+fn peer(&self) SocketAddr
+```
+
+Returns the remote IPv4 address and port associated with the connection.
+
+### `Connection::send`
+
+[socket.crb:31](../stdlib/src/net/udp/socket.crb#L31)
+
+```rust
+fn send(&mut self, buffer: &[u8]) Result<usize, SocketError>
+```
+
+Sends a complete datagram to the connected peer, including an empty datagram.
+
+### `Connection::recv`
+
+[socket.crb:38](../stdlib/src/net/udp/socket.crb#L38)
+
+```rust
+fn recv(&mut self, buffer: &mut [u8]) Result<usize, SocketError>
+```
+
+Receives one datagram from the connected peer. An oversized payload is consumed and reported.
+
 ### `Listener`
 
-[socket.crb:20](../stdlib/src/net/udp/socket.crb#L20)
+[socket.crb:50](../stdlib/src/net/udp/socket.crb#L50)
 
 ```rust
 pub struct Listener
@@ -6669,98 +6710,58 @@ Owns a bound UDP socket that can receive from and send to arbitrary endpoints.
 
 Members:
 
-- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L22) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
-- [`local_address`](../stdlib/src/net/udp/socket.crb#L24) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
-
-### `connect`
-
-[socket.crb:28](../stdlib/src/net/udp/socket.crb#L28)
-
-```rust
-pub fn connect(address: SocketAddr) -> Result<Connection, SocketError>
-```
-
-Associates a UDP socket with the specified peer without a transport handshake.
-
-### `Connection::addr`
-
-[socket.crb:42](../stdlib/src/net/udp/socket.crb#L42)
-
-```rust
-fn addr(&self) -> SocketAddr
-```
-
-Returns the local IPv4 address and port, including a port assigned by the OS.
-
-### `Connection::peer`
-
-[socket.crb:48](../stdlib/src/net/udp/socket.crb#L48)
-
-```rust
-fn peer(&self) -> SocketAddr
-```
-
-Returns the remote IPv4 address and port associated with the connection.
-
-### `Connection::send`
-
-[socket.crb:54](../stdlib/src/net/udp/socket.crb#L54)
-
-```rust
-fn send(&mut self, buffer: &[u8]) -> Result<usize, SocketError>
-```
-
-Sends a complete datagram to the connected peer, including an empty datagram.
-
-### `Connection::recv`
-
-[socket.crb:61](../stdlib/src/net/udp/socket.crb#L61)
-
-```rust
-fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, SocketError>
-```
-
-Receives one datagram from the connected peer. An oversized payload is consumed and reported.
+- [`__din_package_socket`](../stdlib/src/net/udp/socket.crb#L52) (implementation field): Owned native socket storage; the connection/listener closes it on destruction.
+- [`local_address`](../stdlib/src/net/udp/socket.crb#L54) (implementation field): Cached local IPv4 endpoint, including any OS-assigned port.
 
 ### `Listener::bind`
 
-[socket.crb:73](../stdlib/src/net/udp/socket.crb#L73)
+[socket.crb:57](../stdlib/src/net/udp/socket.crb#L57)
 
 ```rust
-fn bind(address: SocketAddr) -> Result<Listener, SocketError>
+fn bind(address: SocketAddr) Result<Listener, SocketError>
 ```
 
 Binds a UDP socket to the supplied local endpoint. Use port zero for an assigned port.
 
 ### `Listener::addr`
 
-[socket.crb:86](../stdlib/src/net/udp/socket.crb#L86)
+[socket.crb:70](../stdlib/src/net/udp/socket.crb#L70)
 
 ```rust
-fn addr(&self) -> SocketAddr
+fn addr(&self) SocketAddr
 ```
 
 Returns the local IPv4 address and port, including a port assigned by the OS.
 
 ### `Listener::recv`
 
-[socket.crb:92](../stdlib/src/net/udp/socket.crb#L92)
+[socket.crb:76](../stdlib/src/net/udp/socket.crb#L76)
 
 ```rust
-fn recv(&mut self, buffer: &mut [u8]) -> Result<Datagram, SocketError>
+fn recv(&mut self, buffer: &mut [u8]) Result<Datagram, SocketError>
 ```
 
 Receives one datagram with sender metadata. An oversized payload is consumed and reported.
 
 ### `Listener::send`
 
-[socket.crb:98](../stdlib/src/net/udp/socket.crb#L98)
+[socket.crb:82](../stdlib/src/net/udp/socket.crb#L82)
 
 ```rust
-fn send(&mut self, buffer: &[u8], destination: SocketAddr) -> Result<usize, SocketError>
+fn send(&mut self, buffer: &[u8], destination: SocketAddr) Result<usize, SocketError>
 ```
 
 Sends a complete datagram to the supplied destination, including an empty datagram.
+
+### `connect`
+
+[socket.crb:90](../stdlib/src/net/udp/socket.crb#L90)
+
+```rust
+pub fn connect(address: SocketAddr) Result<Connection, SocketError>
+```
+
+Associates a UDP socket with the specified peer without a transport handshake.
 
 
 ## `std::num`
@@ -6772,7 +6773,7 @@ Minimum selection for signed 64-bit integers.
 [min.crb:5](../stdlib/src/num/min.crb#L5)
 
 ```rust
-pub fn min_i64(left: i64, right: i64) -> i64
+pub fn min_i64(left: i64, right: i64) i64
 ```
 
 Returns the smaller of two signed 64-bit values.
@@ -6799,27 +6800,27 @@ Members:
 
 ### `Mutex::new`
 
-[mutex.crb:14](../stdlib/src/sync/mutex.crb#L14)
+[mutex.crb:13](../stdlib/src/sync/mutex.crb#L13)
 
 ```rust
-fn new(value: T) -> Mutex<T>
+fn new(value: T) Mutex<T>
 ```
 
 Takes ownership of the payload and constructs its synchronization resource.
 
 ### `Mutex::lock`
 
-[mutex.crb:20](../stdlib/src/sync/mutex.crb#L20)
+[mutex.crb:19](../stdlib/src/sync/mutex.crb#L19)
 
 ```rust
-fn lock(&self) -> MutexGuard<T>
+fn lock(&self) MutexGuard<T>
 ```
 
 Blocks this thread until it acquires the native mutex.
 
 ### `Mutex::drop`
 
-[mutex.crb:29](../stdlib/src/sync/mutex.crb#L29)
+[mutex.crb:28](../stdlib/src/sync/mutex.crb#L28)
 
 ```rust
 fn drop(&mut self)
@@ -6829,7 +6830,7 @@ Destroys unlocked native state; checked borrows keep active guards/waiters alive
 
 ### `MutexGuard`
 
-[mutex.crb:35](../stdlib/src/sync/mutex.crb#L35)
+[mutex.crb:34](../stdlib/src/sync/mutex.crb#L34)
 
 ```rust
 pub struct MutexGuard<T>
@@ -6839,32 +6840,32 @@ Holds the lock until destruction and borrows its owner's payload.
 
 Members:
 
-- [`raw`](../stdlib/src/sync/mutex.crb#L37) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
-- [`data`](../stdlib/src/sync/mutex.crb#L39) (implementation field): Mutable payload access under the retained lock contract.
+- [`raw`](../stdlib/src/sync/mutex.crb#L36) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
+- [`data`](../stdlib/src/sync/mutex.crb#L38) (implementation field): Mutable payload access under the retained lock contract.
 
 ### `MutexGuard::ref`
 
-[mutex.crb:43](../stdlib/src/sync/mutex.crb#L43)
+[mutex.crb:41](../stdlib/src/sync/mutex.crb#L41)
 
 ```rust
-fn ref(&self) -> &T
+fn ref(&self) &T
 ```
 
 Borrows the protected value for reading.
 
 ### `MutexGuard::mut_ref`
 
-[mutex.crb:45](../stdlib/src/sync/mutex.crb#L45)
+[mutex.crb:43](../stdlib/src/sync/mutex.crb#L43)
 
 ```rust
-fn mut_ref(&mut self) -> &mut T
+fn mut_ref(&mut self) &mut T
 ```
 
 Reborrows the protected value with mutation permission.
 
 ### `MutexGuard::drop`
 
-[mutex.crb:47](../stdlib/src/sync/mutex.crb#L47)
+[mutex.crb:45](../stdlib/src/sync/mutex.crb#L45)
 
 ```rust
 fn drop(&mut self)
@@ -6894,27 +6895,27 @@ Members:
 
 ### `Mutex::new`
 
-[mutex.crb:14](../stdlib/src/sync/asyn/mutex.crb#L14)
+[mutex.crb:13](../stdlib/src/sync/asyn/mutex.crb#L13)
 
 ```rust
-fn new(value: T) -> Mutex<T>
+fn new(value: T) Mutex<T>
 ```
 
 Takes ownership of the payload and constructs its synchronization resource.
 
 ### `Mutex::lock`
 
-[mutex.crb:20](../stdlib/src/sync/asyn/mutex.crb#L20)
+[mutex.crb:19](../stdlib/src/sync/asyn/mutex.crb#L19)
 
 ```rust
-async fn lock(&self) -> MutexGuard<T>
+async fn lock(&self) MutexGuard<T>
 ```
 
 Suspends until logical ownership is handed to this task.
 
 ### `Mutex::drop`
 
-[mutex.crb:29](../stdlib/src/sync/asyn/mutex.crb#L29)
+[mutex.crb:28](../stdlib/src/sync/asyn/mutex.crb#L28)
 
 ```rust
 fn drop(&mut self)
@@ -6924,7 +6925,7 @@ Destroys unlocked native state; checked borrows keep active guards/waiters alive
 
 ### `MutexGuard`
 
-[mutex.crb:35](../stdlib/src/sync/asyn/mutex.crb#L35)
+[mutex.crb:34](../stdlib/src/sync/asyn/mutex.crb#L34)
 
 ```rust
 pub struct MutexGuard<T>
@@ -6934,32 +6935,32 @@ Holds the lock until destruction and borrows its owner's payload.
 
 Members:
 
-- [`raw`](../stdlib/src/sync/asyn/mutex.crb#L37) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
-- [`data`](../stdlib/src/sync/asyn/mutex.crb#L39) (implementation field): Mutable payload access under the retained lock contract.
+- [`raw`](../stdlib/src/sync/asyn/mutex.crb#L36) (implementation field): Borrowed native resource identity; the payload borrow retains its owner.
+- [`data`](../stdlib/src/sync/asyn/mutex.crb#L38) (implementation field): Mutable payload access under the retained lock contract.
 
 ### `MutexGuard::ref`
 
-[mutex.crb:43](../stdlib/src/sync/asyn/mutex.crb#L43)
+[mutex.crb:41](../stdlib/src/sync/asyn/mutex.crb#L41)
 
 ```rust
-fn ref(&self) -> &T
+fn ref(&self) &T
 ```
 
 Borrows the protected value for reading.
 
 ### `MutexGuard::mut_ref`
 
-[mutex.crb:45](../stdlib/src/sync/asyn/mutex.crb#L45)
+[mutex.crb:43](../stdlib/src/sync/asyn/mutex.crb#L43)
 
 ```rust
-fn mut_ref(&mut self) -> &mut T
+fn mut_ref(&mut self) &mut T
 ```
 
 Reborrows the protected value with mutation permission.
 
 ### `MutexGuard::drop`
 
-[mutex.crb:47](../stdlib/src/sync/asyn/mutex.crb#L47)
+[mutex.crb:45](../stdlib/src/sync/asyn/mutex.crb#L45)
 
 ```rust
 fn drop(&mut self)
@@ -7003,37 +7004,37 @@ Members:
 
 ### `Channel::new`
 
-[channel.crb:23](../stdlib/src/sync/asyn/channel/channel.crb#L23)
+[channel.crb:21](../stdlib/src/sync/asyn/channel/channel.crb#L21)
 
 ```rust
-fn new(capacity: usize) -> Channel<T>
+fn new(capacity: usize) Channel<T>
 ```
 
 Reserves a nonzero maximum number of queued values; the queue never grows beyond it.
 
 ### `Channel::send`
 
-[channel.crb:32](../stdlib/src/sync/asyn/channel/channel.crb#L32)
+[channel.crb:30](../stdlib/src/sync/asyn/channel/channel.crb#L30)
 
 ```rust
-async fn send(&self, value: T) -> Result<(), SendError<T>>
+async fn send(&self, value: T) Result<(), SendError<T>>
 ```
 
 Moves a value into the queue; a closed channel returns the unsent value.
 
 ### `Channel::recv`
 
-[channel.crb:50](../stdlib/src/sync/asyn/channel/channel.crb#L50)
+[channel.crb:48](../stdlib/src/sync/asyn/channel/channel.crb#L48)
 
 ```rust
-async fn recv(&self) -> Option<T>
+async fn recv(&self) Option<T>
 ```
 
 Receives in FIFO order; closed queues drain before returning None.
 
 ### `Channel::close`
 
-[channel.crb:64](../stdlib/src/sync/asyn/channel/channel.crb#L64)
+[channel.crb:62](../stdlib/src/sync/asyn/channel/channel.crb#L62)
 
 ```rust
 fn close(&self)
@@ -7043,7 +7044,7 @@ Prevents future sends and wakes waiting producers and consumers.
 
 ### `Channel::drop`
 
-[channel.crb:70](../stdlib/src/sync/asyn/channel/channel.crb#L70)
+[channel.crb:68](../stdlib/src/sync/asyn/channel/channel.crb#L68)
 
 ```rust
 fn drop(&mut self)
@@ -7087,37 +7088,37 @@ Members:
 
 ### `Channel::new`
 
-[channel.crb:23](../stdlib/src/sync/channel/channel.crb#L23)
+[channel.crb:21](../stdlib/src/sync/channel/channel.crb#L21)
 
 ```rust
-fn new(capacity: usize) -> Channel<T>
+fn new(capacity: usize) Channel<T>
 ```
 
 Reserves a nonzero maximum number of queued values; the queue never grows beyond it.
 
 ### `Channel::send`
 
-[channel.crb:32](../stdlib/src/sync/channel/channel.crb#L32)
+[channel.crb:30](../stdlib/src/sync/channel/channel.crb#L30)
 
 ```rust
-fn send(&self, value: T) -> Result<(), SendError<T>>
+fn send(&self, value: T) Result<(), SendError<T>>
 ```
 
 Moves a value into the queue; a closed channel returns the unsent value.
 
 ### `Channel::recv`
 
-[channel.crb:47](../stdlib/src/sync/channel/channel.crb#L47)
+[channel.crb:45](../stdlib/src/sync/channel/channel.crb#L45)
 
 ```rust
-fn recv(&self) -> Option<T>
+fn recv(&self) Option<T>
 ```
 
 Receives in FIFO order; closed queues drain before returning None.
 
 ### `Channel::close`
 
-[channel.crb:58](../stdlib/src/sync/channel/channel.crb#L58)
+[channel.crb:56](../stdlib/src/sync/channel/channel.crb#L56)
 
 ```rust
 fn close(&self)
@@ -7127,7 +7128,7 @@ Prevents future sends and wakes waiting producers and consumers.
 
 ### `Channel::drop`
 
-[channel.crb:64](../stdlib/src/sync/channel/channel.crb#L64)
+[channel.crb:62](../stdlib/src/sync/channel/channel.crb#L62)
 
 ```rust
 fn drop(&mut self)
@@ -7159,27 +7160,27 @@ Members:
 - [`finished`](../stdlib/src/text/split.crb#L14) (implementation field): Records exhaustion, including the final empty piece after a trailing match.
 - [`empty_started`](../stdlib/src/text/split.crb#L16) (implementation field): Records whether an empty separator has yielded its leading empty piece.
 
-### `split`
-
-[split.crb:21](../stdlib/src/text/split.crb#L21)
-
-```rust
-pub fn split(text: &str, separator: &str) -> Split
-```
-
-Borrows text and its separator and constructs a fixed-size iterator descriptor.
-Empty pieces are preserved. An empty separator splits at Unicode scalar boundaries.
-
 ### `Split::next`
 
-[split.crb:28](../stdlib/src/text/split.crb#L28)
+[split.crb:20](../stdlib/src/text/split.crb#L20)
 
 ```rust
-fn next(&mut self) -> Option<&str>
+fn next(&mut self) Option<&str>
 ```
 
 Returns the next UTF-8 view, or None after exhaustion.
 Returned pieces depend on the original text, independently of this cursor.
+
+### `split`
+
+[split.crb:73](../stdlib/src/text/split.crb#L73)
+
+```rust
+pub fn split(text: &str, separator: &str) Split
+```
+
+Borrows text and its separator and constructs a fixed-size iterator descriptor.
+Empty pieces are preserved. An empty separator splits at Unicode scalar boundaries.
 
 
 Error type for checked, zero-copy byte-to-text conversion.
@@ -7235,47 +7236,47 @@ Members:
 
 ### `Duration::from_nanos`
 
-[time.crb:22](../stdlib/src/time/time.crb#L22)
+[time.crb:21](../stdlib/src/time/time.crb#L21)
 
 ```rust
-fn from_nanos(nanos: u64) -> Duration
+fn from_nanos(nanos: u64) Duration
 ```
 
 Constructs a span from nanoseconds.
 
 ### `Duration::from_millis`
 
-[time.crb:24](../stdlib/src/time/time.crb#L24)
+[time.crb:23](../stdlib/src/time/time.crb#L23)
 
 ```rust
-fn from_millis(millis: u64) -> Duration
+fn from_millis(millis: u64) Duration
 ```
 
 Constructs a span from milliseconds; integer overflow follows checked arithmetic.
 
 ### `Duration::from_secs`
 
-[time.crb:26](../stdlib/src/time/time.crb#L26)
+[time.crb:25](../stdlib/src/time/time.crb#L25)
 
 ```rust
-fn from_secs(seconds: u64) -> Duration
+fn from_secs(seconds: u64) Duration
 ```
 
 Constructs a span from seconds; integer overflow follows checked arithmetic.
 
 ### `Duration::as_nanos`
 
-[time.crb:28](../stdlib/src/time/time.crb#L28)
+[time.crb:27](../stdlib/src/time/time.crb#L27)
 
 ```rust
-fn as_nanos(&self) -> u64
+fn as_nanos(&self) u64
 ```
 
 Returns the span in nanoseconds without changing it.
 
 ### `Instant`
 
-[time.crb:32](../stdlib/src/time/time.crb#L32)
+[time.crb:31](../stdlib/src/time/time.crb#L31)
 
 ```rust
 pub struct Instant
@@ -7285,51 +7286,51 @@ An opaque monotonic timestamp; not a date or portable serialized timestamp.
 
 Members:
 
-- [`ticks`](../stdlib/src/time/time.crb#L34) (implementation field): Platform clock expressed in nanoseconds; clock resolution remains platform-specific.
+- [`ticks`](../stdlib/src/time/time.crb#L33) (implementation field): Platform clock expressed in nanoseconds; clock resolution remains platform-specific.
 
 ### `Instant::now`
 
-[time.crb:38](../stdlib/src/time/time.crb#L38)
+[time.crb:36](../stdlib/src/time/time.crb#L36)
 
 ```rust
-fn now() -> Result<Instant, Error>
+fn now() Result<Instant, Error>
 ```
 
 Reads the current monotonic timestamp.
 
 ### `Instant::after`
 
-[time.crb:44](../stdlib/src/time/time.crb#L44)
+[time.crb:42](../stdlib/src/time/time.crb#L42)
 
 ```rust
-fn after(&self, duration: Duration) -> Instant
+fn after(&self, duration: Duration) Instant
 ```
 
 Returns an instant after this one; addition uses checked integer arithmetic.
 
 ### `Instant::elapsed`
 
-[time.crb:48](../stdlib/src/time/time.crb#L48)
+[time.crb:46](../stdlib/src/time/time.crb#L46)
 
 ```rust
-fn elapsed(&self) -> Result<Duration, Error>
+fn elapsed(&self) Result<Duration, Error>
 ```
 
 Measures time since this instant, saturating a backward platform reading at zero.
 
 ### `Instant::remaining`
 
-[time.crb:55](../stdlib/src/time/time.crb#L55)
+[time.crb:53](../stdlib/src/time/time.crb#L53)
 
 ```rust
-fn remaining(&self) -> Result<Duration, Error>
+fn remaining(&self) Result<Duration, Error>
 ```
 
 Measures the remaining span until this instant, saturating past deadlines at zero.
 
 ### `Timer`
 
-[time.crb:69](../stdlib/src/time/time.crb#L69)
+[time.crb:66](../stdlib/src/time/time.crb#L66)
 
 ```rust
 pub struct Timer
@@ -7339,44 +7340,44 @@ A reusable monotonic deadline; waiting does not consume it.
 
 Members:
 
-- [`deadline`](../stdlib/src/time/time.crb#L71) (implementation field): Absolute monotonic timestamp of the deadline.
+- [`deadline`](../stdlib/src/time/time.crb#L68) (implementation field): Absolute monotonic timestamp of the deadline.
 
 ### `Timer::after`
 
-[time.crb:75](../stdlib/src/time/time.crb#L75)
+[time.crb:71](../stdlib/src/time/time.crb#L71)
 
 ```rust
-fn after(duration: Duration) -> Result<Timer, Error>
+fn after(duration: Duration) Result<Timer, Error>
 ```
 
 Creates a timer that becomes ready after the given span.
 
 ### `Timer::at`
 
-[time.crb:81](../stdlib/src/time/time.crb#L81)
+[time.crb:77](../stdlib/src/time/time.crb#L77)
 
 ```rust
-fn at(deadline: Instant) -> Timer
+fn at(deadline: Instant) Timer
 ```
 
 Creates a timer for an existing monotonic deadline.
 
 ### `Timer::wait`
 
-[time.crb:83](../stdlib/src/time/time.crb#L83)
+[time.crb:79](../stdlib/src/time/time.crb#L79)
 
 ```rust
-fn wait(&self) -> Result<(), Error>
+fn wait(&self) Result<(), Error>
 ```
 
 Blocks this thread until the deadline, retrying interruptions and early wakes.
 
 ### `sleep`
 
-[time.crb:97](../stdlib/src/time/time.crb#L97)
+[time.crb:93](../stdlib/src/time/time.crb#L93)
 
 ```rust
-pub fn sleep(duration: Duration) -> Result<(), Error>
+pub fn sleep(duration: Duration) Result<(), Error>
 ```
 
 Blocks the current thread for at least the given monotonic span.
@@ -7391,7 +7392,7 @@ Async deadline waits using shared monotonic values.
 [asyn.crb:13](../stdlib/src/time/asyn/asyn.crb#L13)
 
 ```rust
-pub async fn sleep(duration: Duration) -> Result<(), Error>
+pub async fn sleep(duration: Duration) Result<(), Error>
 ```
 
 Suspends this task for a span without blocking an executor thread.
@@ -7412,30 +7413,30 @@ Members:
 
 ### `Timer::after`
 
-[asyn.crb:28](../stdlib/src/time/asyn/asyn.crb#L28)
+[asyn.crb:27](../stdlib/src/time/asyn/asyn.crb#L27)
 
 ```rust
-fn after(duration: Duration) -> Result<Timer, Error>
+fn after(duration: Duration) Result<Timer, Error>
 ```
 
 Creates an asynchronous timer after the supplied span.
 
 ### `Timer::at`
 
-[asyn.crb:33](../stdlib/src/time/asyn/asyn.crb#L33)
+[asyn.crb:32](../stdlib/src/time/asyn/asyn.crb#L32)
 
 ```rust
-fn at(deadline: Instant) -> Timer
+fn at(deadline: Instant) Timer
 ```
 
 Creates an asynchronous timer at an existing monotonic instant.
 
 ### `Timer::wait`
 
-[asyn.crb:38](../stdlib/src/time/asyn/asyn.crb#L38)
+[asyn.crb:37](../stdlib/src/time/asyn/asyn.crb#L37)
 
 ```rust
-async fn wait(&self) -> Result<(), Error>
+async fn wait(&self) Result<(), Error>
 ```
 
 Suspends until the deadline; the timer outlives its borrowed worker wait.

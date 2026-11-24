@@ -2,7 +2,7 @@
 //! Bounded native Huffman construction and entropy encoding.
 
 /// Builds bounded Huffman code lengths from frequencies; returns false when a depth limit would be exceeded.
-fn entropy_lengths(frequencies: &[u64], lengths: &mut [u64], maximum: u64) -> bool {
+fn entropy_lengths(frequencies: &[u64], lengths: &mut [u64], maximum: u64) bool {
     let count = frequencies.len() as u64;
     if count > 288 || (lengths.len() as u64) < count { return false; }
     let mut weights: [u64;576] = [0;576]; let mut parents: [u64;576] = [0;576];
@@ -41,7 +41,7 @@ fn entropy_lengths(frequencies: &[u64], lengths: &mut [u64], maximum: u64) -> bo
 }
 
 /// Emits one or four reversed Huffman literal streams when they beat a raw block; zero means raw fallback.
-fn entropy_block(input: &[u8], output: &mut [u8], start: u64, last: bool) -> u64 {
+fn entropy_block(input: &[u8], output: &mut [u8], start: u64, last: bool) u64 {
     let count = input.len() as u64;
     if count < 64 || count > 131072 { return 0; }
     let mut frequencies: [u64;256] = [0;256]; let mut lengths: [u64;256] = [0;256];

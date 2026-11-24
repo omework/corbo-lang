@@ -6,15 +6,15 @@ use std::crypto::sha512::HashError;
 /// Reports an oversized HKDF result, a short pseudorandom key, or an input length limit.
 pub enum KdfError {
     /// Requested output exceeds the derivation's algorithmic limit.
-    OutputTooLong,
+    OutputTooLong;
     /// The pseudorandom key length does not meet this HKDF API's requirement.
-    InvalidPrkLength,
+    InvalidPrkLength;
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong
+    InputTooLong;
 }
 
 /// Derives a pseudorandom key from salt and input key material using HMAC.
-pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 48], HashError> {
+pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) Result<[u8; 48], HashError> {
     // An empty HMAC key and RFC 5869's default all-zero salt both
     // produce the same zero-padded SHA-384 key block.
     hmac(salt, input_key_material)
@@ -22,7 +22,7 @@ pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) -> Result<[u8; 48], 
 
 /// Fills the output with derived key material using the pseudorandom key and context.
 /// The pseudorandom key needs at least 48 bytes and the output can hold up to 12240 bytes.
-pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) -> Result<(), KdfError> {
+pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) Result<(), KdfError> {
     let length = output.len();
     if length > 12240 { return Err(KdfError.OutputTooLong); }
     let key_len = prk.len();

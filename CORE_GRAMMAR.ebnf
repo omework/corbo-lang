@@ -18,7 +18,7 @@ declaration         = [ "pub" ], ( fonction | fonction_externe | structure | enu
                     | ( contrat_type | annotation_thread ), { contrat_type | annotation_thread },
                       "pub", corps_enumeration
                     | constante_configurable
-                    | implementation ;
+                    ;
 importation         = "use", chemin, "::",
                       ( import_element | "{", import_element, { ",", import_element }, [ "," ], "}" ),
                       ";" ;
@@ -26,7 +26,7 @@ import_element      = nom, [ "as", identifiant ] ;
 
 fonction            = { contrat_type }, [ contrat_branche ], [ "async" ], signature, bloc ;
 signature           = "fn", identifiant, "(", [ parametres ], ")",
-                      [ "->", type ] ;
+                      [ type ] ;
 contrat_type        = "#", "(", "type", ":", identifiant,
                       [ [ "<", parametre_type, ">" ], [ "with" ], "{",
                         exigence_methode, { exigence_methode }, "}" ], ")" ;
@@ -37,19 +37,19 @@ contrat_branche     = "#", "(", "branch",
 parametres          = parametre, { ",", parametre }, [ "," ] ;
 parametre           = [ "mut" ], identifiant, ":", type ;
 fonction_externe    = "extern", abi_c, "fn", identifiant, "(",
-                      [ parametres_externes ], ")", [ "->", resultat_externe ], ";" ;
+                      [ parametres_externes ], ")", [ resultat_externe ], ";" ;
 parametres_externes = parametre_externe, { ",", parametre_externe }, [ "," ] ;
 parametre_externe   = identifiant, ":", primitif ;
 resultat_externe    = primitif | "Void" | "(", ")" ;
 
 structure           = { contrat_type | contrat_lock_objet | annotation_thread }, corps_structure ;
 corps_structure     = "struct", identifiant, [ parametres_generiques ],
-                      "{", [ champs_types ], "}" ;
+                      "{", { champ_definition }, { membre_definition }, "}" ;
 parametres_generiques = "<", identifiant, { ",", identifiant }, [ "," ], ">" ;
 enumeration         = { contrat_type | annotation_thread }, corps_enumeration ;
 corps_enumeration    = "enum", identifiant, [ parametres_generiques ], "{",
-                      variante, { ",", variante }, [ "," ], "}" ;
-variante            = identifiant, [ "{", [ champs_types ], "}"
+                      variante, ";", { variante, ";" }, { membre_definition }, "}" ;
+variante            = identifiant, [ "{", { champ_definition }, "}"
                                     | "(", type, { ",", type }, [ "," ], ")" ] ;
 (* :: is the preferred enum-variant separator. Dot remains accepted for
    compatibility with the existing STD and source corpus. Associated functions
@@ -57,8 +57,12 @@ variante            = identifiant, [ "{", [ champs_types ], "}"
 separateur_variante = "::" | "." ;
 champs_types        = champ_type, { ",", champ_type }, [ "," ] ;
 champ_type          = identifiant, ":", type ;
-implementation      = "impl", chemin, [ parametres_generiques ],
-                      "{", { methode | constante }, "}" ;
+champ_definition    = identifiant, ":", type, ";" ;
+membre_definition   = methode | [ "pub" ], constante | selection_membres ;
+selection_membres   = "#", "(", "if", ":", condition_cible, ")",
+                      { membre_definition }, "#", "(", "endif", ")" ;
+(* Fields/variants precede methods. Method owners remain internal AST nodes;
+   external impl blocks are retained only as bootstrap compatibility syntax. *)
 constante           = "const", identifiant, ":", primitif, "=",
                       ( [ "-" ], ( entier | flottant ) | "true" | "false" ), ";" ;
 (* Lexical configuration specialization; see docs/CONFIGURATION_CONSTANTS.md. *)
@@ -72,7 +76,9 @@ methode             = [ contrat_lock ], [ "pub" ], [ "async" ], signature_method
 exigence_methode    = [ "async" ], signature_methode, ";" ;
 signature_methode   = "fn", ( identifiant | "addr" ), "(",
                       [ receveur, [ ",", [ parametres ] ] | parametres ], ")",
-                      [ "->", type ] ;
+                      [ type ] ;
+(* A typed receiver names its enclosing type. Concrete generic arguments
+   restrict method availability; & and &mut preserve ordinary permissions. *)
 receveur            = "&", [ "mut" ], "self"
                     | [ "mut" ], "self", ":", type ;
 annotation_thread   = "#", "(", "thread", ":", "transfer", "=", "false", ")" ;
@@ -83,7 +89,7 @@ contrat_lock        = "#", "(", "lock", ":", "on", "=", "self",
 type                = "&", [ "mut" ], ( type | type_tranche ) | type_base ;
 type_base           = "(", ")" | type_tuple | type_tableau | type_appelable | type_self | type_nomme ;
 type_tuple          = "(", type, ",", type, { ",", type }, [ "," ], ")" ;
-type_self           = "Self" ; (* Only inside an impl; inherited generic arguments. *)
+type_self           = "Self" ; (* Inside a type definition; inherited generic arguments. *)
 type_nomme          = chemin, [ arguments_type ] ;
 arguments_type      = "<", argument_type, { ",", argument_type }, ">" ;
 argument_type       = type | entier ;
@@ -93,7 +99,7 @@ argument_type       = type | entier ;
    L'argument entier est consigné pour String<N> ; cela ne définit pas
    une fonctionnalité générale de paramètres constants pour les types utilisateur.
    Le parseur conserve la borne littérale ; la spécialisation produit un layout fixe. *)
-type_appelable      = "fn", "(", [ type, { ",", type } ], ")", "->", type ;
+type_appelable      = "fn", "(", [ type, { ",", type } ], ")", type ;
 primitif            = "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
                     | "bool" | "f32" | "f64" | "usize" ;
 type_tableau        = "[", type, ";", longueur_constante, "]" ;
@@ -204,7 +210,7 @@ arguments           = expression, { ",", expression }, [ "," ] ;
    une valeur extérieure, une référence explicite est créée avant la
    closure, qui capture la liaison de référence. L'appel via une liaison
    suit la forme chemin_valeur avec arguments. *)
-expression_closure  = [ "move" ], parametres_closure, [ "->", type ], bloc_delimite ;
+expression_closure  = [ "move" ], parametres_closure, [ type ], bloc_delimite ;
 parametres_closure  = "||" | "|", parametres, "|" ;
 appel_closure       = "(", expression_closure, ")", "(", [ arguments ], ")" ;
 primaire            = litteral | chemin_valeur, [ "(", [ arguments ], ")" ] | "self"

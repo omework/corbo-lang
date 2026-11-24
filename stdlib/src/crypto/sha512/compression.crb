@@ -9,20 +9,20 @@ const U64_MAX: u64 = 0xffffffffffffffff;
 // The SHA-512 family adds words modulo 2^64. Each intermediate sum
 // occupies at most 33 bits and therefore fits Corbo's checked arithmetic.
 /// Adds two compression words modulo 2^64.
-fn add_word(left: u64, right: u64) -> u64 {
+fn add_word(left: u64, right: u64) u64 {
     let low = (left & LOW_32_BITS) + (right & LOW_32_BITS);
     let high = (left >> 32) + (right >> 32) + (low >> 32);
     ((high & LOW_32_BITS) << 32) | (low & LOW_32_BITS)
 }
 
 /// Rotates a 64-bit compression word to the right.
-fn rotate_right(word: u64, count: u64) -> u64 {
+fn rotate_right(word: u64, count: u64) u64 {
     let shift: u64 = 64 - copy(count);
     (word >> count) | ((word & (U64_MAX >> copy(shift))) << shift)
 }
 
 /// Expands one 128-byte block into 80 SHA-512 schedule words.
-fn schedule(block: &[u8; 128]) -> [u64; 80] {
+fn schedule(block: &[u8; 128]) [u64; 80] {
     let mut words: [u64; 80] = [0; 80];
     let mut i: u64 = 0;
     while i < 16 {

@@ -3,7 +3,7 @@
 
 // Jacobian coordinates, in Montgomery form. A zero Z denotes infinity.
 /// Returns the Jacobian representation of the point at infinity.
-fn infinity() -> [u64; 24] {
+fn infinity() [u64; 24] {
     let point: [u64; 24] = [0; 24];
     point
 }
@@ -19,7 +19,7 @@ fn point_set(point: &mut [u64; 24], source: &[u64]) {
 }
 
 /// Reads one eight-limb coordinate from an internal point.
-fn coordinate(point: &[u64], offset: u64) -> [u64; 8] {
+fn coordinate(point: &[u64], offset: u64) [u64; 8] {
     let mut out: [u64; 8] = [0; 8];
     let mut i: u64 = 0;
     while i < 8 {
@@ -30,7 +30,7 @@ fn coordinate(point: &[u64], offset: u64) -> [u64; 8] {
 }
 
 /// Packs x, y and z into one Jacobian point.
-fn point_new(x: &[u64], y: &[u64], z: &[u64]) -> [u64; 24] {
+fn point_new(x: &[u64], y: &[u64], z: &[u64]) [u64; 24] {
     let mut point = infinity();
     let mut i: u64 = 0;
     while i < 8 {
@@ -43,7 +43,7 @@ fn point_new(x: &[u64], y: &[u64], z: &[u64]) -> [u64; 24] {
 }
 
 /// Returns the standard P-256 base point.
-fn generator() -> [u64; 24] {
+fn generator() [u64; 24] {
     let x = generator_x();
     let y = generator_y();
     let z = montgomery_one(false);
@@ -52,23 +52,23 @@ fn generator() -> [u64; 24] {
 }
 
 /// Adds two coordinate values modulo the P-256 field prime.
-fn field_add(a: &[u64], b: &[u64]) -> [u64; 8] {
+fn field_add(a: &[u64], b: &[u64]) [u64; 8] {
     let result = modular_add(&a[0..8], &b[0..8], false);
     result
 }
 /// Subtracts two coordinate values modulo the P-256 field prime.
-fn field_sub(a: &[u64], b: &[u64]) -> [u64; 8] {
+fn field_sub(a: &[u64], b: &[u64]) [u64; 8] {
     let result = modular_sub(&a[0..8], &b[0..8], false);
     result
 }
 /// Multiplies two Montgomery coordinate values.
-fn field_mul(a: &[u64], b: &[u64]) -> [u64; 8] {
+fn field_mul(a: &[u64], b: &[u64]) [u64; 8] {
     let result = montgomery_mul(&a[0..8], &b[0..8], false);
     result
 }
 
 /// Selects each limb from one of two points using a bit mask.
-fn point_select(a: &[u64], b: &[u64], bit: u64) -> [u64; 24] {
+fn point_select(a: &[u64], b: &[u64], bit: u64) [u64; 24] {
     let ax = coordinate(&a[0..24], 0);
     let ay = coordinate(&a[0..24], 8);
     let az = coordinate(&a[0..24], 16);
@@ -83,7 +83,7 @@ fn point_select(a: &[u64], b: &[u64], bit: u64) -> [u64; 24] {
 }
 
 /// Doubles a Jacobian point using the P-256 curve equation.
-fn point_double(a: &[u64]) -> [u64; 24] {
+fn point_double(a: &[u64]) [u64; 24] {
     let ax = coordinate(&a[0..24], 0);
     let ay = coordinate(&a[0..24], 8);
     let az = coordinate(&a[0..24], 16);
@@ -118,7 +118,7 @@ fn point_double(a: &[u64]) -> [u64; 24] {
 }
 
 /// Adds two Jacobian points, including identity and doubling cases.
-fn point_add(a: &[u64], b: &[u64]) -> [u64; 24] {
+fn point_add(a: &[u64], b: &[u64]) [u64; 24] {
     let ax = coordinate(&a[0..24], 0);
     let ay = coordinate(&a[0..24], 8);
     let az = coordinate(&a[0..24], 16);
@@ -162,7 +162,7 @@ fn point_add(a: &[u64], b: &[u64]) -> [u64; 24] {
 }
 
 /// Multiplies a point by a 256-bit scalar.
-fn scalar_multiply(point: &[u64], scalar: &[u64]) -> [u64; 24] {
+fn scalar_multiply(point: &[u64], scalar: &[u64]) [u64; 24] {
     let mut result = infinity();
     let mut bit: u64 = 256;
     while bit > 0 {
@@ -176,7 +176,7 @@ fn scalar_multiply(point: &[u64], scalar: &[u64]) -> [u64; 24] {
 }
 
 /// Converts the Jacobian x coordinate to affine form.
-fn affine_x(point: &[u64]) -> [u64; 8] {
+fn affine_x(point: &[u64]) [u64; 8] {
     let pointx = coordinate(&point[0..24], 0);
     let pointz = coordinate(&point[0..24], 16);
     let inverse = modular_inverse(&pointz[..], false);
@@ -205,7 +205,7 @@ fn serialize_point(point: &[u64], output: &mut [u8]) {
 }
 
 /// Checks the affine coordinates against the P-256 curve equation.
-fn on_curve(x: &[u64], y: &[u64]) -> bool {
+fn on_curve(x: &[u64], y: &[u64]) bool {
     let xx = field_mul(&x[0..8], &x[0..8]);
     let xxx = field_mul(&xx[..], &x[0..8]);
     let twice = field_add(&x[0..8], &x[0..8]);

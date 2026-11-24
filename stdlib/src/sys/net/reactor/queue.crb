@@ -3,7 +3,7 @@
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
     /// Opens the platform event queue and returns its native descriptor.
-    fn queue_create() -> i64 {
+    fn queue_create() i64 {
         let mut result: i64 = 0;
         @unchecked {
             @asm {
@@ -17,7 +17,7 @@
     }
 
     /// Registers a socket for read or write readiness with the supplied wake token.
-    fn queue_watch(queue: i64, socket: u64, interests: u64, token: usize) -> i64 {
+    fn queue_watch(queue: i64, socket: u64, interests: u64, token: usize) i64 {
         let direction: u64 = (copy(interests) & 1) | ((interests & 2) << 1);
         let mut result: i64 = 0;
         @unchecked {
@@ -52,7 +52,7 @@
     }
 
     /// Waits for a ready event and returns its associated token.
-    fn queue_wait(queue: i64) -> usize {
+    fn queue_wait(queue: i64) usize {
         let mut token: usize = 0;
         @unchecked {
             @asm {
@@ -93,7 +93,7 @@
 
 #(if: target.os == "macos" && target.arch == "aarch64")
     /// Opens the platform event queue and returns its native descriptor.
-    fn queue_create() -> i64 {
+    fn queue_create() i64 {
         let mut result: i64 = 0;
         @unchecked {
             @asm {
@@ -111,7 +111,7 @@
     }
 
     /// Registers a socket for read or write readiness with the supplied wake token.
-    fn queue_watch_one(queue: i64, socket: u64, write: bool, token: usize) -> i64 {
+    fn queue_watch_one(queue: i64, socket: u64, write: bool, token: usize) i64 {
         if token == 0 { return 0; }
         let filter: i64 = if write { -2 } else { -1 };
         let mut result: i64 = 0;
@@ -149,7 +149,7 @@
     }
 
     /// Waits for a ready event and returns its associated token.
-    fn queue_wait(queue: i64) -> usize {
+    fn queue_wait(queue: i64) usize {
         let mut token: usize = 0;
         @unchecked {
             @asm {
@@ -189,7 +189,7 @@
 
 #(if: target.os == "macos" && target.arch == "x86_64")
     /// Opens the platform event queue and returns its native descriptor.
-    fn queue_create() -> i64 {
+    fn queue_create() i64 {
         let mut result: i64 = 0;
         @unchecked {
             @asm {
@@ -208,7 +208,7 @@
     }
 
     /// Registers a socket for read or write readiness with the supplied wake token.
-    fn queue_watch_one(queue: i64, socket: u64, write: bool, token: usize) -> i64 {
+    fn queue_watch_one(queue: i64, socket: u64, write: bool, token: usize) i64 {
         if token == 0 { return 0; }
         let filter: i64 = if write { -2 } else { -1 };
         let mut result: i64 = 0;
@@ -246,7 +246,7 @@
     }
 
     /// Waits for a ready event and returns its associated token.
-    fn queue_wait(queue: i64) -> usize {
+    fn queue_wait(queue: i64) usize {
         let mut token: usize = 0;
         @unchecked {
             @asm {
@@ -286,14 +286,14 @@
 
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
     /// Suspends the current task until the requested socket readiness event arrives.
-    pub async fn ready(socket: u64, write: bool) -> i64 {
+    pub async fn ready(socket: u64, write: bool) i64 {
         runtime::wait_socket(socket, write)
     }
 #(endif)
 
 #(if: target.os == "macos")
     /// Applies the aggregate read/write interest mask for one descriptor cohort.
-    fn queue_watch(queue: i64, socket: u64, interests: u64, token: usize) -> i64 {
+    fn queue_watch(queue: i64, socket: u64, interests: u64, token: usize) i64 {
         if token == 0 { return 0; }
         if (copy(interests) & 1) != 0 {
             let status=queue_watch_one(copy(queue),copy(socket),false,copy(token));

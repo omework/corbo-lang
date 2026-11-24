@@ -333,7 +333,7 @@ Les fonctions peuvent retourner des tuples de deux valeurs ou plus. Les types so
 
 <!-- example: tuples -->
 ```rust
-fn measurements(value: i64) -> (i64, i64, bool) {
+fn measurements(value: i64) (i64, i64, bool) {
     (value + 1, value * 2, value > 0)
 }
 
@@ -358,10 +358,8 @@ La signature du receveur indique si une méthode l’emprunte, l’emprunte de m
 <!-- example: methods -->
 ```rust
 struct Counter {
-    value: i64
-}
+    value: i64;
 
-impl Counter {
     const STEP: i64 = 1;
 
     fn increment(&mut self) {
@@ -369,7 +367,7 @@ impl Counter {
         *value += Counter::STEP;
     }
 
-    fn finish(self: Counter) -> i64 {
+    fn finish(self: Counter) i64 {
         self.value
     }
 }
@@ -398,8 +396,8 @@ actifs. Les autres enums conservent leurs règles de déplacement et d’emprunt
 <!-- example: enums -->
 ```rust
 enum Reading {
-    Value(i64),
-    Missing
+    Value(i64);
+    Missing;
 }
 
 fn main() {
@@ -428,16 +426,16 @@ Sortie : `true`, `42`, `42`. [Paquet complet](examples/features/enums/).
 
 #### Result, Option et propagation anticipée
 
-`?` retourne l’échec ou l’absence depuis la fonction englobante. Des erreurs de `Result` de types différents nécessitent un `Outer::from(Inner) -> Outer` résolu statiquement ; aucune conversion arbitraire implicite n’est effectuée.
+`?` retourne l’échec ou l’absence depuis la fonction englobante. Des erreurs de `Result` de types différents nécessitent un `Outer::from(Inner) Outer` résolu statiquement ; aucune conversion arbitraire implicite n’est effectuée.
 
 <!-- example: errors -->
 ```rust
-fn checked(value: i64) -> Result<i64, bool> {
+fn checked(value: i64) Result<i64, bool> {
     if value < 0 { return Err(false); }
     Ok(value)
 }
 
-fn calculate() -> Result<i64, bool> {
+fn calculate() Result<i64, bool> {
     let value = checked(21)?;
     Ok(value * 2)
 }
@@ -468,7 +466,7 @@ Les valeurs primitives sont copiées implicitement lors des affectations, des ap
 <!-- example: moves -->
 ```rust
 struct Message {
-    value: i64
+    value: i64;
 }
 
 fn consume(message: Message) {
@@ -542,10 +540,10 @@ Le type d’un tableau contient son nombre d’éléments. Une tranche emprunté
 <!-- example: arrays -->
 ```rust
 struct Token {
-    kind: u8
+    kind: u8;
 }
 
-fn sum(values: &[i64]) -> i64 {
+fn sum(values: &[i64]) i64 {
     let mut index: usize = 0;
     let mut result: i64 = 0;
     while index < values.len() {
@@ -636,10 +634,8 @@ Sortie : `42`. [Paquet complet](examples/features/placement/).
 <!-- example: destruction -->
 ```rust
 struct Item {
-    number: i64
-}
+    number: i64;
 
-impl Item {
     fn drop(&mut self) {
         print((*self).number);
     }
@@ -828,15 +824,15 @@ Une closure est un objet concret contenant ses captures. Les paramètres sont ty
 
 <!-- example: closures -->
 ```rust
-fn apply(f: fn(i64) -> i64, value: i64) -> i64 {
+fn apply(f: fn(i64) i64, value: i64) i64 {
     f(value)
 }
 
-fn inspect(f: &fn(i64) -> i64, value: i64) -> i64 {
+fn inspect(f: &fn(i64) i64, value: i64) i64 {
     f(value)
 }
 
-fn advance(f: &mut fn() -> i64) -> i64 {
+fn advance(f: &mut fn() i64) i64 {
     f()
 }
 
@@ -875,12 +871,10 @@ Seul `Iter` emprunte la source. Chaque adaptateur possède le maillon précéden
 use std::iter::iter;
 
 struct Counter {
-    position: i64,
-    end: i64
-}
+    position: i64;
+    end: i64;
 
-impl Counter {
-    fn next(&mut self) -> Option<i64> {
+    fn next(&mut self) Option<i64> {
         let value = (*self).position;
         if copy(value) >= (*self).end { return None; }
         let position = &mut (*self).position;
@@ -923,7 +917,7 @@ Les paramètres de type et leurs contraintes s’appliquent également aux struc
 ```rust
 #(type: T)
 pub struct Holder<T> {
-    value: T
+    value: T;
 }
 
 fn main() {
@@ -946,33 +940,29 @@ Un contrat `with` exige les méthodes listées et autorise des méthodes supplé
 ```rust
 #(type: V)
 struct Boxed<V> {
-    value: V
-}
+    value: V;
 
-impl Boxed<V> {
-    fn new(value: V) -> Boxed<V> {
+    fn new(value: V) Boxed<V> {
         Boxed { value: value }
     }
 
-    fn get(&self) -> V {
+    fn get(&self) V {
         (*self).value
     }
 }
 
 #(type: V)
 #(type: S<V> with {
-    fn get(&self) -> V;
+    fn get(&self) V;
 })
 struct Reader<S, V> {
-    source: S
-}
+    source: S;
 
-impl Reader<S, V> {
-    fn new(source: S) -> Reader<S, V> {
+    fn new(source: S) Reader<S, V> {
         Reader { source: source }
     }
 
-    fn get(&self) -> V {
+    fn get(&self) V {
         let source = &(*self).source;
         source.get()
     }
@@ -1010,11 +1000,11 @@ Le composant importé est `src/math/numbers.crb` :
 
 <!-- example-file: modules/src/math/numbers.crb -->
 ```rust
-pub fn answer() -> i64 {
+pub fn answer() i64 {
     42
 }
 
-pub fn twice(value: i64) -> i64 {
+pub fn twice(value: i64) i64 {
     value * 2
 }
 ```
@@ -1032,13 +1022,13 @@ La sélection de la cible précède la résolution des imports. Les branches exc
 <!-- example: target -->
 ```rust
 #(if: target.family == "unix")
-fn answer() -> i64 {
+fn answer() i64 {
     42
 }
 
 #(endif)
 #(if: target.family == "windows")
-fn answer() -> i64 {
+fn answer() i64 {
     42
 }
 
@@ -1065,12 +1055,12 @@ Appeler une fonction asynchrone crée une Future inactive et capture immédiatem
 
 <!-- example: async -->
 ```rust
-async fn twice(value: i64) -> i64 {
+async fn twice(value: i64) i64 {
     yield;
     value * 2
 }
 
-async fn calculate() -> i64 {
+async fn calculate() i64 {
     twice(21).await
 }
 
@@ -1121,11 +1111,11 @@ Sortie : `42`. [Paquet complet](examples/features/threads/).
 
 <!-- example: blocking -->
 ```rust
-async fn operation() -> i64 {
+async fn operation() i64 {
     42
 }
 
-async fn calculate() -> i64 {
+async fn calculate() i64 {
     let execution = runtime::spawn_blocking(operation());
     match execution.await {
         Ok(value) => { value },
@@ -1166,7 +1156,7 @@ File::open("journal.wal", FileMode::READ | FileMode::WRITE | FileMode::CREATE)
 use std::io::{FileMode, FilePerm, SeekFrom};
 use std::io::asyn::{File, FileError};
 
-async fn round_trip() -> Result<usize, FileError> {
+async fn round_trip() Result<usize, FileError> {
     let path = "demo.bin";
     let count = {
         let mut file = File::create(
@@ -1214,7 +1204,7 @@ L’appelant choisit le mode d’ouverture, les permissions et la taille du tamp
 use std::io::{File, FileError};
 use std::io::{FileMode, FilePerm, SeekFrom};
 
-fn run() -> Result<usize, FileError> {
+fn run() Result<usize, FileError> {
     let path = "demo.bin";
     let count = {
         let mut file = File::create(&path[..], FileMode::READ_WRITE | FileMode::TRUNCATE, FilePerm.DefaultMode)?;
@@ -1302,7 +1292,7 @@ use std::net::ipv4::{Addr, SocketAddr};
 use std::net::udp::{Listener, connect};
 use std::net::SocketError;
 
-fn exchange() -> Result<usize, SocketError> {
+fn exchange() Result<usize, SocketError> {
     let mut listener = Listener::bind(SocketAddr::new(Addr::new(127, 0, 0, 1), 0))?;
     let mut peer = connect(listener.addr())?;
     let input: [u8; 1] = [42];
@@ -1366,7 +1356,7 @@ Les mêmes quatre octets donnent ici deux valeurs différentes selon l’ordre d
 ```rust
 use std::encoding::binary::{BigEndian, LittleEndian, Error};
 
-fn encode() -> Result<(), Error> {
+fn encode() Result<(), Error> {
     let mut bytes: [u8; 4] = [0; 4];
 
     // 0x01020304 becomes the four bytes 01 02 03 04.
@@ -1402,7 +1392,7 @@ Sortie: `4, 16909060, 67305985`. [Paquet complet](examples/features/binary/).
 use std::time::{Duration, Instant, Error};
 use std::time::{Timer, sleep};
 
-fn wait() -> Result<(), Error> {
+fn wait() Result<(), Error> {
     let start = Instant::now()?;
     sleep(Duration::from_millis(2))?;
 
@@ -1437,7 +1427,7 @@ L’attente suspend la tâche appelante. Un worker bloquant existant effectue l�
 use std::time::{Duration, Error};
 use std::time::asyn::{sleep, Timer};
 
-async fn delayed_value() -> Result<i64, Error> {
+async fn delayed_value() Result<i64, Error> {
     sleep(Duration::from_millis(2)).await?;
 
     let timer = Timer::after(Duration::from_nanos(0))?;
@@ -1543,7 +1533,7 @@ async fn produce(channel: &Channel<i64>) {
     channel.close();
 }
 
-async fn consume(channel: &Channel<i64>) -> i64 {
+async fn consume(channel: &Channel<i64>) i64 {
     let mut total: i64 = 0;
 
     loop {
@@ -1591,7 +1581,7 @@ Les deux variantes acquièrent le verrou via `&self`. La garde libère le verrou
 use std::sync::Mutex;
 use std::sync::asyn::Mutex as AsyncMutex;
 
-async fn async_value() -> i64 {
+async fn async_value() i64 {
     let mutex = AsyncMutex::new(10);
     {
         let mut guard = mutex.lock().await;
@@ -1763,7 +1753,7 @@ empruntent le `T` stocké ; `&allocation` emprunte le handle lui-même.
 Les références existantes ne sont pas implicitement déréférencées et la
 permission de mutation doit déjà exister.
 
-Un objet qui déclare `ref(&self) -> &T` et `mut_ref(&mut self) -> &mut T` peut
+Un objet qui déclare `ref(&self) &T` et `mut_ref(&mut self) &mut T` peut
 utiliser `*` : lecture via `ref()`, écriture ou emprunt mutable via `mut_ref()`.
 Les deux variantes de `MutexGuard` utilisent ce contrat. Les dépendances de
 durée de vie et de verrou sont conservées.
@@ -1787,3 +1777,5 @@ La source est évaluée une seule fois. Les tableaux et tranches empruntés
 produisent des références ; les itérateurs produisent le contenu de l'Option
 renvoyée par `next()`. Chaque itération conserve les règles de portée,
 de déplacement, d'emprunt et de nettoyage existantes.
+
+Méthodes et types de retour : voir la [syntaxe actuelle](docs/DEFINITION_METHODS-fr.md). Les méthodes sont dans les définitions ; le type de retour suit les paramètres sans flèche.

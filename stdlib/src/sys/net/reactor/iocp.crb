@@ -3,7 +3,7 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64")
     /// Creates the native I/O completion port and returns its handle.
-    fn completion_create() -> usize {
+    fn completion_create() usize {
         let mut port: usize = 0;
         @unchecked {
             @asm {
@@ -19,7 +19,7 @@
     }
 
     /// Associates a native socket with the completion port.
-    fn completion_attach(port: usize, socket: u64) -> i64 {
+    fn completion_attach(port: usize, socket: u64) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -39,7 +39,7 @@
     }
 
     /// Submits a socket I/O request to the Windows completion backend.
-    fn completion_submit(request: usize) -> i64 {
+    fn completion_submit(request: usize) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -156,7 +156,7 @@
     }
 
     /// Obtains the next completed request from the native completion port.
-    fn completion_next(port: usize) -> usize {
+    fn completion_next(port: usize) usize {
         let mut request: usize = 0;
         @unchecked {
             @asm {
@@ -191,7 +191,7 @@
 
 #(if: target.os == "windows" && target.arch == "x86_64")
     /// Creates the native I/O completion port and returns its handle.
-    fn completion_create() -> usize {
+    fn completion_create() usize {
         let mut port: usize = 0;
         @unchecked {
             @asm {
@@ -209,7 +209,7 @@
     }
 
     /// Associates a native socket with the completion port.
-    fn completion_attach(port: usize, socket: u64) -> i64 {
+    fn completion_attach(port: usize, socket: u64) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -232,7 +232,7 @@
     }
 
     /// Submits a socket I/O request to the Windows completion backend.
-    fn completion_submit(request: usize) -> i64 {
+    fn completion_submit(request: usize) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -348,7 +348,7 @@
     }
 
     /// Obtains the next completed request from the native completion port.
-    fn completion_next(port: usize) -> usize {
+    fn completion_next(port: usize) usize {
         let mut request: usize = 0;
         @unchecked {
             @asm {
@@ -385,12 +385,12 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
     /// Registers a socket with the completion port used by the runtime.
-    pub fn attach(socket: u64) -> i64 {
+    pub fn attach(socket: u64) i64 {
         runtime::attach_socket(socket)
     }
 
     /// Awaits the completion of the supplied request on the registered socket.
-    pub async fn complete(socket: u64, request: &mut [u64]) -> i64 {
+    pub async fn complete(socket: u64, request: &mut [u64]) i64 {
         let mut status: i64 = 0;
         @unchecked {
             let address = addr(&mut request[0]);

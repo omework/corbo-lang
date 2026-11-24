@@ -4,44 +4,34 @@
 /// Stores an IPv4 address as four packed octets.
 pub struct Addr {
     /// IPv4 address bits in the representation used by from_parts and octet accessors.
-    bits: u32,
+    bits: u32;
+
+    /// Packs four IPv4 octets in network order.
+    fn new(a: u8, b: u8, c: u8, d: u8) Addr {
+        Addr { bits: ((a as u32) << 24) | ((b as u32) << 16) | ((c as u32) << 8) | (d as u32) }
+    }
 }
 
 /// Pairs a packed IPv4 address with a 16-bit port.
 pub struct SocketAddr {
     /// IPv4 address bits in the representation used by from_parts and octet accessors.
-    bits: u32,
+    bits: u32;
     /// Transport port number, including zero before OS port allocation.
-    port_number: u16,
-}
+    port_number: u16;
 
-/// Reports invalid IPv4 endpoint syntax or an out-of-range address component.
-pub enum ParseError {
-    /// The IPv4 address or port text is malformed or out of range.
-    InvalidAddress,
-}
-
-impl Addr {
-    /// Packs four IPv4 octets in network order.
-    fn new(a: u8, b: u8, c: u8, d: u8) -> Addr {
-        Addr { bits: ((a as u32) << 24) | ((b as u32) << 16) | ((c as u32) << 8) | (d as u32) }
-    }
-}
-
-impl SocketAddr {
     /// Pairs an IPv4 address with the supplied port number.
-    fn new(ip: Addr, port: u16) -> SocketAddr {
+    fn new(ip: Addr, port: u16) SocketAddr {
         SocketAddr { bits: ip.bits, port_number: port }
     }
 
     /// Returns the address with the first IPv4 octet in the high byte.
-    fn ipv4_bits(&self) -> u32 { (*self).bits }
+    fn ipv4_bits(&self) u32 { (*self).bits }
 
     /// Returns the socket endpoint's port number.
-    fn port(&self) -> u16 { (*self).port_number }
+    fn port(&self) u16 { (*self).port_number }
 
     /// Parses an IPv4 endpoint written as four decimal octets, a colon and a decimal port.
-    fn parse(text: &str) -> Result<SocketAddr, ParseError> {
+    fn parse(text: &str) Result<SocketAddr, ParseError> {
         let bytes = text.as_bytes();
         let mut index: usize = 0;
         let mut octets: usize = 0;
@@ -77,7 +67,15 @@ impl SocketAddr {
     }
 }
 
+/// Reports invalid IPv4 endpoint syntax or an out-of-range address component.
+pub enum ParseError {
+    /// The IPv4 address or port text is malformed or out of range.
+    InvalidAddress;
+}
+
+
+
 /// Constructs a socket endpoint from packed IPv4 bits and a port.
-pub fn from_parts(ip: u32, port: u16) -> SocketAddr {
+pub fn from_parts(ip: u32, port: u16) SocketAddr {
     SocketAddr { bits: ip, port_number: port }
 }

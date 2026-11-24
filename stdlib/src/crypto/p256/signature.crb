@@ -6,14 +6,14 @@ use std::crypto::sha256::{digest, hmac};
 /// Holds the HMAC key and value for deterministic ECDSA nonce generation.
 struct Nonce {
     /// Current deterministic nonce-generator HMAC key.
-    key: [u8; 32],
+    key: [u8; 32];
     /// Current deterministic nonce-generator HMAC value.
-    value: [u8; 32],
+    value: [u8; 32];
 }
 
 // RFC 6979 section 3.2, steps d–g.
 /// Updates the RFC 6979 HMAC state with the supplied data and control byte.
-fn nonce_update(state: &mut Nonce, input: &[u8], flag: u8) -> Result<(), Error> {
+fn nonce_update(state: &mut Nonce, input: &[u8], flag: u8) Result<(), Error> {
     let mut key: [u8; 32] = [0; 32];
     let mut value: [u8; 32] = [0; 32];
     let mut cursor: usize = 0;
@@ -57,7 +57,7 @@ fn nonce_update(state: &mut Nonce, input: &[u8], flag: u8) -> Result<(), Error> 
 // All HMAC invocations for nonce derivation use at most 97 input bytes
 // and a 32-byte key, so SHA-256 length overflow is unreachable here.
 /// Computes HMAC-SHA-256 for deterministic nonce generation.
-fn fixed_hmac(key: &[u8], input: &[u8]) -> Result<[u8; 32], Error> {
+fn fixed_hmac(key: &[u8], input: &[u8]) Result<[u8; 32], Error> {
     let size = input.len();
     match hmac(&key[0..32], &input[0..size]) {
         Ok(hash) => { Ok(hash) },
@@ -66,7 +66,7 @@ fn fixed_hmac(key: &[u8], input: &[u8]) -> Result<[u8; 32], Error> {
 }
 
 /// Produces the next valid nonce scalar from the RFC 6979 state.
-fn nonce_next(state: &mut Nonce) -> Result<[u64; 8], Error> {
+fn nonce_next(state: &mut Nonce) Result<[u64; 8], Error> {
     let mut key: [u8; 32] = [0; 32];
     let mut value: [u8; 32] = [0; 32];
     let mut cursor: usize = 0;
@@ -90,7 +90,7 @@ fn nonce_next(state: &mut Nonce) -> Result<[u64; 8], Error> {
 }
 
 /// Hashes the message with SHA-256 and reduces the digest modulo the curve order.
-fn hash_scalar(message: &[u8]) -> Result<[u64; 8], Error> {
+fn hash_scalar(message: &[u8]) Result<[u64; 8], Error> {
     let size = message.len();
     let hash = match digest(&message[0..size]) {
         Ok(value) => { value },
@@ -103,7 +103,7 @@ fn hash_scalar(message: &[u8]) -> Result<[u64; 8], Error> {
 }
 
 /// Constructs ECDSA scalars with a deterministic nonce and encodes the resulting signature.
-fn sign_message(secret: &[u64], message: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+fn sign_message(secret: &[u64], message: &[u8], output: &mut [u8]) Result<usize, Error> {
     let length = message.len();
     let z = match hash_scalar(&message[0..length]) {
         Ok(value) => { value },
@@ -156,7 +156,7 @@ fn sign_message(secret: &[u64], message: &[u8], output: &mut [u8]) -> Result<usi
 }
 
 /// Validates and verifies an ECDSA signature against the supplied point and message.
-fn verify_message(point: &[u64], message: &[u8], signature: &[u8]) -> Result<bool, Error> {
+fn verify_message(point: &[u64], message: &[u8], signature: &[u8]) Result<bool, Error> {
     let size = signature.len();
     if size < 8 || size > 72 { return Err(Error.InvalidSignature); }
     if signature[0] != 48 || (signature[1] as usize) + 2 != size {

@@ -3,7 +3,7 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64")
     /// Creates the owned OVERLAPPED companion immediately, preserving file identity across rename.
-    pub fn reopen_positioned(handle: u64, mode: i64) -> (i64, u64) {
+    pub fn reopen_positioned(handle: u64, mode: i64) (i64, u64) {
         let kind = copy(mode) & 3;
         let read_access: u64 = if copy(kind) == 1 { 0 } else { 0x80000000 };
         let write_access: u64 = if kind == 0 { 0 }
@@ -34,7 +34,7 @@
     }
 
     /// Reads through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
-    pub fn read_at(handle: u64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+    pub fn read_at(handle: u64, buffer: &mut [u8], offset: u64) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -106,7 +106,7 @@
     }
 
     /// Writes through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
-    pub fn write_at(handle: u64, buffer: &[u8], offset: u64) -> (i64, usize) {
+    pub fn write_at(handle: u64, buffer: &[u8], offset: u64) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -180,7 +180,7 @@
 
 #(if: target.os == "windows" && target.arch == "x86_64")
     /// Creates the owned OVERLAPPED companion immediately, preserving file identity across rename.
-    pub fn reopen_positioned(handle: u64, mode: i64) -> (i64, u64) {
+    pub fn reopen_positioned(handle: u64, mode: i64) (i64, u64) {
         let kind = copy(mode) & 3;
         let read_access: u64 = if copy(kind) == 1 { 0 } else { 0x80000000 };
         let write_access: u64 = if kind == 0 { 0 }
@@ -213,7 +213,7 @@
     }
 
     /// Reads through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
-    pub fn read_at(handle: u64, buffer: &mut [u8], offset: u64) -> (i64, usize) {
+    pub fn read_at(handle: u64, buffer: &mut [u8], offset: u64) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }
@@ -292,7 +292,7 @@
     }
 
     /// Writes through the owned OVERLAPPED handle with a per-request event; waits and closes the event.
-    pub fn write_at(handle: u64, buffer: &[u8], offset: u64) -> (i64, usize) {
+    pub fn write_at(handle: u64, buffer: &[u8], offset: u64) (i64, usize) {
         let mut length = buffer.len();
         if length == 0 { return (0, 0); }
         if length > 4294967295 { length = 4294967295; }

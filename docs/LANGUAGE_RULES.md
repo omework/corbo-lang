@@ -1,5 +1,7 @@
 [Français](LANGUAGE_RULES-fr.md)
 
+
+Current method and return syntax: [definition-local methods](DEFINITION_METHODS.md). This supersedes legacy `impl` syntax in historical examples below.
 <a id="crust--règles-de-langage-retenues"></a>
 
 # Corbo language rules

@@ -1,3 +1,11 @@
+## Definition-local method syntax
+
+Grammar/STD migration is recorded in [the syntax specification](DEFINITION_METHODS.md).
+Six focused corboc observations, adjacent endian validation and self-rebuild evidence are recorded in the compiler's
+`docs/DEFINITION_METHODS_CYCLE.md`. This changes surface syntax and static method
+selection, not ownership, borrowing or destruction rules. The Rust frontend stays
+frozen. Cross-platform execution is not claimed for this syntax-only cycle.
+
 ## Universal reference methods and for loops
 
 Grammar and documentation updated. The active compiler passed ten focused

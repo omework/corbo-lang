@@ -8,29 +8,69 @@
     /// Reports context, handshake, peer verification or TLS I/O failures.
     pub enum TlsError {
         /// Input does not meet this TLS backend's parameter contract.
-        InvalidInput,
+        InvalidInput;
         /// The TLS backend could not construct its configuration.
-        ConfigurationFailed,
+        ConfigurationFailed;
         /// The peer certificate/identity verification failed.
-        PeerVerificationFailed,
+        PeerVerificationFailed;
         /// The TLS handshake failed.
-        HandshakeFailed,
+        HandshakeFailed;
         /// The TLS backend reported an underlying transport failure.
-        TransportFailed,
+        TransportFailed;
     }
 
     /// Owns the TLS session and its underlying TCP connection.
     pub struct Connection {
         /// Owned underlying TCP connection; it outlives the TLS session cleanup.
-        socket: TcpConnection,
+        socket: TcpConnection;
         /// Owned native OpenSSL session address; used only by this optional backend.
-        session: usize,
+        session: usize;
         /// Sticky failure state; subsequent operations must follow the API's failure/reset contract.
-        failed: bool,
-    }
+        failed: bool;
+
+        /// Reads authenticated application data into the caller's slice.
+        fn read(&mut self, destination: &mut [u8]) Result<usize, TlsError> {
+            if (*self).failed { return Err(TlsError.TransportFailed); }
+            let length = destination.len();
+            if length == 0 { return Ok(0); }
+            let (status, count) = read_session((*self).session, destination, length);
+            if status == 1 { return Ok(count); }
+            if status == -6 { return Ok(0); } // SSL_ERROR_ZERO_RETURN
+            let failed = &mut (*self).failed;
+            *failed = true;
+            Err(TlsError.TransportFailed)
+        }
+
+        /// Sends application bytes and returns the count accepted by the TLS session.
+        fn write(&mut self, source: &[u8]) Result<usize, TlsError> {
+            if (*self).failed { return Err(TlsError.TransportFailed); }
+            let length = source.len();
+            if length == 0 { return Ok(0); }
+            let (status, count) = write_session((*self).session, source, length);
+            if status == 1 { return Ok(count); }
+            let failed = &mut (*self).failed;
+            *failed = true;
+            Err(TlsError.TransportFailed)
+        }
+
+        // A terminal operation. OpenSSL returns zero after sending its alert
+        // when the peer has yet to send its own.
+        /// Consumes the connection and requests a TLS shutdown.
+        fn close(self: Connection) Result<(), TlsError> {
+            if self.failed { return Err(TlsError.TransportFailed); }
+            if shutdown_session(self.session) < 0 { return Err(TlsError.TransportFailed); }
+            Ok(())
+        }
+
+        /// Frees the OpenSSL session before the underlying TCP connection is destroyed.
+        fn drop(&mut self) {
+            free_session((*self).session);
+        }
+
+}
 
     /// Consumes a connected TCP socket and performs TLS with a NUL-terminated hostname and trust path.
-    pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) -> Result<Connection, TlsError> {
+    pub fn connect(socket: TcpConnection, hostname: &[u8], trust_file: &[u8]) Result<Connection, TlsError> {
         let name_length = hostname.len();
         let trust_length = trust_file.len();
         if !valid_file_path(&hostname[0..name_length]) || !valid_file_path(&trust_file[0..trust_length]) {
@@ -53,7 +93,7 @@
     }
 
     /// Consumes a connected TCP socket and performs TLS with NUL-terminated certificate and key paths.
-    pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) -> Result<Connection, TlsError> {
+    pub fn accept(socket: TcpConnection, certificate: &[u8], private_key: &[u8]) Result<Connection, TlsError> {
         let cert_length = certificate.len();
         let key_length = private_key.len();
         if !valid_file_path(&certificate[0..cert_length]) || !valid_file_path(&private_key[0..key_length]) {
@@ -72,44 +112,4 @@
         Ok(Connection { socket: socket, session: session, failed: false })
     }
 
-    impl Connection {
-        /// Reads authenticated application data into the caller's slice.
-        fn read(&mut self, destination: &mut [u8]) -> Result<usize, TlsError> {
-            if (*self).failed { return Err(TlsError.TransportFailed); }
-            let length = destination.len();
-            if length == 0 { return Ok(0); }
-            let (status, count) = read_session((*self).session, destination, length);
-            if status == 1 { return Ok(count); }
-            if status == -6 { return Ok(0); } // SSL_ERROR_ZERO_RETURN
-            let failed = &mut (*self).failed;
-            *failed = true;
-            Err(TlsError.TransportFailed)
-        }
-
-        /// Sends application bytes and returns the count accepted by the TLS session.
-        fn write(&mut self, source: &[u8]) -> Result<usize, TlsError> {
-            if (*self).failed { return Err(TlsError.TransportFailed); }
-            let length = source.len();
-            if length == 0 { return Ok(0); }
-            let (status, count) = write_session((*self).session, source, length);
-            if status == 1 { return Ok(count); }
-            let failed = &mut (*self).failed;
-            *failed = true;
-            Err(TlsError.TransportFailed)
-        }
-
-        // A terminal operation. OpenSSL returns zero after sending its alert
-        // when the peer has yet to send its own.
-        /// Consumes the connection and requests a TLS shutdown.
-        fn close(self: Connection) -> Result<(), TlsError> {
-            if self.failed { return Err(TlsError.TransportFailed); }
-            if shutdown_session(self.session) < 0 { return Err(TlsError.TransportFailed); }
-            Ok(())
-        }
-
-        /// Frees the OpenSSL session before the underlying TCP connection is destroyed.
-        fn drop(&mut self) {
-            free_session((*self).session);
-        }
-    }
 #(endif)

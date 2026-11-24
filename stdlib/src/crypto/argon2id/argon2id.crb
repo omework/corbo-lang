@@ -4,21 +4,21 @@
 /// Sets the number of passes and lanes. The workspace supplied to `derive` sets the memory cost.
 pub struct Params {
     /// Argon2 time-cost iteration count.
-    passes: u32,
+    passes: u32;
     /// Configured Argon2 parallel lane count.
-    lanes: u32,
+    lanes: u32;
 }
 
 /// Reports invalid parameters, insufficient workspace, or incompatible input or output lengths.
 pub enum Error {
     /// A parameter is outside this algorithm's supported bounds.
-    InvalidParams,
+    InvalidParams;
     /// The supplied Argon2 memory blocks do not meet the configured parameters.
-    InvalidMemory,
+    InvalidMemory;
     /// The requested Argon2 output length is invalid.
-    InvalidOutput,
+    InvalidOutput;
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong
+    InputTooLong;
 }
 
 // RFC 9106 H': emit 32-byte prefixes of successive 64-byte
@@ -97,7 +97,7 @@ fn hash_block(seed: &[u8; 64], index: u64, lane: u64, block: &mut [u64; 128]) {
 }
 
 /// Adds two words and twice the product of their low 32 bits modulo 2^64.
-fn blamka(a: u64, b: u64) -> u64 {
+fn blamka(a: u64, b: u64) u64 {
     let product = (a & ARGON_LOW_WORD) * (b & ARGON_LOW_WORD);
     argon_add(argon_add(a, b), (product & 0x7fffffffffffffff) << 1)
 }
@@ -135,7 +135,7 @@ fn argon_permute(v: &mut [u64; 16]) {
 }
 
 /// Maps a permutation-group index to its position in the memory block.
-fn group_word(group: u64, word: u64) -> u64 {
+fn group_word(group: u64, word: u64) u64 {
     if group < 8 { group * 16 + word } else { word / 2 * 16 + (group - 8) * 2 + word % 2 }
 }
 
@@ -174,21 +174,21 @@ fn argon_compress(a: &[u64; 128], b: &[u64; 128], output: &mut [u64; 128]) {
 /// Carries the pass, slice and lane coordinates used to fill a segment.
 struct Segment {
     /// Zero-based Argon2 pass index.
-    pass: u64,
+    pass: u64;
     /// Zero-based Argon2 synchronization slice index.
-    slice: u64,
+    slice: u64;
     /// Zero-based Argon2 lane index.
-    lane: u64,
+    lane: u64;
     /// Number of Argon2 lanes in this addressing context.
-    lanes: u64,
+    lanes: u64;
     /// Number of blocks in one Argon2 lane segment.
-    length: u64,
+    length: u64;
     /// Argon2 time-cost iteration count.
-    passes: u64,
+    passes: u64;
 }
 
 /// Selects the reference block from the permitted window for the current segment position.
-fn segment_reference(segment: &Segment, index: u64, pseudo: u64) -> u64 {
+fn segment_reference(segment: &Segment, index: u64, pseudo: u64) u64 {
     let length = (*segment).length;
     let lane_length = length * 4;
     let pass = (*segment).pass;
@@ -268,7 +268,7 @@ fn fill_segment(work: &mut [[u64; 128]], segment: &Segment) {
 fn derive_internal(
     password: &[u8], salt: &[u8], secret: &[u8], associated_data: &[u8],
     params: Params, work: &mut [[u64; 128]], output: &mut [u8],
-) -> Result<(), Error> {
+) Result<(), Error> {
     let lanes = params.lanes as u64;
     let passes = params.passes as u64;
     let memory = work.len() as u64;
@@ -359,7 +359,7 @@ fn derive_internal(
 
 /// Derives the requested Argon2id output using the supplied workspace and parameters.
 pub fn derive(password: &[u8], salt: &[u8], params: Params,
-    work: &mut [[u64; 128]], output: &mut [u8]) -> Result<(), Error> {
+    work: &mut [[u64; 128]], output: &mut [u8]) Result<(), Error> {
     let empty: [u8; 0] = [];
     derive_internal(password, salt, &empty[..], &empty[..], params, work, output)
 }

@@ -3,7 +3,7 @@
 
 // Mask away the discarded bits before using Corbo's checked left shift.
 /// Shifts a byte left, discarding bits that would extend past eight bits.
-fn shift_byte(value: u8, count: u64) -> u8 {
+fn shift_byte(value: u8, count: u64) u8 {
     let mask: u8 = 255;
     (value & (mask >> copy(count))) << count
 }
@@ -11,12 +11,12 @@ fn shift_byte(value: u8, count: u64) -> u8 {
 // Multiplication in AES's byte field. The mask depends on a single bit,
 // so the checked multiplications cannot overflow.
 /// Multiplies an AES byte by x in the Rijndael field.
-fn xtime(value: u8) -> u8 {
+fn xtime(value: u8) u8 {
     shift_byte(copy(value), 1) ^ ((value >> 7) * 27)
 }
 
 /// Multiplies two bytes in the Rijndael field.
-fn byte_product(left: u8, right: u8) -> u8 {
+fn byte_product(left: u8, right: u8) u8 {
     let mut a = left;
     let mut b = right;
     let mut product: u8 = 0;
@@ -31,13 +31,13 @@ fn byte_product(left: u8, right: u8) -> u8 {
 }
 
 /// Rotates the bits of a byte for the AES substitution transform.
-fn rotate_byte(value: u8, count: u64) -> u8 {
+fn rotate_byte(value: u8, count: u64) u8 {
     shift_byte(copy(value), copy(count)) | (value >> (8 - count))
 }
 
 // Invert by raising to 254. Zero passes through inversion as zero.
 /// Computes the multiplicative inverse in the AES field.
-fn field_inverse(value: u8) -> u8 {
+fn field_inverse(value: u8) u8 {
     let x2 = byte_product(copy(value), value);
     let x4 = byte_product(copy(x2), copy(x2));
     let x8 = byte_product(copy(x4), copy(x4));
@@ -52,7 +52,7 @@ fn field_inverse(value: u8) -> u8 {
 }
 
 /// Computes the AES S-box value by field inversion and affine transformation.
-fn substitute(value: u8) -> u8 {
+fn substitute(value: u8) u8 {
     let inverse = field_inverse(value);
     rotate_byte(copy(inverse), 1) ^ rotate_byte(copy(inverse), 2)
         ^ rotate_byte(copy(inverse), 3) ^ rotate_byte(copy(inverse), 4) ^ inverse ^ 99

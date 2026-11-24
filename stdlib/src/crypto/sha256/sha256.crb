@@ -7,24 +7,22 @@ const SHA256_MAX_INPUT_BYTES: u64 = 0x1fffffffffffffff;
 /// Reports that the input length exceeds the SHA-256 limit.
 pub enum HashError {
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong
+    InputTooLong;
 }
 
 /// Holds SHA-256 chaining state, byte count and pending block.
 pub struct Sha256 {
     /// Internal chaining or sponge state retained between updates.
-    state: [u64; 8],
+    state: [u64; 8];
     /// Pending input block; update compresses full blocks before reusing this storage.
-    block: [u8; 64],
+    block: [u8; 64];
     /// Total input bytes incorporated by this hash instance.
-    bytes: u64,
+    bytes: u64;
     /// Whether this instance uses the available hardware compression/encryption path.
-    accelerated: bool,
-}
+    accelerated: bool;
 
-impl Sha256 {
     /// Creates a fresh SHA-256 hasher that uses portable compression.
-    fn portable() -> Sha256 {
+    fn portable() Sha256 {
         Sha256 {
             state: [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
                     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19],
@@ -35,7 +33,7 @@ impl Sha256 {
     }
 
     /// Creates a fresh SHA-256 hasher and selects an available compression backend.
-    fn new() -> Sha256 {
+    fn new() Sha256 {
         let mut hash = Sha256::portable();
         let enabled = &mut hash.accelerated;
         *enabled = hardware_available();
@@ -43,10 +41,10 @@ impl Sha256 {
     }
 
     /// Reports whether this hasher uses the hardware compression path.
-    fn hardware_accelerated(&self) -> bool { (*self).accelerated }
+    fn hardware_accelerated(&self) bool { (*self).accelerated }
 
     /// Computes the digest of the bytes seen so far while keeping the hasher available.
-    fn snapshot(&self) -> [u8; 32] {
+    fn snapshot(&self) [u8; 32] {
         let mut hash = Sha256::portable();
         let count = &mut hash.bytes;
         *count = (*self).bytes;
@@ -68,7 +66,7 @@ impl Sha256 {
     }
 
     /// Feeds a byte slice into the hash, compressing full blocks and retaining the remainder.
-    fn update(&mut self, input: &[u8]) -> Result<(), HashError> {
+    fn update(&mut self, input: &[u8]) Result<(), HashError> {
         let length = input.len() as u64;
         let bytes = (*self).bytes;
         if length > SHA256_MAX_INPUT_BYTES - bytes { return Err(HashError.InputTooLong); }
@@ -91,7 +89,7 @@ impl Sha256 {
     }
 
     /// Consumes the hasher and returns its 32-byte digest after padding the message.
-    fn finish(mut self: Sha256) -> [u8; 32] {
+    fn finish(mut self: Sha256) [u8; 32] {
         let bits = self.bytes * 8;
         let used = self.bytes % 64;
         let separator = &mut self.block[used];
@@ -128,6 +126,7 @@ impl Sha256 {
     }
 }
 
+
 /// Compresses one complete block using the hasher's selected backend.
 fn compress_block(hash: &mut Sha256) {
     let words = schedule(&(*hash).block);
@@ -136,7 +135,7 @@ fn compress_block(hash: &mut Sha256) {
 }
 
 /// Computes a SHA-256 digest in one call.
-pub fn digest(input: &[u8]) -> Result<[u8; 32], HashError> {
+pub fn digest(input: &[u8]) Result<[u8; 32], HashError> {
     let mut hash = Sha256::new();
     match hash.update(input) {
         Ok(()) => { Ok(hash.finish()) },
@@ -147,7 +146,7 @@ pub fn digest(input: &[u8]) -> Result<[u8; 32], HashError> {
 // The core's exact casts cannot narrow an integer. Assemble the eight
 // bits directly without an unchecked conversion or a lookup table.
 /// Extracts one byte at the given offset within a serialized SHA-256 word.
-fn byte_at(word: u64, shift: u64) -> u8 {
+fn byte_at(word: u64, shift: u64) u8 {
     let mut value = word >> shift;
     let mut byte: u8 = 0;
     let mut bit: u64 = 0;

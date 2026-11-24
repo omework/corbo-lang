@@ -7,20 +7,18 @@ pub enum SendError<T> {
     /// The channel was closed before the value could enter its queue.
     Closed {
         /// Value whose ownership was not transferred into the queue.
-        value: T,
-    },
+        value: T;
+    };
 }
 
 #(type: T)
 /// Owns a fixed-capacity queue; borrowed users must end before destruction.
 pub struct Channel<T> {
     /// Stable native metadata and managed ring-storage identity.
-    raw: usize,
-}
+    raw: usize;
 
-impl Channel<T> {
     /// Reserves a nonzero maximum number of queued values; the queue never grows beyond it.
-    fn new(capacity: usize) -> Channel<T> {
+    fn new(capacity: usize) Channel<T> {
         let prototype: Option<T> = None;
         let mut raw: usize = 0;
         @unchecked { @c { ${raw}=channel_create(${capacity},sizeof(${prototype})); } }
@@ -29,7 +27,7 @@ impl Channel<T> {
 
     /// Moves a value into the queue; a closed channel returns the unsent value.
     #(lock: on=self)
-    fn send(&self, value: T) -> Result<(), SendError<T>> {
+    fn send(&self, value: T) Result<(), SendError<T>> {
         let mut incoming: Option<T> = Some(value);
         let raw = (*self).raw;
         let mut status: i64 = 1;
@@ -44,7 +42,7 @@ impl Channel<T> {
 
     /// Receives in FIFO order; closed queues drain before returning None.
     #(lock: on=self)
-    fn recv(&self) -> Option<T> {
+    fn recv(&self) Option<T> {
         let raw = (*self).raw;
         let mut output: Option<T> = None;
         let mut status: i64 = 1;

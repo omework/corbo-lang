@@ -4,15 +4,22 @@
 /// Byte counts for managed fixed datastacks, pool storage and growing regions.
 pub struct MemoryStats {
     /// Reserved virtual address bytes; committed storage is a subset.
-    reserved_bytes: usize,
+    reserved_bytes: usize;
     /// Committed managed pages, not physical resident memory.
-    committed_bytes: usize,
+    committed_bytes: usize;
     /// Fixed cursor spans plus live region payload, excluding unused pool slots.
-    occupied_bytes: usize,
+    occupied_bytes: usize;
+
+    /// Returns sampled reserved virtual address bytes.
+    fn reserved(&self) usize { (*self).reserved_bytes }
+    /// Returns sampled committed managed pages in bytes, independently of OS RSS.
+    fn committed(&self) usize { (*self).committed_bytes }
+    /// Returns sampled occupied bytes, excluding unused pool slots.
+    fn occupied(&self) usize { (*self).occupied_bytes }
 }
 
 /// Samples atomic counters without pausing workers. Fields may reflect adjacent instants.
-pub fn memory_stats() -> MemoryStats {
+pub fn memory_stats() MemoryStats {
     let mut reserved: usize = 0;
     let mut committed: usize = 0;
     let mut occupied: usize = 0;
@@ -25,13 +32,4 @@ pub fn memory_stats() -> MemoryStats {
         }
     }
     MemoryStats { reserved_bytes: reserved, committed_bytes: committed, occupied_bytes: occupied }
-}
-
-impl MemoryStats {
-    /// Returns sampled reserved virtual address bytes.
-    fn reserved(&self) -> usize { (*self).reserved_bytes }
-    /// Returns sampled committed managed pages in bytes, independently of OS RSS.
-    fn committed(&self) -> usize { (*self).committed_bytes }
-    /// Returns sampled occupied bytes, excluding unused pool slots.
-    fn occupied(&self) -> usize { (*self).occupied_bytes }
 }

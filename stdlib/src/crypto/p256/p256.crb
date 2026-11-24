@@ -8,102 +8,26 @@ use std::encoding::pem::{decode as decode_pem, Error as PemError};
 /// Reports invalid keys or signatures, input limits, output capacity or system entropy errors.
 pub enum Error {
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall,
+    BufferTooSmall;
     /// The system random source could not provide the required bytes.
-    RandomFailed,
+    RandomFailed;
     /// The encoded/private scalar material is invalid for this key format.
-    InvalidPrivateKey,
+    InvalidPrivateKey;
     /// The public point/key encoding is invalid or outside the supported curve.
-    InvalidPublicKey,
+    InvalidPublicKey;
     /// The signature encoding or scalar values are invalid.
-    InvalidSignature,
+    InvalidSignature;
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong,
+    InputTooLong;
 }
 
 /// Holds a private P-256 scalar for one consuming ECDHE agreement.
 pub struct EphemeralKey {
     /// Private scalar limbs; never expose these through a public borrowed view.
-    secret: [u64; 8],
-}
+    secret: [u64; 8];
 
-/// Holds a P-256 private scalar used to derive a public key and sign messages.
-pub struct SigningKey {
-    /// Private scalar limbs; never expose these through a public borrowed view.
-    secret: [u64; 8],
-}
-
-/// Holds a validated P-256 curve point.
-pub struct PublicKey {
-    /// Encoded internal elliptic-curve point representation.
-    point: [u64; 24],
-}
-
-/// Writes the private scalar in big-endian form into a pre-sized 32-byte slice.
-fn write_signing_scalar(key: &SigningKey, output: &mut [u8]) {
-    let words = private_words(&(*key).secret);
-    write_words(&words[..], output, 0);
-}
-
-/// Checks that a scalar is nonzero and smaller than the curve order.
-fn valid_scalar(words: &[u64]) -> bool {
-    let order = modulus(true);
-    let nonzero: u64 = zero_bit(&words[0..8]) ^ 1;
-    let below_order: u64 = less_than(&words[0..8], &order[..]);
-    let valid: u64 = nonzero & below_order;
-    return valid == 1;
-}
-
-/// Samples a private scalar from system entropy and rejects out-of-range candidates.
-fn random_scalar(output: &mut [u8]) -> Result<(), Error> {
-    while true {
-        let size = output.len();
-        match fill(&mut output[0..size]) {
-            Ok(()) => {},
-            Err(cause) => { drop(cause); return Err(Error.RandomFailed); },
-        };
-        let scalar = read_words(&output[0..32], 0);
-        if valid_scalar(&scalar[..]) { return Ok(()); }
-    }
-    Ok(())
-}
-
-/// Builds an ephemeral agreement key after checking the scalar range.
-fn ephemeral_from_bytes(input: &[u8]) -> Result<EphemeralKey, Error> {
-    let scalar = read_words(&input[0..32], 0);
-    if !valid_scalar(&scalar[..]) { return Err(Error.InvalidPrivateKey); }
-    let mut key = EphemeralKey { secret: [0; 8] };
-    let mut i: u64 = 0;
-    while i < 8 {
-        let limb = &mut key.secret[i];
-        *limb = scalar[i];
-        i = i + 1;
-    }
-    Ok(key)
-}
-
-/// Stores an internal point in the public key representation.
-fn public_from_point(point: &[u64]) -> PublicKey {
-    let mut key = PublicKey { point: [0; 24] };
-    let mut i: u64 = 0;
-    while i < 24 {
-        let limb = &mut key.point[i];
-        *limb = point[i];
-        i = i + 1;
-    }
-    key
-}
-
-/// Multiplies the P-256 generator by the private scalar to derive its public key.
-fn derive_public(secret: &[u64]) -> PublicKey {
-    let base = generator();
-    let point = scalar_multiply(&base[..], &secret[0..8]);
-    public_from_point(&point[..])
-}
-
-impl EphemeralKey {
     /// Creates a key using a private scalar sampled from system entropy.
-    fn generate() -> Result<EphemeralKey, Error> {
+    fn generate() Result<EphemeralKey, Error> {
         let mut bytes: [u8; 32] = [0; 32];
         match random_scalar(&mut bytes[..]) {
             Ok(()) => {},
@@ -113,13 +37,13 @@ impl EphemeralKey {
     }
 
     /// Derives the public point corresponding to this private scalar.
-    fn public_key(&self) -> PublicKey {
+    fn public_key(&self) PublicKey {
         let secret = private_words(&(*self).secret);
         derive_public(&secret[..])
     }
 
     /// Consumes the ephemeral key and writes the 32-byte ECDHE shared secret.
-    fn agree(self: EphemeralKey, peer: &PublicKey, output: &mut [u8; 32]) -> Result<(), Error> {
+    fn agree(self: EphemeralKey, peer: &PublicKey, output: &mut [u8; 32]) Result<(), Error> {
         let scalar = private_words(&self.secret);
         let point = public_words(&(*peer).point);
         let shared = scalar_multiply(&point[..], &scalar[..]);
@@ -138,9 +62,13 @@ impl EphemeralKey {
     }
 }
 
-impl SigningKey {
+/// Holds a P-256 private scalar used to derive a public key and sign messages.
+pub struct SigningKey {
+    /// Private scalar limbs; never expose these through a public borrowed view.
+    secret: [u64; 8];
+
     /// Creates a key using a private scalar sampled from system entropy.
-    fn generate() -> Result<SigningKey, Error> {
+    fn generate() Result<SigningKey, Error> {
         let mut bytes: [u8; 32] = [0; 32];
         match random_scalar(&mut bytes[..]) {
             Ok(()) => {},
@@ -150,7 +78,7 @@ impl SigningKey {
     }
 
     /// Imports a 32-byte big-endian private scalar after checking its range.
-    fn from_bytes(input: &[u8; 32]) -> Result<SigningKey, Error> {
+    fn from_bytes(input: &[u8; 32]) Result<SigningKey, Error> {
         let mut bytes: [u8; 32] = [0; 32];
         let mut index: usize = 0;
         while index < 32 {
@@ -170,13 +98,13 @@ impl SigningKey {
     }
 
     /// Derives the public point corresponding to this private scalar.
-    fn public_key(&self) -> PublicKey {
+    fn public_key(&self) PublicKey {
         let secret = private_words(&(*self).secret);
         derive_public(&secret[..])
     }
 
     /// Signs a message with deterministic ECDSA and writes the DER signature.
-    fn sign_sha256(&self, message: &[u8], output: &mut [u8; 72]) -> Result<usize, Error> {
+    fn sign_sha256(&self, message: &[u8], output: &mut [u8; 72]) Result<usize, Error> {
         let secret = private_words(&(*self).secret);
         let length = message.len();
         let mut der: [u8; 72] = [0; 72];
@@ -193,72 +121,9 @@ impl SigningKey {
             },
         }
     }
-}
 
-impl PublicKey {
-    /// Parses a 65-byte SEC1 point and checks its coordinates and curve equation.
-    fn from_sec1_uncompressed(input: &[u8]) -> Result<PublicKey, Error> {
-        if input.len() != 65 { return Err(Error.InvalidPublicKey); }
-        if input[0] != 4 { return Err(Error.InvalidPublicKey); }
-        let x = read_words(&input[0..65], 1);
-        let y = read_words(&input[0..65], 33);
-        let prime = modulus(false);
-        if less_than(&x[..], &prime[..]) == 0 || less_than(&y[..], &prime[..]) == 0 {
-            return Err(Error.InvalidPublicKey);
-        }
-        let xm = to_montgomery(&x[..], false);
-        let ym = to_montgomery(&y[..], false);
-        if !on_curve(&xm[..], &ym[..]) { return Err(Error.InvalidPublicKey); }
-        // P-256 has cofactor one. Every finite point on the curve is
-        // in the prime-order subgroup.
-        let one = montgomery_one(false);
-        let point = point_new(&xm[..], &ym[..], &one[..]);
-        let key = public_from_point(&point[..]);
-        Ok(key)
-    }
-
-    /// Serializes the public point in uncompressed SEC1 form.
-    fn to_sec1_uncompressed(&self) -> [u8; 65] {
-        let point = public_words(&(*self).point);
-        let mut output: [u8; 65] = [0; 65];
-        serialize_point(&point[..], &mut output[..]);
-        output
-    }
-}
-
-/// Verifies a DER-encoded P-256 ECDSA signature over a SHA-256 message digest.
-pub fn verify_sha256(key: &PublicKey, message: &[u8], signature: &[u8]) -> Result<bool, Error> {
-    let point = public_words(&(*key).point);
-    let size = message.len();
-    let sig_size = signature.len();
-    verify_message(&point[..], &message[0..size], &signature[0..sig_size])
-}
-
-/// Copies a fixed-size private scalar into the arithmetic representation.
-fn private_words(words: &[u64; 8]) -> [u64; 8] {
-    let mut result: [u64; 8] = [0; 8];
-    let mut i: u64 = 0;
-    while i < 8 {
-        result[i] = (*words)[i];
-        i = i + 1;
-    }
-    result
-}
-
-/// Copies the public point coordinates into the arithmetic representation.
-fn public_words(words: &[u64; 24]) -> [u64; 24] {
-    let mut result: [u64; 24] = [0; 24];
-    let mut i: u64 = 0;
-    while i < 24 {
-        result[i] = (*words)[i];
-        i = i + 1;
-    }
-    result
-}
-
-impl SigningKey {
     /// Imports a P-256 signing key from unencrypted PKCS#8 or SEC1 DER.
-    fn from_der(input: &[u8]) -> Result<SigningKey, Error> {
+    fn from_der(input: &[u8]) Result<SigningKey, Error> {
         let size = input.len() as u64;
         let outer = der(&input[0..size], 0, copy(size), 48);
         if outer.end == 0 || outer.end != size { return Err(Error.InvalidPrivateKey); }
@@ -269,7 +134,7 @@ impl SigningKey {
     }
 
     /// Imports one PRIVATE KEY or EC PRIVATE KEY block. The scratch buffer retains private DER.
-    fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<SigningKey, Error> {
+    fn from_pem(input: &[u8], scratch: &mut [u8]) Result<SigningKey, Error> {
         let size = input.len();
         let capacity = scratch.len();
         let standard: [u8; 11] = [80,82,73,86,65,84,69,32,75,69,89]; // PRIVATE KEY
@@ -295,11 +160,86 @@ impl SigningKey {
             },
         }
     }
+
+    /// Writes an unencrypted PKCS#8 PrivateKeyInfo and returns its DER length.
+    fn to_der(&self, output: &mut [u8]) Result<usize, Error> {
+        if output.len() < 138 { return Err(Error.BufferTooSmall); }
+        let header: [u8; 6] = [48,129,135,2,1,0];
+        let algorithm = p256_algorithm_identifier();
+        copy_der_field(&header[..], &mut output[0..6]);
+        copy_der_field(&algorithm[..], &mut output[6..27]);
+        output[27] = 4;
+        output[28] = 109;
+        write_sec1(&*self, false, &mut output[29..138]);
+        Ok(138)
+    }
+
+    /// Writes an unencrypted SEC1 ECPrivateKey and returns its DER length.
+    fn to_sec1_der(&self, output: &mut [u8]) Result<usize, Error> {
+        if output.len() < 121 { return Err(Error.BufferTooSmall); }
+        write_sec1(&*self, true, &mut output[0..121]);
+        Ok(121)
+    }
+
+    /// Writes a PRIVATE KEY PEM block containing an unencrypted PKCS#8 key.
+    fn to_pem(&self, output: &mut [u8]) Result<usize, Error> {
+        let mut bytes: [u8; 138] = [0; 138];
+        let length = match self.to_der(&mut bytes[..]) {
+            Ok(size) => { size },
+            Err(error) => { return Err(error); },
+        };
+        let label: [u8; 11] = [80,82,73,86,65,84,69,32,75,69,89]; // PRIVATE KEY
+        write_key_pem(&bytes[..length], &label[..], output)
+    }
+
+    /// Writes an EC PRIVATE KEY PEM block containing an unencrypted SEC1 key.
+    fn to_sec1_pem(&self, output: &mut [u8]) Result<usize, Error> {
+        let mut bytes: [u8; 121] = [0; 121];
+        let length = match self.to_sec1_der(&mut bytes[..]) {
+            Ok(size) => { size },
+            Err(error) => { return Err(error); },
+        };
+        let label: [u8; 14] = [69,67,32,80,82,73,86,65,84,69,32,75,69,89]; // EC PRIVATE KEY
+        write_key_pem(&bytes[..length], &label[..], output)
+    }
 }
 
-impl PublicKey {
+/// Holds a validated P-256 curve point.
+pub struct PublicKey {
+    /// Encoded internal elliptic-curve point representation.
+    point: [u64; 24];
+
+    /// Parses a 65-byte SEC1 point and checks its coordinates and curve equation.
+    fn from_sec1_uncompressed(input: &[u8]) Result<PublicKey, Error> {
+        if input.len() != 65 { return Err(Error.InvalidPublicKey); }
+        if input[0] != 4 { return Err(Error.InvalidPublicKey); }
+        let x = read_words(&input[0..65], 1);
+        let y = read_words(&input[0..65], 33);
+        let prime = modulus(false);
+        if less_than(&x[..], &prime[..]) == 0 || less_than(&y[..], &prime[..]) == 0 {
+            return Err(Error.InvalidPublicKey);
+        }
+        let xm = to_montgomery(&x[..], false);
+        let ym = to_montgomery(&y[..], false);
+        if !on_curve(&xm[..], &ym[..]) { return Err(Error.InvalidPublicKey); }
+        // P-256 has cofactor one. Every finite point on the curve is
+        // in the prime-order subgroup.
+        let one = montgomery_one(false);
+        let point = point_new(&xm[..], &ym[..], &one[..]);
+        let key = public_from_point(&point[..]);
+        Ok(key)
+    }
+
+    /// Serializes the public point in uncompressed SEC1 form.
+    fn to_sec1_uncompressed(&self) [u8; 65] {
+        let point = public_words(&(*self).point);
+        let mut output: [u8; 65] = [0; 65];
+        serialize_point(&point[..], &mut output[..]);
+        output
+    }
+
     /// Imports a P-256 SubjectPublicKeyInfo with an uncompressed point.
-    fn from_der(input: &[u8]) -> Result<PublicKey, Error> {
+    fn from_der(input: &[u8]) Result<PublicKey, Error> {
         let size = input.len() as u64;
         let sequence = der(&input[0..size], 0, copy(size), 48);
         if sequence.end == 0 || sequence.end != size { return Err(Error.InvalidPublicKey); }
@@ -309,7 +249,7 @@ impl PublicKey {
     }
 
     /// Decodes one PUBLIC KEY block into scratch and imports its P-256 public point.
-    fn from_pem(input: &[u8], scratch: &mut [u8]) -> Result<PublicKey, Error> {
+    fn from_pem(input: &[u8], scratch: &mut [u8]) Result<PublicKey, Error> {
         let size = input.len();
         let capacity = scratch.len();
         let label: [u8; 10] = [80,85,66,76,73,67,32,75,69,89]; // PUBLIC KEY
@@ -324,55 +264,9 @@ impl PublicKey {
             },
         }
     }
-}
 
-impl SigningKey {
-    /// Writes an unencrypted PKCS#8 PrivateKeyInfo and returns its DER length.
-    fn to_der(&self, output: &mut [u8]) -> Result<usize, Error> {
-        if output.len() < 138 { return Err(Error.BufferTooSmall); }
-        let header: [u8; 6] = [48,129,135,2,1,0];
-        let algorithm = p256_algorithm_identifier();
-        copy_der_field(&header[..], &mut output[0..6]);
-        copy_der_field(&algorithm[..], &mut output[6..27]);
-        output[27] = 4;
-        output[28] = 109;
-        write_sec1(&*self, false, &mut output[29..138]);
-        Ok(138)
-    }
-
-    /// Writes an unencrypted SEC1 ECPrivateKey and returns its DER length.
-    fn to_sec1_der(&self, output: &mut [u8]) -> Result<usize, Error> {
-        if output.len() < 121 { return Err(Error.BufferTooSmall); }
-        write_sec1(&*self, true, &mut output[0..121]);
-        Ok(121)
-    }
-
-    /// Writes a PRIVATE KEY PEM block containing an unencrypted PKCS#8 key.
-    fn to_pem(&self, output: &mut [u8]) -> Result<usize, Error> {
-        let mut bytes: [u8; 138] = [0; 138];
-        let length = match self.to_der(&mut bytes[..]) {
-            Ok(size) => { size },
-            Err(error) => { return Err(error); },
-        };
-        let label: [u8; 11] = [80,82,73,86,65,84,69,32,75,69,89]; // PRIVATE KEY
-        write_key_pem(&bytes[..length], &label[..], output)
-    }
-
-    /// Writes an EC PRIVATE KEY PEM block containing an unencrypted SEC1 key.
-    fn to_sec1_pem(&self, output: &mut [u8]) -> Result<usize, Error> {
-        let mut bytes: [u8; 121] = [0; 121];
-        let length = match self.to_sec1_der(&mut bytes[..]) {
-            Ok(size) => { size },
-            Err(error) => { return Err(error); },
-        };
-        let label: [u8; 14] = [69,67,32,80,82,73,86,65,84,69,32,75,69,89]; // EC PRIVATE KEY
-        write_key_pem(&bytes[..length], &label[..], output)
-    }
-}
-
-impl PublicKey {
     /// Writes a DER SubjectPublicKeyInfo with an uncompressed P-256 point.
-    fn to_der(&self, output: &mut [u8]) -> Result<usize, Error> {
+    fn to_der(&self, output: &mut [u8]) Result<usize, Error> {
         if output.len() < 91 { return Err(Error.BufferTooSmall); }
         let algorithm = p256_algorithm_identifier();
         let point = self.to_sec1_uncompressed();
@@ -387,7 +281,7 @@ impl PublicKey {
     }
 
     /// Writes a PUBLIC KEY PEM block with a P-256 SubjectPublicKeyInfo.
-    fn to_pem(&self, output: &mut [u8]) -> Result<usize, Error> {
+    fn to_pem(&self, output: &mut [u8]) Result<usize, Error> {
         let mut bytes: [u8; 91] = [0; 91];
         let length = match self.to_der(&mut bytes[..]) {
             Ok(size) => { size },
@@ -396,4 +290,100 @@ impl PublicKey {
         let label: [u8; 10] = [80,85,66,76,73,67,32,75,69,89]; // PUBLIC KEY
         write_key_pem(&bytes[..length], &label[..], output)
     }
+}
+
+/// Writes the private scalar in big-endian form into a pre-sized 32-byte slice.
+fn write_signing_scalar(key: &SigningKey, output: &mut [u8]) {
+    let words = private_words(&(*key).secret);
+    write_words(&words[..], output, 0);
+}
+
+/// Checks that a scalar is nonzero and smaller than the curve order.
+fn valid_scalar(words: &[u64]) bool {
+    let order = modulus(true);
+    let nonzero: u64 = zero_bit(&words[0..8]) ^ 1;
+    let below_order: u64 = less_than(&words[0..8], &order[..]);
+    let valid: u64 = nonzero & below_order;
+    return valid == 1;
+}
+
+/// Samples a private scalar from system entropy and rejects out-of-range candidates.
+fn random_scalar(output: &mut [u8]) Result<(), Error> {
+    while true {
+        let size = output.len();
+        match fill(&mut output[0..size]) {
+            Ok(()) => {},
+            Err(cause) => { drop(cause); return Err(Error.RandomFailed); },
+        };
+        let scalar = read_words(&output[0..32], 0);
+        if valid_scalar(&scalar[..]) { return Ok(()); }
+    }
+    Ok(())
+}
+
+/// Builds an ephemeral agreement key after checking the scalar range.
+fn ephemeral_from_bytes(input: &[u8]) Result<EphemeralKey, Error> {
+    let scalar = read_words(&input[0..32], 0);
+    if !valid_scalar(&scalar[..]) { return Err(Error.InvalidPrivateKey); }
+    let mut key = EphemeralKey { secret: [0; 8] };
+    let mut i: u64 = 0;
+    while i < 8 {
+        let limb = &mut key.secret[i];
+        *limb = scalar[i];
+        i = i + 1;
+    }
+    Ok(key)
+}
+
+/// Stores an internal point in the public key representation.
+fn public_from_point(point: &[u64]) PublicKey {
+    let mut key = PublicKey { point: [0; 24] };
+    let mut i: u64 = 0;
+    while i < 24 {
+        let limb = &mut key.point[i];
+        *limb = point[i];
+        i = i + 1;
+    }
+    key
+}
+
+/// Multiplies the P-256 generator by the private scalar to derive its public key.
+fn derive_public(secret: &[u64]) PublicKey {
+    let base = generator();
+    let point = scalar_multiply(&base[..], &secret[0..8]);
+    public_from_point(&point[..])
+}
+
+
+
+
+
+/// Verifies a DER-encoded P-256 ECDSA signature over a SHA-256 message digest.
+pub fn verify_sha256(key: &PublicKey, message: &[u8], signature: &[u8]) Result<bool, Error> {
+    let point = public_words(&(*key).point);
+    let size = message.len();
+    let sig_size = signature.len();
+    verify_message(&point[..], &message[0..size], &signature[0..sig_size])
+}
+
+/// Copies a fixed-size private scalar into the arithmetic representation.
+fn private_words(words: &[u64; 8]) [u64; 8] {
+    let mut result: [u64; 8] = [0; 8];
+    let mut i: u64 = 0;
+    while i < 8 {
+        result[i] = (*words)[i];
+        i = i + 1;
+    }
+    result
+}
+
+/// Copies the public point coordinates into the arithmetic representation.
+fn public_words(words: &[u64; 24]) [u64; 24] {
+    let mut result: [u64; 24] = [0; 24];
+    let mut i: u64 = 0;
+    while i < 24 {
+        result[i] = (*words)[i];
+        i = i + 1;
+    }
+    result
 }

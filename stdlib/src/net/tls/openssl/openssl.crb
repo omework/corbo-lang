@@ -5,7 +5,7 @@
 // Each successful SSL_new retains its SSL_CTX until SSL_free.
 #(if: target.os == "macos" && target.arch == "aarch64")
     /// Builds an OpenSSL context configured for the selected role and certificate settings.
-    fn tls_context() -> usize {
+    fn tls_context() usize {
         let mut context: usize = 0;
         @unchecked {
             @asm {
@@ -59,7 +59,7 @@
     }
 
     /// Allocates a client session and configures its socket and reference hostname.
-    fn client_session(context: usize, socket: u64, hostname_bytes: &[u8], trust_bytes: &[u8]) -> usize {
+    fn client_session(context: usize, socket: u64, hostname_bytes: &[u8], trust_bytes: &[u8]) usize {
         let mut session: usize = 0;
         @unchecked {
             let hostname = addr(&hostname_bytes[0]);
@@ -110,7 +110,7 @@
     }
 
     /// Allocates a server session and associates it with a connected socket.
-    fn server_session(context: usize, socket: u64, certificate_bytes: &[u8], key_bytes: &[u8]) -> usize {
+    fn server_session(context: usize, socket: u64, certificate_bytes: &[u8], key_bytes: &[u8]) usize {
         let mut session: usize = 0;
         @unchecked {
             let certificate = addr(&certificate_bytes[0]);
@@ -159,7 +159,7 @@
     }
 
     /// Invokes the OpenSSL handshake for the selected role.
-    fn handshake(session: usize, server: bool) -> i64 {
+    fn handshake(session: usize, server: bool) i64 {
         let role: i64 = if server { 1 } else { 0 };
         let mut status: i64 = 0;
         @unchecked {
@@ -181,7 +181,7 @@
     }
 
     /// Returns OpenSSL's certificate verification status.
-    fn verification_result(session: usize) -> i64 {
+    fn verification_result(session: usize) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {
@@ -194,7 +194,7 @@
     }
 
     /// Reads decrypted application bytes through the OpenSSL session.
-    fn read_session(session: usize, bytes: &mut [u8], length: usize) -> (i64, usize) {
+    fn read_session(session: usize, bytes: &mut [u8], length: usize) (i64, usize) {
         let mut status: i64 = 0;
         let mut count: usize = 0;
         @unchecked {
@@ -229,7 +229,7 @@
     }
 
     /// Writes application bytes through the OpenSSL session.
-    fn write_session(session: usize, bytes: &[u8], length: usize) -> (i64, usize) {
+    fn write_session(session: usize, bytes: &[u8], length: usize) (i64, usize) {
         let mut status: i64 = 0;
         let mut count: usize = 0;
         @unchecked {
@@ -254,7 +254,7 @@
     }
 
     /// Requests TLS shutdown through OpenSSL.
-    fn shutdown_session(session: usize) -> i64 {
+    fn shutdown_session(session: usize) i64 {
         let mut status: i64 = 0;
         @unchecked {
             @asm {

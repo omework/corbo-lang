@@ -5,16 +5,16 @@
 /// Holds the content and end offsets of a DER element. End zero denotes malformed input.
 pub struct Der {
     /// Start of the parsed DER value body.
-    body: u64,
+    body: u64;
     /// Exclusive end of the parsed DER value.
-    end: u64,
+    end: u64;
 }
 
 /// Returns the sentinel for a malformed or missing DER element.
-pub fn invalid_der() -> Der { Der { body: 0, end: 0 } }
+pub fn invalid_der() Der { Der { body: 0, end: 0 } }
 
 /// Parses one element with the expected tag and a canonical definite length within the supplied limit.
-pub fn der(input: &[u8], at: u64, limit: u64, tag: u8) -> Der {
+pub fn der(input: &[u8], at: u64, limit: u64, tag: u8) Der {
     if limit > input.len() as u64 || at > limit || limit - at < 2 || input[at] != tag { return invalid_der(); }
     let mut body = at + 2;
     let mut length = input[at + 1] as u64;
@@ -37,7 +37,7 @@ pub fn der(input: &[u8], at: u64, limit: u64, tag: u8) -> Der {
 }
 
 /// Compares the length and contents of two byte slices.
-pub fn bytes_equal(a: &[u8], b: &[u8]) -> bool {
+pub fn bytes_equal(a: &[u8], b: &[u8]) bool {
     let length = a.len();
     if length != b.len() { return false; }
     let mut i: usize = 0;
@@ -49,14 +49,14 @@ pub fn bytes_equal(a: &[u8], b: &[u8]) -> bool {
 }
 
 /// Checks that a byte range is a minimally encoded nonnegative DER integer.
-pub fn uint_valid(input: &[u8], start: u64, end: u64) -> bool {
+pub fn uint_valid(input: &[u8], start: u64, end: u64) bool {
     if start >= end || end > input.len() as u64 || input[start] >= 128 { return false; }
     if end - start > 1 && input[start] == 0 && input[start + 1] < 128 { return false; }
     true
 }
 
 /// Checks the base-128 component encoding and termination of a DER object identifier.
-pub fn oid_valid(input: &[u8], start: u64, end: u64) -> bool {
+pub fn oid_valid(input: &[u8], start: u64, end: u64) bool {
     if start >= end || end > input.len() as u64 { return false; }
     let mut i = start;
     let mut first = true;
@@ -70,7 +70,7 @@ pub fn oid_valid(input: &[u8], start: u64, end: u64) -> bool {
 }
 
 /// Returns the width of a DER tag and definite length, or zero when the length exceeds 32 bits.
-pub fn der_header_size(length: u64) -> u64 {
+pub fn der_header_size(length: u64) u64 {
     if length < 128 { return 2; }
     if length <= 255 { return 3; }
     if length <= 65535 { return 4; }
@@ -80,7 +80,7 @@ pub fn der_header_size(length: u64) -> u64 {
 }
 
 /// Returns the octet at the supplied position of a word.
-pub fn der_octet(word: u64, shift: u64) -> u8 {
+pub fn der_octet(word: u64, shift: u64) u8 {
     let mut value = word >> shift;
     let mut byte: u8 = 0;
     let mut bit: u64 = 0;
@@ -94,7 +94,7 @@ pub fn der_octet(word: u64, shift: u64) -> u8 {
 }
 
 /// Writes a DER header and returns its width, or zero when the header cannot fit.
-pub fn write_der_header(tag: u8, length: u64, output: &mut [u8]) -> u64 {
+pub fn write_der_header(tag: u8, length: u64, output: &mut [u8]) u64 {
     let width = der_header_size(copy(length));
     if width == 0 || width > output.len() as u64 { return 0; }
     output[0] = tag;
@@ -112,7 +112,7 @@ pub fn write_der_header(tag: u8, length: u64, output: &mut [u8]) -> u64 {
 }
 
 /// Copies a byte slice into caller-owned storage, returning zero on insufficient capacity.
-pub fn copy_der(input: &[u8], output: &mut [u8]) -> usize {
+pub fn copy_der(input: &[u8], output: &mut [u8]) usize {
     let length = input.len();
     if length > output.len() { return 0; }
     let mut at: usize = 0;

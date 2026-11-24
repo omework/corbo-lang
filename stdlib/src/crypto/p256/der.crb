@@ -3,10 +3,10 @@
 
 // Convert a length or an octet already masked by the caller.
 /// Converts a size or offset to its low byte for DER serialization.
-fn der_byte(value: usize) -> u8 { p256_octet(value as u64, 0) }
+fn der_byte(value: usize) u8 { p256_octet(value as u64, 0) }
 
 /// Encodes a minimally padded positive DER integer at the supplied output offset.
-fn encode_integer(value: &[u64], output: &mut [u8], start: usize) -> usize {
+fn encode_integer(value: &[u64], output: &mut [u8], start: usize) usize {
     let mut bytes: [u8; 32] = [0; 32];
     write_words(&value[0..8], &mut bytes[..], 0);
     let mut offset: usize = 0;
@@ -28,7 +28,7 @@ fn encode_integer(value: &[u64], output: &mut [u8], start: usize) -> usize {
 }
 
 /// Encodes the ECDSA scalars r and s as a DER sequence and returns its length.
-fn encode_signature(r: &[u64], s: &[u64], output: &mut [u8]) -> usize {
+fn encode_signature(r: &[u64], s: &[u64], output: &mut [u8]) usize {
     let first = encode_integer(&r[0..8], &mut output[0..72], 2);
     let end = encode_integer(&s[0..8], &mut output[0..72], first);
     output[0] = 48;
@@ -39,7 +39,7 @@ fn encode_signature(r: &[u64], s: &[u64], output: &mut [u8]) -> usize {
 // A zero result denotes malformed DER. The value is decoded into a
 // 32-byte, big-endian buffer only after validating its framing.
 /// Validates a positive DER integer and copies its magnitude to the output.
-fn decode_integer(input: &[u8], start: usize, output: &mut [u8]) -> usize {
+fn decode_integer(input: &[u8], start: usize, output: &mut [u8]) usize {
     let size = input.len();
     if start + 2 > size { return 0; }
     if input[start] != 2 { return 0; }

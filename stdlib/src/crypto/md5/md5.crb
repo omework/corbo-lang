@@ -10,16 +10,14 @@ const BYTE_COUNT_MASK: u64 = 0x1fffffffffffffff;
 /// Streaming state for a legacy 16-byte MD5 checksum.
 pub struct Md5 {
     /// Internal chaining or sponge state retained between updates.
-    state: [u64; 4],
+    state: [u64; 4];
     /// Pending input block; update compresses full blocks before reusing this storage.
-    block: [u8; 64],
+    block: [u8; 64];
     /// Total input bytes incorporated by this hash instance.
-    bytes: u64,
-}
+    bytes: u64;
 
-impl Md5 {
     /// Creates a hasher with the standard MD5 initial state.
-    fn new() -> Md5 {
+    fn new() Md5 {
         Md5 {
             state: [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476],
             block: [0; 64],
@@ -48,7 +46,7 @@ impl Md5 {
     }
 
     /// Consumes the state, adds MD5 padding and returns the checksum.
-    fn finish(mut self: Md5) -> [u8; 16] {
+    fn finish(mut self: Md5) [u8; 16] {
         let bits = self.bytes * 8;
         let used = self.bytes % 64;
         let separator = &mut self.block[used];
@@ -84,8 +82,9 @@ impl Md5 {
     }
 }
 
+
 /// Extracts the eight bits starting at the supplied shift.
-fn word_byte(word: u64, shift: u64) -> u8 {
+fn word_byte(word: u64, shift: u64) u8 {
     let mut value = word >> shift;
     let mut output: u8 = 0;
     let mut bit: u64 = 0;
@@ -161,7 +160,7 @@ fn compress_md5(hash: &mut Md5) {
 }
 
 /// Computes a 16-byte MD5 checksum for interoperability.
-pub fn digest(input: &[u8]) -> [u8; 16] {
+pub fn digest(input: &[u8]) [u8; 16] {
     let mut hash = Md5::new();
     hash.update(input);
     hash.finish()

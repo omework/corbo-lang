@@ -8,30 +8,78 @@ const MAX_HIGH_BYTES: u64 = 0x1fffffffffffffff;
 /// Reports that the input exceeds the hash's message length limit.
 pub enum HashError {
     /// Input length exceeds the algorithm's supported counter or encoding limit.
-    InputTooLong
+    InputTooLong;
 }
 
 /// Stores chaining words, the pending block, and the split message length.
 struct State {
     /// Internal SHA-512-family chaining words.
-    words: [u64; 8],
+    words: [u64; 8];
     /// Pending input block; update compresses full blocks before reusing this storage.
-    block: [u8; 128],
+    block: [u8; 128];
     /// Low word of the accumulated message byte count.
-    bytes_low: u64,
+    bytes_low: u64;
     /// High word of the accumulated message byte count.
-    bytes_high: u64,
+    bytes_high: u64;
 }
 
 /// Streaming SHA-384 state with its distinct initial values and 48-byte digest.
 pub struct Sha384 {
     /// Internal chaining or sponge state retained between updates.
-    state: State
+    state: State;
+
+    /// Creates a fresh hasher with this variant's initial chaining values.
+    fn new() Sha384 {
+        let state = State {
+            words: [0xcbbb9d5dc1059ed8, 0x629a292a367cd507, 0x9159015a3070dd17, 0x152fecd8f70e5939,
+                    0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4],
+            block: [0; 128],
+            bytes_low: 0,
+            bytes_high: 0,
+        };
+        Sha384 { state: state }
+    }
+
+    /// Adds input bytes and checks the maximum message length.
+    fn update(&mut self, input: &[u8]) Result<(), HashError> {
+        update_state(&mut (*self).state, input)
+    }
+
+    /// Consumes the hasher and returns the digest for this variant.
+    fn finish(mut self: Sha384) [u8; 48] {
+        let mut output: [u8; 48] = [0; 48];
+        finish_state(&mut self.state, &mut output[..]);
+        output
+    }
 }
 /// Streaming SHA-512 state with a 64-byte digest.
 pub struct Sha512 {
     /// Internal chaining or sponge state retained between updates.
-    state: State
+    state: State;
+
+    /// Creates a fresh hasher with this variant's initial chaining values.
+    fn new() Sha512 {
+        let state = State {
+            words: [0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
+                    0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179],
+            block: [0; 128],
+            bytes_low: 0,
+            bytes_high: 0,
+        };
+        Sha512 { state: state }
+    }
+
+    /// Adds input bytes and checks the maximum message length.
+    fn update(&mut self, input: &[u8]) Result<(), HashError> {
+        update_state(&mut (*self).state, input)
+    }
+
+    /// Consumes the hasher and returns the digest for this variant.
+    fn finish(mut self: Sha512) [u8; 64] {
+        let mut output: [u8; 64] = [0; 64];
+        finish_state(&mut self.state, &mut output[..]);
+        output
+    }
 }
 
 /// Compresses the bytes in the state's complete pending block.
@@ -41,7 +89,7 @@ fn compress(state: &mut State) {
 }
 
 /// Adds input to the byte count and processes complete 128-byte blocks.
-fn update_state(state: &mut State, input: &[u8]) -> Result<(), HashError> {
+fn update_state(state: &mut State, input: &[u8]) Result<(), HashError> {
     let length = input.len() as u64;
     let low = (*state).bytes_low;
     let available = U64_MAX - low;
@@ -74,7 +122,7 @@ fn update_state(state: &mut State, input: &[u8]) -> Result<(), HashError> {
 
 // Extract one byte without an unchecked narrowing conversion.
 /// Extracts an octet from a big-endian serialized hash word.
-fn byte_at(word: u64, shift: u64) -> u8 {
+fn byte_at(word: u64, shift: u64) u8 {
     let mut value = word >> shift;
     let mut byte: u8 = 0;
     let mut bit: u64 = 0;
@@ -130,60 +178,10 @@ fn finish_state(state: &mut State, output: &mut [u8]) {
     }
 }
 
-impl Sha384 {
-    /// Creates a fresh hasher with this variant's initial chaining values.
-    fn new() -> Sha384 {
-        let state = State {
-            words: [0xcbbb9d5dc1059ed8, 0x629a292a367cd507, 0x9159015a3070dd17, 0x152fecd8f70e5939,
-                    0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4],
-            block: [0; 128],
-            bytes_low: 0,
-            bytes_high: 0,
-        };
-        Sha384 { state: state }
-    }
 
-    /// Adds input bytes and checks the maximum message length.
-    fn update(&mut self, input: &[u8]) -> Result<(), HashError> {
-        update_state(&mut (*self).state, input)
-    }
-
-    /// Consumes the hasher and returns the digest for this variant.
-    fn finish(mut self: Sha384) -> [u8; 48] {
-        let mut output: [u8; 48] = [0; 48];
-        finish_state(&mut self.state, &mut output[..]);
-        output
-    }
-}
-
-impl Sha512 {
-    /// Creates a fresh hasher with this variant's initial chaining values.
-    fn new() -> Sha512 {
-        let state = State {
-            words: [0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-                    0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179],
-            block: [0; 128],
-            bytes_low: 0,
-            bytes_high: 0,
-        };
-        Sha512 { state: state }
-    }
-
-    /// Adds input bytes and checks the maximum message length.
-    fn update(&mut self, input: &[u8]) -> Result<(), HashError> {
-        update_state(&mut (*self).state, input)
-    }
-
-    /// Consumes the hasher and returns the digest for this variant.
-    fn finish(mut self: Sha512) -> [u8; 64] {
-        let mut output: [u8; 64] = [0; 64];
-        finish_state(&mut self.state, &mut output[..]);
-        output
-    }
-}
 
 /// Computes a 48-byte SHA-384 digest.
-pub fn digest384(input: &[u8]) -> Result<[u8; 48], HashError> {
+pub fn digest384(input: &[u8]) Result<[u8; 48], HashError> {
     let mut hash = Sha384::new();
     match hash.update(input) {
         Ok(()) => { Ok(hash.finish()) },
@@ -192,7 +190,7 @@ pub fn digest384(input: &[u8]) -> Result<[u8; 48], HashError> {
 }
 
 /// Computes a 64-byte SHA-512 digest.
-pub fn digest512(input: &[u8]) -> Result<[u8; 64], HashError> {
+pub fn digest512(input: &[u8]) Result<[u8; 64], HashError> {
     let mut hash = Sha512::new();
     match hash.update(input) {
         Ok(()) => { Ok(hash.finish()) },

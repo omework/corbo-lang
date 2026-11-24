@@ -18,37 +18,37 @@
         /// Preserves the native operating-system error code in code.
         Os {
             /// Native operating-system status code preserved by this error.
-            code: i64
-        },
+            code: i64;
+        };
         /// The requested local endpoint is already in use.
-        AddressInUse,
+        AddressInUse;
         /// The remote endpoint refused the connection.
-        ConnectionRefused,
+        ConnectionRefused;
         /// The received datagram exceeded the supplied buffer and was consumed.
-        DatagramTooLarge,
+        DatagramTooLarge;
     }
 
     /// Stores the received datagram's byte count and sender address.
     pub struct Datagram {
         /// Number of received datagram payload bytes.
-        size: u64,
+        size: u64;
         /// Packed sender IPv4 address and port, decoded by the public peer accessor.
-        peer: u64,
-    }
+        peer: u64;
 
-    impl Datagram {
         /// Returns how many payload bytes were received.
-        fn count(&self) -> usize { (*self).size as usize }
+        fn count(&self) usize { (*self).size as usize }
 
         /// Returns the datagram's source IPv4 address and port.
-        fn sender(&self) -> SocketAddr {
+        fn sender(&self) SocketAddr {
             let (ip, port) = raw::decode_peer((*self).peer);
             from_parts(ip, port)
         }
-    }
+
+}
+
 
     /// Creates metadata for the byte count and sender returned by a receive operation.
-    pub fn datagram(size: u64, peer: u64) -> Datagram {
+    pub fn datagram(size: u64, peer: u64) Datagram {
         Datagram { size: size, peer: peer }
     }
 #(endif)

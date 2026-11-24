@@ -9,15 +9,15 @@
 #(endif)
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
     /// Recognizes the target's native status for an operation that must wait for readiness.
-    fn would_block(code: i64) -> bool { code == -11 }
+    fn would_block(code: i64) bool { code == -11 }
     /// Recognizes statuses for a connect that is interrupted or still pending.
-    fn connecting(code: i64) -> bool { code == -115 || code == -4 }
+    fn connecting(code: i64) bool { code == -115 || code == -4 }
 #(endif)
 #(if: target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
     /// Recognizes the target's native status for an operation that must wait for readiness.
-    fn would_block(code: i64) -> bool { code == -35 }
+    fn would_block(code: i64) bool { code == -35 }
     /// Recognizes statuses for a connect that is interrupted or still pending.
-    fn connecting(code: i64) -> bool { code == -36 || code == -4 }
+    fn connecting(code: i64) bool { code == -36 || code == -4 }
 #(endif)
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64" || target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
     use std::sys::net::reactor::ready;
@@ -25,14 +25,14 @@
     use std::net::{SocketError, Datagram};
 
     /// Sets the native socket to nonblocking mode for the readiness reactor.
-    pub fn prepare_async(socket: &PlatformSocket) -> Result<(), SocketError> {
+    pub fn prepare_async(socket: &PlatformSocket) Result<(), SocketError> {
         let status = raw::nonblocking(socket_descriptor(socket));
         if copy(status) != 0 { return Err(socket_error(status)); }
         Ok(())
     }
 
     /// Connects a nonblocking socket, waits for write readiness and checks the pending error.
-    pub async fn connect_nonblocking(ip: u32, port: u16) -> Result<PlatformSocket, SocketError> {
+    pub async fn connect_nonblocking(ip: u32, port: u16) Result<PlatformSocket, SocketError> {
         let socket = match make_socket(1) {
             Ok(value) => { value }, Err(error) => { return Err(error); },
         };
@@ -50,7 +50,7 @@
     }
 
     /// Retries accept after readiness and configures the new socket for asynchronous I/O.
-    pub async fn accept_nonblocking(socket: &mut PlatformSocket) -> Result<PlatformSocket, SocketError> {
+    pub async fn accept_nonblocking(socket: &mut PlatformSocket) Result<PlatformSocket, SocketError> {
         let listener = socket_descriptor(&*socket);
         while true {
             let (status, handle) = raw::accept(copy(listener));
@@ -73,7 +73,7 @@
     }
 
     /// Retries a nonblocking read after the reactor reports read readiness.
-    pub async fn read_nonblocking(socket: u64, buffer: &mut [u8]) -> Result<usize, SocketError> {
+    pub async fn read_nonblocking(socket: u64, buffer: &mut [u8]) Result<usize, SocketError> {
         let length = buffer.len();
         if copy(length) == 0 { return Ok(0); }
         while true {
@@ -89,7 +89,7 @@
     }
 
     /// Retries a nonblocking write after the reactor reports write readiness.
-    pub async fn write_nonblocking(socket: u64, buffer: &[u8]) -> Result<usize, SocketError> {
+    pub async fn write_nonblocking(socket: u64, buffer: &[u8]) Result<usize, SocketError> {
         let length = buffer.len();
         if copy(length) == 0 { return Ok(0); }
         while true {
@@ -104,7 +104,7 @@
         Err(SocketError.Os { code: -1 })
     }
     /// Waits for a readable datagram and preserves the sender and truncation status.
-    pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) -> Result<Datagram, SocketError> {
+    pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) Result<Datagram, SocketError> {
         let length = buffer.len();
         while true {
             let (status, count, from) = receive_datagram(copy(socket), &mut buffer[0..copy(length)]);
@@ -118,13 +118,13 @@
     }
 
     /// Performs one send attempt to either the connected peer or an explicit destination.
-    fn send_packet(socket: u64, buffer: &[u8], length: usize, direct: bool, ip: u32, port: u16) -> (i64, usize) {
+    fn send_packet(socket: u64, buffer: &[u8], length: usize, direct: bool, ip: u32, port: u16) (i64, usize) {
         if direct { return raw::send(socket, buffer, length); }
         raw::send_to(socket, buffer, length, ip, port)
     }
 
     /// Retries sending a complete datagram after write readiness.
-    pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) -> Result<usize, SocketError> {
+    pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) Result<usize, SocketError> {
         let length = buffer.len();
         if copy(length) > 65507 { return Err(SocketError.DatagramTooLarge); }
         let dummy: [u8; 1] = [0];

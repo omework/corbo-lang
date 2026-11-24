@@ -46,7 +46,7 @@ def split_members(ts, low, high):
     while low < high:
         word = ts[low][0]
         if word in ('(', '[', '{', '<'): low = end_group(ts, low); continue
-        if word == ',':
+        if word in (',', ';'):
             if start < low: yield start, low
             start = low + 1
         low += 1
@@ -86,13 +86,23 @@ def inventory(source):
                     stop=end_group(ts,cursor)
                     if kind=='impl': scan(cursor+1,stop-1,name)
                     elif kind in ('struct','enum'):
-                        for a,b in split_members(ts,cursor+1,stop-1):
+                        member_end = cursor + 1
+                        while member_end < stop - 1:
+                            word = ts[member_end][0]
+                            if word in ('fn', 'async', '#', 'const') or (word == 'pub' and member_end + 1 < stop - 1 and ts[member_end + 1][0] in ('fn', 'async', 'const')):
+                                break
+                            if word in ('(', '[', '{', '<'):
+                                member_end = end_group(ts, member_end)
+                            else:
+                                member_end += 1
+                        for a,b in split_members(ts,cursor+1,member_end):
                             if ts[a][0]=='pub': a+=1
                             child=Entry('field' if kind=='struct' else 'variant',ts[a][0],ts[a][1],ts[b-1][2],public,name,tuple(conditions))
                             if kind=='enum' and a+1<b and ts[a+1][0]=='{':
                                 for first,last in split_members(ts,a+2,b-1):
                                     child.children.append(Entry('field',ts[first][0],ts[first][1],ts[last-1][2],public,name+'::'+child.name,tuple(conditions)))
                             entry.children.append(child)
+                        scan(member_end, stop-1, name)
                     at=stop
                 else: at=cursor+1
                 continue

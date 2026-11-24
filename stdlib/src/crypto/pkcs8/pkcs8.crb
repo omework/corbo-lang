@@ -11,70 +11,70 @@ use std::encoding::pem::{encode as encode_pem, decode as decode_pem, Error as Pe
 /// Reports a malformed or unsupported container, bad password, work limit, storage, or entropy error.
 pub enum Error {
     /// The encoded/private scalar material is invalid for this key format.
-    InvalidPrivateKey,
+    InvalidPrivateKey;
     /// The PEM/DER container is malformed or uses an unsupported envelope.
-    InvalidEnvelope,
+    InvalidEnvelope;
     /// Password-based authentication/decryption failed or the decrypted encoding is invalid.
-    InvalidPasswordOrData,
+    InvalidPasswordOrData;
     /// The derivation iteration count is invalid.
-    InvalidIterations,
+    InvalidIterations;
                  /// The encoded PBKDF2 work factor exceeds the caller's allowed limit.
-                 IterationLimit,
+                 IterationLimit;
     /// The caller-provided output buffer cannot hold the result.
-    BufferTooSmall,
+    BufferTooSmall;
     /// The system random source could not provide the required bytes.
-    RandomFailed,
+    RandomFailed;
     /// The password length is outside the accepted bounds.
-    InvalidPasswordLength
+    InvalidPasswordLength;
 }
 
 /// Holds the validated ciphertext, IV and PBKDF2 salt offsets.
 struct Envelope {
     /// Start offset of encrypted key bytes in the PKCS#8 envelope.
-    start: u64,
+    start: u64;
     /// Exclusive end of encrypted key bytes.
-    end: u64,
+    end: u64;
     /// Start offset of the CBC initialization vector.
-    iv: u64,
+    iv: u64;
     /// Start offset of the PBKDF2 salt in the encoded envelope.
-    salt_start: u64,
+    salt_start: u64;
     /// Exclusive end offset of the PBKDF2 salt.
-    salt_end: u64,
+    salt_end: u64;
     /// PBKDF2 iteration count parsed from the envelope.
-    iterations: u32,
+    iterations: u32;
 }
 
 /// Represents an invalid or unsupported encrypted key structure.
-fn invalid_envelope() -> Envelope {
+fn invalid_envelope() Envelope {
     Envelope { start: 0, end: 0, iv: 0, salt_start: 0, salt_end: 0, iterations: 0 }
 }
 
 /// Returns the DER object identifier for PBES2.
-fn pbes2_oid() -> [u8; 11] {
+fn pbes2_oid() [u8; 11] {
     let oid: [u8; 11] = [6,9,42,134,72,134,247,13,1,5,13];
     oid
 }
 
 /// Returns the DER object identifier for PBKDF2.
-fn pbkdf2_oid() -> [u8; 11] {
+fn pbkdf2_oid() [u8; 11] {
     let oid: [u8; 11] = [6,9,42,134,72,134,247,13,1,5,12];
     oid
 }
 
 /// Returns the DER object identifier for AES-256-CBC.
-fn aes_cbc_oid() -> [u8; 11] {
+fn aes_cbc_oid() [u8; 11] {
     let oid: [u8; 11] = [6,9,96,134,72,1,101,3,4,1,42];
     oid
 }
 
 /// Returns the DER AlgorithmIdentifier for HMAC-SHA-256.
-fn sha256_prf() -> [u8; 14] {
+fn sha256_prf() [u8; 14] {
     let oid: [u8; 14] = [48,12,6,8,42,134,72,134,247,13,2,9,5,0];
     oid
 }
 
 /// Checks a complete version-zero PrivateKeyInfo with an algorithm and nonempty key bytes.
-fn valid_private_info(input: &[u8]) -> bool {
+fn valid_private_info(input: &[u8]) bool {
     let size = input.len() as u64;
     let outer = der(&input[0..size], 0, copy(size), 48);
     if outer.end == 0 || outer.end != size { return false; }
@@ -93,7 +93,7 @@ fn valid_private_info(input: &[u8]) -> bool {
 }
 
 /// Parses an unsigned nonnegative DER integer no larger than a u32, with zero as the failure sentinel.
-fn positive_count(input: &[u8], field: &Der) -> u32 {
+fn positive_count(input: &[u8], field: &Der) u32 {
     let start = (*field).body;
     let end = (*field).end;
     if !uint_valid(&input[0..input.len()], copy(start), copy(end)) || end - start > 5 { return 0; }
@@ -108,7 +108,7 @@ fn positive_count(input: &[u8], field: &Der) -> u32 {
 }
 
 /// Parses the explicit PBKDF2 salt, iteration count and HMAC-SHA-256 PRF.
-fn parse_kdf(input: &[u8], kdf: &Der) -> Envelope {
+fn parse_kdf(input: &[u8], kdf: &Der) Envelope {
     let size = input.len() as u64;
     let limit = (*kdf).end;
     let start = (*kdf).body;
@@ -138,7 +138,7 @@ fn parse_kdf(input: &[u8], kdf: &Der) -> Envelope {
 }
 
 /// Validates the encrypted PrivateKeyInfo framing and supported PBES2 parameters.
-fn parse_envelope(input: &[u8]) -> Envelope {
+fn parse_envelope(input: &[u8]) Envelope {
     let size = input.len() as u64;
     let outer = der(&input[0..size], 0, copy(size), 48);
     if outer.end == 0 || outer.end != size { return invalid_envelope(); }
@@ -171,7 +171,7 @@ fn parse_envelope(input: &[u8]) -> Envelope {
 /// Output must fit the ciphertext length. Invalid password or plaintext clears the written prefix.
 /// The caller sets the maximum accepted PBKDF2 iteration count.
 pub fn decrypt_der(input: &[u8], password: &[u8], max_iterations: u32,
-                   output: &mut [u8]) -> Result<usize, Error> {
+                   output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
     let enc = parse_envelope(&input[0..size]);
     if enc.end == 0 { return Err(Error.InvalidEnvelope); }
@@ -197,7 +197,7 @@ pub fn decrypt_der(input: &[u8], password: &[u8], max_iterations: u32,
 }
 
 /// Computes the canonical positive DER INTEGER width for the supplied iteration count.
-fn count_width(value: u32) -> u64 {
+fn count_width(value: u32) u64 {
     if value < 128 { return 1; }
     if value < 32768 { return 2; }
     if value < 8388608 { return 3; }
@@ -243,7 +243,7 @@ fn write_algorithm(salt: &[u8], iv: &[u8], iterations: u32, width: u64, output: 
 /// Protects version-zero PrivateKeyInfo DER using a fresh random salt and IV.
 /// The caller selects a nonzero iteration count and supplies the output buffer.
 pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32,
-                   output: &mut [u8]) -> Result<usize, Error> {
+                   output: &mut [u8]) Result<usize, Error> {
     if iterations == 0 { return Err(Error.InvalidIterations); }
     let size = input.len() as u64;
     if size > 4294967040 || !valid_private_info(&input[0..size]) { return Err(Error.InvalidPrivateKey); }
@@ -277,14 +277,14 @@ pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32,
 }
 
 /// Returns the PEM label of an EncryptedPrivateKeyInfo.
-fn encrypted_label() -> [u8; 21] {
+fn encrypted_label() [u8; 21] {
     let label: [u8; 21] = [69,78,67,82,89,80,84,69,68,32,80,82,73,86,65,84,69,32,75,69,89];
     label
 }
 
 /// Encrypts a PrivateKeyInfo into ENCRYPTED PRIVATE KEY PEM using DER scratch.
 pub fn encrypt_pem(input: &[u8], password: &[u8], iterations: u32,
-                   scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+                   scratch: &mut [u8], output: &mut [u8]) Result<usize, Error> {
     let capacity = scratch.len();
     let used = match encrypt_der(input, password, iterations, &mut scratch[0..capacity]) {
         Ok(used) => { used }, Err(error) => { return Err(error); },
@@ -297,7 +297,7 @@ pub fn encrypt_pem(input: &[u8], password: &[u8], iterations: u32,
 
 /// Decodes ENCRYPTED PRIVATE KEY PEM into DER scratch, then decrypts into output.
 pub fn decrypt_pem(input: &[u8], password: &[u8], max_iterations: u32,
-                   scratch: &mut [u8], output: &mut [u8]) -> Result<usize, Error> {
+                   scratch: &mut [u8], output: &mut [u8]) Result<usize, Error> {
     let label = encrypted_label();
     let capacity = scratch.len();
     match decode_pem(input, &label[..], &mut scratch[0..capacity]) {

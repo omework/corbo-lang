@@ -3,7 +3,7 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64")
     /// Opens the process token used to obtain file security identities.
-    fn open_file_token() -> (i64, u64) {
+    fn open_file_token() (i64, u64) {
         let mut token: u64 = 0;
         let mut error: i64 = 0;
         @unchecked {
@@ -39,7 +39,7 @@
     }
 
     /// Reads a requested user or group security identifier from the process token.
-    fn read_file_sid(token: u64, kind: u32, sid: &mut [u32]) -> i64 {
+    fn read_file_sid(token: u64, kind: u32, sid: &mut [u32]) i64 {
         let mut error: i64 = 0;
         @unchecked {
             let sid_address = addr(&mut sid[0]);
@@ -69,7 +69,7 @@
     }
 
     /// Reads the security descriptor associated with an open file.
-    fn query_file_security(handle: u64, output: &mut [u32]) -> i64 {
+    fn query_file_security(handle: u64, output: &mut [u32]) i64 {
         let mut error: i64 = 0;
         @unchecked {
             let output_address = addr(&mut output[0]);
@@ -114,7 +114,7 @@
 
 #(if: target.os == "windows" && target.arch == "x86_64")
     /// Opens the process token used to obtain file security identities.
-    fn open_file_token() -> (i64, u64) {
+    fn open_file_token() (i64, u64) {
         let mut token: u64 = 0;
         let mut error: i64 = 0;
         @unchecked {
@@ -154,7 +154,7 @@
     }
 
     /// Reads a requested user or group security identifier from the process token.
-    fn read_file_sid(token: u64, kind: u32, sid: &mut [u32]) -> i64 {
+    fn read_file_sid(token: u64, kind: u32, sid: &mut [u32]) i64 {
         let mut error: i64 = 0;
         @unchecked {
             let sid_address = addr(&mut sid[0]);
@@ -187,7 +187,7 @@
     }
 
     /// Reads the security descriptor associated with an open file.
-    fn query_file_security(handle: u64, output: &mut [u32]) -> i64 {
+    fn query_file_security(handle: u64, output: &mut [u32]) i64 {
         let mut error: i64 = 0;
         @unchecked {
             let output_address = addr(&mut output[0]);
@@ -234,7 +234,7 @@
 
 #(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
     /// Converts one set of permission bits to Windows access rights.
-    fn file_access_mask(bits: u32) -> u32 {
+    fn file_access_mask(bits: u32) u32 {
         let read: u32 = if (copy(bits) & 4) != 0 { 0x009 } else { 0 };
         let write: u32 = if (copy(bits) & 2) != 0 { 0x116 } else { 0 };
         let execute: u32 = if (bits & 1) != 0 { 0x020 } else { 0 };
@@ -251,7 +251,7 @@
     }
 
     /// Appends an access control entry to a descriptor and returns the next offset.
-    fn append_file_ace(output: &mut [u32], offset: u32, sid: &[u32], mask: u32, kind: u32) -> u32 {
+    fn append_file_ace(output: &mut [u32], offset: u32, sid: &[u32], mask: u32, kind: u32) u32 {
         let words = ((sid[0] >> 8) & 0xff) + 2;
         let size = copy(words) + 2;
         output[copy(offset)] = (copy(size) << 18) | kind;
@@ -261,7 +261,7 @@
     }
 
     /// Builds a Windows security descriptor from the requested permission bits.
-    fn file_security_descriptor(output: &mut [u32], perm: u32) -> i64 {
+    fn file_security_descriptor(output: &mut [u32], perm: u32) i64 {
         let (error, token) = open_file_token();
         if copy(error) != 0 { return error; }
         let mut owner: [u32; 17] = [0; 17];
@@ -309,7 +309,7 @@
     }
 
     /// Compares equal-length word ranges within two security descriptors.
-    fn security_words_equal(expected: &[u32], expected_start: u32, actual: &[u32], actual_start: u32, words: u32) -> bool {
+    fn security_words_equal(expected: &[u32], expected_start: u32, actual: &[u32], actual_start: u32, words: u32) bool {
         let descriptor_words: u32 = 160;
         if copy(actual_start) > copy(descriptor_words) || copy(words) > descriptor_words - copy(actual_start) { return false; }
         let mut index: u32 = 0;
@@ -321,7 +321,7 @@
     }
 
     /// Checks the opened file's security descriptor against the requested descriptor.
-    fn check_file_security(handle: u64, expected: &[u32]) -> i64 {
+    fn check_file_security(handle: u64, expected: &[u32]) i64 {
         let mut actual: [u32; 160] = [0; 160];
         let error = query_file_security(handle, &mut actual[..]);
         if copy(error) != 0 { return error; }
