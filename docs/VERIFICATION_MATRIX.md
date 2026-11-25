@@ -5201,3 +5201,12 @@ regional reclamation. Ten executable cases under fatal UBSan and six related
 refusals passed on macOS ARM64, including borrowed elements, custom destructors,
 nested owners and helper environments. Other platforms were not executed in this
 cycle. Compiler report: docs/VECTOR_OWNERSHIP_CYCLE.md.
+
+## Standalone regional String
+
+String::new() no longer requires a pool. The fixed descriptor owns regional bytes;
+views retain the descriptor's lifetime and block conflicting access. Five programs
+passed fatal UBSan on macOS ARM64, including cleanup metrics and pooled/inline
+compatibility; four rule refusals and two runtime constraints passed. The cycle
+also fixed grouped-text provenance loss. Other platforms were not executed.
+Compiler evidence: docs/STANDALONE_STRING_CYCLE.md.

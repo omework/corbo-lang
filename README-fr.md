@@ -760,7 +760,7 @@ Sortie : `42, 42`. [Paquet complet](examples/features/map/).
 
 #### Texte UTF-8 et octets détenus par l’appelant
 
-`String` détient des octets UTF-8 stockés dans une région ; un littéral fournit une vue statique `&str`. La longueur en octets diffère du nombre de caractères. Convertissez explicitement en tranche d’octets avec `as_bytes()`. `String` et `&str` proposent tous deux `split(separator)` : l’itérateur produit des morceaux empruntés de type `&str`, en conservant les morceaux vides sans allouer de chaînes.
+`String::new()` crée une chaîne vide avec un descripteur fixe sur la datastack et des octets UTF-8 stockés dans une région ; un littéral fournit une vue statique `&str`. La longueur en octets diffère du nombre de caractères. Convertissez explicitement en tranche d’octets avec `as_bytes()`. `String` et `&str` proposent tous deux `split(separator)` : l’itérateur produit des morceaux empruntés de type `&str`, en conservant les morceaux vides sans allouer de chaînes.
 
 `String<N>` conserve au contraire au plus `N` octets UTF-8 inline, avec une borne connue à la compilation. Une construction ou un remplacement trop long renvoie une erreur sans tronquer le texte. Voir les [API des chaînes bornées](docs/UTF8_STRINGS-fr.md).
 
@@ -769,8 +769,7 @@ Sortie : `42, 42`. [Paquet complet](examples/features/map/).
 use std::String;
 
 fn main() {
-    let mut strings = Pool<String>::new(1);
-    let mut text = strings.new();
+    let mut text = String::new();
     text.push_str("été,soleil,");
     print(text.byte_len());
 

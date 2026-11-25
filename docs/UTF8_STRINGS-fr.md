@@ -108,18 +108,20 @@ Cette décision d'architecture n'approuve pas à elle seule l'ensemble de l'API
 générique `Vector<T>`. Le premier cas sur sa construction vide est seulement
 proposé au moment de cette consignation.
 
-**TX10 — Pool, région et nettoyage.** `Pool<String>` fournit les slots contenant
-les informations fixes ; le stockage grandissant associé utilise les stratégies
-de data stacks/régions déjà retenues. `textes.new()` construit un String vide.
-L'annotation actuelle est `#(directive, stack_region_max_size=1M)` avant un scope ; les
-anciens noms proposés ne sont plus à utiliser. Les règles d'héritage, capacité,
-limites et stabilité restent celles de G1–G12.
+**TX10 — Descripteur, région et nettoyage.** `String::new()` construit une chaîne
+vide autonome. Son descripteur fixe suit le placement sur datastack/frame ; ses
+octets grandissants utilisent la politique de région courante. `Pool<String>`
+reste une option explicite dont l’allocation est représentée par `A<String>`.
 
-La destruction de String nettoie son stockage associé et restitue son slot,
-sans double nettoyage. Les sous-vues ou tâches dépendantes peuvent empêcher
-cette destruction selon les règles existantes. Le protocole interne exact entre
-pool de descripteurs et région reste à implémenter ; aucune réallocation cachée
-sur un autre allocateur n'est autorisée par ces décisions.
+`#(stack_region: max_size=1M)` sur un scope fixe la limite des données
+grandissantes ; `count` est facultatif. L’héritage du budget, les limites et la
+stabilité des adresses suivent les règles existantes. Aucun repli caché vers un
+allocateur de tas généraliste n’est ajouté.
+
+Un move transfère la responsabilité du nettoyage. La destruction libère une
+seule fois le stockage régional ; seule la forme en pool restitue aussi un slot.
+Les vues et les branches dépendantes conservent leurs obligations de durée de
+vie et d’accès habituelles.
 
 **TX11 — push(char).** `texte.push(caractere)` ajoute l'encodage complet du char
 à la fin du texte. Avant écriture, tout l'encodage doit tenir dans la capacité

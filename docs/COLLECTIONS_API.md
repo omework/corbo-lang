@@ -146,9 +146,27 @@ executes basic insertion, borrowing and extraction.
 
 `String` owns a region-backed UTF-8 byte sequence. `&str` is a borrowed view;
 text does not gain ownership merely because a view was copied or returned.
-Construct an owned string through a String pool. `push_str(&str)` appends bytes
+Construct with `String::new()` without a pool. The fixed descriptor follows
+ordinary datastack/frame placement and its UTF-8 data uses the current region
+policy. `push_str(&str)` appends bytes
 while retaining the UTF-8 contract; `byte_len()` reports encoded bytes.
 `as_bytes()` makes byte-level access explicit.
+
+`as_str()` borrows `&str`; `&text[start..end]` retains the same
+ownership dependency and checks byte bounds and UTF-8 character boundaries.
+Views prevent conflicting mutation, moves and destruction until their last use.
+Moves transfer regional cleanup exactly once, including through aggregate and
+function returns. Destruction releases payload before runtime registration.
+The current `as_str()` implementation validates UTF-8 while producing the view.
+
+`Pool<String>` remains an explicit option returning `A<String>`.
+`String<N>` is unchanged: it stores its bytes inline with a compile-time maximum.
+The standalone implementation is
+[string_value.crb](../stdlib/src/collections/string_value.crb). Its zero-sized
+anchor establishes the checked lifetime of views; the unchecked runtime bridge
+substitutes the regional pointer and length without exposing mutable bytes.
+As with standalone Vector, stable registration metadata has runtime mapping
+overhead outside the configured payload-byte budget.
 
 The [text example](../examples/features/text/src/main.crb) executes owned-string
 append, byte length and a literal's byte view. The full

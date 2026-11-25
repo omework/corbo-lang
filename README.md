@@ -779,7 +779,7 @@ Output: `42, 42`. [Complete package](examples/features/map/).
 
 #### UTF-8 text and caller-owned bytes
 
-`String` owns region-backed UTF-8 bytes; a literal provides a static `&str` view. Byte length differs from character count. Convert to a byte slice explicitly with `as_bytes()`. Both `String` and `&str` provide `split(separator)`: its iterator yields borrowed `&str` pieces, preserving empty pieces without allocating strings.
+`String::new()` creates an empty owned string with a fixed datastack descriptor and region-backed UTF-8 bytes; a literal provides a static `&str` view. Byte length differs from character count. Convert to a byte slice explicitly with `as_bytes()`. Both `String` and `&str` provide `split(separator)`: its iterator yields borrowed `&str` pieces, preserving empty pieces without allocating strings.
 
 `String<N>` instead keeps at most `N` UTF-8 bytes inline, with its bound known
 at compilation. Oversized construction or replacement returns an error without
@@ -790,8 +790,7 @@ truncation. See [bounded string APIs](docs/UTF8_STRINGS.md#bounded-inline-utf-8-
 use std::String;
 
 fn main() {
-    let mut strings = Pool<String>::new(1);
-    let mut text = strings.new();
+    let mut text = String::new();
     text.push_str("été,soleil,");
     print(text.byte_len());
 

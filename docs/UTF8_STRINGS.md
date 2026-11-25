@@ -116,18 +116,18 @@ This architecture decision does not in itself approve the entire API
 generic `Vector<T>`. The first case on its empty construction is only
 proposed at the time of this check-in.
 
-**TX10 — Pool, region and cleaning.** `Pool<String>` provides slots containing
-fixed information; the growing associated storage uses strategies
-data stacks/regions already retained. `textes.new()` construit un String vide.
-The current annotation is `#(directive, stack_region_max_size=1M)` before a telescope; the
-old names proposed are no longer to be used.
-limits and stability remain those of G1–G12.
+**TX10 — Descriptor, region and cleanup.** `String::new()` constructs an empty
+standalone string. Its fixed descriptor uses ordinary datastack/frame placement;
+its growing bytes use the current region policy. `Pool<String>` remains an
+explicit alternative whose allocation descriptor is `A<String>`.
 
-The destruction of String cleans up its associated storage and restores its slot,
-without double cleaning. Subsights or dependent tasks can prevent
-the destruction according to the existing rules. The exact internal protocol between
-pool of descriptors and region still to be implemented; no hidden reallocation
-on another allocator is not authorized by these decisions.
+Use `#(stack_region: max_size=1M)` on a scope to constrain its growing payloads;
+`count` is optional. Budget inheritance, limits and address stability follow the
+existing growing-storage rules. No hidden general-purpose heap fallback is added.
+
+Moves transfer cleanup responsibility. Destruction releases associated regional
+storage once; only the pooled form also returns a slot. Borrowed views and branch
+dependencies preserve their ordinary lifetime and access obligations.
 
 **TX11 — push(char).** `texte.push(caractere)` add the full tank encoding
 at the end of the text. Before writing, all encoding must hold in the ability

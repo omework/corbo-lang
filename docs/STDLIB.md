@@ -155,19 +155,20 @@ A region-backed map with integer or boolean keys and stable entry storage.
 
 ### `String`
 
-[collections.crb:26](../stdlib/src/collections.crb#L26)
+[collections.crb:27](../stdlib/src/collections.crb#L27)
 
 ```rust
 pub struct String
 ```
 
 An owned, region-backed UTF-8 string with the existing String operations.
-Construct through a String pool; borrowed text views retain its lifetime.
+`String::new()` creates a standalone descriptor, with bytes in a region.
+Pool construction remains available; borrowed views retain their owner.
 `split(separator)` returns `std::text::Split`, yielding borrowed `&str` pieces.
 
 ### `Pool`
 
-[collections.crb:32](../stdlib/src/collections.crb#L32)
+[collections.crb:33](../stdlib/src/collections.crb#L33)
 
 ```rust
 pub struct Pool<T>
@@ -179,7 +180,7 @@ Fixed-capacity typed slot storage on the datastack; allocations retain its lifet
 
 ### `PoolError`
 
-[collections.crb:36](../stdlib/src/collections.crb#L36)
+[collections.crb:37](../stdlib/src/collections.crb#L37)
 
 ```rust
 pub enum PoolError
@@ -189,11 +190,11 @@ Recoverable failure to allocate a slot in an existing typed pool.
 
 Members:
 
-- [`Full`](../stdlib/src/collections.crb#L38) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
+- [`Full`](../stdlib/src/collections.crb#L39) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
 
 ### `BoundedStringError`
 
-[collections.crb:42](../stdlib/src/collections.crb#L42)
+[collections.crb:43](../stdlib/src/collections.crb#L43)
 
 ```rust
 pub enum BoundedStringError
@@ -203,11 +204,11 @@ Reports content exceeding a bounded inline string's byte capacity.
 
 Members:
 
-- [`TooLong`](../stdlib/src/collections.crb#L44) (variant): The full UTF-8 input does not fit; the destination remains unchanged.
+- [`TooLong`](../stdlib/src/collections.crb#L45) (variant): The full UTF-8 input does not fit; the destination remains unchanged.
 
 ### `BoundedString`
 
-[collections.crb:50](../stdlib/src/collections.crb#L50)
+[collections.crb:51](../stdlib/src/collections.crb#L51)
 
 ```rust
 pub struct BoundedString<N>
@@ -219,12 +220,12 @@ No field is writable outside this STD module; constructors retain UTF-8.
 
 Members:
 
-- [`length`](../stdlib/src/collections.crb#L52) (implementation field): Current UTF-8 byte count, always no greater than N.
-- [`data`](../stdlib/src/collections.crb#L54) (implementation field): Inline storage; unused bytes are zeroed by construction and set.
+- [`length`](../stdlib/src/collections.crb#L53) (implementation field): Current UTF-8 byte count, always no greater than N.
+- [`data`](../stdlib/src/collections.crb#L55) (implementation field): Inline storage; unused bytes are zeroed by construction and set.
 
 ### `BoundedString::new`
 
-[collections.crb:57](../stdlib/src/collections.crb#L57)
+[collections.crb:58](../stdlib/src/collections.crb#L58)
 
 ```rust
 fn new() BoundedString<N>
@@ -234,7 +235,7 @@ Constructs an empty inline string without an allocation.
 
 ### `BoundedString::try_from`
 
-[collections.crb:61](../stdlib/src/collections.crb#L61)
+[collections.crb:62](../stdlib/src/collections.crb#L62)
 
 ```rust
 fn try_from(text: &str) Result<BoundedString<N>, BoundedStringError>
@@ -244,7 +245,7 @@ Copies a complete UTF-8 input or returns TooLong without truncation.
 
 ### `BoundedString::capacity`
 
-[collections.crb:69](../stdlib/src/collections.crb#L69)
+[collections.crb:70](../stdlib/src/collections.crb#L70)
 
 ```rust
 fn capacity(&self) usize
@@ -254,7 +255,7 @@ Returns the compile-time byte capacity.
 
 ### `BoundedString::len`
 
-[collections.crb:71](../stdlib/src/collections.crb#L71)
+[collections.crb:72](../stdlib/src/collections.crb#L72)
 
 ```rust
 fn len(&self) usize
@@ -264,7 +265,7 @@ Returns the current byte length, not a character count.
 
 ### `BoundedString::set`
 
-[collections.crb:73](../stdlib/src/collections.crb#L73)
+[collections.crb:74](../stdlib/src/collections.crb#L74)
 
 ```rust
 fn set(&mut self, text: &str) Result<(), BoundedStringError>
@@ -274,7 +275,7 @@ Replaces the content, retaining the old value if the input is too long.
 
 ### `BoundedString::as_str`
 
-[collections.crb:92](../stdlib/src/collections.crb#L92)
+[collections.crb:93](../stdlib/src/collections.crb#L93)
 
 ```rust
 fn as_str(&self) Result<&str, Utf8Error>
@@ -284,7 +285,7 @@ Borrows validated UTF-8 text without allocating or copying its payload.
 
 ### `BoundedString::as_bytes`
 
-[collections.crb:97](../stdlib/src/collections.crb#L97)
+[collections.crb:98](../stdlib/src/collections.crb#L98)
 
 ```rust
 fn as_bytes(&self) &[u8]
@@ -294,6 +295,107 @@ Borrows the used bytes; mutation and moves respect the ordinary loan rules.
 
 
 ## `std::collections`
+
+Standalone UTF-8 strings with datastack descriptors and region-backed bytes.
+
+### `StringValue`
+
+[string_value.crb:7](../stdlib/src/collections/string_value.crb#L7)
+
+```rust
+pub struct StringValue
+```
+
+Owns a growing UTF-8 byte region without a user-facing allocation pool.
+Moves transfer cleanup; shared views retain a borrow of this descriptor.
+
+Members:
+
+- [`raw`](../stdlib/src/collections/string_value.crb#L9) (implementation field): Stable runtime region registration, retained across descriptor moves.
+- [`anchor`](../stdlib/src/collections/string_value.crb#L11) (implementation field): Zero-sized lifetime anchor for shared views into the owned payload.
+
+### `StringValue::new`
+
+[string_value.crb:14](../stdlib/src/collections/string_value.crb#L14)
+
+```rust
+pub fn new() StringValue
+```
+
+Creates an empty string under the current growing-region policy.
+
+### `StringValue::byte_len`
+
+[string_value.crb:20](../stdlib/src/collections/string_value.crb#L20)
+
+```rust
+pub fn byte_len(&self) usize
+```
+
+Returns the encoded byte length, which can differ from character count.
+
+### `StringValue::is_empty`
+
+[string_value.crb:30](../stdlib/src/collections/string_value.crb#L30)
+
+```rust
+pub fn is_empty(&self) bool
+```
+
+Reports whether this string contains no bytes.
+
+### `StringValue::push_str`
+
+[string_value.crb:34](../stdlib/src/collections/string_value.crb#L34)
+
+```rust
+pub fn push_str(&mut self, text: &str)
+```
+
+Appends valid UTF-8 bytes by copy; the argument remains borrowed.
+Growth enforces the region's byte limit and reserves mutable access.
+
+### `StringValue::as_bytes`
+
+[string_value.crb:44](../stdlib/src/collections/string_value.crb#L44)
+
+```rust
+pub fn as_bytes(&self) &[u8]
+```
+
+Borrows the initialized bytes. The unchecked pointer substitution keeps
+the ordinary self-borrow established through the zero-sized anchor.
+
+### `StringValue::as_str`
+
+[string_value.crb:56](../stdlib/src/collections/string_value.crb#L56)
+
+```rust
+pub fn as_str(&self) &str
+```
+
+Borrows UTF-8 text. Construction and append maintain the UTF-8 invariant.
+
+### `StringValue::split`
+
+[string_value.crb:64](../stdlib/src/collections/string_value.crb#L64)
+
+```rust
+pub fn split(&self, separator: &str) Split
+```
+
+Returns an allocation-free iterator borrowing this string and separator.
+
+### `StringValue::drop`
+
+[string_value.crb:70](../stdlib/src/collections/string_value.crb#L70)
+
+```rust
+pub fn drop(&mut self)
+```
+
+Releases the regional payload before its stable registration, once.
+
 
 Standalone vector descriptors and region-backed data. The compiler selects
 this ordinary owned object for bare Vector<T>; pooled Vector payloads retain
