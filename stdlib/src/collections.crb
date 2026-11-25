@@ -5,9 +5,13 @@
 //! Storage, operations and dependency tracking retain their existing native implementation.
 
 use std::text::Utf8Error;
+use std::collections::VectorValue;
 
 /// A contiguous, region-backed sequence of owned values of type T, initially empty.
-/// Construct through `Pool<Vector<T>>::new(...).new()`; normal moves and loans apply.
+/// `Vector::new()` creates a standalone descriptor for values and references;
+/// its payload uses the construction scope's region and owns element cleanup.
+/// Retained references preserve their lifetime/access dependencies. Pool construction remains
+/// available as `Pool<Vector<T>>::new(...).new()` and returns A<Vector<T>>.
 pub struct Vector<T> {
 }
 

@@ -5170,3 +5170,34 @@ The active compiler accepts configurable associated constants and annotated gene
 ## Unrestricted declaration order and Self
 
 Fields/variants, constants and methods may be interleaved. The active compiler resolves Self in nominal definitions and associated constant bounds before layout. The final macOS ARM64 candidate passes 28 focused/regression observations and a qualified temporary WAL snapshot. Documentation inventory and generated-reference freshness pass. See [compiler evidence](https://github.com/omework/corboc/blob/main/docs/MIXED_MEMBERS_CYCLE.md). No source changes were made to SubDB.
+
+## Constant expression reduction (CC3–CC5)
+
+The agreed primitive/text constant grammar, arithmetic, parentheses, min/max,
+constant reuse and lexical derived-default evaluation are implemented in corboc.
+Focused execution on macOS ARM64 passed 15 constant observations and eight
+adjacent member/Self/array-bound observations. Executable cases used fatal UBSan.
+The installed compiler also executed the 1024/2048-byte frame-size specialization
+example, producing group sizes 4194304/8388608/4194304.
+Evidence is maintained in the compiler repository's
+`docs/CONSTANT_EXPRESSIONS_CYCLE.md` and accompanying result files.
+This cycle did not execute other platforms or the full historical corpus.
+
+## Standalone regional vector API
+
+`Vector::new()` now supports standalone plain-data elements through the STD
+VectorValue implementation, with fixed descriptor placement and regional payload.
+Executed: five programs under fatal UBSan on macOS ARM64, four related refusals,
+and a Linux ARM64 regional-transfer probe. The actual SubDB dispatcher checks.
+Dependency-bearing standalone elements and full native API parity remain compiler
+limitations; Windows execution was not performed. Details and reproducible results
+are in the compiler repository: docs/SHORTHAND_VECTORS_CYCLE.md.
+
+## Standalone vector references and owned resources
+
+The previous plain-data-only standalone restriction is superseded. The compiler
+now retains element summaries and the STD destroys remaining values before
+regional reclamation. Ten executable cases under fatal UBSan and six related
+refusals passed on macOS ARM64, including borrowed elements, custom destructors,
+nested owners and helper environments. Other platforms were not executed in this
+cycle. Compiler report: docs/VECTOR_OWNERSHIP_CYCLE.md.

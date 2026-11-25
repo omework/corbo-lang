@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Standalone vector descriptors and region-backed data. The compiler selects
+//! this ordinary owned object for bare Vector<T>; pooled Vector payloads retain
+//! their existing representation. Element moves and retained dependencies are tracked by the compiler.
+
+/// Owns one stable region registration. The movable fixed-size descriptor stays
+/// in the datastack; its payload uses the construction scope's growing region.
+#(type: T)
+pub struct VectorValue<T> {
+    /// Private runtime registration; moving the object transfers its cleanup.
+    raw: usize;
+
+    /// Creates an empty region-backed vector without a user-facing pool.
+    pub fn new() VectorValue<T> {
+        let raw = new_vector_region();
+        VectorValue { raw: raw }
+    }
+
+    /// Returns the number of initialized elements.
+    pub fn len(&self) usize {
+        let raw = (*self).raw;
+        let mut length: usize = 0;
+        @unchecked { @c(includes={"corbo_runtime.h"}) {
+            ${length}=((CorboRegion*)${raw})->len;
+        } }
+        length
+    }
+
+    /// Reports whether the vector contains no initialized elements.
+    pub fn is_empty(&self) bool { self.len() == 0 }
+
+    /// Appends a moved value, enforcing the retained region budget.
+    pub fn push(&mut self, value: T) {
+        let raw = (*self).raw;
+        let mut retained: Option<T> = Some(value);
+        @unchecked { @c(includes={"corbo_runtime.h","string.h"}) {
+            CorboRegion *region=(CorboRegion*)${raw};
+            __typeof__((${retained}).value) element=(${retained}).value;
+            if(!region->len)region->width=sizeof(element);
+            if(region->width!=sizeof(element))abort();
+            memcpy(corbo_region_push(region),&element,sizeof(element));
+            (${retained}).some=false;
+        } }
+    }
+
+    /// Removes and returns the last element, or None when empty.
+    pub fn pop(&mut self) Option<T> {
+        let raw = (*self).raw;
+        let mut result: Option<T> = None;
+        @unchecked { @c(includes={"corbo_runtime.h"}) {
+            (${result}).some=vector_pop((CorboRegion*)${raw},&(${result}).value);
+        } }
+        result
+    }
+
+    /// Destroys remaining elements before reclaiming the region's cursor.
+    pub fn clear(&mut self) {
+        let raw = (*self).raw;
+        loop {
+            let mut removed: Option<T> = None;
+            @unchecked { @c(includes={"corbo_runtime.h"}) {
+                (${removed}).some=vector_pop((CorboRegion*)${raw},&(${removed}).value);
+            } }
+            match removed {
+                Some(value) => { drop(value); },
+                None => { break; },
+            }
+        }
+    }
+
+    /// Destroys remaining elements, then releases region and registration once.
+    pub fn drop(&mut self) {
+        let raw = (*self).raw;
+        loop {
+            let mut removed: Option<T> = None;
+            @unchecked { @c(includes={"corbo_runtime.h"}) {
+                (${removed}).some=vector_pop((CorboRegion*)${raw},&(${removed}).value);
+            } }
+            match removed {
+                Some(value) => { drop(value); },
+                None => { break; },
+            }
+        }
+        release_vector_region(raw);
+    }
+
+}
+
+#(if: target.family == "unix")
+/// Maps fixed runtime registration storage and captures the current region policy.
+fn new_vector_region() usize {
+    let mut raw: usize = 0;
+    @unchecked { @c(includes={"corbo_runtime.h","sys/mman.h"}) {
+        void *memory=mmap(NULL,sizeof(CorboRegion),PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+        if(memory==MAP_FAILED)abort();
+        ${raw}=(uintptr_t)memory;
+        corbo_region_new((CorboRegion*)memory,1,false);
+    } }
+    raw
+}
+
+/// Releases region data and then its registration's virtual-memory mapping.
+fn release_vector_region(raw: usize) {
+    @unchecked { @c(includes={"corbo_runtime.h","sys/mman.h"}) {
+        corbo_region_drop((CorboRegion*)${raw});
+        if(munmap((void*)${raw},sizeof(CorboRegion)))abort();
+    } }
+}
+#(endif)
+
+#(if: target.family == "windows")
+/// Allocates stable Windows registration storage and captures the region policy.
+fn new_vector_region() usize {
+    let mut raw: usize = 0;
+    @unchecked { @c(includes={"corbo_runtime.h","windows.h"}) {
+        void *memory=VirtualAlloc(NULL,sizeof(CorboRegion),MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+        if(!memory)abort();
+        ${raw}=(uintptr_t)memory;
+        corbo_region_new((CorboRegion*)memory,1,false);
+    } }
+    raw
+}
+
+/// Releases region data before returning the Windows registration mapping.
+fn release_vector_region(raw: usize) {
+    @unchecked { @c(includes={"corbo_runtime.h","windows.h"}) {
+        corbo_region_drop((CorboRegion*)${raw});
+        if(!VirtualFree((void*)${raw},0,MEM_RELEASE))abort();
+    } }
+}
+#(endif)

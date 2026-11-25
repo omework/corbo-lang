@@ -89,10 +89,9 @@ use std::Vector;
 
 fn main() {
     let count: i64 = 1000;
-    let mut vectors = Pool<Vector<i64>>::new(1);
 
     #(stack_region: max_size=64K, count=1) {
-        let mut numbers = vectors.new();
+        let mut numbers: Vector<i64> = Vector::new();
         let mut number: i64 = 0;
         while number < count {
             numbers.push(number);
@@ -105,8 +104,8 @@ fn main() {
 
 Output: `1000`. [Complete package](examples/features/budget/).
 
-- `Pool<Vector<i64>>::new(1)` provides one vector slot. The `1` counts vector
-  objects, not their elements.
+- `Vector::new()` creates the fixed descriptor; its elements use the region.
+  No pool is required for this standalone data vector.
 - `#(stack_region: max_size=64K, count=1)` sets a 64 KiB region size and reserves
   one region for this scope. The vector's growing payload uses that region.
 - An `i64` occupies eight bytes, so this payload budget holds at most 8,192
@@ -114,7 +113,7 @@ Output: `1000`. [Complete package](examples/features/budget/).
 - With `push`, exceeding that limit stops the program with a diagnostic.
   Scope exit destroys the vector before making its region storage reusable.
 
-The limit applies to the element storage; the descriptor, pool and runtime
+The limit applies to the element storage; the descriptor and runtime
 metadata have their own storage. This is not a total-process memory limit.
 
 **The explicit annotation is optional today.** When a size is omitted, Corbo
@@ -354,7 +353,7 @@ Output: `22, 42, true`. [Complete package](examples/features/tuples/).
 
 #### Structs, constants and receiver modes
 
-Receiver signatures determine whether a method borrows, mutably borrows or consumes its receiver. Associated constants use `Type::NAME`.
+Receiver signatures determine whether a method borrows, mutably borrows or consumes its receiver. Associated constants use `Type::NAME`. Constructor shorthand `Self { file, groups }` means `Self { file: file, groups: groups }`, with the same copy/move rules.
 
 <!-- example: methods -->
 ```rust
@@ -381,6 +380,13 @@ fn main() {
 ```
 
 Output: `42`. [Complete package](examples/features/methods/).
+
+Constants support primitive and `&str` literals, reuse of other constants,
+parentheses and checked numeric `+ - * / %`, `min(a, b)` and `max(a, b)`.
+For example, `const GROUP_SIZE: usize = max(4096 * FRAME_SIZE, 8192);` derives a
+static bound from another constant. Derived defaults follow lexical overrides;
+an explicit override of the derived constant takes precedence. See
+[configurable constants](docs/CONFIGURATION_CONSTANTS.md).
 
 <a id="enums"></a>
 
@@ -720,7 +726,7 @@ Output: `3`. [Complete package](examples/features/regions/).
 
 #### Vectors and extraction
 
-The vector descriptor has fixed size; its contiguous payload grows within its region budget. Insertion moves an item into the vector. Extraction transfers it to the receiver.
+The vector descriptor has fixed size; its contiguous payload grows within its region budget. Insertion moves an item into the vector. Extraction transfers it to the receiver. `Vector::new()` creates a standalone vector, as shown in the memory-budget example above. The following example retains the existing pooled API, which also supports indexed access.
 
 <!-- example: vector -->
 ```rust
@@ -1557,7 +1563,7 @@ Output: `30`. [API](docs/CHANNELS.md).
 
 Import the native collection types with `use std::{Vector, HashMap, String};`.
 Their public names live in [collections.crb](stdlib/src/collections.crb). Native
-collection algorithms live in the runtime; bounded `String<N>` is implemented
+collection algorithms live in the runtime. Standalone data vectors are implemented in [vector_value.crb](stdlib/src/collections/vector_value.crb); bounded `String<N>` is implemented
 in the STD. See the [collection API guide](docs/COLLECTIONS_API.md)
 for construction, element ownership, borrowing and cleanup.
 

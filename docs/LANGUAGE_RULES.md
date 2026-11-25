@@ -6,6 +6,10 @@ Current method and return syntax: [definition-local methods](DEFINITION_METHODS.
 
 # Corbo language rules
 
+Constructor shorthand `Type { field }` means `Type { field: field }`, including
+named enum constructors and `Self`. The ordinary right-hand-side copy/move and
+borrowing rules apply. It does not add shorthand field declarations or patterns.
+
 Enum variants use `Enum::Variant` in constructors, `match` and `if let`.
 The older `Enum.Variant` form remains accepted for compatibility. Both forms
 resolve to the same variant and preserve payload evaluation, copy/move,
@@ -1228,13 +1232,30 @@ compositions actually supported.
 
 ### Constants
 
-`const NAME: T = literal;` declares a typed value at module scope. Use
-`pub const` to export a module constant. A constant inside `impl Struct`
-belongs to the type and is accessed as `Struct::NAME`. It follows the
-visibility of the type. The initializer is an integer, float, or boolean
-literal. Numeric literals may have a leading minus. The compiler checks the
-literal against the declared primitive type and inserts its value at each
-use. A constant has no address of its own.
+`const NAME: T = expression;` declares a typed value at module scope. Use
+`pub const` to export it. Constants inside a struct or enum use the qualified
+`Type::NAME` identity; `Self::NAME` is accepted inside its definition.
+
+The declared type is a primitive or `&str`. Initializers use literals, other
+constants, parentheses, unary minus, and numeric `+`, `-`, `*`, `/`, `%`,
+`min(a, b)` and `max(a, b)`. These two operations are recognized in constant
+expressions; this does not add arbitrary compile-time function calls. Text and
+boolean constants support literals and constant reuse, not numeric operations.
+No aggregates, owned collections or user-defined function execution are added.
+
+Literals take the declared type; referenced constants must have that same type.
+Intermediate integer values must fit it. Overflow, division by zero, invalid
+initializers and cyclic dependencies are compilation errors. Signed minimum
+remainder by `-1` is zero, while the corresponding division overflows. Floating
+operations retain the declared precision and ordinary rounding; a nonfinite
+constant result is rejected, as is a nonzero literal that rounds to zero.
+A constant has no address of its own. Text constants refer to static UTF-8 literal
+storage. Named integer constants can supply array lengths and repetition counts.
+
+Under lexical overrides, derived default expressions are re-evaluated using the
+effective dependency values. An explicitly overridden constant retains that
+value in nested scopes until overridden again. Right-hand sides of assignments
+in one directive are all evaluated in the enclosing environment.
 
 ### Closures
 

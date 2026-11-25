@@ -1241,13 +1241,28 @@ délimitent les types et compositions effectivement pris en charge.
 
 ### Constantes
 
-`const NOM: T = littéral;` déclare une valeur typée dans le module.
-`pub const` permet de l’exporter. Une constante déclarée dans `impl Struct`
-appartient au type, suit sa visibilité et s’utilise sous la forme
-`Struct::NOM`. L’initialiseur est un littéral entier, flottant ou booléen.
-Un signe moins peut précéder un littéral numérique. Le compilateur vérifie
-que le littéral correspond au type primitif déclaré et insère sa valeur à
-chaque utilisation. Une constante n’a pas d’adresse propre.
+`const NOM: T = expression;` déclare une constante de type primitif ou `&str`.
+`pub const` l’exporte. Dans une struct ou enum, elle est désignée par
+`Type::NOM`, ou `Self::NOM` dans la définition.
+
+L’initialiseur accepte les littéraux, la réutilisation de constantes, les
+parenthèses, le moins unaire et les opérations numériques `+`, `-`, `*`, `/`,
+`%`, `min(a, b)` et `max(a, b)`. Aucun appel de fonction utilisateur, agrégat ou
+collection propriétaire n’est ajouté. Le texte et les booléens acceptent les
+littéraux et la réutilisation, sans opérations numériques.
+
+Les littéraux prennent le type déclaré ; une constante référencée doit avoir ce
+même type. Débordements entiers intermédiaires, division par zéro et dépendances
+cycliques sont refusés. Le reste du minimum signé par `-1` vaut zéro ; la division
+correspondante déborde. Les flottants gardent leur précision et leur arrondi
+ordinaires ; les résultats non finis et les littéraux non nuls arrondis à zéro
+sont refusés. Une constante n’a pas d’adresse propre. Le texte utilise le
+stockage statique des littéraux UTF-8.
+
+Les expressions dérivées sont recalculées sous les overrides lexicaux. Un
+override explicite conserve sa valeur dans les blocs enfants tant qu’il n’est
+pas remplacé. Les valeurs d’un même override sont évaluées dans l’environnement
+parent, avant toute affectation.
 
 ### Closures
 
@@ -1516,3 +1531,10 @@ Voir [les accès mutables](MUTABLE_ACCESS-fr.md).
 `"big"`. La valeur vient de la cible configurée à la construction du compilateur.
 La sélection précède la résolution des imports, comme les autres propriétés
 `target`. Elle ne produit aucun test d’ordre des octets dans le programme final.
+
+### Raccourci de construction des champs
+
+`Type { champ }` équivaut à `Type { champ: champ }`, y compris avec `Self`
+et les variantes nommées d’enum. Les règles ordinaires de copie, de déplacement
+et d’emprunt de la partie droite s’appliquent. Cela n’ajoute pas de raccourci
+pour les déclarations de champs ni pour les motifs.

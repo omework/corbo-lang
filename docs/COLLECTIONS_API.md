@@ -41,8 +41,66 @@ cleans its allocation. Reservation/datastack failures remain terminating.
 
 ## `Vector<T>`
 
+A standalone `Vector<T>` owns a fixed-size descriptor on the datastack and a
+region-backed payload. It does not require a user-facing pool:
+
+```rust
+use std::Vector;
+
+struct GroupMetadata {
+    compressed: bool;
+    cursor: usize;
+}
+
+struct Table {
+    groups: Vector<GroupMetadata>;
+
+    fn new() Self {
+        let groups = Vector::new();
+        Self { groups }
+    }
+}
+
+fn main() {
+    let mut table = Table::new();
+    table.groups.push(GroupMetadata { compressed: false, cursor: 0 });
+    print(table.groups.len());
+}
+```
+
+`new()` infers its element from a typed binding or receiving struct field;
+`Vector<T>::new()` can specify it explicitly. Moves transfer cleanup. Dropping
+the final owner releases the region, including after scope/async transfers.
+`#(stack_region: ...)` supplies the growing-data limit; no capacity argument is
+added. The ordinary STD implementation is in
+[vector_value.crb](../stdlib/src/collections/vector_value.crb).
+
+Standalone elements can be values, shared or mutable references, and owned
+resources. `push` transfers ownership to the vector; `pop` transfers the extracted
+value and its dependencies to its receiver. `clear` and destruction clean up all
+remaining elements before releasing storage, including nested owners and custom
+destructors. A vector needs no pool of its own. If an element is `A<T>`, its
+original allocation pool must still outlive that allocation.
+
+The compiler retains immutable element summaries alongside the descriptor's
+checked value. Moves preserve this graph; field projections and helper calls
+use the same summaries. Pushing a reference retains its target's lifetime and
+access constraints. Thread-transfer restrictions propagate from element types.
+
+This API provides `new`, `len`, `is_empty`, `push`, `pop` and `clear`. The existing
+indexed/sliced native-vector API is still the pooled path. Conditional and
+repeated extraction may retain conservative dependency summaries when exact
+membership cannot be proven; that can refuse otherwise valid programs.
+
+A stable internal runtime registration accompanies the movable descriptor so
+region lists do not retain the descriptor's former address. Its fixed metadata
+mapping is runtime overhead; the configured region byte limit applies to element
+data. The registration is released after the region at destruction.
+
+### Pooled vectors (existing API)
+
 A fixed-size descriptor identifies contiguous element storage growing in a
-bounded region. Construct the owned allocation through a vector pool, as in the
+bounded region. The pooled form constructs an owned allocation through a vector pool, as in the
 [vector example](../examples/features/vector/src/main.crb).
 
 | Operation | Result and ownership |

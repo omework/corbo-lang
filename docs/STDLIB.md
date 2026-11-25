@@ -13,6 +13,7 @@ Regenerate with `python3 scripts/stdlib_docs.py > docs/STDLIB.md`.
 
 - [`runtime::metrics`](#runtimemetrics)
 - [`std`](#std)
+- [`std::collections`](#stdcollections)
 - [`std::compression::gzip`](#stdcompressiongzip)
 - [`std::compression::zstd`](#stdcompressionzstd)
 - [`std::crypto::aes`](#stdcryptoaes)
@@ -129,18 +130,21 @@ Storage, operations and dependency tracking retain their existing native impleme
 
 ### `Vector`
 
-[collections.crb:11](../stdlib/src/collections.crb#L11)
+[collections.crb:15](../stdlib/src/collections.crb#L15)
 
 ```rust
 pub struct Vector<T>
 ```
 
 A contiguous, region-backed sequence of owned values of type T, initially empty.
-Construct through `Pool<Vector<T>>::new(...).new()`; normal moves and loans apply.
+`Vector::new()` creates a standalone descriptor for values and references;
+its payload uses the construction scope's region and owns element cleanup.
+Retained references preserve their lifetime/access dependencies. Pool construction remains
+available as `Pool<Vector<T>>::new(...).new()` and returns A<Vector<T>>.
 
 ### `HashMap`
 
-[collections.crb:16](../stdlib/src/collections.crb#L16)
+[collections.crb:20](../stdlib/src/collections.crb#L20)
 
 ```rust
 pub struct HashMap<K, V>
@@ -151,7 +155,7 @@ A region-backed map with integer or boolean keys and stable entry storage.
 
 ### `String`
 
-[collections.crb:22](../stdlib/src/collections.crb#L22)
+[collections.crb:26](../stdlib/src/collections.crb#L26)
 
 ```rust
 pub struct String
@@ -163,7 +167,7 @@ Construct through a String pool; borrowed text views retain its lifetime.
 
 ### `Pool`
 
-[collections.crb:28](../stdlib/src/collections.crb#L28)
+[collections.crb:32](../stdlib/src/collections.crb#L32)
 
 ```rust
 pub struct Pool<T>
@@ -175,7 +179,7 @@ Fixed-capacity typed slot storage on the datastack; allocations retain its lifet
 
 ### `PoolError`
 
-[collections.crb:32](../stdlib/src/collections.crb#L32)
+[collections.crb:36](../stdlib/src/collections.crb#L36)
 
 ```rust
 pub enum PoolError
@@ -185,11 +189,11 @@ Recoverable failure to allocate a slot in an existing typed pool.
 
 Members:
 
-- [`Full`](../stdlib/src/collections.crb#L34) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
+- [`Full`](../stdlib/src/collections.crb#L38) (variant): No free slot remains in the selected enum arm (or ordinary element pool).
 
 ### `BoundedStringError`
 
-[collections.crb:38](../stdlib/src/collections.crb#L38)
+[collections.crb:42](../stdlib/src/collections.crb#L42)
 
 ```rust
 pub enum BoundedStringError
@@ -199,11 +203,11 @@ Reports content exceeding a bounded inline string's byte capacity.
 
 Members:
 
-- [`TooLong`](../stdlib/src/collections.crb#L40) (variant): The full UTF-8 input does not fit; the destination remains unchanged.
+- [`TooLong`](../stdlib/src/collections.crb#L44) (variant): The full UTF-8 input does not fit; the destination remains unchanged.
 
 ### `BoundedString`
 
-[collections.crb:46](../stdlib/src/collections.crb#L46)
+[collections.crb:50](../stdlib/src/collections.crb#L50)
 
 ```rust
 pub struct BoundedString<N>
@@ -215,12 +219,12 @@ No field is writable outside this STD module; constructors retain UTF-8.
 
 Members:
 
-- [`length`](../stdlib/src/collections.crb#L48) (implementation field): Current UTF-8 byte count, always no greater than N.
-- [`data`](../stdlib/src/collections.crb#L50) (implementation field): Inline storage; unused bytes are zeroed by construction and set.
+- [`length`](../stdlib/src/collections.crb#L52) (implementation field): Current UTF-8 byte count, always no greater than N.
+- [`data`](../stdlib/src/collections.crb#L54) (implementation field): Inline storage; unused bytes are zeroed by construction and set.
 
 ### `BoundedString::new`
 
-[collections.crb:53](../stdlib/src/collections.crb#L53)
+[collections.crb:57](../stdlib/src/collections.crb#L57)
 
 ```rust
 fn new() BoundedString<N>
@@ -230,7 +234,7 @@ Constructs an empty inline string without an allocation.
 
 ### `BoundedString::try_from`
 
-[collections.crb:57](../stdlib/src/collections.crb#L57)
+[collections.crb:61](../stdlib/src/collections.crb#L61)
 
 ```rust
 fn try_from(text: &str) Result<BoundedString<N>, BoundedStringError>
@@ -240,7 +244,7 @@ Copies a complete UTF-8 input or returns TooLong without truncation.
 
 ### `BoundedString::capacity`
 
-[collections.crb:65](../stdlib/src/collections.crb#L65)
+[collections.crb:69](../stdlib/src/collections.crb#L69)
 
 ```rust
 fn capacity(&self) usize
@@ -250,7 +254,7 @@ Returns the compile-time byte capacity.
 
 ### `BoundedString::len`
 
-[collections.crb:67](../stdlib/src/collections.crb#L67)
+[collections.crb:71](../stdlib/src/collections.crb#L71)
 
 ```rust
 fn len(&self) usize
@@ -260,7 +264,7 @@ Returns the current byte length, not a character count.
 
 ### `BoundedString::set`
 
-[collections.crb:69](../stdlib/src/collections.crb#L69)
+[collections.crb:73](../stdlib/src/collections.crb#L73)
 
 ```rust
 fn set(&mut self, text: &str) Result<(), BoundedStringError>
@@ -270,7 +274,7 @@ Replaces the content, retaining the old value if the input is too long.
 
 ### `BoundedString::as_str`
 
-[collections.crb:88](../stdlib/src/collections.crb#L88)
+[collections.crb:92](../stdlib/src/collections.crb#L92)
 
 ```rust
 fn as_str(&self) Result<&str, Utf8Error>
@@ -280,13 +284,105 @@ Borrows validated UTF-8 text without allocating or copying its payload.
 
 ### `BoundedString::as_bytes`
 
-[collections.crb:93](../stdlib/src/collections.crb#L93)
+[collections.crb:97](../stdlib/src/collections.crb#L97)
 
 ```rust
 fn as_bytes(&self) &[u8]
 ```
 
 Borrows the used bytes; mutation and moves respect the ordinary loan rules.
+
+
+## `std::collections`
+
+Standalone vector descriptors and region-backed data. The compiler selects
+this ordinary owned object for bare Vector<T>; pooled Vector payloads retain
+their existing representation. Element moves and retained dependencies are tracked by the compiler.
+
+### `VectorValue`
+
+[vector_value.crb:9](../stdlib/src/collections/vector_value.crb#L9)
+
+```rust
+pub struct VectorValue<T>
+```
+
+Owns one stable region registration. The movable fixed-size descriptor stays
+in the datastack; its payload uses the construction scope's growing region.
+
+Members:
+
+- [`raw`](../stdlib/src/collections/vector_value.crb#L11) (implementation field): Private runtime registration; moving the object transfers its cleanup.
+
+### `VectorValue::new`
+
+[vector_value.crb:14](../stdlib/src/collections/vector_value.crb#L14)
+
+```rust
+pub fn new() VectorValue<T>
+```
+
+Creates an empty region-backed vector without a user-facing pool.
+
+### `VectorValue::len`
+
+[vector_value.crb:20](../stdlib/src/collections/vector_value.crb#L20)
+
+```rust
+pub fn len(&self) usize
+```
+
+Returns the number of initialized elements.
+
+### `VectorValue::is_empty`
+
+[vector_value.crb:30](../stdlib/src/collections/vector_value.crb#L30)
+
+```rust
+pub fn is_empty(&self) bool
+```
+
+Reports whether the vector contains no initialized elements.
+
+### `VectorValue::push`
+
+[vector_value.crb:33](../stdlib/src/collections/vector_value.crb#L33)
+
+```rust
+pub fn push(&mut self, value: T)
+```
+
+Appends a moved value, enforcing the retained region budget.
+
+### `VectorValue::pop`
+
+[vector_value.crb:47](../stdlib/src/collections/vector_value.crb#L47)
+
+```rust
+pub fn pop(&mut self) Option<T>
+```
+
+Removes and returns the last element, or None when empty.
+
+### `VectorValue::clear`
+
+[vector_value.crb:57](../stdlib/src/collections/vector_value.crb#L57)
+
+```rust
+pub fn clear(&mut self)
+```
+
+Destroys remaining elements before reclaiming the region's cursor.
+
+### `VectorValue::drop`
+
+[vector_value.crb:72](../stdlib/src/collections/vector_value.crb#L72)
+
+```rust
+pub fn drop(&mut self)
+```
+
+Destroys remaining elements, then releases region and registration once.
 
 
 ## `std::compression::gzip`

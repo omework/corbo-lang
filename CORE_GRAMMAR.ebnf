@@ -64,8 +64,17 @@ selection_membres   = "#", "(", "if", ":", condition_cible, ")",
 (* Fields/variants, constants and methods have no required declaration order.
    Method owners remain internal AST nodes;
    external impl blocks are retained only as bootstrap compatibility syntax. *)
-constante           = "const", identifiant, ":", primitif, "=",
-                      ( [ "-" ], ( entier | flottant ) | "true" | "false" ), ";" ;
+constante           = "const", identifiant, ":", type_constante, "=", expression_constante, ";" ;
+type_constante      = primitif | "&", "str" ;
+expression_constante = somme_constante ;
+somme_constante     = produit_constante, { ( "+" | "-" ), produit_constante } ;
+produit_constante   = unaire_constante, { ( "*" | "/" | "%" ), unaire_constante } ;
+unaire_constante    = [ "-" ], atome_constante ;
+atome_constante     = entier | flottant | texte | "true" | "false" | chemin_valeur
+                    | "(", expression_constante, ")"
+                    | ( "min" | "max" ), "(", expression_constante, ",", expression_constante, ")" ;
+(* Operators and min/max require numeric operands of the declared type.
+   No aggregate construction or user-defined compile-time function execution. *)
 (* Lexical configuration specialization; see docs/CONFIGURATION_CONSTANTS.md. *)
 annotation_configurable = "#", "(", "configurable", ")" ;
 constante_configurable = annotation_configurable, [ "pub" ], constante ;
@@ -229,7 +238,8 @@ construction        = nom_structure, "{", [ valeurs_champs ], "}"
                     | nom_enum, separateur_variante, identifiant, [ "{", [ valeurs_champs ], "}"
                                                   | "(", arguments, ")" ] ;
 valeurs_champs      = valeur_champ, { ",", valeur_champ }, [ "," ] ;
-valeur_champ        = identifiant, ":", expression ;
+valeur_champ        = identifiant, [ ":", expression ] ;
+(* { champ } is exactly { champ: champ }; normal RHS copy/move rules apply. *)
 (* Pool<T>::new(capacity) utilise un appel qualifié générique ordinaire.
    La capacité reste un entier statique strictement positif. *)
 initialisation_pool = initialiseur_structure_pool | valeurs_champs | expression ;

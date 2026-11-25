@@ -97,10 +97,9 @@ use std::Vector;
 
 fn main() {
     let count: i64 = 1000;
-    let mut vectors = Pool<Vector<i64>>::new(1);
 
     #(stack_region: max_size=64K, count=1) {
-        let mut numbers = vectors.new();
+        let mut numbers: Vector<i64> = Vector::new();
         let mut number: i64 = 0;
         while number < count {
             numbers.push(number);
@@ -113,12 +112,12 @@ fn main() {
 
 Sortie : `1000`. [Paquet complet](examples/features/budget/).
 
-- `Pool<Vector<i64>>::new(1)` fournit un slot de vecteur. Le `1` compte les objets vecteurs, pas leurs éléments.
+- `Vector::new()` crée le descripteur fixe ; ses éléments utilisent la région. Aucun pool n’est nécessaire pour ce vecteur autonome de données.
 - `#(stack_region: max_size=64K, count=1)` fixe la taille d’une région à 64 Kio et réserve une région pour ce scope. Les données grandissantes du vecteur utilisent cette région.
 - Un `i64` occupe huit octets : ce budget permet donc de stocker au plus 8 192 éléments. Augmenter le nombre d’entrées n’augmente pas la limite de la région.
 - Avec `push`, dépasser cette limite arrête le programme avec un diagnostic. La sortie du scope détruit le vecteur avant de rendre le stockage de sa région réutilisable.
 
-La limite porte sur le stockage des éléments ; le descripteur, le pool et les métadonnées du runtime disposent de leur propre stockage. Il ne s’agit pas d’une limite sur la mémoire totale du processus.
+La limite porte sur le stockage des éléments ; le descripteur et les métadonnées du runtime disposent de leur propre stockage. Il ne s’agit pas d’une limite sur la mémoire totale du processus.
 
 **L’annotation explicite est actuellement facultative.** Lorsqu’une taille est omise, Corbo utilise une borne déduite statiquement si elle est disponible, puis sa politique de régions configurée ou par défaut. Une valeur grandissante reste soumise à une limite de région finie. Cet exemple montre comment le développeur indique une limite précise directement dans le code.
 
@@ -353,7 +352,7 @@ Sortie : `22, 42, true`. [Paquet complet](examples/features/tuples/).
 
 #### Structures, constantes et modes du receveur
 
-La signature du receveur indique si une méthode l’emprunte, l’emprunte de manière mutable ou le consomme. Les constantes associées utilisent `Type::NAME`.
+La signature du receveur indique si une méthode l’emprunte, l’emprunte de manière mutable ou le consomme. Les constantes associées utilisent `Type::NAME`. Le raccourci `Self { file, groups }` équivaut à `Self { file: file, groups: groups }`, avec les mêmes règles de copie et de déplacement.
 
 <!-- example: methods -->
 ```rust
@@ -380,6 +379,14 @@ fn main() {
 ```
 
 Sortie : `42`. [Paquet complet](examples/features/methods/).
+
+Les constantes acceptent les littéraux primitifs et `&str`, la réutilisation
+d’autres constantes, les parenthèses et les opérations numériques vérifiées
+`+ - * / %`, `min(a, b)` et `max(a, b)`. Par exemple,
+`const GROUP_SIZE: usize = max(4096 * FRAME_SIZE, 8192);` déduit une borne statique
+d’une autre constante. Les valeurs dérivées suivent les overrides lexicaux ; un
+override explicite de la constante dérivée est prioritaire. Voir les
+[constantes configurables](docs/CONFIGURATION_CONSTANTS.md).
 
 <a id="enums"></a>
 
@@ -695,6 +702,8 @@ Sortie : `3`. [Paquet complet](examples/features/regions/).
 #### Vecteurs et extraction
 
 Le descripteur d’un vecteur a une taille fixe ; ses données contiguës grandissent dans le budget de sa région. Une insertion déplace un élément dans le vecteur. Une extraction le transfère au receveur.
+
+`Vector::new()` crée un vecteur autonome, comme dans l’exemple de budget mémoire ci-dessus. L’exemple suivant conserve l’API existante avec pool, qui prend aussi en charge l’indexation.
 
 <!-- example: vector -->
 ```rust

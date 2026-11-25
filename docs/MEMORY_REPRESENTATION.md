@@ -447,3 +447,29 @@ retain separate validity/protection edges. Generated closure capture records use
 the same field representation. Async summaries include owned captures, retained
 locals at suspension and results. Branch launches query these facts without
 changing ownership, lifetime or lock summaries.
+
+## Standalone regional collection summaries
+
+The standalone vector keeps its ordinary nominal identity in `CheckedValue.origin_call`.
+Its fixed descriptor contains runtime storage metadata, while `loan_parent` links to
+an immutable retained-member summary. The compiler records each moved element's
+checked value independently of that element's physical C storage.
+
+Current compiler encoding uses a `5012` summary and `5014` list entries. Each
+entry points to an immutable element snapshot and the next entry. Named field
+mappings remain available when an aggregate is extracted; an unnamed retained
+entry preserves any additional candidate dependencies. Moving the descriptor
+preserves this graph. Caller environments instantiate helper-function effects
+rather than treating the runtime address as ownership information.
+
+Straight-line extraction can remove a proven final insertion from the vector's
+summary. Conditional/repeated extraction retains a conservative may-own summary.
+The runtime still removes exactly one actual element, and clear/destruction
+clean up all remaining runtime elements before regional storage is released.
+This conservative representation can reject valid programs; it must not erase
+an unproven dependency merely because an extraction was syntactically present.
+
+In these internal tagged summaries, the `5012` marker's writable bit identifies
+retained collection members; it is not reference mutation permission. A `5014`
+member entry's writable bit records possible repeated insertion at its source
+site. Such an entry cannot be removed solely because one pop was observed.

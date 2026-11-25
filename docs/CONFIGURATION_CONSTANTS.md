@@ -61,8 +61,12 @@ package globally or changes an unrelated caller's configuration.
 Calls under an override use implementations specialized for the effective
 configuration, including internal helper calls. The compiler must carry the
 configuration through those calls, rather than resolve package constants once
-using their default declaration values. Derived constants, where supported by
-constant evaluation, are evaluated under the effective configuration.
+using their default declaration values. Derived default expressions are re-evaluated under the effective configuration.
+For example, overriding `FRAME_SIZE` changes the default
+`GROUP_SIZE = 4096 * Self::FRAME_SIZE`. Explicitly overriding `GROUP_SIZE` wins:
+that assigned value stays fixed in nested scopes even if `FRAME_SIZE` changes.
+All right-hand sides within one directive use its parent environment; assignments
+are simultaneous, not evaluated left to right against newly assigned values.
 
 This is compile-time specialization, not a dynamically scoped parameter and not
 a hidden runtime Limits object. The implementation may share identical code,
@@ -94,10 +98,37 @@ constants and their domain-specific meaning. See the complete
 
 ## Implementation scope
 
-corboc specializes declarations before ordinary verification/lowering. Current
-replacement expressions are literals or references to existing constants; this does
-not add arithmetic constant initializers or compile-time function execution.
-Named constants can supply fixed-array lengths and repetition counts.
+corboc specializes declarations before ordinary verification/lowering. Constant
+initializers and replacement expressions accept primitive/text literals,
+constant reuse, parentheses, unary minus and numeric `+ - * / %`, `min` and `max`.
+The declared type is a primitive or `&str`; references to constants require the
+same type. Text and bool support literal/reuse only. No user-defined compile-time
+calls, aggregates or owned collections are added. Invalid expressions, cycles,
+integer overflow and zero divisors receive compile-time diagnostics.
+Named integer constants can supply fixed-array lengths and repetition counts.
 The bounded implementation permits 256 marked constants and 256 environments per
-unit; exceeding compiler workspace is a diagnostic, not dynamic configuration.
-See [executed evidence](cycles/HTTP_CONFIGURATION_IMPLEMENTATION_CYCLE.md).
+unit, with a nesting/dependency limit of 128. Exceeding compiler workspace is a
+diagnostic, not dynamic configuration.
+
+```rust
+pub struct RawTable {
+    #(configurable)
+    pub const FRAME_SIZE: usize = 1024;
+
+    #(configurable)
+    pub const GROUP_SIZE: usize = max(4096 * Self::FRAME_SIZE, 8192);
+}
+
+const LABEL: &str = "table";
+const DISPLAY_LABEL: &str = LABEL;
+
+fn main() {
+    print(RawTable::GROUP_SIZE);
+    #(override: RawTable::FRAME_SIZE = 2048) {
+        print(RawTable::GROUP_SIZE); // 8388608
+    }
+    let label = DISPLAY_LABEL;
+    let bytes = label.as_bytes();
+    print(bytes.len());
+}
+```
