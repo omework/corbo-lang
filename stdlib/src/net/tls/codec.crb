@@ -295,44 +295,44 @@ pub struct Certificate {
     extension_ranges: [u64; 16];
 
     /// Parses a complete TLS Certificate handshake message and records the ranges in it.
-    fn from_message(input: &[u8]) Result<Certificate, HandshakeError> {
+    pub fn from_message(input: &[u8]) Result<Certificate, HandshakeError> {
         let size = input.len();
         if size < 8 || input[0] != 11 || get24(&input[0..size], 1) != size - 4 {
-            return Err(HandshakeError.Protocol);
+            return Err(HandshakeError::Protocol);
         }
         let context = input[4] as usize;
         let list = 8 + context;
         if size < list || get24(&input[0..size], 5 + context) != size - list {
-            return Err(HandshakeError.Protocol);
+            return Err(HandshakeError::Protocol);
         }
         decode_certificate_entries(&input[0..size], list, context as u64)
     }
 
     /// Returns the request context length in bytes.
-    fn context_length(&self) u64 { (*self).context_size }
+    pub fn context_length(&self) u64 { (*self).context_size }
 
     /// Returns the start and exclusive end of the request context.
-    fn context_range(&self) (u64, u64) {
+    pub fn context_range(&self) (u64, u64) {
         return (5, 5 + (*self).context_size);
     }
 
     /// Returns the number of certificate entries in the handshake message.
-    fn count(&self) u64 { (*self).entries }
+    pub fn count(&self) u64 { (*self).entries }
 
     /// Returns the start and exclusive end of the DER bytes for an entry.
-    fn der_range(&self, index: u64) (u64, u64) {
+    pub fn der_range(&self, index: u64) (u64, u64) {
         if index >= (*self).entries { return (0, 0); }
         return ((*self).der_ranges[2 * index], (*self).der_ranges[2 * index + 1]);
     }
 
     /// Returns the start and exclusive end of the encoded extensions for an entry.
-    fn extensions_range(&self, index: u64) (u64, u64) {
+    pub fn extensions_range(&self, index: u64) (u64, u64) {
         if index >= (*self).entries { return (0, 0); }
         return ((*self).extension_ranges[2 * index], (*self).extension_ranges[2 * index + 1]);
     }
 
     /// Checks the request context and entry extensions for the supported server profile.
-    fn supports_server_certificate(&self) bool {
+    pub fn supports_server_certificate(&self) bool {
         if (*self).context_size != 0 || (*self).entries == 0 { return false; }
         let mut i: u64 = 0;
         while i < (*self).entries {
@@ -345,12 +345,12 @@ pub struct Certificate {
     }
 
     /// Checks the received certificate against a configured pin and obtains the associated public key.
-    fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64)
+    pub fn server_key(&self, input: &[u8], anchor: &[u8], hostname: &[u8], now: i64)
                    Result<X509PublicKey, HandshakeError> {
         match validate_server_path(&input[0..input.len()], &(*self).der_ranges, (*self).entries,
                                      &anchor[0..anchor.len()], &hostname[0..hostname.len()], now) {
             Ok(key) => { Ok(key) },
-            Err(error) => { drop(error); Err(HandshakeError.Authentication) },
+            Err(error) => { drop(error); Err(HandshakeError::Authentication) },
         }
     }
 }
@@ -363,16 +363,16 @@ fn decode_certificate_entries(input: &[u8], start: usize, context_size: u64) Res
     let mut at = start;
     let mut count: u64 = 0;
     while at < size {
-        if count == 8 || size - at < 5 { return Err(HandshakeError.Protocol); }
+        if count == 8 || size - at < 5 { return Err(HandshakeError::Protocol); }
         let length = get24(&input[0..size], copy(at));
         let begin = at + 3;
-        if length == 0 || length > size - begin - 2 { return Err(HandshakeError.Protocol); }
+        if length == 0 || length > size - begin - 2 { return Err(HandshakeError::Protocol); }
         let end = begin + length;
         let extension_length = get16(&input[0..size], copy(end));
         let extension_start = end + 2;
-        if extension_length > size - extension_start { return Err(HandshakeError.Protocol); }
+        if extension_length > size - extension_start { return Err(HandshakeError::Protocol); }
         let next = extension_start + extension_length;
-        if !extensions_valid(&input[extension_start..next]) { return Err(HandshakeError.Protocol); }
+        if !extensions_valid(&input[extension_start..next]) { return Err(HandshakeError::Protocol); }
         let der_begin = &mut result.der_ranges[count * 2];
         *der_begin = begin as u64;
         let der_end = &mut result.der_ranges[count * 2 + 1];

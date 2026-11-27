@@ -1,3 +1,125 @@
+## Exhaustive C++ generation from PostAST
+
+- [x] Make the typed PostAST and physical memory plan the only C++ inputs.
+- [x] Inventory every `Operation` variant with an explicit backend disposition.
+- [x] Inventory nested type, predicate, call, iteration, async, foreign and runtime-check variants.
+- [x] Inventory native layouts, value storage, backing storage, datastacks, budgets, cursors and cleanup actions.
+- [x] Audit each concrete handoff before emission and reject leaked abstract-only representations.
+- [x] Emit control from execution moments/edges and storage from the physical plan without semantic re-resolution.
+- [x] Apply planned cleanup for `break`, `continue` and `return` paths.
+- [x] Keep the test suite as validation evidence rather than as the scope definition.
+
+## PostAST rule verification — current work
+
+- [x] Separate PostAST-only verifier and guarded-flow foundation.
+- [x] Initial consumers for N1–N8; 65 focused checks passed, including independent copy/drop ownership and the separate destruction hook/runtime chain.
+- [x] Correct completion, task ownership, assignment-effect and consuming-drop producer facts.
+- [x] Keep existing enum-copy eligibility and consuming drop semantics separate.
+- [ ] Establish or refuse consuming payload extraction using the fixed N1/N2/N7 obligations; do not invent new destruction semantics.
+- [ ] Finish dependency/effect/cleanup completeness and required-obligation accounting.
+- [ ] Audit the STD, validate regressions and publish the final rule matrix.
+
+[Current evidence and limits](cycles/RUST_POST_AST_RULE_VERIFICATION.md).
+
+## Rust semantic population — core grammar handoff
+
+- [x] Keep the syntax AST and original token/source streams intact.
+- [x] Use one canonical PostAST schema; architecture documents re-export it.
+- [x] Resolve module symbols, aliases, visibility and target selections from parsed package inputs.
+- [x] Resolve types, structural/OR contracts, concrete generic instances and configurations.
+- [x] Populate all 55 AST construct families listed in the grammar-to-PostAST mapping.
+- [x] Retain distinct assignment/operator operations, evaluated places and replacement snapshots.
+- [x] Resolve direct/method/callable calls, callable fields and temporary receivers through shared mechanisms.
+- [x] Retain closure capture environments, inactive async states, await/yield and named task types.
+- [x] Retain lexical/execution moments, branch relationships and symbolic loop instances.
+- [x] Retain projection provenance, dependency recipes, lifetime requirements and logical final destinations.
+- [x] Resolve effective constants under overrides into the artifact; do not defer constant lookup to consumers.
+- [x] Add an exhaustive Rust dispatch inventory and a successfully resolved multi-module grammar-family corpus.
+- [x] Validate the semantic handoff without running rule checking, physical planning or generation.
+
+Coverage here means semantic producers for grammar constructs, with focused
+composition regressions. It is not a proof that every well-typed program or every
+combination is accepted. STD API completeness is outside this checklist. Generic
+source bodies also have canonical parametric instances resolved from their declared
+contracts; downstream stages consume resolved instances and dependency applications.
+
+Executed evidence and boundaries: [semantic population report](cycles/RUST_SEMANTIC_POPULATION.md).
+
+## Whole-STD semantic audit
+
+- [x] All 107 STD sources lex and parse with preserved input.
+- [x] Fix HTTP Header field/method collisions; audit direct member collisions across the STD.
+- [x] Implement confirmed classical shadowing with separate binding/cleanup identities.
+- [x] Correct shared receiver/name lookup, nested type constraints and mixed-width shift counts.
+- [x] Resolve primitive/runtime bindings and preserve explicit suspension paths.
+- [x] Correct existing STD visibility and explicit numeric-conversion defects without weakening checks.
+- [x] Produce target-selected STD PostAST for Linux, macOS and Windows on x86-64 and ARM64.
+- [x] Make the whole-STD semantic audit a normal permanent regression.
+- [x] Resolve every active generic source definition symbolically, including unused definitions, without selecting sample types.
+- [x] Retain contract-call targets, forwarding evidence, abstract async protocols and parametric transfer/capture choices.
+- [x] Pass 72 focused semantic regressions, 2 grammar checks and the STD parser regression.
+
+Rule checking and code generation remain intentionally excluded. Generic bodies resolve against symbolic parameter identities. Each target selection
+is audited separately on the host; this is not native execution of those platforms.
+
+[Executed results and limits](cycles/RUST_STDLIB_SEMANTIC_AUDIT.md).
+
+## Typed PostAST architecture — review proposal, no engine
+
+- [x] Document requirements, stage handoffs, completeness criteria and open decisions.
+- [x] Write standalone Rust schema with explicit branch timelines, both moment types, execution phases and branch relationships.
+- [x] Map all 55 syntax NodeKind variants and 35 operator forms; define 110 distinct operation structs.
+- [x] Format/type-check the data definitions only; no production compiler integration.
+- [x] Define inference/lifetime population, rule evidence and final-destination/parent-caller reservation data contracts. [Pass contracts](architecture/POST_AST_PASS_CONTRACTS.md).
+- [x] Retain logical final destinations before rule checking, then physical reservations; remove deferred language-rule placement outcomes.
+- [x] Record instruction/declaration lexical moments, hierarchical loop/iteration occurrences, lexical-only declarations and one resolved body per concrete specialization.
+- [ ] Review field-level completeness and producer/invariant contracts before engine implementation.
+- [ ] Reconcile the reported historical N5 documentation contradiction before implementing the new verifier.
+- [ ] Implement resolution, invariant validation, rule checks and enrichment plans in separate subsequent work.
+
+[Approach and complete Rust proposal](architecture/POST_AST_APPROACH.md).
+
+## Alternative structural contracts — Rust syntax implementation
+
+- [x] Add `|` between nonempty complete structural contracts in the EBNF.
+- [x] Document OR semantics with one annotation-wide `with`; reject `with` after `|`.
+- [x] Represent alternatives as source-preserving AST nodes and implement annotation-wide with / OR parsing.
+- [x] Extend the independent contract oracle; generate 15 focused cases and retain readable fixtures/diagnostics. All 15 cases now match; eight accepted ASTs agree with the independent oracle. [Report](cycles/RUST_OR_CONTRACT_CASES.md).
+- [x] Restore generated-case parity: 847 derived cases, 566 mutations; all 106 STD files still parse.
+- [ ] Implement semantic matching separately; do not silently choose a first match.
+
+The syntax-only reference parser now accepts this extension. Semantic contract
+matching remains a later-stage task. No matching policy was silently selected.
+
+## Rust staged reference: lexer
+
+- [x] Keep lexical analysis independent of name resolution, type inference and rules.
+- [x] Preserve token spelling, decoded string payloads and exact source byte spans.
+- [x] Scan operators, tuple projections, ranges and opaque C/C++/assembly bodies.
+- [x] Pass foreign header tokens and operand spans forward without binding lookup.
+- [x] Run twelve focused lexer checks and compile the library/CLI in the existing cache.
+- [x] Document the stage contract and artifact reuse.
+- [x] Compare independent Logos rules and decoding: dispatcher plus 346 source files; zero differences.
+- [x] Audit existing parser boundary: declaration-name lookup and grammar drift recorded in [parser audit](cycles/RUST_PARSER_AUDIT.md).
+- [x] Implement source + original tokens + explicit syntax AST handoff and syntax-only parser.
+- [x] Parse dispatcher and five randomly sampled STD modules; all 106 STD files parse.
+- [x] Add permanent exhaustive STD regression: every source, original tokens, node/operand references, source spans and AST reachability; zero STD exceptions. [Audit](cycles/RUST_STDLIB_PARSER_AUDIT.md).
+- [x] Require :: for enum variants and migrate 672 separators in 50 STD files.
+- [x] Compare the initial 285 expression cases with independent LALRPOP; no differences in that subset.
+- [x] Record approved call-based assignment places and enforce only their syntax; whole STD still passes.
+- [x] Resolve declaration/annotation order: annotations precede pub; eleven declaration cases now match. [Decision record](cycles/RUST_PARSER_DECLARATION_ORDER.md).
+- [x] Finish a bare inner block before a following operator; ten independent block cases match, and the entire STD still parses. [Decision record](cycles/RUST_PARSER_BLOCK_OPERATOR.md).
+- [x] Separate carrier-contract parameter parsing from ordinary generic argument lists; seven contract cases match the written production.
+- [x] Restrict as targets to numeric type names; 307 expression cases now match, including casts before comparisons and rejected generic targets. [Evidence](cycles/RUST_PARSER_CAST_COMPARISON.md).
+- [x] Inventory all 160 remaining EBNF productions; derive 843 cases and compare 559 mutations with an independent chart recognizer. [Scope and limits](cycles/RUST_GRAMMAR_GENERATION.md).
+- [x] Implement the declared try_slice range-call form and compare six AST/acceptance cases with LALRPOP.
+- [x] Remove the unused champ_type, champs_types and place productions; all remaining productions are reachable, enforced by the regression.
+- [ ] Complete full-grammar oracle coverage and remaining written-grammar review; expression-only parity is not full parser conformance.
+- [ ] Later stages: establish typed PostAST, rule checking and C++ generation contracts.
+
+[Source and evidence](cycles/RUST_LEXER_STAGE.md). No parser or later-stage
+completion follows from the lexer results.
+
 ## File check targets and dependency watching
 
 - [x] Accept standalone and package-backed `.crb` targets with existing static verification.
@@ -1436,6 +1558,20 @@ Direct calls from a `fn` synchronous from a `async fn` are excluded
 The old lots that mention them describe the Python prototype.
 
 <a id="décisions-ouvertes-et-éléments-reportés"></a>
+
+## New PostAST physical memory planner
+
+- [x] Compute target layouts from resolved `TypeId` only.
+- [x] Reserve fixed values/descriptors in final-destination scope.
+- [x] Emit parent and caller reservations without reconstructing transfers.
+- [x] Share layout-compatible storage across proven exclusive branches.
+- [x] Place pool slots on the fixed stack and growing payloads in regions.
+- [x] Apply global/local sizes, `stack_region count`, dedicated overflow stacks,
+  inference and platform defaults.
+- [x] Translate verified destruction sequences before cursor/region recovery.
+- [x] Realize every named physical placement requirement or reject/incomplete.
+- [x] Audit planned-artifact integrity and all six target descriptions.
+- [ ] Feed `PlannedPostAst` into the future new-architecture C++ lowering stage.
 
 ## Open decisions and deferred items
 

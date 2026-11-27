@@ -174,24 +174,24 @@ pub fn decrypt_der(input: &[u8], password: &[u8], max_iterations: u32,
                    output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
     let enc = parse_envelope(&input[0..size]);
-    if enc.end == 0 { return Err(Error.InvalidEnvelope); }
-    if enc.iterations > max_iterations { return Err(Error.IterationLimit); }
+    if enc.end == 0 { return Err(Error::InvalidEnvelope); }
+    if enc.iterations > max_iterations { return Err(Error::IterationLimit); }
     let capacity = output.len();
     let width = enc.end - enc.start;
-    if width > capacity as u64 { return Err(Error.BufferTooSmall); }
+    if width > capacity as u64 { return Err(Error::BufferTooSmall); }
     let mut iv: [u8; 16] = [0; 16];
     drop(copy_der(&input[enc.iv..enc.iv + 16], &mut iv[..]));
     let mut key: [u8; 32] = [0; 32];
     match derive_sha256(password, &input[enc.salt_start..enc.salt_end], enc.iterations, &mut key[..]) {
-        Ok(()) => {}, Err(error) => { drop(error); return Err(Error.InvalidPasswordLength); },
+        Ok(()) => {}, Err(error) => { drop(error); return Err(Error::InvalidPasswordLength); },
     };
     let used = match cbc_decrypt_padded(&key, &iv, &input[enc.start..enc.end], &mut output[0..width]) {
-        Ok(used) => { used }, Err(error) => { drop(error); return Err(Error.InvalidPasswordOrData); },
+        Ok(used) => { used }, Err(error) => { drop(error); return Err(Error::InvalidPasswordOrData); },
     };
     if !valid_private_info(&output[0..used]) {
         let mut at: u64 = 0;
         while at < width { output[at] = 0; at = at + 1; }
-        return Err(Error.InvalidPasswordOrData);
+        return Err(Error::InvalidPasswordOrData);
     }
     Ok(used)
 }
@@ -244,27 +244,27 @@ fn write_algorithm(salt: &[u8], iv: &[u8], iterations: u32, width: u64, output: 
 /// The caller selects a nonzero iteration count and supplies the output buffer.
 pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32,
                    output: &mut [u8]) Result<usize, Error> {
-    if iterations == 0 { return Err(Error.InvalidIterations); }
+    if iterations == 0 { return Err(Error::InvalidIterations); }
     let size = input.len() as u64;
-    if size > 4294967040 || !valid_private_info(&input[0..size]) { return Err(Error.InvalidPrivateKey); }
+    if size > 4294967040 || !valid_private_info(&input[0..size]) { return Err(Error::InvalidPrivateKey); }
     let width = count_width(copy(iterations));
     let encrypted = size + 16 - size % 16;
     let algorithm = 95 + width;
     let body = algorithm + der_header_size(copy(encrypted)) + encrypted;
     let outer = der_header_size(copy(body));
     let total = outer + body;
-    if total > output.len() as u64 { return Err(Error.BufferTooSmall); }
+    if total > output.len() as u64 { return Err(Error::BufferTooSmall); }
     let mut salt: [u8; 16] = [0; 16];
     match fill(&mut salt[..]) {
-        Ok(()) => {}, Err(error) => { drop(error); return Err(Error.RandomFailed); },
+        Ok(()) => {}, Err(error) => { drop(error); return Err(Error::RandomFailed); },
     };
     let mut iv: [u8; 16] = [0; 16];
     match fill(&mut iv[..]) {
-        Ok(()) => {}, Err(error) => { drop(error); return Err(Error.RandomFailed); },
+        Ok(()) => {}, Err(error) => { drop(error); return Err(Error::RandomFailed); },
     };
     let mut key: [u8; 32] = [0; 32];
     match derive_sha256(password, &salt[..], copy(iterations), &mut key[..]) {
-        Ok(()) => {}, Err(error) => { drop(error); return Err(Error.InvalidPasswordLength); },
+        Ok(()) => {}, Err(error) => { drop(error); return Err(Error::InvalidPasswordLength); },
     };
     drop(write_der_header(48, body, &mut output[0..outer]));
     let mut at = outer + algorithm;
@@ -272,7 +272,7 @@ pub fn encrypt_der(input: &[u8], password: &[u8], iterations: u32,
     at = at + write_der_header(4, encrypted, &mut output[at..total]);
     match cbc_encrypt_padded(&key, &iv, &input[0..size], &mut output[at..total]) {
         Ok(used) => { drop(used); Ok(total as usize) },
-        Err(error) => { drop(error); Err(Error.BufferTooSmall) },
+        Err(error) => { drop(error); Err(Error::BufferTooSmall) },
     }
 }
 
@@ -291,7 +291,7 @@ pub fn encrypt_pem(input: &[u8], password: &[u8], iterations: u32,
     };
     let label = encrypted_label();
     match encode_pem(&scratch[0..used], &label[..], output) {
-        Ok(used) => { Ok(used) }, Err(error) => { drop(error); Err(Error.BufferTooSmall) },
+        Ok(used) => { Ok(used) }, Err(error) => { drop(error); Err(Error::BufferTooSmall) },
     }
 }
 
@@ -304,9 +304,9 @@ pub fn decrypt_pem(input: &[u8], password: &[u8], max_iterations: u32,
         Ok(used) => { decrypt_der(&scratch[0..used], password, max_iterations, output) },
         Err(error) => {
             match error {
-                PemError.BufferTooSmall => { Err(Error.BufferTooSmall) },
-                PemError.InvalidEnvelope => { Err(Error.InvalidEnvelope) },
-                PemError.InvalidBase64 => { Err(Error.InvalidEnvelope) },
+                PemError::BufferTooSmall => { Err(Error::BufferTooSmall) },
+                PemError::InvalidEnvelope => { Err(Error::InvalidEnvelope) },
+                PemError::InvalidBase64 => { Err(Error::InvalidEnvelope) },
             }
         },
     }

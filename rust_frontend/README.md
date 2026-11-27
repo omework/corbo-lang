@@ -4,39 +4,205 @@
 
 # Corbo Frontend Rust
 
-The crate exposes `frontend(source, mode)`. It produces tokens with
-their bytes positions, an indexed syntactic tree and a tree
-static with scopes, links and execution points. The facts
-structured include uses, named travels, catches,
-borrowings, pools, projections, calls, writings and exits.
-Types, sources and effects that require resolution
-semantics are established by a separate pass. The package loader uses the `toml` crate to read manifests. Modes `program`, `block` and
-`signature` stop at the tree.
+The reference syntax entry points are:
 
-From the root of the repository, compile and then display a tree.
+- `lexer::lex(&source)` → original tokens and decoded lexical payloads.
+- `parser::parse(source, tokens)` → `ParsedUnit { source, tokens, ast }`.
+- `parser::parse_expression(source, tokens)` → the same retained unit for an expression.
+- `parse_source(source)` → convenience composition that lexes once and parses once.
+
+The semantic-stage entry point is `semantic::resolve(parsed_unit)`. It populates
+canonical `post_ast` types and returns logical destinations with source, type,
+provenance and timeline facts. `semantic::validate_population` checks structural
+handoff integrity. Neither entry point invokes the rule checker or backend.
+
+The separate `rule_check::verify(logical_result)` consumes the resolved PostAST
+and returns `RuleAnalysisResult`; it does not invoke semantic resolution or a
+backend. This new verifier is **under implementation**; existing implicit-copy and
+consuming-drop rules are preserved. Read the
+[current verifier report](../docs/cycles/RUST_POST_AST_RULE_VERIFICATION.md)
+before interpreting a verdict. The legacy `check` command is unchanged.
+
 
 ```sh
-CARGO_TARGET_DIR=build/rust_frontend cargo build --offline --manifest-path rust_frontend/Cargo.toml
-printf '%s\n' 'fn main() { print(7); }' | build/rust_frontend/debug/corbo-frontend program
+cargo run --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target -- resolve < example.crb
 ```
 
-Modes `block` and `signature` read autonomous fragments.
-Mode `--batch` is used for comparison with the corpus.
+The semantic stage has a grammar-family coverage inventory and a whole-STD audit. Read the
+[coverage and limitations report](../docs/cycles/RUST_SEMANTIC_POPULATION.md)
+before using its output. The legacy `check`/`build` path still uses its old pipeline;
+it has not been migrated to the new PostAST.
+
+For parsed packages, `semantic::resolve_package_for_target(modules, target)`
+selects imports/declarations using explicit target facts before resolution.
+Generic source bodies have canonical parametric instances resolved from their
+contracts, without enumerating concrete specializations. The permanent STD audit
+covers Linux/macOS/Windows on x86-64 and ARM64 through semantic PostAST only:
 
 ```sh
-python3 validation/build_representation_corpus.py
-python3 validation/compare_rust_frontend.py
+cargo test --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target --test semantic_stdlib -- --nocapture
 ```
 
-The comparator produces `build/rust_frontend_comparison.jsonl`.
-It compares the following of the standardized leximes, the parents and lines
-d-input of the telescopes, the names of the local links in their order,
-accounts for borrowings, pools, candidate addresses and
-named trips, and the links of these trips.
-See [cycle report]](../docs/cycles/CORE_COMPOSITION_CYCLE.md#frontend-rust-et-comparaison-du-corpus)
-for deviations and limitations of this comparison.
+Per-target reports and `semantic-stdlib-matrix.json` reuse `rust_frontend/target`.
+See the [STD semantic report](../docs/cycles/RUST_STDLIB_SEMANTIC_AUDIT.md).
 
-<a id="vérification-et-génération-c"></a>
+The AST is defined in `src/ast.rs`. It records unresolved names, written type
+syntax, annotations, declarations and expression/statement structure with source
+spans. It contains no symbol resolutions, inferred types or rule proofs. Token
+ranges and sub-token references preserve generic closers without changing the
+original lexer stream. Parsed foreign includes point into the existing lexical
+payload, so downstream code does not need to parse the header again.
+
+```sh
+cargo build --offline --manifest-path rust_frontend/Cargo.toml --target-dir rust_frontend/target
+rust_frontend/target/debug/corbo-frontend parse < path/to/source.crb
+```
+
+`parse` is the default CLI mode and prints the retained source, tokens and AST for
+inspection. It does not load imports, choose target branches, construct the legacy
+static tree, verify rules or generate code.
+
+### Parser validation
+
+```sh
+cargo test --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target --features parser-oracle \
+  --test parser_stage --test parser_lalrpop --test lexer_logos -- --nocapture
+```
+
+The opt-in `parser-oracle` feature generates an independent LALRPOP expression
+parser; normal parser builds do not need LALRPOP. The oracle covers expression,
+block-boundary, declaration-order, structural-contract and range-call subsets,
+not complete module-level grammar parity. The five-module random STD
+sample uses recorded seed 20261126 in `validation/parser_std_sample.json`.
+See [the parser report](../docs/cycles/RUST_PARSER_STAGE.md).
+
+### Permanent entire-STD regression
+
+`tests/parser_stdlib.rs` recursively discovers every STD `.crb` file. Every input
+must parse and preserve its original source/tokens, with valid reachable AST nodes,
+child references and token views. There are no expected-rejection exemptions.
+
+```sh
+cargo test --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target --features parser-oracle \
+  --test parser_stdlib -- --nocapture
+```
+
+Per-file results reuse `rust_frontend/target/parser-stdlib.json`.
+See [the whole-STD audit](../docs/cycles/RUST_STDLIB_PARSER_AUDIT.md).
+
+### Structural-contract alternatives
+
+The syntax parser accepts one annotation-wide `with` followed by nonempty method
+sets separated by `|`. It retains explicit alternative nodes, signature/type
+nodes, source spans, braces and separator TokenRefs. Bare `#(type: T)` remains
+unconstrained. This does not implement semantic contract matching.
+
+The generated OR cases compare acceptance and normalized contract ASTs against
+independent LALRPOP output. See [the implementation report](../docs/cycles/RUST_OR_CONTRACT_CASES.md).
+
+### Grammar-derived coverage
+
+`tests/grammar_coverage.rs` reads `CORE_GRAMMAR.ebnf` and generates complete
+programs for reachable productions, alternatives, optional parts and bounded
+repetitions. An independent chart recognizer checks derivations and classifies
+terminal-deletion mutations before comparison with the Rust parser. Source/token
+preservation and AST integrity are audited as well.
+
+```sh
+cargo test --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target --test grammar_coverage -- --nocapture
+```
+
+The JSON inventory and generated source reuse
+`rust_frontend/target/parser-grammar-coverage.json`. This is bounded structural
+coverage, not full AST or semantic conformance. See
+[results and limitations](../docs/cycles/RUST_GRAMMAR_GENERATION.md).
+
+### Typed PostAST architecture proposal
+
+The next-stage data architecture is proposed in
+[POST_AST_APPROACH.md](../docs/architecture/POST_AST_APPROACH.md), with the complete
+[standalone Rust schema](../docs/architecture/post_ast.rs) and AST/operator mapping
+inventories. It is not imported by this compiler and contains no resolution,
+verification or code-generation engine. Timelines and both moment types are
+explicit, including hierarchical loop/iteration occurrences. The retained order
+is logical final destinations, rule checking, then physical memory planning.
+[Pass contracts](../docs/architecture/POST_AST_PASS_CONTRACTS.md) describe the data
+handoffs; no resolution engine is integrated.
+
+### Legacy pipeline
+
+The previous mixed parser is retained as `legacy_parser`. Existing `frontend`,
+`parse_for_target`, `program`, `block`, `signature`, `check`, `emit-c`, `build` and
+historical batch operations still use that legacy pipeline. They are not the
+reference syntax-only entry points. Their old checker/backend behavior is not
+established by the parser-stage results, and they must be migrated separately.
+
+## Reference lexer: source → tokens
+
+Rust is again the reference implementation for the staged compiler work.
+The lexical and syntax-only parser stages have been revised. The older
+legacy_parser, static-tree construction, verifier and C generator remain legacy stages;
+they are not evidence of alignment with the current grammar or of a completed
+typed PostAST. Their migration is separate work.
+
+`lexer::lex(&str)` returns tokens with half-open UTF-8 byte spans and an explicit
+EOF token. Each token retains its original spelling through `Token::text(source)`.
+Strings carry decoded UTF-8 bytes in `Payload::Text`; numeric spelling is retained
+without selecting a numeric type or checking a machine range. Identifier-shaped
+words, including keywords, have `Kind::Name`; the parser matches keyword terminals
+by spelling. There is no declaration lookup in the lexer.
+
+Operators use longest matching, including `>>`, `>=` and `>>=`. The lexer does not
+split generic closing brackets based on type context. Decimal floats, ranges and
+numeric tuple projections remain distinct. The preceding token's lexical spelling
+is used to distinguish a leading-dot float from a tuple-access dot; no binding or
+type information is used. Scientific notation has no dedicated literal token.
+Historical `->` can still be tokenized; whether syntax accepts it is a parser task.
+
+`@c`, `@c++` and `@asm` preserve opaque foreign bodies, original-source header/body spans,
+and the spans of `${name}` placeholders. Foreign header tokens are supplied with
+absolute offsets, avoiding header re-lexing by the parser. Strings, raw C++ strings,
+line comments and block comments shield braces and placeholders. This is lexical
+boundary scanning, not validation of foreign instructions or C++ statements.
+Whether a foreign block is enclosed in `@unchecked` is not checked here.
+
+The lexer reports lexical errors with byte offsets. It does not resolve names,
+infer types, enforce borrowing, select a compilation target, evaluate annotations,
+or verify language rules. String payload consumption by legacy later stages has
+not been migrated in this pass; those stages still contain decoding helpers.
+
+Use the existing target directory for builds and focused validation:
+
+```sh
+cargo test --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target lexer::tests
+```
+
+Cargo fingerprints decide when recompilation is needed. Do not make timestamped
+build trees, clean the cache routinely, or build release/cross-target variants for
+this source-only stage. See [the lexer cycle report](../docs/cycles/RUST_LEXER_STAGE.md).
+
+### Independent Logos comparison
+
+The test-only oracle is in `tests/support/logos_oracle.rs`; its generated rules
+and serde_json decoding do not call the production scanner or its helpers.
+
+```sh
+cargo test --offline --manifest-path rust_frontend/Cargo.toml \
+  --target-dir rust_frontend/target --test lexer_logos -- --nocapture
+```
+
+Set `CORBO_LEXER_CASE` to select a real source file for the dispatcher test.
+Otherwise it uses the sibling SubDB checkout when present. The corpus test uses
+STD/runtime/examples and sibling compiler/SubDB sources when available. Reports
+reuse `rust_frontend/target/lexer-logos-{dispatcher,corpus}.json`. Every corpus
+mismatch is recorded for investigation; agreement is not proof of correctness.
+See [the comparison report](../docs/cycles/RUST_LEXER_LOGOS.md).
 
 ## Verification and generation C
 
@@ -45,8 +211,8 @@ for deviations and limitations of this comparison.
 the standard output. The generator receives a `VerifiedProgram`.
 
 ```sh
-build/rust_frontend/debug/corbo-frontend check < programme.crb
-build/rust_frontend/debug/corbo-frontend emit-c < programme.crb > programme.c
+rust_frontend/target/debug/corbo-frontend check < programme.crb
+rust_frontend/target/debug/corbo-frontend emit-c < programme.crb > programme.c
 cc -std=c11 -pthread programme.c -lm -o programme
 ```
 

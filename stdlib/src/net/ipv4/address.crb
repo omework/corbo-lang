@@ -7,7 +7,7 @@ pub struct Addr {
     bits: u32;
 
     /// Packs four IPv4 octets in network order.
-    fn new(a: u8, b: u8, c: u8, d: u8) Addr {
+    pub fn new(a: u8, b: u8, c: u8, d: u8) Addr {
         Addr { bits: ((a as u32) << 24) | ((b as u32) << 16) | ((c as u32) << 8) | (d as u32) }
     }
 }
@@ -20,18 +20,18 @@ pub struct SocketAddr {
     port_number: u16;
 
     /// Pairs an IPv4 address with the supplied port number.
-    fn new(ip: Addr, port: u16) SocketAddr {
+    pub fn new(ip: Addr, port: u16) SocketAddr {
         SocketAddr { bits: ip.bits, port_number: port }
     }
 
     /// Returns the address with the first IPv4 octet in the high byte.
-    fn ipv4_bits(&self) u32 { (*self).bits }
+    pub fn ipv4_bits(&self) u32 { (*self).bits }
 
     /// Returns the socket endpoint's port number.
-    fn port(&self) u16 { (*self).port_number }
+    pub fn port(&self) u16 { (*self).port_number }
 
     /// Parses an IPv4 endpoint written as four decimal octets, a colon and a decimal port.
-    fn parse(text: &str) Result<SocketAddr, ParseError> {
+    pub fn parse(text: &str) Result<SocketAddr, ParseError> {
         let bytes = text.as_bytes();
         let mut index: usize = 0;
         let mut octets: usize = 0;
@@ -44,15 +44,15 @@ pub struct SocketAddr {
             if byte >= 48 && byte <= 57 {
                 let limit: u16 = if octets == 4 { 65535 } else { 255 };
                 let digit = byte as u16 - 48;
-                if value > (limit - digit) / 10 { return Err(ParseError.InvalidAddress); }
+                if value > (limit - digit) / 10 { return Err(ParseError::InvalidAddress); }
                 value = value * 10 + digit;
                 has_digit = true;
             } else {
-                if !has_digit || octets == 4 { return Err(ParseError.InvalidAddress); }
+                if !has_digit || octets == 4 { return Err(ParseError::InvalidAddress); }
                 if octets == 3 {
-                    if byte != 58 { return Err(ParseError.InvalidAddress); }
+                    if byte != 58 { return Err(ParseError::InvalidAddress); }
                 } else {
-                    if byte != 46 { return Err(ParseError.InvalidAddress); }
+                    if byte != 46 { return Err(ParseError::InvalidAddress); }
                 }
                 ip = (ip << 8) | (value as u32);
                 octets += 1;
@@ -62,7 +62,7 @@ pub struct SocketAddr {
             index += 1;
         }
 
-        if octets != 4 || !has_digit { return Err(ParseError.InvalidAddress); }
+        if octets != 4 || !has_digit { return Err(ParseError::InvalidAddress); }
         Ok(from_parts(ip, value))
     }
 }

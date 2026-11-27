@@ -77,44 +77,82 @@ impl Checker<'_> {
     }
 
     pub(super) fn pipeline_candidate(&self, mut id: NodeId) -> bool {
-        if self.is_pipeline(id) { return true; }
-        while self.node(id).kind == "groupe" { id = self.node(id).children[0]; }
+        if self.is_pipeline(id) {
+            return true;
+        }
+        while self.node(id).kind == "groupe" {
+            id = self.node(id).children[0];
+        }
         if self.node(id).kind == "appel méthode" && self.name(id) == Some("map") {
             return self.pipeline_candidate(self.node(id).children[0]);
         }
         let ty = if self.node(id).kind == "nom" {
-            self.uses.get(&id).and_then(|binding| self.slots[binding.0]).map(|slot| slot.ty)
+            self.uses
+                .get(&id)
+                .and_then(|binding| self.slots[binding.0])
+                .map(|slot| slot.ty)
         } else if self.node(id).kind == "appel" {
             let callee = self.node(self.node(id).children[0]);
             if callee.kind == "nom qualifié" {
-                let owner = &self.source[self.tree.tokens[callee.start].span.start..self.tree.tokens[callee.start].span.end];
-                let method = &self.source[self.tree.tokens[callee.end - 1].span.start..self.tree.tokens[callee.end - 1].span.end];
-                self.structure_names.get(owner)
+                let owner = &self.source[self.tree.tokens[callee.start].span.start
+                    ..self.tree.tokens[callee.start].span.end];
+                let method = &self.source[self.tree.tokens[callee.end - 1].span.start
+                    ..self.tree.tokens[callee.end - 1].span.end];
+                self.structure_names
+                    .get(owner)
                     .and_then(|layout| self.methods.get(&(*layout, method)))
                     .map(|(index, _)| self.signatures[*index].result)
             } else {
-                self.name(self.node(id).children[0]).and_then(|name| self.names.get(name))
+                self.name(self.node(id).children[0])
+                    .and_then(|name| self.names.get(name))
                     .map(|&index| self.signatures[index].result)
             }
-        } else { None };
+        } else {
+            None
+        };
         matches!(ty, Some(Ty::Struct(layout)) if self.methods.contains_key(&(layout, "next"))
             && !self.methods.contains_key(&(layout, "map")) && !self.methods.contains_key(&(layout, "collect")))
     }
 
-    fn own_pipeline_source(&mut self, id: NodeId, value: Value, out: &mut Vec<Instr>) -> Result<Value, Error> {
-        let Ty::Struct(layout) = value.ty else { return Err(self.error(id, "source itérable attendue")); };
-        if self.pipeline_stages.contains_key(&layout) { return Ok(value); }
+    fn own_pipeline_source(
+        &mut self,
+        id: NodeId,
+        value: Value,
+        out: &mut Vec<Instr>,
+    ) -> Result<Value, Error> {
+        let Ty::Struct(layout) = value.ty else {
+            return Err(self.error(id, "source itérable attendue"));
+        };
+        if self.pipeline_stages.contains_key(&layout) {
+            return Ok(value);
+        }
         let Some(&(next, true)) = self.methods.get(&(layout, "next")) else {
             return Err(self.error(id, "next(&mut self) requis"));
         };
         let signature = &self.signatures[next];
-        let expected = Ty::Ref { target: Referent::Aggregate(layout), mutable: true };
-        if signature.asynchronous || !matches!(signature.parameters.as_slice(), [(_, ty)] if *ty == expected) {
+        let expected = Ty::Ref {
+            target: Referent::Aggregate(layout),
+            mutable: true,
+        };
+        if signature.asynchronous
+            || !matches!(signature.parameters.as_slice(), [(_, ty)] if *ty == expected)
+        {
             return Err(self.error(id, "next(&mut self) synchrone requis"));
         }
-        let item = self.options.iter().find_map(|&(item, option)| (signature.result == Ty::Struct(option)).then_some(item))
+        let item = self
+            .options
+            .iter()
+            .find_map(|&(item, option)| (signature.result == Ty::Struct(option)).then_some(item))
             .ok_or_else(|| self.error(id, "next doit retourner Option<T>"))?;
-        Ok(self.pipeline_stage(Stage::Owned { source: value.ty, next, item }, vec![value], out))
+        Ok(self.pipeline_stage(
+            Stage::Owned {
+                source: value.ty,
+                next,
+                item,
+            },
+            vec![value],
+            out,
+        ))
     }
 
     fn pipeline_stage(&mut self, stage: Stage, fields: Vec<Value>, out: &mut Vec<Instr>) -> Value {
@@ -126,8 +164,13 @@ impl Checker<'_> {
                 let layout = self.structures.len();
                 let (name, ty) = stage.field();
                 let mut layout_fields = vec![(name.into(), ty)];
-                layout_fields.extend(fields.iter().skip(1).enumerate()
-                    .map(|(index, value)| (format!("@capture{index}"), value.ty)));
+                layout_fields.extend(
+                    fields
+                        .iter()
+                        .skip(1)
+                        .enumerate()
+                        .map(|(index, value)| (format!("@capture{index}"), value.ty)),
+                );
                 self.structures.push(Structure {
                     destructor: None,
                     fields: layout_fields,
@@ -144,7 +187,9 @@ impl Checker<'_> {
             self.append_value_origins(&mut origins, field, &[Position::Field(index)]);
         }
         let mut value = self.emit(
-            Ty::Struct(layout), Expr::Construct(fields.into_iter().enumerate().collect()), out,
+            Ty::Struct(layout),
+            Expr::Construct(fields.into_iter().enumerate().collect()),
+            out,
         );
         value.dependencies.loan = (!origins.is_empty()).then(|| self.intern(origins));
         value.finish_evaluation(out)
@@ -195,7 +240,12 @@ impl Checker<'_> {
         ))
     }
 
-    fn compile_mapper(&mut self, id: NodeId, input: Ty, captures: &[(BindingId, Ty)]) -> Result<(usize, Ty), Error> {
+    fn compile_mapper(
+        &mut self,
+        id: NodeId,
+        input: Ty,
+        captures: &[(BindingId, Ty)],
+    ) -> Result<(usize, Ty), Error> {
         let closure = self.node(id);
         if closure.kind != "closure" {
             return Err(self.error(id, "map exige une closure littérale"));
@@ -235,7 +285,10 @@ impl Checker<'_> {
         // generated function owns its ordinary item argument.
         let mut formal = vec![(binding, input)];
         formal.extend_from_slice(captures);
-        let captured = captures.iter().map(|&(binding, _)| binding).collect::<Vec<_>>();
+        let captured = captures
+            .iter()
+            .map(|&(binding, _)| binding)
+            .collect::<Vec<_>>();
         let slots = std::mem::replace(&mut self.slots, vec![None; self.tree.bindings.len()]);
         let loops = std::mem::take(&mut self.loops);
         let pending = std::mem::take(&mut self.pending);
@@ -266,7 +319,12 @@ impl Checker<'_> {
                 }])
             });
             self.slots[binding.0] = Some(Slot {
-                ty, state: State::Live, loan, awaited_loan: None, vector_len: None, field_lengths: None,
+                ty,
+                state: State::Live,
+                loan,
+                awaited_loan: None,
+                vector_len: None,
+                field_lengths: None,
             });
         }
         let mut instructions = Vec::new();
@@ -328,8 +386,13 @@ impl Checker<'_> {
             unreachable!()
         };
         let input = self.pipeline_stages[&previous].item();
-        let bindings = self.tree.captures.iter().filter(|capture| capture.closure == mapper)
-            .map(|capture| capture.source).collect::<Vec<_>>();
+        let bindings = self
+            .tree
+            .captures
+            .iter()
+            .filter(|capture| capture.closure == mapper)
+            .map(|capture| capture.source)
+            .collect::<Vec<_>>();
         let moves_captures = self.name(mapper) == Some("move");
         let mut captures = Vec::new();
         let mut fields = vec![prior];
@@ -415,18 +478,31 @@ impl Checker<'_> {
                 result.dependencies.awaited_loan = awaited_loan;
                 Ok(result.finish_evaluation(out))
             }
-            Stage::Owned { source: Ty::Struct(source), next, .. } => {
-                let ty = Ty::Ref { target: Referent::Aggregate(source), mutable: true };
+            Stage::Owned {
+                source: Ty::Struct(source),
+                next,
+                ..
+            } => {
+                let ty = Ty::Ref {
+                    target: Referent::Aggregate(source),
+                    mutable: true,
+                };
                 let mut reference = self.emit(ty, Expr::BorrowField(stage, 0), out);
-                let mut origins = self.selected_origins(stage.dependencies.loan, &[Position::Field(0)]);
+                let mut origins =
+                    self.selected_origins(stage.dependencies.loan, &[Position::Field(0)]);
                 if let Some(parent) = parent {
-                    for origin in &mut origins { origin.parent = Some(parent); }
+                    for origin in &mut origins {
+                        origin.parent = Some(parent);
+                    }
                 }
                 reference.dependencies.loan = (!origins.is_empty()).then(|| self.intern(origins));
                 let reference = reference.finish_evaluation(out);
                 let (loan, awaited_loan) = self.call_effects(id, next, &[reference])?;
-                let mut result = self.emit(self.signatures[next].result,
-                    Expr::Call(next, vec![reference], CallKind::Pipeline), out);
+                let mut result = self.emit(
+                    self.signatures[next].result,
+                    Expr::Call(next, vec![reference], CallKind::Pipeline),
+                    out,
+                );
                 result.dependencies.loan = loan;
                 result.dependencies.awaited_loan = awaited_loan;
                 Ok(result.finish_evaluation(out))
@@ -457,16 +533,22 @@ impl Checker<'_> {
                 let argument = self.take_propagation_payload(option, 1, input, &mut yes);
                 let mut arguments = vec![argument];
                 let captured = self.generated_functions[mapper - self.signatures.len()]
-                    .as_ref().unwrap().parameters[1..].to_vec();
+                    .as_ref()
+                    .unwrap()
+                    .parameters[1..]
+                    .to_vec();
                 for (index, (_, ty)) in captured.into_iter().enumerate() {
                     let field = index + 1;
                     let mut capture = self.emit(
-                        Ty::Ref { target: ty.referent().unwrap(), mutable: true },
-                        Expr::BorrowField(stage, field), &mut yes,
+                        Ty::Ref {
+                            target: ty.referent().unwrap(),
+                            mutable: true,
+                        },
+                        Expr::BorrowField(stage, field),
+                        &mut yes,
                     );
-                    capture.dependencies.loan = self.selected_loan(
-                        stage.dependencies.loan, &[Position::Field(field)],
-                    );
+                    capture.dependencies.loan =
+                        self.selected_loan(stage.dependencies.loan, &[Position::Field(field)]);
                     arguments.push(capture.finish_evaluation(&mut yes));
                 }
                 let mapped = self.apply_mapper(id, mapper, item, arguments, &mut yes)?;
@@ -508,11 +590,7 @@ impl Checker<'_> {
         }
         let loan = self.native_output_loan(id, index, &arguments)?;
         let origins = self.origins(loan).to_vec();
-        let mut result = self.emit(
-            item,
-            Expr::Call(mapper, arguments, CallKind::Pipeline),
-            out,
-        );
+        let mut result = self.emit(item, Expr::Call(mapper, arguments, CallKind::Pipeline), out);
         self.unpack_output(&mut result, origins);
         Ok(result.finish_evaluation(out))
     }
@@ -527,7 +605,10 @@ impl Checker<'_> {
             unreachable!()
         };
         if self.dependent_handle(stage.ty, stage.dependencies.loan) {
-            return Err(self.error(id, "collect abandonnerait une tâche capturée par le pipeline"));
+            return Err(self.error(
+                id,
+                "collect abandonnerait une tâche capturée par le pipeline",
+            ));
         }
         let item = self.pipeline_stages[&layout].item();
         let pending = self.pending.len();
@@ -571,11 +652,15 @@ impl Checker<'_> {
                 self.origins(stage.dependencies.loan)
                     .iter()
                     .any(|source_origin| {
-                        source_origin.storage && source_origin.root == item_origin.root
+                        source_origin.storage
+                            && source_origin.root == item_origin.root
                             && (item_origin.opaque
                                 || item_origin.capture_exclusive
                                 || self.has_exclusive_dependencies(item.ty)
-                                || self.handle_origin(item.ty, &self.dependencies.paths[item_origin.at.0])
+                                || self.handle_origin(
+                                    item.ty,
+                                    &self.dependencies.paths[item_origin.at.0],
+                                )
                                 || source_origin.opaque
                                 || !self.shared_dependency_at(
                                     stage.ty,

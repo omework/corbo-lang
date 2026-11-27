@@ -1,0 +1,19 @@
+// Borrowing an enum payload suspends the parent borrow while the child is used.
+struct Item {
+    value: i64;
+}
+
+enum Packet {
+    Stored(Item);
+
+    fn value(&mut self) i64 {
+        match self {
+            Packet::Stored(item) => { item.value }
+        }
+    }
+}
+
+fn main() {
+    let mut packet = Packet::Stored(Item { value: 42 });
+    let observed = packet.value();
+}

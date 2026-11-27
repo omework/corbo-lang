@@ -55,14 +55,14 @@ pub enum Version {
 /// A field view borrows its message's header storage; duplicates stay distinct.
 pub struct Header {
     /// ASCII field name, preserving its spelling.
-    name: &str;
+    field_name: &str;
     /// Field value bytes with surrounding SP/HTAB removed.
-    value: &[u8];
+    field_value: &[u8];
 
     /// Returns the validated ASCII field name.
-    fn name(&self) &str { (*self).name }
+    fn name(&self) &str { (*self).field_name }
     /// Borrows the original field value bytes, without UTF-8 interpretation.
-    fn value(&self) &[u8] { &*(*self).value }
+    fn value(&self) &[u8] { &*(*self).field_value }
 }
 
 
@@ -100,7 +100,7 @@ pub struct Headers {
         while value_end > value_start && (bytes[value_end - 1] == 32 || bytes[value_end - 1] == 9) { value_end -= 1; }
         let name = ascii(&bytes[start..name_end]);
         let value = &bytes[value_start..value_end];
-        Some(Header { name: name, value: value })
+        Some(Header { field_name: name, field_value: value })
     }
 }
 
@@ -226,10 +226,10 @@ pub struct BodyReader<R, E> {
         let reader = &mut *(*self).source;
         let count = match reader.read(&mut byte[..]) {
             Ok(count) => { count },
-            Err(error) => { return Err(ParseError.Read { error: error }); },
+            Err(error) => { return Err(ParseError::Read { error: error }); },
         };
         if count == 0 { return Ok(None); }
-        if count != 1 { return Err(ParseError.InvalidReadCount); }
+        if count != 1 { return Err(ParseError::InvalidReadCount); }
         Ok(Some(byte[0]))
     }
 
@@ -241,22 +241,22 @@ pub struct BodyReader<R, E> {
                 Some(byte) => { byte },
                 None => {
                     if length == 0 { return Ok(None); }
-                    return Err(ParseError.UnexpectedEof);
+                    return Err(ParseError::UnexpectedEof);
                 },
             };
             if byte == 13 {
                 match self.one()? {
-                    Some(next) => { if next != 10 { return Err(ParseError.InvalidHeader); } },
-                    None => { return Err(ParseError.UnexpectedEof); },
+                    Some(next) => { if next != 10 { return Err(ParseError::InvalidHeader); } },
+                    None => { return Err(ParseError::UnexpectedEof); },
                 }
                 return Ok(Some(copy(length)));
             }
-            if byte == 10 { return Err(ParseError.InvalidHeader); }
-            if length == output.len() { return Err(ParseError.LineTooLong); }
+            if byte == 10 { return Err(ParseError::InvalidHeader); }
+            if length == output.len() { return Err(ParseError::LineTooLong); }
             output[length] = byte;
             length += 1;
         }
-            Err(ParseError.UnexpectedEof)
+            Err(ParseError::UnexpectedEof)
     }
 
     /// Reads a bounded section into owned storage, retaining repeated field lines.
@@ -264,13 +264,13 @@ pub struct BodyReader<R, E> {
         let mut result = Headers { bytes: [0; HEADERS_MAX_SIZE], used: 0, count: 0 };
         while true {
             let at = result.used;
-            if HEADERS_MAX_SIZE - at < 2 { return Err(ParseError.HeadersTooLarge); }
+            if HEADERS_MAX_SIZE - at < 2 { return Err(ParseError::HeadersTooLarge); }
             let remaining = HEADERS_MAX_SIZE - at - 2;
             let limit = if remaining < HEADER_LINE_MAX_SIZE { remaining } else { HEADER_LINE_MAX_SIZE };
             let parsed = self.line(&mut result.bytes[at..at + limit])?;
             let count = match parsed {
                 Some(count) => { count },
-                None => { return Err(ParseError.UnexpectedEof); },
+                None => { return Err(ParseError::UnexpectedEof); },
             };
             let destination = &mut result.bytes[..];
             destination[at + count] = 13;
@@ -278,12 +278,12 @@ pub struct BodyReader<R, E> {
             let used = &mut result.used;
             *used = at + count + 2;
             if count == 0 { return Ok(result); }
-            if !field_valid(&result.bytes[at..at + count]) { return Err(ParseError.InvalidHeader); }
-            if result.count == HEADER_COUNT_MAX { return Err(ParseError.TooManyHeaders); }
+            if !field_valid(&result.bytes[at..at + count]) { return Err(ParseError::InvalidHeader); }
+            if result.count == HEADER_COUNT_MAX { return Err(ParseError::TooManyHeaders); }
             let count_field = &mut result.count;
             *count_field = *count_field + 1;
         }
-            Err(ParseError.UnexpectedEof)
+            Err(ParseError::UnexpectedEof)
     }
 
     /// Reads a body prefix; empty output causes no transport access.
@@ -293,12 +293,12 @@ pub struct BodyReader<R, E> {
             if (*self).delimiter {
                 let a = self.one()?;
                 let b = self.one()?;
-                match a { Some(byte) => { if byte != 13 { return Err(ParseError.InvalidChunk); } }, None => { return Err(ParseError.UnexpectedEof); }, }
-                match b { Some(byte) => { if byte != 10 { return Err(ParseError.InvalidChunk); } }, None => { return Err(ParseError.UnexpectedEof); }, }
+                match a { Some(byte) => { if byte != 13 { return Err(ParseError::InvalidChunk); } }, None => { return Err(ParseError::UnexpectedEof); }, }
+                match b { Some(byte) => { if byte != 10 { return Err(ParseError::InvalidChunk); } }, None => { return Err(ParseError::UnexpectedEof); }, }
                 let delimiter = &mut (*self).delimiter; *delimiter = false;
             }
             let mut buffer: [u8; HEADER_LINE_MAX_SIZE] = [0; HEADER_LINE_MAX_SIZE];
-            let count = match self.line(&mut buffer[..])? { Some(count) => { count }, None => { return Err(ParseError.UnexpectedEof); }, };
+            let count = match self.line(&mut buffer[..])? { Some(count) => { count }, None => { return Err(ParseError::UnexpectedEof); }, };
             let mut size: u64 = 0;
             let mut at: usize = 0;
             while at < count && buffer[at] != 59 {
@@ -306,17 +306,17 @@ pub struct BodyReader<R, E> {
                 let digit: u64 = if byte >= 48 && byte <= 57 { (byte - 48) as u64 }
                     else if byte >= 65 && byte <= 70 { (byte - 55) as u64 }
                     else if byte >= 97 && byte <= 102 { (byte - 87) as u64 }
-                    else { return Err(ParseError.InvalidChunk); };
-                if size > (18446744073709551615 - digit) / 16 { return Err(ParseError.InvalidChunk); }
+                    else { return Err(ParseError::InvalidChunk); };
+                if size > (18446744073709551615 - digit) / 16 { return Err(ParseError::InvalidChunk); }
                 size = size * 16 + digit;
                 at += 1;
             }
-            if at == 0 { return Err(ParseError.InvalidChunk); }
-            while at < count { if buffer[at] < 32 || buffer[at] > 126 { return Err(ParseError.InvalidChunk); } at += 1; }
+            if at == 0 { return Err(ParseError::InvalidChunk); }
+            while at < count { if buffer[at] < 32 || buffer[at] > 126 { return Err(ParseError::InvalidChunk); } at += 1; }
             if size == 0 {
                 let trailers = self.headers()?;
                 let decision = framing(&trailers);
-                if !decision.valid || decision.mode != 0 { return Err(ParseError.InvalidFraming); }
+                if !decision.valid || decision.mode != 0 { return Err(ParseError::InvalidFraming); }
                 let finished = &mut (*self).finished; *finished = true;
                 return Ok(0);
             }
@@ -329,10 +329,10 @@ pub struct BodyReader<R, E> {
         let reader = &mut *(*self).source;
         let received = match reader.read(&mut output[0..count]) {
             Ok(received) => { received },
-            Err(error) => { return Err(ParseError.Read { error: error }); },
+            Err(error) => { return Err(ParseError::Read { error: error }); },
         };
-        if received > count { return Err(ParseError.InvalidReadCount); }
-        if received == 0 { return Err(ParseError.UnexpectedEof); }
+        if received > count { return Err(ParseError::InvalidReadCount); }
+        if received == 0 { return Err(ParseError::UnexpectedEof); }
         let rest = remaining - received as u64;
         let remaining = &mut (*self).remaining; *remaining = copy(rest);
         if rest == 0 && (*self).mode == 2 { let delimiter = &mut (*self).delimiter; *delimiter = true; }
@@ -409,8 +409,8 @@ pub struct Response<R, E> {
 
 /// Materializes the already validated protocol variant.
 fn protocol(minor: u8) Version {
-    if minor == 48 { return Version.Http10; }
-    Version.Http11
+    if minor == 48 { return Version::Http10; }
+    Version::Http11
 }
 
 /// Checks the fixed HTTP/1.0 or HTTP/1.1 version spelling.
@@ -431,15 +431,15 @@ pub fn request(reader: &mut R) Result<Option<Request<R, E>>, ParseError<E>> {
     let length = match decoder.line( &mut bytes[..])? { Some(length) => { length }, None => { return Ok(None); }, };
     let mut method_end: usize = 0;
     while method_end < length && token_byte(bytes[method_end]) { method_end += 1; }
-    if method_end == 0 || method_end == length || bytes[method_end] != 32 { return Err(ParseError.InvalidStartLine); }
+    if method_end == 0 || method_end == length || bytes[method_end] != 32 { return Err(ParseError::InvalidStartLine); }
     let mut target_end = copy(method_end) + 1;
     while target_end < length && bytes[target_end] > 32 && bytes[target_end] < 127 { target_end += 1; }
-    if target_end == method_end + 1 || target_end == length || bytes[target_end] != 32 { return Err(ParseError.InvalidStartLine); }
-    if !version(&bytes[target_end + 1..length]) { return Err(ParseError.InvalidStartLine); }
+    if target_end == method_end + 1 || target_end == length || bytes[target_end] != 32 { return Err(ParseError::InvalidStartLine); }
+    if !version(&bytes[target_end + 1..length]) { return Err(ParseError::InvalidStartLine); }
     let protocol = protocol(bytes[length - 1]);
     let fields = decoder.headers()?;
     let decision = framing(&fields);
-    if !decision.valid { return Err(ParseError.InvalidFraming); }
+    if !decision.valid { return Err(ParseError::InvalidFraming); }
     let body_mode = &mut decoder.mode; *body_mode = decision.mode;
     let remaining = &mut decoder.remaining; *remaining = decision.length;
     let mut result = Request { line: [0; REQUEST_LINE_MAX_SIZE], method_end: method_end, target_end: target_end, protocol: protocol,
@@ -457,23 +457,23 @@ pub fn response(reader: &mut R) Result<Option<Response<R, E>>, ParseError<E>> {
     let mut decoder: BodyReader<R, E> = BodyReader::new(reader);
     let mut bytes: [u8; REQUEST_LINE_MAX_SIZE] = [0; REQUEST_LINE_MAX_SIZE];
     let length = match decoder.line( &mut bytes[..])? { Some(length) => { length }, None => { return Ok(None); }, };
-    if length < 13 || !version(&bytes[..8]) || bytes[8] != 32 || bytes[12] != 32 { return Err(ParseError.InvalidStartLine); }
+    if length < 13 || !version(&bytes[..8]) || bytes[8] != 32 || bytes[12] != 32 { return Err(ParseError::InvalidStartLine); }
     let mut at: usize = 9;
     let mut code: u16 = 0;
     while at < 12 {
-        if bytes[at] < 48 || bytes[at] > 57 { return Err(ParseError.InvalidStartLine); }
+        if bytes[at] < 48 || bytes[at] > 57 { return Err(ParseError::InvalidStartLine); }
         code = code * 10 + (bytes[at] - 48) as u16;
         at += 1;
     }
-    if code < 100 || code > 599 { return Err(ParseError.InvalidStartLine); }
+    if code < 100 || code > 599 { return Err(ParseError::InvalidStartLine); }
     while at < length {
-        if (bytes[at] < 32 && bytes[at] != 9) || bytes[at] == 127 { return Err(ParseError.InvalidStartLine); }
+        if (bytes[at] < 32 && bytes[at] != 9) || bytes[at] == 127 { return Err(ParseError::InvalidStartLine); }
         at += 1;
     }
     let protocol = protocol(bytes[7]);
     let fields = decoder.headers()?;
     let decision = framing(&fields);
-    if !decision.valid { return Err(ParseError.InvalidFraming); }
+    if !decision.valid { return Err(ParseError::InvalidFraming); }
     let body_mode = &mut decoder.mode; *body_mode = decision.mode;
     let remaining = &mut decoder.remaining; *remaining = decision.length;
     let mut result = Response { line: [0; REQUEST_LINE_MAX_SIZE], line_length: copy(length), code: code, protocol: protocol,

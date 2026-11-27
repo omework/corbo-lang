@@ -1,0 +1,27 @@
+// Independent try_slice range-call subset; endpoints are identifiers/integers.
+use crate::{OracleNode,OracleToken,leaf,postfix,Suffix};
+grammar;
+pub Call: OracleNode = {
+    <l:@L> <base:"identifier"> <base_end:@R> "." <member:"identifier"> <member_end:@R>
+    "(" <range:Range> ")" <r:@R> => {
+        let base=leaf("path",base,l,base_end);
+        let field=postfix(base,Suffix::Field(member,member_end));
+        postfix(field,Suffix::Call(vec![range],r))
+    }
+};
+Range: OracleNode = <l:@L> <start:Endpoint?> ".." <end:Endpoint?> <r:@R>
+    => OracleNode::new("range",l,r,start.into_iter().chain(end).collect());
+Endpoint: OracleNode = {
+    <l:@L> <value:"identifier"> <r:@R> => leaf("path",value,l,r),
+    <l:@L> <value:"integer"> <r:@R> => leaf("literal",value,l,r),
+};
+extern {
+ type Location=usize;
+ type Error=&'static str;
+ enum OracleToken {
+    "identifier"=>OracleToken::Identifier(<String>),
+    "integer"=>OracleToken::Integer(<String>),
+    "."=>OracleToken::Symbol("."), ".."=>OracleToken::Symbol(".."),
+    "("=>OracleToken::Symbol("("), ")"=>OracleToken::Symbol(")"),
+ }
+}

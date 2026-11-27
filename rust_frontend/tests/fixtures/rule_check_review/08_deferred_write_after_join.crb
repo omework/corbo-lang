@@ -1,0 +1,18 @@
+// Completion of the writer must apply its reference-field effect to the caller.
+struct View {
+    target: &i64;
+}
+
+async fn replace(view: &mut View, target: &i64) {
+    view.target = target;
+}
+
+fn main() {
+    let first: i64 = 1;
+    let second: i64 = 2;
+    let mut view = View { target: &first };
+    let execution = runtime::spawn(replace(&mut view, &second));
+    let result = execution.join();
+    drop(first);
+    let observed = *view.target;
+}

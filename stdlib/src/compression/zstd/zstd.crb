@@ -104,27 +104,27 @@ fn sequence_table(input: &[u8], at: u64, kind: u64, mode: u64, table: &mut [u64]
 fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut [u64],
               ll: &mut [u64], off: &mut [u64], ml: &mut [u64], state: &mut State, start: u64, dictionary: &[u8]) Result<u64, Error> {
     let decoded_fields_1 = literals(&input[0..input.len()], &mut scratch[0..scratch.len()], &mut huffman[0..huffman.len()], (*state).huffman); let mut at = decoded_fields_1 >> 32; let literal_count = (decoded_fields_1 >> 8) & 0xffffff; let huff_bits = decoded_fields_1 & 255;
-    if at == 0 { return Err(Error.InvalidData); }
+    if at == 0 { return Err(Error::InvalidData); }
     let field = &mut (*state).huffman; *field = huff_bits;
-    if at >= input.len() as u64 { return Err(Error.TruncatedInput); }
+    if at >= input.len() as u64 { return Err(Error::TruncatedInput); }
     let first = input[at] as u64; at = at + 1; let mut count = copy(first);
     if first > 127 {
-        if at >= input.len() as u64 { return Err(Error.TruncatedInput); }
+        if at >= input.len() as u64 { return Err(Error::TruncatedInput); }
         if first < 255 { count = ((first - 128) << 8) + input[at] as u64; at = at + 1; }
         else {
-            if input.len() as u64 - at < 2 { return Err(Error.TruncatedInput); }
+            if input.len() as u64 - at < 2 { return Err(Error::TruncatedInput); }
             count = little(&input[0..input.len()], copy(at), 2) + 32512; at = at + 2;
         }
     }
     let mut written = copy(start); let mut used: u64 = 0;
     if count != 0 {
-        if at == input.len() as u64 { return Err(Error.TruncatedInput); }
+        if at == input.len() as u64 { return Err(Error::TruncatedInput); }
         let mode = input[at] as u64; at = at + 1;
-        if (mode & 3) != 0 { return Err(Error.InvalidData); }
+        if (mode & 3) != 0 { return Err(Error::InvalidData); }
         let decoded_fields_2 = sequence_table(&input[0..input.len()], at, 0, mode >> 6, &mut ll[0..ll.len()], (*state).literal); let ll_bits = decoded_fields_2 >> 32; let ll_end = decoded_fields_2 & 0xffffffff;
         let decoded_fields_3 = sequence_table(&input[0..input.len()], ll_end, 1, (mode >> 4) & 3, &mut off[0..off.len()], (*state).offset); let off_bits = decoded_fields_3 >> 32; let off_end = decoded_fields_3 & 0xffffffff;
         let decoded_fields_4 = sequence_table(&input[0..input.len()], off_end, 2, (mode >> 2) & 3, &mut ml[0..ml.len()], (*state).matched); let ml_bits = decoded_fields_4 >> 32; let end = decoded_fields_4 & 0xffffffff;
-        if ll_bits == 99 || off_bits == 99 || ml_bits == 99 { return Err(Error.InvalidData); }
+        if ll_bits == 99 || off_bits == 99 || ml_bits == 99 { return Err(Error::InvalidData); }
         let field = &mut (*state).literal; *field = copy(ll_bits);
         let field = &mut (*state).offset; *field = copy(off_bits);
         let field = &mut (*state).matched; *field = copy(ml_bits);
@@ -134,9 +134,9 @@ fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut
         let mut ml_state = backward(&input[0..input.len()], &mut reader, ml_bits);
         let mut sequence: u64 = 0;
         while sequence < count {
-            if reader.bad || ll_state >= ll.len() as u64 || off_state >= off.len() as u64 || ml_state >= ml.len() as u64 { return Err(Error.InvalidData); }
+            if reader.bad || ll_state >= ll.len() as u64 || off_state >= off.len() as u64 || ml_state >= ml.len() as u64 { return Err(Error::InvalidData); }
             let a = ll[ll_state]; let b = off[off_state]; let c = ml[ml_state];
-            if (a & 255) > 35 || (b & 255) > 31 || (c & 255) > 52 { return Err(Error.InvalidData); }
+            if (a & 255) > 35 || (b & 255) > 31 || (c & 255) > 52 { return Err(Error::InvalidData); }
             let decoded_fields_5 = baseline(1, b & 255); let base = decoded_fields_5 >> 32; let bits = decoded_fields_5 & 0xffffffff;
             let mut distance = base + backward(&input[0..input.len()], &mut reader, copy(bits));
             let decoded_fields_6 = baseline(2, c & 255); let base = decoded_fields_6 >> 32; let extra = decoded_fields_6 & 0xffffffff;
@@ -155,9 +155,9 @@ fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut
                     if distance == 2 { distance = r2; }
                     else if distance == 3 { distance = r3; let field = &mut (*state).rep3; *field = copy(r2); }
                     else if distance == 4 {
-                        if r1 == 0 { return Err(Error.InvalidData); } distance = r1 - 1;
+                        if r1 == 0 { return Err(Error::InvalidData); } distance = r1 - 1;
                         let field = &mut (*state).rep3; *field = copy(r2);
-                    } else { return Err(Error.InvalidData); }
+                    } else { return Err(Error::InvalidData); }
                     let field = &mut (*state).rep2; *field = r1;
                     let field = &mut (*state).rep1; *field = copy(distance);
                 }
@@ -168,17 +168,17 @@ fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut
                 ml_state = (c >> 16) + backward(&input[0..input.len()], &mut reader, (c >> 8) & 255);
                 off_state = (b >> 16) + backward(&input[0..input.len()], &mut reader, (b >> 8) & 255);
             }
-            if reader.bad || literal > literal_count - used { return Err(Error.InvalidData); }
-            if literal > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+            if reader.bad || literal > literal_count - used { return Err(Error::InvalidData); }
+            if literal > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
             let mut i: u64 = 0;
             while i < literal { output[written] = scratch[used]; written = written + 1; used = used + 1; i = i + 1; }
             let available = written - (*state).origin;
-            if distance == 0 { return Err(Error.InvalidData); }
+            if distance == 0 { return Err(Error::InvalidData); }
             if distance > available {
-                if available > (*state).window || distance - available > dictionary.len() as u64 { return Err(Error.InvalidData); }
-            } else if distance > (*state).window { return Err(Error.InvalidData); }
-            if matched > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
-            if written - start + matched > 131072 { return Err(Error.InvalidData); }
+                if available > (*state).window || distance - available > dictionary.len() as u64 { return Err(Error::InvalidData); }
+            } else if distance > (*state).window { return Err(Error::InvalidData); }
+            if matched > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
+            if written - start + matched > 131072 { return Err(Error::InvalidData); }
             i = 0;
             while i < matched {
                 let produced = written - (*state).origin;
@@ -187,10 +187,10 @@ fn compressed(input: &[u8], output: &mut [u8], scratch: &mut [u8], huffman: &mut
                 written = written + 1; i = i + 1;
             }
         }
-        if reader.bad || reader.bit != reader.low { return Err(Error.InvalidData); }
-    } else if at != input.len() as u64 { return Err(Error.InvalidData); }
-    if literal_count - used > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
-    if written - start + literal_count - used > 131072 { return Err(Error.InvalidData); }
+        if reader.bad || reader.bit != reader.low { return Err(Error::InvalidData); }
+    } else if at != input.len() as u64 { return Err(Error::InvalidData); }
+    if literal_count - used > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
+    if written - start + literal_count - used > 131072 { return Err(Error::InvalidData); }
     while used < literal_count { output[written] = scratch[used]; written = written + 1; used = used + 1; }
     Ok(written)
 }
@@ -204,77 +204,77 @@ pub fn decompress(input: &[u8], output: &mut [u8], workspace: &mut [u8]) Result<
 
 /// Decodes frames with a borrowed raw or formatted dictionary. No dictionary bytes are retained.
 pub fn decompress_with_dictionary(input: &[u8], output: &mut [u8], workspace: &mut [u8], dictionary_bytes: &[u8]) Result<usize, Error> {
-    if workspace.len() < 131072 { return Err(Error.WorkspaceTooSmall); }
-    if input.len() == 0 { return Err(Error.TruncatedInput); }
+    if workspace.len() < 131072 { return Err(Error::WorkspaceTooSmall); }
+    if input.len() == 0 { return Err(Error::TruncatedInput); }
     let mut at: u64 = 0; let size = input.len() as u64; let mut written: u64 = 0;
     let mut huffman: [u64; 2048] = [0; 2048]; let mut ll: [u64; 512] = [0; 512];
     let mut off: [u64; 256] = [0; 256]; let mut ml: [u64; 512] = [0; 512];
     while at < size {
-        if size - at < 4 { return Err(Error.TruncatedInput); }
+        if size - at < 4 { return Err(Error::TruncatedInput); }
         let magic = little(&input[0..input.len()], copy(at), 4); at = at + 4;
         if (magic & 0xfffffff0) == 0x184d2a50 {
-            if size - at < 4 { return Err(Error.TruncatedInput); }
+            if size - at < 4 { return Err(Error::TruncatedInput); }
             let length = little(&input[0..input.len()], copy(at), 4); at = at + 4;
-            if length > size - at { return Err(Error.TruncatedInput); } at = at + length; continue;
+            if length > size - at { return Err(Error::TruncatedInput); } at = at + length; continue;
         }
-        if magic != 0xfd2fb528 { return Err(Error.InvalidData); }
-        if at == size { return Err(Error.TruncatedInput); }
+        if magic != 0xfd2fb528 { return Err(Error::InvalidData); }
+        if at == size { return Err(Error::TruncatedInput); }
         let flags = input[at] as u64; at = at + 1;
-        if (flags & 8) != 0 { return Err(Error.InvalidData); }
+        if (flags & 8) != 0 { return Err(Error::InvalidData); }
         let single = (flags & 32) != 0; let has_checksum = (flags & 4) != 0;
         let mut window: u64 = 0;
         if !single {
-            if at == size { return Err(Error.TruncatedInput); }
+            if at == size { return Err(Error::TruncatedInput); }
             let descriptor = input[at] as u64; at = at + 1;
             let base: u64 = 1 << ((descriptor >> 3) + 10);
             window = base + (base / 8) * (descriptor & 7);
         }
         let dict_flag = flags & 3; let dictionary: u64 = if dict_flag == 0 { 0 } else { 1 << (dict_flag - 1) };
-        if dictionary > size - at { return Err(Error.TruncatedInput); }
+        if dictionary > size - at { return Err(Error::TruncatedInput); }
         let expected_dictionary = little(&input[0..input.len()], copy(at), copy(dictionary));
-        if expected_dictionary != 0 && dictionary_bytes.len() == 0 { return Err(Error.DictionaryRequired); }
-        if expected_dictionary != 0 && expected_dictionary != dictionary_number(&dictionary_bytes[0..dictionary_bytes.len()]) { return Err(Error.DictionaryMismatch); }
+        if expected_dictionary != 0 && dictionary_bytes.len() == 0 { return Err(Error::DictionaryRequired); }
+        if expected_dictionary != 0 && expected_dictionary != dictionary_number(&dictionary_bytes[0..dictionary_bytes.len()]) { return Err(Error::DictionaryMismatch); }
         at = at + dictionary;
         let flag = flags >> 6;
         let width: u64 = if flag == 0 { if single { 1 } else { 0 } } else { 1 << flag };
-        if width > size - at { return Err(Error.TruncatedInput); }
+        if width > size - at { return Err(Error::TruncatedInput); }
         let mut content = little(&input[0..input.len()], copy(at), copy(width)); at = at + width;
         if flag == 1 { content = content + 256; }
         let known = width != 0;
         if single { window = copy(content); }
-        if known && content > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+        if known && content > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
         let origin = copy(written);
         let mut state = State { huffman: 0, literal: 99, offset: 99, matched: 99, rep1: 1, rep2: 4, rep3: 8, window: window, origin: copy(origin) };
         let dict_start = match load_dictionary(&dictionary_bytes[0..dictionary_bytes.len()], &mut huffman[..], &mut ll[..], &mut off[..], &mut ml[..], &mut state) {
             Ok(value) => { value }, Err(error) => { return Err(error); },
         };
         loop {
-            if size - at < 3 { return Err(Error.TruncatedInput); }
+            if size - at < 3 { return Err(Error::TruncatedInput); }
             let header = little(&input[0..input.len()], copy(at), 3); at = at + 3;
             let last = (header & 1) != 0; let kind = (header >> 1) & 3; let count = header >> 3;
-            if count > 131072 || (!single && count > state.window && kind < 2) { return Err(Error.InvalidData); }
+            if count > 131072 || (!single && count > state.window && kind < 2) { return Err(Error::InvalidData); }
             if kind == 0 {
-                if count > size - at { return Err(Error.TruncatedInput); }
-                if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+                if count > size - at { return Err(Error::TruncatedInput); }
+                if count > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
                 let mut i: u64 = 0; while i < count { output[written] = input[at + i]; written = written + 1; i = i + 1; } at = at + count;
             } else if kind == 1 {
-                if at == size { return Err(Error.TruncatedInput); }
-                if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+                if at == size { return Err(Error::TruncatedInput); }
+                if count > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
                 let mut i: u64 = 0; while i < count { output[written] = input[at]; written = written + 1; i = i + 1; } at = at + 1;
             } else if kind == 2 {
-                if count > size - at { return Err(Error.TruncatedInput); }
+                if count > size - at { return Err(Error::TruncatedInput); }
                 let decoded = match compressed(&input[at..at + count], &mut output[0..output.len()], &mut workspace[0..workspace.len()],
                     &mut huffman[..], &mut ll[..], &mut off[..], &mut ml[..], &mut state, copy(written), &dictionary_bytes[dict_start..dictionary_bytes.len()]) {
                     Ok(value) => { value }, Err(error) => { return Err(error); },
                 };
                 written = decoded; at = at + count;
-            } else { return Err(Error.InvalidData); }
+            } else { return Err(Error::InvalidData); }
             if last { break; }
         }
-        if known && written - origin != content { return Err(Error.InvalidData); }
+        if known && written - origin != content { return Err(Error::InvalidData); }
         if has_checksum {
-            if size - at < 4 { return Err(Error.TruncatedInput); }
-            if little(&input[0..input.len()], copy(at), 4) != (checksum(&output[origin..written]) & 0xffffffff) { return Err(Error.ChecksumMismatch); }
+            if size - at < 4 { return Err(Error::TruncatedInput); }
+            if little(&input[0..input.len()], copy(at), 4) != (checksum(&output[origin..written]) & 0xffffffff) { return Err(Error::ChecksumMismatch); }
             at = at + 4;
         }
     }

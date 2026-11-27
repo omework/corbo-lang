@@ -22,19 +22,19 @@
         __din_package_socket: u64;
 
         /// Accepts a native socket and returns its status and handle.
-        fn accept(&mut self) Result<PlatformSocket, SocketError> {
+        pub fn accept(&mut self) Result<PlatformSocket, SocketError> {
             let startup = raw::startup();
-            if startup != 0 { return Err(SocketError.Os { code: startup }); }
+            if startup != 0 { return Err(SocketError::Os { code: startup }); }
             let (error, handle) = raw::accept((*self).__din_package_socket);
             if error != 0 {
                 raw::cleanup();
-                return Err(SocketError.Os { code: error });
+                return Err(SocketError::Os { code: error });
             }
             adopt_socket(handle)
         }
 
         /// Queries the local or peer IPv4 endpoint and returns its native address representation.
-        fn endpoint(&self, remote: u64) Result<SocketAddr, SocketError> {
+        pub fn endpoint(&self, remote: u64) Result<SocketAddr, SocketError> {
             let (error, packed) = raw::endpoint((*self).__din_package_socket, remote);
             if error != 0 { return Err(socket_error(error)); }
             let (ip, port) = raw::decode_peer(packed);
@@ -42,7 +42,7 @@
         }
 
         /// Sends bytes to the connected endpoint and returns status and byte count.
-        fn send(&mut self, buffer: &[u8]) Result<usize, SocketError> {
+        pub fn send(&mut self, buffer: &[u8]) Result<usize, SocketError> {
             let length = buffer.len();
             if length == 0 {
                 let dummy: [u8; 1] = [0];
@@ -54,16 +54,16 @@
         }
 
         /// Reads from a connected socket and returns status and byte count.
-        fn receive(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
+        pub fn receive(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
             let (error, count) = raw::receive((*self).__din_package_socket, buffer);
-            if error != 0 { return Err(SocketError.Os { code: error }); }
+            if error != 0 { return Err(SocketError::Os { code: error }); }
             Ok(count)
         }
 
         /// Sends bytes to a specified native endpoint and returns status and byte count.
-        fn send_to(&mut self, buffer: &[u8], ipv4: u32, port: u16) Result<usize, SocketError> {
+        pub fn send_to(&mut self, buffer: &[u8], ipv4: u32, port: u16) Result<usize, SocketError> {
             let length = buffer.len();
-            if length > 65507 { return Err(SocketError.DatagramTooLarge); }
+            if length > 65507 { return Err(SocketError::DatagramTooLarge); }
             if length == 0 {
                 let dummy: [u8; 1] = [0];
                 let (error, count) = raw::send_to((*self).__din_package_socket, &dummy[..], 0, ipv4, port);
@@ -74,7 +74,7 @@
         }
 
         /// Reads one datagram and returns status, byte count and native sender address.
-        fn receive_from(&mut self, buffer: &mut [u8]) Result<Datagram, SocketError> {
+        pub fn receive_from(&mut self, buffer: &mut [u8]) Result<Datagram, SocketError> {
             let (error, count, peer) = receive_datagram((*self).__din_package_socket, buffer);
             datagram_result(error, count, peer)
         }
@@ -90,11 +90,11 @@
     /// Initializes the platform backend and creates a socket of the requested kind.
     pub fn make_socket(kind: i64) Result<PlatformSocket, SocketError> {
         let startup = raw::startup();
-        if startup != 0 { return Err(SocketError.Os { code: startup }); }
+        if startup != 0 { return Err(SocketError::Os { code: startup }); }
         let (error, handle) = raw::open(kind);
         if error != 0 {
             raw::cleanup();
-            return Err(SocketError.Os { code: error });
+            return Err(SocketError::Os { code: error });
         }
         adopt_socket(handle)
     }
@@ -105,7 +105,7 @@
         if error != 0 {
             raw::close(handle);
             raw::cleanup();
-            return Err(SocketError.Os { code: error });
+            return Err(SocketError::Os { code: error });
         }
         Ok(PlatformSocket { __din_package_socket: handle })
     }
@@ -137,7 +137,7 @@
 
     /// Converts the native status and count of a send operation to a result.
     fn sent(error: i64, count: usize) Result<usize, SocketError> {
-        if error != 0 { return Err(SocketError.Os { code: error }); }
+        if error != 0 { return Err(SocketError::Os { code: error }); }
         Ok(count)
     }
 
@@ -156,7 +156,7 @@
 
     /// Translates the native datagram result and decodes the sender endpoint.
     pub fn datagram_result(error: i64, count: usize, peer: u64) Result<Datagram, SocketError> {
-        if error == -65536 || error == -10040 { return Err(SocketError.DatagramTooLarge); }
+        if error == -65536 || error == -10040 { return Err(SocketError::DatagramTooLarge); }
         if error != 0 { return Err(socket_error(error)); }
         Ok(datagram(count as u64, peer))
     }
@@ -169,24 +169,24 @@
 #(if: target.os == "linux" && target.arch == "x86_64" && target.pointer_width == "64")
     /// Maps the target's native socket code to a portable socket error.
     pub fn socket_error(code: i64) SocketError {
-        if code == -98 { return SocketError.AddressInUse; }
-        if code == -111 { return SocketError.ConnectionRefused; }
-        SocketError.Os { code: code }
+        if code == -98 { return SocketError::AddressInUse; }
+        if code == -111 { return SocketError::ConnectionRefused; }
+        SocketError::Os { code: code }
     }
 #(endif)
 #(if: target.os == "macos" && target.arch == "aarch64" || target.os == "macos" && target.arch == "x86_64")
     /// Maps the target's native socket code to a portable socket error.
     pub fn socket_error(code: i64) SocketError {
-        if code == -48 { return SocketError.AddressInUse; }
-        if code == -61 { return SocketError.ConnectionRefused; }
-        SocketError.Os { code: code }
+        if code == -48 { return SocketError::AddressInUse; }
+        if code == -61 { return SocketError::ConnectionRefused; }
+        SocketError::Os { code: code }
     }
 #(endif)
 #(if: target.os == "windows" && target.arch == "aarch64" || target.os == "windows" && target.arch == "x86_64")
     /// Maps the target's native socket code to a portable socket error.
     pub fn socket_error(code: i64) SocketError {
-        if code == -10048 { return SocketError.AddressInUse; }
-        if code == -10061 { return SocketError.ConnectionRefused; }
-        SocketError.Os { code: code }
+        if code == -10048 { return SocketError::AddressInUse; }
+        if code == -10061 { return SocketError::ConnectionRefused; }
+        SocketError::Os { code: code }
     }
 #(endif)

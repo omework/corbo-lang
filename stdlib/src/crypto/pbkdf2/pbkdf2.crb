@@ -17,21 +17,21 @@ pub enum Error {
 /// Parameter errors leave the output unchanged.
 pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32,
                       output: &mut [u8]) Result<(), Error> {
-    if iterations == 0 { return Err(Error.InvalidIterations); }
+    if iterations == 0 { return Err(Error::InvalidIterations); }
     let length = output.len();
-    if length == 0 || (length as u64) > 0xffffffff * 32 { return Err(Error.InvalidOutputLength); }
+    if length == 0 || (length as u64) > 0xffffffff * 32 { return Err(Error::InvalidOutputLength); }
     let password_len = password.len();
     let salt_len = salt.len();
     // U1 hashes the 64-byte HMAC pad, the salt and the 4-byte block index.
     if (password_len as u64) > 0x1fffffffffffffff
-       || (salt_len as u64) > 0x1fffffffffffffff - 68 { return Err(Error.InputTooLong); }
+       || (salt_len as u64) > 0x1fffffffffffffff - 68 { return Err(Error::InputTooLong); }
 
     let prefix: [u8; 0] = [];
     let mut written: usize = 0;
     let mut block: [u8; 4] = [0, 0, 0, 1];
     while written < length {
         let mut u = match hmac_parts(&password[0..password_len], &prefix[..], &salt[0..salt_len], &block[..]) {
-            Err(error) => { drop(error); return Err(Error.InputTooLong); },
+            Err(error) => { drop(error); return Err(Error::InputTooLong); },
             Ok(value) => { value },
         };
         let mut sum: [u8; 32] = [0; 32];
@@ -43,7 +43,7 @@ pub fn derive_sha256(password: &[u8], salt: &[u8], iterations: u32,
         let mut round: u32 = 1;
         while round < iterations {
             let next = match hmac(&password[0..password_len], &u[..]) {
-                Err(error) => { drop(error); return Err(Error.InputTooLong); },
+                Err(error) => { drop(error); return Err(Error::InputTooLong); },
                 Ok(value) => { value },
             };
             index = 0;

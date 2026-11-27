@@ -119,6 +119,12 @@ chosen after construction, the chosen location must survive
 reservations count for all possible destinations.
 in the peak occupation until they are recovered.
 
+The physical address of a constructed value must never depend on a predicate
+computed after that construction. When several later exclusive paths retain
+the same value, the planner reserves one location in their nearest common
+lexical ancestor and all paths reuse it. Path guards still select cleanup and
+control flow; they do not select an address that needed to exist earlier.
+
 The plane distinguishes the state of the location and the position of the cursor.
 On each path, a location can be **reserved**, **construit**
 ou **liberable**. A liberable location can still be found under

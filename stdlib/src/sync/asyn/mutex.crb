@@ -10,13 +10,13 @@ pub struct Mutex<T> {
     value: T;
 
     /// Takes ownership of the payload and constructs its synchronization resource.
-    fn new(value: T) Mutex<T> {
+    pub fn new(value: T) Mutex<T> {
         let raw = mutex_create_binding(true);
         Mutex { raw: raw, value: value }
     }
     /// Suspends until logical ownership is handed to this task.
     #(lock: on=self, through_result=true)
-    async fn lock(&self) MutexGuard<T> {
+    pub async fn lock(&self) MutexGuard<T> {
         let raw = (*self).raw;
         drop(mutex_wait_binding(copy(raw)).await);
         // Native lock ownership permits this tracked interior-mutable borrow.
@@ -38,9 +38,9 @@ pub struct MutexGuard<T> {
     data: &mut T;
 
     /// Borrows the protected value for reading.
-    fn ref(&self) &T { &*(*self).data }
+    pub fn ref(&self) &T { &*(*self).data }
     /// Reborrows the protected value with mutation permission.
-    fn mut_ref(&mut self) &mut T { &mut *(*self).data }
+    pub fn mut_ref(&mut self) &mut T { &mut *(*self).data }
     /// Releases ownership before the guard's reference fields are discarded.
     fn drop(&mut self) { let raw = (*self).raw; mutex_release_binding(raw); }
 }
@@ -49,14 +49,14 @@ pub struct MutexGuard<T> {
 /// Private binding: allocates stable native state for the selected blocking or asynchronous policy.
 fn mutex_create_binding(asynchronous: bool) usize {
     let mut raw: usize = 0;
-    @unchecked { @c { ${raw}=mutex_create(${asynchronous}); } }
+    @unchecked { @c++ { ${raw}=mutex_create(${asynchronous}); } }
     raw
 }
 /// Private binding: acquires the synchronous native mutex on this thread.
-fn mutex_acquire_binding(raw: usize) { @unchecked { @c { mutex_acquire(${raw}); } } }
+fn mutex_acquire_binding(raw: usize) { @unchecked { @c++ { mutex_acquire(${raw}); } } }
 /// Private binding: releases a native-thread guard or an asynchronous logical guard.
-fn mutex_release_binding(raw: usize) { @unchecked { @c { mutex_release(${raw}); } } }
+fn mutex_release_binding(raw: usize) { @unchecked { @c++ { mutex_release(${raw}); } } }
 /// Private binding: destroys native state once no guard or pending lock future can use it.
-fn mutex_destroy_binding(raw: usize) { @unchecked { @c { mutex_destroy(${raw}); } } }
+fn mutex_destroy_binding(raw: usize) { @unchecked { @c++ { mutex_destroy(${raw}); } } }
 /// Private runtime-designated poll suspension point; callers must keep the owner alive.
 async fn mutex_wait_binding(raw: usize) i64 { runtime::wait_mutex(raw) }

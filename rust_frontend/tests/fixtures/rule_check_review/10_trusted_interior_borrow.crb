@@ -1,0 +1,16 @@
+// The existing unchecked contract bypasses mutation permission, not lifetime checks.
+struct Cell {
+    value: i64;
+
+    fn lend(&self) &mut i64 {
+        @unchecked {
+            &mut (*self).value
+        }
+    }
+}
+
+fn main() {
+    let cell = Cell { value: 1 };
+    let view = cell.lend();
+    *view = 2;
+}

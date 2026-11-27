@@ -1,1339 +1,1678 @@
+//! Reference syntax parser. It consumes the existing lexer stream exactly once;
+//! no declaration table, imported names, target evaluation or inferred types.
 use crate::{
-    Error,
-    lexer::{Kind, Token},
+    Span,
+    ast::*,
+    lexer::{Kind, Payload, Token},
 };
-use std::collections::HashSet;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct NodeId(pub usize);
-
-#[derive(Clone, Copy, Debug)]
-pub enum Mode {
-    Program,
-    Block,
-    Signature,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorClass {
+    Syntax,
+    InputContract,
+    ImplementationLimit,
 }
 
 #[derive(Debug)]
-pub struct Node {
-    pub public: bool,
-    pub asm_operand: Option<crate::Span>,
-    pub kind: &'static str,
-    pub start: usize,
-    pub end: usize,
-    pub name: Option<usize>,
-    pub children: Vec<NodeId>,
+pub struct ParseError {
+    pub class: ErrorClass,
+    pub span: Span,
+    pub message: &'static str,
+    pub expected: Vec<&'static str>,
+    pub found: String,
 }
 
-#[derive(Debug)]
-pub struct Syntax {
-    pub nodes: Vec<Node>,
-    pub root: NodeId,
+/// Takes ownership of the lexer output without re-lexing or rewriting it.
+pub fn parse(source: String, tokens: Vec<Token>) -> Result<ParsedUnit, ParseError> {
+    parse_mode(source, tokens, false)
 }
 
-pub fn parse(source: &str, tokens: &[Token], mode: Mode) -> Result<Syntax, Error> {
-    parse_with_names(source, tokens, mode, &[], false)
+/// Parse one expression using the same syntax parser, preserving source/tokens.
+pub fn parse_expression(source: String, tokens: Vec<Token>) -> Result<ParsedUnit, ParseError> {
+    parse_mode(source, tokens, true)
 }
 
-pub(crate) fn parse_with_names(
-    source: &str,
-    tokens: &[Token],
-    mode: Mode,
-    imported_names: &[String],
-    discovering_package: bool,
-) -> Result<Syntax, Error> {
-    let names = tokens
-        .windows(2)
-        .filter_map(|pair| {
-            let word = &source[pair[0].span.start..pair[0].span.end];
-            (word == "struct" || word == "enum")
-                .then(|| &source[pair[1].span.start..pair[1].span.end])
-        })
-        .chain(imported_names.iter().map(String::as_str))
-        .collect();
-    let mut p = Parser {
+fn parse_mode(
+    source: String,
+    tokens: Vec<Token>,
+    expression: bool,
+) -> Result<ParsedUnit, ParseError> {
+    validate_stream(&source, &tokens)?;
+    let mut parser = Parser {
+        source: &source,
+        tokens: &tokens,
+        index: 0,
+        piece: 0,
+        last_end: 0,
+        nodes: Vec::new(),
+        depth: 0,
+        unchecked: 0,
+    };
+    let start = parser.mark();
+    let root = if expression {
+        let root = parser.expr(0, false)?;
+        if !parser.eof() {
+            return Err(parser.error("unexpected token after expression", &["EOF"]));
+        }
+        root
+    } else {
+        let mut items = Vec::new();
+        while !parser.eof() {
+            items.push(parser.item(Context::Module)?);
+        }
+        let root = parser.push(start, NodeKind::Module { items });
+        // A module includes leading/trailing trivia, even for an empty file.
+        parser.nodes[root.0].span = Span {
+            start: 0,
+            end: source.len(),
+        };
+        root
+    };
+    let ast = Ast {
+        nodes: parser.nodes,
+        root,
+    };
+    Ok(ParsedUnit {
         source,
         tokens,
-        i: 0,
-        nodes: Vec::new(),
-        names,
-        depth: 0,
-        unchecked_depth: 0,
-        empty_constructor: true,
-        discovering_package,
-    };
-    let children = match mode {
-        Mode::Program => {
-            let mut declarations = Vec::new();
-            if p.word() == "#" && p.word_at(p.i + 1) == "(" && p.word_at(p.i + 2) == "datastack" {
-                declarations.push(p.datastack_annotation()?);
-            }
-            while !p.eof() {
-                declarations.push(if p.word() == "use" { p.import()? } else { p.item(false)? });
-            }
-            declarations
-        }
-        Mode::Signature => vec![p.item(true)?],
-        Mode::Block => p.statements("")?,
-    };
-    if !p.eof() {
-        return Err(p.error("tokens après la fin de la construction"));
-    }
-    let root = p.node("programme", 0, None, children);
-    Ok(Syntax {
-        nodes: p.nodes,
-        root,
+        ast,
     })
 }
 
-type Res<T> = Result<T, Error>;
+fn validate_stream(source: &str, tokens: &[Token]) -> Result<(), ParseError> {
+    let valid = !tokens.is_empty()
+        && tokens.last().is_some_and(|t| {
+            t.kind == Kind::Eof
+                && t.span
+                    == Span {
+                        start: source.len(),
+                        end: source.len(),
+                    }
+        })
+        && tokens.iter().enumerate().all(|(i, t)| {
+            t.span.start <= t.span.end
+                && t.span.end <= source.len()
+                && source.is_char_boundary(t.span.start)
+                && source.is_char_boundary(t.span.end)
+                && (i == 0 || tokens[i - 1].span.end <= t.span.start)
+                && (i == tokens.len() - 1 || t.kind != Kind::Eof && t.span.start < t.span.end)
+        });
+    if valid {
+        Ok(())
+    } else {
+        Err(ParseError {
+            class: ErrorClass::InputContract,
+            span: Span { start: 0, end: 0 },
+            message: "invalid source/token handoff",
+            expected: vec!["ordered source spans and one final EOF token"],
+            found: String::new(),
+        })
+    }
+}
 
+#[derive(Clone, Copy)]
+struct Mark {
+    token: usize,
+    byte: usize,
+}
+#[derive(Clone, Copy)]
+enum Context {
+    Module,
+    Struct,
+    Enum,
+}
 struct Parser<'a> {
     source: &'a str,
     tokens: &'a [Token],
-    i: usize,
+    index: usize,
+    piece: usize,
+    last_end: usize,
     nodes: Vec<Node>,
-    names: HashSet<&'a str>,
     depth: usize,
-    unchecked_depth: usize,
-    empty_constructor: bool,
-    discovering_package: bool,
+    unchecked: usize,
 }
-
-impl<'a> Parser<'a> {
-    fn word_at(&self, i: usize) -> &'a str {
+type ResultNode = Result<NodeId, ParseError>;
+impl Parser<'_> {
+    fn word(&self) -> &str {
+        let s = self.tokens[self.index].span;
+        &self.source[s.start + self.piece..s.end]
+    }
+    fn peek(&self, n: usize) -> &str {
         self.tokens
-            .get(i)
+            .get(self.index + n)
             .map_or("", |t| &self.source[t.span.start..t.span.end])
     }
-    fn word(&self) -> &'a str {
-        self.word_at(self.i)
-    }
     fn eof(&self) -> bool {
-        self.tokens[self.i].kind == Kind::Eof
+        self.tokens[self.index].kind == Kind::Eof
     }
-    fn error(&self, msg: &'static str) -> Error {
-        Error::new(self.tokens[self.i].span.start, msg)
-    }
-    fn eat(&mut self, s: &str) -> bool {
-        if !self.eof() && self.word() == s {
-            self.i += 1;
-            true
-        } else {
-            false
+    fn mark(&self) -> Mark {
+        Mark {
+            token: self.index,
+            byte: self.tokens[self.index].span.start + self.piece,
         }
     }
-    fn expect(&mut self, s: &'static str) -> Res<()> {
-        if self.eat(s) {
-            Ok(())
-        } else {
-            Err(self.error(s))
+    fn reference(&self) -> TokenRef {
+        TokenRef {
+            index: self.index,
+            span: Span {
+                start: self.mark().byte,
+                end: self.tokens[self.index].span.end,
+            },
         }
     }
-    fn name(&mut self) -> Res<usize> {
-        if self.tokens[self.i].kind != Kind::Name {
-            return Err(self.error("nom attendu"));
+    fn advance(&mut self) -> TokenRef {
+        let r = self.reference();
+        self.last_end = r.span.end;
+        if !self.eof() {
+            self.index += 1;
+            self.piece = 0;
         }
-        let i = self.i;
-        self.i += 1;
-        Ok(i)
+        r
     }
-    fn declaration_name(&mut self, allow_self: bool) -> Res<usize> {
-        let token = self.name()?;
-        let word = self.word_at(token);
-        if word == "self" && allow_self {
-            return Ok(token);
-        }
-        if matches!(
-            word,
-            "_" | "runtime"
-                | "self"
-                | "fn"
-                | "struct"
-                | "enum"
-                | "impl"
-                | "const"
-                | "let"
-                | "mut"
-                | "if"
-                | "else"
-                | "match"
-                | "loop"
-                | "while"
-                | "return"
-                | "break"
-                | "continue"
-                | "as"
-                | "true"
-                | "false"
-                | "bool"
-                | "Void"
-                | "i32"
-                | "i64"
-                | "u8"
-                | "u16"
-                | "u32"
-                | "u64"
-                | "usize"
-                | "addr"
-                | "f32"
-                | "f64"
-                | "str"
-                | "char"
-                | "String"
-                | "NumericConversionError"
-                | "A"
-                | "Pool"
-                | "Vector"
-                | "Option"
-                | "Result"
-                | "Mutex"
-                | "AsyncMutex"
-                | "HashMap"
-        ) {
-            return Err(Error::new(self.tokens[token].span.start, "nom réservé"));
-        }
-        Ok(token)
+    fn eat(&mut self, text: &str) -> Option<TokenRef> {
+        (self.word() == text && !self.eof()).then(|| self.advance())
     }
-    fn node(
-        &mut self,
-        kind: &'static str,
-        start: usize,
-        name: Option<usize>,
-        children: Vec<NodeId>,
-    ) -> NodeId {
+    fn error(&self, message: &'static str, expected: &[&'static str]) -> ParseError {
+        ParseError {
+            class: ErrorClass::Syntax,
+            span: self.reference().span,
+            message,
+            expected: expected.to_vec(),
+            found: self.word().to_owned(),
+        }
+    }
+    fn expect(&mut self, text: &'static str) -> Result<TokenRef, ParseError> {
+        self.eat(text)
+            .ok_or_else(|| self.error("unexpected token", &[text]))
+    }
+    fn ident(&mut self) -> Result<TokenRef, ParseError> {
+        if self.tokens[self.index].kind != Kind::Name
+            || matches!(
+                self.word(),
+                "_" | "fn"
+                    | "struct"
+                    | "enum"
+                    | "const"
+                    | "let"
+                    | "if"
+                    | "else"
+                    | "match"
+                    | "loop"
+                    | "while"
+                    | "for"
+                    | "in"
+                    | "return"
+                    | "break"
+                    | "continue"
+                    | "yield"
+                    | "as"
+                    | "true"
+                    | "false"
+                    | "async"
+                    | "move"
+                    | "mut"
+                    | "pub"
+                    | "use"
+                    | "extern"
+            )
+        {
+            return Err(self.error("expected an identifier", &["identifier"]));
+        }
+        Ok(self.advance())
+    }
+    fn push(&mut self, start: Mark, kind: NodeKind) -> NodeId {
         let id = NodeId(self.nodes.len());
         self.nodes.push(Node {
-            public: false,
-            asm_operand: None,
+            span: Span {
+                start: start.byte,
+                end: self.last_end.max(start.byte),
+            },
+            tokens: start.token..self.index + usize::from(self.piece > 0),
             kind,
-            start,
-            end: self.i,
-            name,
-            children,
         });
         id
     }
-    fn nested<T>(&mut self, f: impl FnOnce(&mut Self) -> Res<T>) -> Res<T> {
-        if self.depth >= 128 {
-            return Err(self.error("imbrication syntaxique trop profonde"));
+    fn start_of(&self, id: NodeId) -> Mark {
+        let n = &self.nodes[id.0];
+        Mark {
+            token: n.tokens.start,
+            byte: n.span.start,
+        }
+    }
+    fn nested(&mut self, f: impl FnOnce(&mut Self) -> ResultNode) -> ResultNode {
+        if self.depth >= 256 {
+            let mut e = self.error("parser nesting limit reached", &[]);
+            e.class = ErrorClass::ImplementationLimit;
+            return Err(e);
         }
         self.depth += 1;
         let result = f(self);
         self.depth -= 1;
         result
     }
-    fn list(
-        &mut self,
-        close: &'static str,
-        mut item: impl FnMut(&mut Self) -> Res<NodeId>,
-    ) -> Res<Vec<NodeId>> {
-        let mut result = Vec::new();
-        while self.word() != close {
-            result.push(item(self)?);
-            if !self.eat(",") {
+    fn empty_attributes() -> Attributes {
+        Attributes {
+            annotations: Vec::new(),
+            public: None,
+        }
+    }
+    fn attributes(&mut self) -> Result<Attributes, ParseError> {
+        let mut annotations = Vec::new();
+        while self.word() == "#" && self.peek(2) != "if" {
+            annotations.push(self.annotation()?);
+        }
+        Ok(Attributes {
+            annotations,
+            public: self.eat("pub"),
+        })
+    }
+    fn comma_end(&mut self, end: &'static str) -> Result<bool, ParseError> {
+        if self.eat(end).is_some() {
+            return Ok(true);
+        }
+        self.expect(",")?;
+        Ok(self.eat(end).is_some())
+    }
+    fn angle_close(&mut self) -> Result<TokenRef, ParseError> {
+        // The original longest-match token remains unchanged in ParsedUnit.
+        if matches!(self.word(), ">" | ">>" | ">=" | ">>=") {
+            let mut r = self.reference();
+            r.span.end = r.span.start + 1;
+            self.last_end = r.span.end;
+            self.piece += 1;
+            if self.tokens[self.index].span.start + self.piece == self.tokens[self.index].span.end {
+                self.index += 1;
+                self.piece = 0;
+            }
+            Ok(r)
+        } else {
+            Err(self.error("expected a generic closing bracket", &[">"]))
+        }
+    }
+    fn generic_parameters(&mut self) -> Result<Vec<TokenRef>, ParseError> {
+        let mut names = Vec::new();
+        if self.eat("<").is_none() {
+            return Ok(names);
+        }
+        loop {
+            names.push(self.ident()?);
+            if self.eat(",").is_none() {
+                self.angle_close()?;
+                break;
+            }
+            if self.word().starts_with('>') {
+                self.angle_close()?;
                 break;
             }
         }
-        self.expect(close)?;
-        Ok(result)
+        Ok(names)
     }
-    fn path(&mut self) -> Res<usize> {
-        let start = self.name()?;
-        while self.eat("::") {
-            self.name()?;
+    fn item(&mut self, context: Context) -> ResultNode {
+        if matches!(context, Context::Module)
+            && self.word() == "#"
+            && matches!(self.peek(2), "datastack" | "directive")
+        {
+            return self.annotation();
         }
-        Ok(start)
+        if self.word() == "#" && self.peek(2) == "if" {
+            return self.conditional(context);
+        }
+        let start = self.mark();
+        let attrs = self.attributes()?;
+        if matches!(context, Context::Module) && self.eat("use").is_some() {
+            if attrs.public.is_some() || !attrs.annotations.is_empty() {
+                return Err(self.error("use cannot have declaration attributes", &[]));
+            }
+            return self.import(start);
+        }
+        if self.word() == "const" {
+            return self.constant(start, attrs);
+        }
+        let asynchronous = self.eat("async");
+        let abi = if self.eat("extern").is_some() {
+            if self.tokens[self.index].kind != Kind::Text {
+                return Err(self.error("expected an ABI string", &["\"C\""]));
+            }
+            Some(self.advance())
+        } else {
+            None
+        };
+        if self.eat("fn").is_some() {
+            return self.function(start, attrs, asynchronous, abi, false);
+        }
+        if asynchronous.is_some() || abi.is_some() {
+            return Err(self.error("expected a function declaration", &["fn"]));
+        }
+        let record = self.eat("struct").is_some();
+        let enumeration = !record && self.eat("enum").is_some();
+        if record || enumeration {
+            let name = self.ident()?;
+            let generics = self.generic_parameters()?;
+            self.expect("{")?;
+            let mut members = Vec::new();
+            while self.word() != "}" && !self.eof() {
+                members.push(self.item(if record {
+                    Context::Struct
+                } else {
+                    Context::Enum
+                })?)
+            }
+            self.expect("}")?;
+            return Ok(self.push(
+                start,
+                if record {
+                    NodeKind::Struct {
+                        attributes: attrs,
+                        name,
+                        generics,
+                        members,
+                    }
+                } else {
+                    NodeKind::Enum {
+                        attributes: attrs,
+                        name,
+                        generics,
+                        members,
+                    }
+                },
+            ));
+        }
+        match context {
+            Context::Struct => {
+                let name = self.ident()?;
+                self.expect(":")?;
+                let ty = self.ty()?;
+                self.expect(";")?;
+                Ok(self.push(
+                    start,
+                    NodeKind::Field {
+                        attributes: attrs,
+                        name,
+                        ty,
+                    },
+                ))
+            }
+            Context::Enum => {
+                if attrs.public.is_some() || !attrs.annotations.is_empty() {
+                    return Err(
+                        self.error("attributes do not prefix this variant", &["fn", "const"])
+                    );
+                }
+                let name = self.ident()?;
+                let mut positional = None;
+                let mut fields = None;
+                if self.eat("(").is_some() {
+                    let mut values = vec![self.ty()?];
+                    while !self.comma_end(")")? {
+                        values.push(self.ty()?)
+                    }
+                    positional = Some(values)
+                } else if self.eat("{").is_some() {
+                    let mut values = Vec::new();
+                    while self.word() != "}" {
+                        values.push(self.item(Context::Struct)?)
+                    }
+                    self.expect("}")?;
+                    fields = Some(values)
+                }
+                self.expect(";")?;
+                Ok(self.push(
+                    start,
+                    NodeKind::Variant {
+                        name,
+                        positional,
+                        fields,
+                    },
+                ))
+            }
+            Context::Module => {
+                if !attrs.annotations.is_empty() && attrs.public.is_none() {
+                    Ok(self.push(
+                        start,
+                        NodeKind::Module {
+                            items: attrs.annotations,
+                        },
+                    ))
+                } else {
+                    Err(self.error(
+                        "expected a module declaration",
+                        &["use", "fn", "struct", "enum", "const"],
+                    ))
+                }
+            }
+        }
     }
-    fn annotation(&mut self) -> Res<NodeId> {
-        self.parse_annotation(false)
+    fn import(&mut self, start: Mark) -> ResultNode {
+        let mut path = vec![self.ident()?];
+        let mut entries = None;
+        while self.eat("::").is_some() {
+            if self.eat("{").is_some() {
+                let mut list = Vec::new();
+                loop {
+                    let mark = self.mark();
+                    let name = self.ident()?;
+                    let alias = if self.eat("as").is_some() {
+                        Some(self.ident()?)
+                    } else {
+                        None
+                    };
+                    list.push(self.push(mark, NodeKind::ImportEntry { name, alias }));
+                    if self.comma_end("}")? {
+                        break;
+                    }
+                }
+                entries = Some(list);
+                break;
+            } else {
+                path.push(self.ident()?);
+            }
+        }
+        let alias = if self.eat("as").is_some() {
+            Some(self.ident()?)
+        } else {
+            None
+        };
+        self.expect(";")?;
+        Ok(self.push(
+            start,
+            NodeKind::Import {
+                path,
+                entries,
+                alias,
+            },
+        ))
     }
-
-    fn datastack_annotation(&mut self) -> Res<NodeId> {
-        self.parse_annotation(true)
-    }
-
-    fn parse_annotation(&mut self, global: bool) -> Res<NodeId> {
-        let start = self.i;
+    fn conditional(&mut self, context: Context) -> ResultNode {
+        let start = self.mark();
         self.expect("#")?;
         self.expect("(")?;
-        let name = self.name()?;
-        let mut properties = Vec::new();
-        match self.word_at(name) {
-            "datastack" => {
-                if !global {
-                    return Err(self.error("annotation datastack attendue en tête du programme"));
+        self.expect("if")?;
+        self.expect(":")?;
+        let condition = self.expr(0, false)?;
+        self.expect(")")?;
+        let mut items = Vec::new();
+        while !(self.word() == "#" && self.peek(2) == "endif") && !self.eof() {
+            items.push(self.item(context)?)
+        }
+        self.expect("#")?;
+        self.expect("(")?;
+        let end = self.expect("endif")?;
+        self.expect(")")?;
+        Ok(self.push(
+            start,
+            NodeKind::Conditional {
+                condition,
+                items,
+                end,
+            },
+        ))
+    }
+    fn constant(&mut self, start: Mark, attributes: Attributes) -> ResultNode {
+        self.expect("const")?;
+        let name = self.ident()?;
+        self.expect(":")?;
+        let ty = self.ty()?;
+        self.expect("=")?;
+        let value = self.expr(0, false)?;
+        self.expect(";")?;
+        Ok(self.push(
+            start,
+            NodeKind::Constant {
+                attributes,
+                name,
+                ty,
+                value,
+            },
+        ))
+    }
+    fn function(
+        &mut self,
+        start: Mark,
+        attributes: Attributes,
+        asynchronous: Option<TokenRef>,
+        abi: Option<TokenRef>,
+        signature: bool,
+    ) -> ResultNode {
+        let name = self.ident()?;
+        self.expect("(")?;
+        let mut parameters = Vec::new();
+        if self.eat(")").is_none() {
+            loop {
+                parameters.push(self.parameter()?);
+                if self.comma_end(")")? {
+                    break;
                 }
-                self.expect(":")?;
-                let mut seen = HashSet::new();
+            }
+        }
+        let result = if self.type_starts() {
+            Some(self.ty()?)
+        } else {
+            None
+        };
+        let body = if signature || abi.is_some() {
+            self.expect(";")?;
+            None
+        } else {
+            Some(self.block()?)
+        };
+        Ok(self.push(
+            start,
+            NodeKind::Function {
+                attributes,
+                asynchronous,
+                abi,
+                name,
+                parameters,
+                result,
+                body,
+            },
+        ))
+    }
+    fn parameter(&mut self) -> ResultNode {
+        let start = self.mark();
+        let reference = self.eat("&");
+        let mutable = self.eat("mut");
+        let name = self.ident()?;
+        let is_self = &self.source[name.span.start..name.span.end] == "self";
+        let ty = if self.eat(":").is_some() {
+            Some(self.ty()?)
+        } else if is_self {
+            None
+        } else {
+            return Err(self.error("parameter type is required", &[":"]));
+        };
+        if reference.is_some() && !is_self {
+            return Err(self.error("receiver reference syntax requires self", &["self"]));
+        }
+        Ok(self.push(
+            start,
+            NodeKind::Parameter {
+                mutable,
+                reference,
+                name,
+                ty,
+            },
+        ))
+    }
+    fn type_starts(&self) -> bool {
+        matches!(self.word(), "&" | "&&" | "[" | "(" | "fn")
+            || self.tokens[self.index].kind == Kind::Name
+                && !matches!(self.word(), "move" | "async")
+    }
+    fn ty(&mut self) -> ResultNode {
+        self.nested(|p| p.type_inner())
+    }
+    fn type_inner(&mut self) -> ResultNode {
+        let start = self.mark();
+        let syntax = if matches!(self.word(), "&" | "&&") {
+            let mut ampersand = self.reference();
+            ampersand.span.end = ampersand.span.start + 1;
+            self.last_end = ampersand.span.end;
+            self.piece += 1;
+            if self.tokens[self.index].span.start + self.piece == self.tokens[self.index].span.end {
+                self.index += 1;
+                self.piece = 0;
+            }
+
+            let mutable = self.eat("mut");
+            let target = self.ty()?;
+            TypeSyntax::Reference {
+                ampersand,
+                mutable,
+                target,
+            }
+        } else if self.eat("[").is_some() {
+            let element = self.ty()?;
+            if self.eat(";").is_some() {
+                let length = self.expr(0, false)?;
+                self.expect("]")?;
+                TypeSyntax::Array { element, length }
+            } else {
+                self.expect("]")?;
+                TypeSyntax::Slice { element }
+            }
+        } else if self.eat("(").is_some() {
+            let mut elements = Vec::new();
+            if self.eat(")").is_none() {
+                elements.push(self.ty()?);
+                self.expect(",")?;
                 if self.word() != ")" {
                     loop {
-                        let property = self.i;
-                        let name = self.word();
-                        if !matches!(name, "size" | "region_stack_size" | "region_size" | "reclaim_threshold" | "region_reclaim_threshold") {
-                            return Err(self.error("propriété de datastack inconnue"));
+                        elements.push(self.ty()?);
+                        if self.comma_end(")")? {
+                            break;
                         }
-                        if !seen.insert(name) {
-                            return Err(self.error("propriété de datastack répétée"));
+                    }
+                } else {
+                    return Err(
+                        self.error("singleton tuple types are not in the grammar", &["type"])
+                    );
+                }
+            }
+            TypeSyntax::Tuple { elements }
+        } else if self.eat("fn").is_some() {
+            self.expect("(")?;
+            let mut parameters = Vec::new();
+            if self.eat(")").is_none() {
+                loop {
+                    parameters.push(self.ty()?);
+                    if self.comma_end(")")? {
+                        break;
+                    }
+                }
+            }
+            let result = self.ty()?;
+            TypeSyntax::Callable { parameters, result }
+        } else {
+            let segments = self.path_segments()?;
+            let arguments = self.type_arguments()?;
+            TypeSyntax::Path {
+                segments,
+                arguments,
+            }
+        };
+        Ok(self.push(start, NodeKind::Type(syntax)))
+    }
+    fn path_segments(&mut self) -> Result<Vec<TokenRef>, ParseError> {
+        let mut segments = vec![self.ident()?];
+        while self.word() == "::" && self.peek(1) != "{" {
+            self.advance();
+            segments.push(self.ident()?)
+        }
+        Ok(segments)
+    }
+    fn type_arguments(&mut self) -> Result<Vec<NodeId>, ParseError> {
+        let mut args = Vec::new();
+        if self.eat("<").is_none() {
+            return Ok(args);
+        }
+        loop {
+            if self.tokens[self.index].kind == Kind::Integer {
+                let start = self.mark();
+                let token = self.advance();
+                args.push(self.push(start, NodeKind::Literal { token }))
+            } else {
+                args.push(self.ty()?)
+            }
+            if self.eat(",").is_none() {
+                self.angle_close()?;
+                break;
+            }
+        }
+        Ok(args)
+    }
+    fn contract_arguments(&mut self) -> Result<Vec<NodeId>, ParseError> {
+        if self.eat("<").is_none() {
+            return Ok(Vec::new());
+        }
+        let start = self.mark();
+        let parameter = self.ident()?;
+        let argument = if self.eat(":").is_some() {
+            let mut alternatives = vec![self.ty()?];
+            while self.eat(",").is_some() {
+                alternatives.push(self.ty()?)
+            }
+            self.push(
+                start,
+                NodeKind::Type(TypeSyntax::Constrained {
+                    parameter,
+                    alternatives,
+                }),
+            )
+        } else {
+            self.push(
+                start,
+                NodeKind::Type(TypeSyntax::Path {
+                    segments: vec![parameter],
+                    arguments: vec![],
+                }),
+            )
+        };
+        self.angle_close()?;
+        Ok(vec![argument])
+    }
+
+    fn annotation(&mut self) -> ResultNode {
+        let start = self.mark();
+        self.expect("#")?;
+        self.expect("(")?;
+        let name = self.ident()?;
+        let tag = &self.source[name.span.start..name.span.end];
+        let syntax = match tag {
+            "configurable" | "free_pages" => AnnotationSyntax::Marker,
+            "type" => {
+                self.expect(":")?;
+                let parameter = self.ident()?;
+                let arguments = self.contract_arguments()?;
+                let with = self.eat("with");
+                let mut alternatives = Vec::new();
+                let mut separators = Vec::new();
+                if self.word() == "{" {
+                    alternatives.push(self.contract_alternative()?);
+                    while let Some(separator) = self.eat("|") {
+                        separators.push(separator);
+                        if self.word() == "with" {
+                            return Err(self.error(
+                                "with applies to the whole contract; place it before the first branch",
+                                &["{"],
+                            ));
                         }
-                        self.i += 1;
+                        alternatives.push(self.contract_alternative()?);
+                    }
+                } else if with.is_some() || !arguments.is_empty() {
+                    return Err(self.error(
+                        "contract arguments or with require a method contract",
+                        &["{"],
+                    ));
+                } else if self.word() == "|" {
+                    return Err(self.error("OR requires a method contract before |", &["{"]));
+                }
+                if self.word() == "||" {
+                    return Err(self.error(
+                        "use | between type-contract alternatives, not ||",
+                        &["|", ")"],
+                    ));
+                }
+                AnnotationSyntax::TypeContract {
+                    parameter,
+                    arguments,
+                    with,
+                    alternatives,
+                    separators,
+                }
+            }
+            "branch" => {
+                let join = if self.eat(":").is_some() {
+                    self.expect("join")?;
+                    self.expect("=")?;
+                    Some(self.expr(0, false)?)
+                } else {
+                    None
+                };
+                AnnotationSyntax::Branch { join }
+            }
+            "lock" if self.word() == ")" => AnnotationSyntax::Marker,
+            "lock" | "thread" | "datastack" | "stack_region" | "override" | "directive" => {
+                self.expect(":")?;
+                let mut entries = Vec::new();
+                if self.word() != ")" {
+                    loop {
+                        let mark = self.mark();
+                        let segments = self.path_segments()?;
+                        let key = self.push(
+                            mark,
+                            NodeKind::Path {
+                                segments,
+                                arguments: vec![],
+                            },
+                        );
                         self.expect("=")?;
-                        let digits = self.word();
-                        if digits.is_empty()
-                            || !digits.bytes().all(|digit| digit.is_ascii_digit())
-                            || digits.bytes().all(|digit| digit == b'0')
+                        let value = if self.tokens[self.index].kind == Kind::Integer
+                            && matches!(self.peek(1), "K" | "M" | "G")
                         {
-                            return Err(
-                                self.error("taille de datastack décimale positive attendue")
-                            );
+                            let mark = self.mark();
+                            let number = self.advance();
+                            let unit = self.advance();
+                            self.push(mark, NodeKind::Size { number, unit })
+                        } else if tag == "directive" && self.eat("{").is_some() {
+                            let mark = self.mark();
+                            let mut fields = Vec::new();
+                            if self.eat("}").is_none() {
+                                loop {
+                                    let m = self.mark();
+                                    let segments = self.path_segments()?;
+                                    let key = self.push(
+                                        m,
+                                        NodeKind::Path {
+                                            segments,
+                                            arguments: vec![],
+                                        },
+                                    );
+                                    self.expect(":")?;
+                                    let value = self.expr(0, false)?;
+                                    fields.push(self.push(m, NodeKind::Property { key, value }));
+                                    if self.comma_end("}")? {
+                                        break;
+                                    }
+                                }
+                            }
+                            self.push(mark, NodeKind::Module { items: fields })
+                        } else {
+                            self.expr(0, false)?
+                        };
+                        entries.push(self.push(mark, NodeKind::Property { key, value }));
+                        if self.eat(",").is_none() {
+                            break;
                         }
-                        let size = self.integer()?;
-                        if !matches!(self.word(), "K" | "M" | "G") {
-                            return Err(self.error("unité K, M ou G attendue"));
-                        }
-                        self.i += 1;
-                        properties.push(self.node(
-                            "taille de datastack",
-                            property,
-                            Some(property),
-                            vec![size],
-                        ));
-                        if !self.eat(",") {
+                        if self.word() == ")" {
                             break;
                         }
                     }
                 }
+                AnnotationSyntax::Properties { entries }
             }
-            "free_pages" => {}
-            "stack_region" => {
-                self.expect(":")?;
-                let property = self.i;
-                self.expect("max_size")?;
-                self.expect("=")?;
-                let size = self.positive_decimal()?;
-                if !matches!(self.word(), "K" | "M" | "G") {
-                    return Err(self.error("unité K, M ou G attendue"));
-                }
-                self.i += 1;
-                properties.push(self.node(
-                    "taille de datastack",
-                    property,
-                    Some(property),
-                    vec![size],
-                ));
-                if self.eat(",") {
-                    let property = self.i;
-                    self.expect("count")?;
-                    self.expect("=")?;
-                    let count = self.positive_decimal()?;
-                    properties.push(self.node(
-                        "nombre de régions",
-                        property,
-                        Some(property),
-                        vec![count],
-                    ));
-                }
-            }
-            "directive" => {
-                self.expect(":")?;
-                let property = self.i;
-                if self.eat("async_pool_sizes") {
-                    self.expect("=")?;
-                    self.expect("{")?;
-                    let entries = self.list("}", |p| {
-                        let start = p.i;
-                        let key = p.path()?;
-                        p.expect(":")?;
-                        let capacity = p.integer()?;
-                        Ok(p.node("capacité", start, Some(key), vec![capacity]))
-                    })?;
-                    if entries.is_empty() {
-                        return Err(self.error("capacité attendue"));
-                    }
-                    properties.push(self.node("capacités", property, Some(property), entries));
-                } else {
-                    self.expect("stack_region_max_size")?;
-                    self.expect("=")?;
-                    let digits = self.word();
-                    if digits.is_empty()
-                        || !digits.bytes().all(|b| b.is_ascii_digit())
-                        || digits.bytes().all(|b| b == b'0')
-                    {
-                        return Err(self.error("taille de région positive attendue"));
-                    }
-                    let size = self.integer()?;
-                    if !matches!(self.word(), "K" | "M" | "G") {
-                        return Err(self.error("unité K, M ou G attendue"));
-                    }
-                    self.i += 1;
-                    properties.push(self.node("région", property, Some(property), vec![size]));
-                }
-            }
-            "type" => {
-                self.expect(":")?;
-                let carrier = self.name()?;
-                if self.eat("*") {
-                    properties.push(self.node("type libre", carrier, Some(carrier), vec![]));
-                } else {
-                    if self.eat("<") {
-                    let parameter = self.name()?;
-                    let mut alternatives = Vec::new();
-                    if self.eat(":") {
-                        alternatives.push(self.ty()?);
-                        while self.eat(",") {
-                            alternatives.push(self.ty()?);
-                        }
-                    }
-                    self.expect(">")?;
-                    properties.push(self.node(
-                        "paramètre de type",
-                        parameter,
-                        Some(parameter),
-                        alternatives,
-                    ));
-                    }
-                    let with = self.eat("with");
-                    self.expect("{")?;
-                    let mut methods = Vec::new();
-                    while !self.eat("}") {
-                        let start = self.i;
-                        let asynchronous = self.eat("async");
-                        self.expect("fn")?;
-                        methods.push(self.function(start, vec![], asynchronous, false, true, true)?);
-                        self.expect(";")?;
-                    }
-                    if methods.is_empty() {
-                        return Err(self.error("exigence de méthode attendue"));
-                    }
-                    properties.push(self.node(
-                        if with { "type avec" } else { "type exact" },
-                        carrier,
-                        Some(carrier),
-                        methods,
-                    ));
-                }
-            }
-            "lock" => {
-                self.expect(":")?;
-                self.expect("on")?;
-                self.expect("=")?;
-                let target = self.i;
-                self.expect("self")?;
-                let through = self.eat(",");
-                if through {
-                    self.expect("through_result")?;
-                    self.expect("=")?;
-                    self.expect("true")?;
-                }
-                properties.push(self.node(
-                    if through {
-                        "verrou lié au résultat"
-                    } else {
-                        "verrou"
-                    },
-                    target,
-                    Some(target),
-                    vec![],
+            _ => {
+                return Err(self.error(
+                    "unknown annotation",
+                    &[
+                        "type",
+                        "branch",
+                        "lock",
+                        "thread",
+                        "configurable",
+                        "override",
+                        "datastack",
+                        "stack_region",
+                        "free_pages",
+                        "directive",
+                    ],
                 ));
             }
-            "branch" => {
-                if self.eat(":") {
-                    self.expect("join")?;
-                    self.expect("=")?;
-                    self.expect("result")?;
-                    self.expect(".")?;
-                    let end = self.name()?;
-                    if self.word_at(end) != "await" {
-                        self.expect("(")?;
-                        self.expect(")")?;
-                    }
-                    properties.push(self.node("fin de branche", end, Some(end), vec![]));
-                }
-            }
-            _ => return Err(self.error("annotation inconnue")),
-        }
+        };
         self.expect(")")?;
-        Ok(self.node("annotation", start, Some(name), properties))
+        Ok(self.push(start, NodeKind::Annotation { name, syntax }))
     }
-    fn item(&mut self, signature: bool) -> Res<NodeId> {
-        let start = self.i;
-        let public = self.eat("pub");
-        let node = self.declaration(signature)?;
-        if public && !matches!(self.nodes[node.0].kind, "fn" | "async fn" | "extern" | "struct" | "enum" | "const") {
-            return Err(self.error("pub exige une fonction, un type nommé ou une constante"));
+    fn contract_alternative(&mut self) -> ResultNode {
+        let start = self.mark();
+        let open = self.expect("{")?;
+        if self.word() == "}" {
+            return Err(self.error("method contract requires at least one signature", &["fn"]));
         }
-        if public && self.nodes[node.0].public { return Err(self.error("pub répété")); }
-        self.nodes[node.0].public |= public;
-        self.nodes[node.0].start = start;
-        Ok(node)
+        let mut methods = Vec::new();
+        while self.word() != "}" {
+            let mark = self.mark();
+            let attrs = Self::empty_attributes();
+            let asynchronous = self.eat("async");
+            self.expect("fn")?;
+            methods.push(self.function(mark, attrs, asynchronous, None, true)?);
+        }
+        let close = self.expect("}")?;
+        Ok(self.push(
+            start,
+            NodeKind::TypeContractAlternative {
+                open,
+                methods,
+                close,
+            },
+        ))
     }
 
-    fn import(&mut self) -> Res<NodeId> {
-        let start = self.i;
-        self.expect("use")?;
-        let path = self.name()?;
-        self.expect("::")?;
-        loop {
-            if self.eat("{") {
-                let members = self.list("}", |p| {
-                    let start = p.i;
-                    let name = p.name()?;
-                    let alias = p.import_alias()?;
-                    Ok(p.node("import member", start, Some(name), alias))
-                })?;
-                if members.is_empty() {
-                    return Err(self.error("empty import group"));
-                }
-                self.expect(";")?;
-                return Ok(self.node("use", start, Some(path), members));
-            }
-            self.name()?;
-            if !self.eat("::") {
-                let alias = self.import_alias()?;
-                self.expect(";")?;
-                return Ok(self.node("use", start, Some(path), alias));
-            }
-        }
+    fn block(&mut self) -> ResultNode {
+        self.nested(|p| p.block_inner())
     }
-
-    fn import_alias(&mut self) -> Res<Vec<NodeId>> {
-        if !self.eat("as") {
-            return Ok(vec![]);
-        }
-        let name = self.declaration_name(false)?;
-        Ok(vec![self.node("import alias", name, Some(name), vec![])])
-    }
-
-    fn declaration(&mut self, signature: bool) -> Res<NodeId> {
-        let start = self.i;
+    fn block_inner(&mut self) -> ResultNode {
+        let start = self.mark();
         let mut annotations = Vec::new();
         while self.word() == "#" {
-            let annotation = self.annotation()?;
-            let tag = self.nodes[annotation.0].name.unwrap();
-            if matches!(self.word_at(tag), "stack_region" | "free_pages") {
-                return Err(self.error("annotation de bloc attendue avant les accolades"));
+            annotations.push(self.annotation()?)
+        }
+        self.expect("{")?;
+        let mut statements = Vec::new();
+        let mut result = None;
+        while self.word() != "}" && !self.eof() {
+            if let Some(statement) = self.special_statement()? {
+                statements.push(statement);
+                continue;
             }
-            if self.word_at(tag) == "datastack" {
-                return Err(self.error("annotation datastack attendue en tête du programme"));
-            }
-            if self.word_at(tag) == "directive" {
-                if annotations.is_empty() {
-                    return Ok(annotation);
-                }
-                return Err(self.error("directive après contrat"));
-            }
-            annotations.push(annotation);
-        }
-        let public = self.eat("pub");
-        let asynchronous = self.eat("async");
-        let external = self.eat("extern");
-        if external {
-            self.expect("\"C\"")?;
-        }
-        if self.eat("fn") {
-            let function = self.function(start, annotations, asynchronous, external, signature, false)?;
-            self.nodes[function.0].public = public;
-            return Ok(function);
-        }
-        if !asynchronous && !external && self.eat("struct") {
-            if annotations.iter().any(|id| self.nodes[id.0].name.is_none_or(|name| self.word_at(name) != "type")) {
-                return Err(self.error("seuls les contrats de type peuvent annoter une struct"));
-            }
-            let name = self.declaration_name(false)?;
-            annotations.extend(self.generic_parameters()?);
-            annotations.extend(self.fields(true)?);
-            let record = self.node("struct", start, Some(name), annotations);
-            self.nodes[record.0].public = public;
-            return Ok(record);
-        }
-        if !asynchronous && !external && self.eat("enum") {
-            if annotations.iter().any(|id| self.nodes[id.0].name.is_none_or(|name| self.word_at(name) != "type")) {
-                return Err(self.error("seuls les contrats de type peuvent annoter une enum"));
-            }
-            let name = self.declaration_name(false)?;
-            annotations.extend(self.generic_parameters()?);
-            self.expect("{")?;
-            let variants = self.list("}", |p| {
-                let start = p.i;
-                let name = p.declaration_name(false)?;
-                let fields = if p.word() == "{" { p.fields(true)? }
-                else if p.eat("(") {
-                    if p.word() == ")" { return Err(p.error("type positionnel attendu")); }
-                    p.list(")", |p| {
-                        let start = p.i;
-                        let ty = p.ty()?;
-                        Ok(p.node("champ positionnel", start, None, vec![ty]))
-                    })?
-                } else { vec![] };
-                Ok(p.node("variante", start, Some(name), fields))
-            })?;
-            if variants.is_empty() { return Err(self.error("enum vide")); }
-            annotations.extend(variants);
-            let enumeration = self.node("enum", start, Some(name), annotations);
-            self.nodes[enumeration.0].public = public;
-            return Ok(enumeration);
-        }
-        if asynchronous || external || !annotations.is_empty() {
-            return Err(self.error("fn attendu"));
-        }
-        if self.eat("const") {
-            return self.constant(start);
-        }
-        if self.eat("impl") {
-            let name = self.path()?;
-            let mut methods = self.generic_parameters()?;
-            self.expect("{")?;
-            while !self.eat("}") {
-                let start = self.i;
-                if self.eat("const") {
-                    methods.push(self.constant(start)?);
-                    continue;
-                }
-                let mut annotations = Vec::new();
-                if self.word() == "#" {
-                    annotations.push(self.annotation()?);
-                }
-                let asynchronous = self.eat("async");
-                self.expect("fn")?;
-                methods.push(self.function(start, annotations, asynchronous, false, false, true)?);
-            }
-            return Ok(self.node("impl", start, Some(name), methods));
-        }
-        Err(self.error("déclaration attendue"))
-    }
-    fn generic_parameters(&mut self) -> Res<Vec<NodeId>> {
-        if !self.eat("<") { return Ok(vec![]); }
-        let mut seen = HashSet::new();
-        let parameters = self.list(">", |p| {
-            let name = p.declaration_name(false)?;
-            if !seen.insert(p.word_at(name)) { return Err(p.error("paramètre de type répété")); }
-            Ok(p.node("type libre", name, Some(name), vec![]))
-        })?;
-        if parameters.is_empty() { return Err(self.error("paramètre de type attendu")); }
-        Ok(parameters)
-    }
-
-    fn constant(&mut self, start: usize) -> Res<NodeId> {
-        let name = self.declaration_name(false)?;
-        self.expect(":")?;
-        let ty = self.ty()?;
-        self.expect("=")?;
-        let literal_start = self.i;
-        let negative = self.eat("-");
-        let literal = self.i;
-        if !(matches!(self.tokens[literal].kind, Kind::Integer | Kind::Float)
-            || !negative && matches!(self.word(), "true" | "false"))
-        {
-            return Err(self.error("littéral scalaire attendu pour la constante"));
-        }
-        self.i += 1;
-        let value = self.node("littéral", literal, Some(literal), vec![]);
-        let value = if negative {
-            self.node("unaire", literal_start, Some(literal_start), vec![value])
-        } else {
-            value
-        };
-        self.expect(";")?;
-        Ok(self.node("const", start, Some(name), vec![ty, value]))
-    }
-
-    fn function(
-        &mut self,
-        start: usize,
-        mut children: Vec<NodeId>,
-        asynchronous: bool,
-        external: bool,
-        signature: bool,
-        method: bool,
-    ) -> Res<NodeId> {
-        let name = if method && self.word() == "addr" {
-            self.name()?
-        } else {
-            self.declaration_name(false)?
-        };
-        self.expect("(")?;
-        children.extend(self.list(")", Self::parameter)?);
-        if self.eat("->") {
-            children.push(self.ty()?);
-        }
-        if external {
-            self.expect(";")?;
-        } else if !signature {
-            children.push(self.block()?);
-        }
-        Ok(self.node(
-            if external {
-                "extern"
-            } else if asynchronous {
-                "async fn"
+            let mark = self.mark();
+            // A bare block-form at statement start is self-contained. A
+            // parenthesized block, assignment RHS or call argument still uses
+            // ordinary expression parsing and may participate in operators.
+            let expression = if self.starts_block_statement() {
+                self.nested(|p| p.primary(false))?
             } else {
-                "fn"
-            },
+                self.expr(0, false)?
+            };
+            if let Some(operator) = self.assignment_operator() {
+                if !self.assignment_target_shape(expression) {
+                    let node = &self.nodes[expression.0];
+                    return Err(ParseError {
+                        class: ErrorClass::Syntax,
+                        span: node.span,
+                        message: "assignment requires a name, dereference, field or indexed target",
+                        expected: vec!["assignment_left_expression"],
+                        found: self.source[node.span.start..node.span.end].to_owned(),
+                    });
+                }
+                let value = self.expr(0, false)?;
+                self.expect(";")?;
+                // Distinct target/value roles; no inferred mutability or place validity.
+                statements.push(self.push(
+                    mark,
+                    NodeKind::Assignment {
+                        target: expression,
+                        operator,
+                        value,
+                    },
+                ));
+            } else if let Some(semicolon) = self.eat(";") {
+                statements.push(self.push(
+                    mark,
+                    NodeKind::ExpressionStatement {
+                        expression,
+                        semicolon: Some(semicolon),
+                    },
+                ))
+            } else if self.word() == "}" {
+                result = Some(expression);
+                break;
+            } else if self.block_like(expression) {
+                statements.push(self.push(
+                    mark,
+                    NodeKind::ExpressionStatement {
+                        expression,
+                        semicolon: None,
+                    },
+                ))
+            } else {
+                return Err(self.error("expected a statement terminator", &[";", "}"]));
+            }
+        }
+        self.expect("}")?;
+        Ok(self.push(
             start,
-            Some(name),
-            children,
+            NodeKind::Block {
+                annotations,
+                statements,
+                result,
+            },
         ))
     }
-    fn parameter(&mut self) -> Res<NodeId> {
-        let start = self.i;
-        let reference = self.eat("&");
-        self.eat("mut");
-        let name = self.declaration_name(true)?;
-        let mut children = Vec::new();
-        if !reference || self.word_at(name) != "self" {
-            self.expect(":")?;
-            children.push(self.ty()?);
-        }
-        Ok(self.node("paramètre", start, Some(name), children))
-    }
-    fn ty(&mut self) -> Res<NodeId> {
-        self.nested(|p| {
-            let start = p.i;
-            let mut children = Vec::new();
-            let name;
-            if p.eat("&") || p.eat("&&") {
-                p.eat("mut");
-                children.push(p.ty()?);
-                name = None;
-            } else if p.eat("[") {
-                children.push(p.ty()?);
-                if p.eat(";") {
-                    children.push(p.integer()?);
-                }
-                p.expect("]")?;
-                name = None;
-            } else if p.eat("(") {
-                children = p.list(")", Self::ty)?;
-                if children.len() == 1 {
-                    return Err(p.error("tuple type requires at least two elements"));
-                }
-                name = None;
-            } else if p.eat("fn") {
-                p.expect("(")?;
-                children.extend(p.list(")", Self::ty)?);
-                p.expect("->")?;
-                children.push(p.ty()?);
-                name = Some(start);
-            } else {
-                name = Some(p.path()?);
-                if p.word() == "<" {
-                    children = p.type_arguments()?;
-                }
-            }
-            Ok(p.node("type", start, name, children))
-        })
-    }
-    fn type_arguments(&mut self) -> Res<Vec<NodeId>> {
-        self.expect("<")?;
-        let mut arguments = vec![self.ty()?];
-        while self.eat(",") {
-            arguments.push(self.ty()?);
-        }
-        self.expect(">")?;
-        Ok(arguments)
+    fn starts_block_statement(&self) -> bool {
+        matches!(self.word(), "{" | "#" | "if" | "match" | "loop" | "@")
+            || self.word() == "move" && matches!(self.peek(1), "{" | "#")
+            || matches!(
+                self.tokens[self.index].kind,
+                Kind::Assembly | Kind::C | Kind::Cpp
+            )
     }
 
-    fn positive_decimal(&mut self) -> Res<NodeId> {
-        let digits = self.word();
-        if digits.is_empty()
-            || !digits.bytes().all(|digit| digit.is_ascii_digit())
-            || digits.bytes().all(|digit| digit == b'0')
-        {
-            return Err(self.error("entier décimal strictement positif attendu"));
-        }
-        self.integer()
+    fn block_like(&self, id: NodeId) -> bool {
+        matches!(
+            self.nodes[id.0].kind,
+            NodeKind::Block { .. }
+                | NodeKind::If { .. }
+                | NodeKind::Match { .. }
+                | NodeKind::Loop { .. }
+                | NodeKind::MoveBlock { .. }
+                | NodeKind::Unchecked { .. }
+                | NodeKind::Foreign { .. }
+        )
     }
-    fn integer(&mut self) -> Res<NodeId> {
-        let start = self.i;
-        if self.tokens[start].kind != Kind::Integer {
-            return Err(self.error("entier attendu"));
+    // This recognizes the grammatical shape of a place, not whether it exists,
+    // is mutable, or remains alive. Calls can occur inside a final projection,
+    // index or dereference without consulting their signatures.
+    fn assignment_target_shape(&self, id: NodeId) -> bool {
+        match &self.nodes[id.0].kind {
+            NodeKind::Path {
+                segments,
+                arguments,
+            } => segments.len() == 1 && arguments.is_empty(),
+            NodeKind::Parenthesized { expression } => self.assignment_target_shape(*expression),
+            NodeKind::Unary { operator, .. } => {
+                &self.source[operator.span.start..operator.span.end] == "*"
+            }
+            NodeKind::Projection { .. } => true,
+            NodeKind::Index { index, .. } => {
+                !matches!(self.nodes[index.0].kind, NodeKind::Range { .. })
+            }
+            _ => false,
         }
-        self.i += 1;
-        Ok(self.node("littéral", start, Some(start), vec![]))
     }
-    fn fields(&mut self, types: bool) -> Res<Vec<NodeId>> {
-        self.expect("{")?;
-        self.named_fields("}", types)
-    }
-    fn named_fields(&mut self, close: &'static str, types: bool) -> Res<Vec<NodeId>> {
-        self.list(close, |p| {
-            let start = p.i;
-            let name = p.name()?;
-            p.expect(":")?;
-            let value = if types { p.ty()? } else { p.expr(0, false)? };
-            Ok(p.node("champ", start, Some(name), vec![value]))
-        })
-    }
-    fn block(&mut self) -> Res<NodeId> {
-        self.nested(|p| {
-            let start = p.i;
-            let mut children = Vec::new();
-            if p.word() == "#" {
-                let annotation = p.annotation()?;
-                let region = p.nodes[annotation.0].name.is_some_and(|name| p.word_at(name) == "stack_region");
-                children.push(annotation);
-                if region && p.word() == "#" && p.word_at(p.i + 2) == "free_pages" {
-                    children.push(p.annotation()?);
-                }
-            }
-            p.expect("{")?;
-            children.extend(p.statements("}")?);
-            p.expect("}")?;
-            Ok(p.node("scope", start, None, children))
-        })
-    }
-    fn statements(&mut self, close: &'static str) -> Res<Vec<NodeId>> {
-        let mut children = Vec::new();
-        let mut imports = true;
-        while self.word() != close && !self.eof() {
-            let statement = self.statement(imports, close)?;
-            imports &= self.nodes[statement.0].kind == "move nommé";
-            children.push(statement);
-        }
-        Ok(children)
-    }
-    fn statement(&mut self, imports: bool, close: &str) -> Res<NodeId> {
-        let start = self.i;
-        if self.tokens[self.i].kind == Kind::Assembly {
-            if self.unchecked_depth == 0 {
-                return Err(self.error("@asm exige un bloc @unchecked"));
-            }
-            let span = self.tokens[self.i].span;
-            let template = &self.source[span.start..span.end];
-            let body = template.find('{').unwrap() + 1;
-            let mut operands = Vec::new();
-            let mut line_start = span.start + body;
-            for line in template[body..template.len() - 1].split_inclusive('\n') {
-                let code = line.split_once("//").map_or(line, |(code, _)| code);
-                for (offset, _) in code.match_indices("${") {
-                    let name = &code[offset + 2..];
-                    let name_len = name.find('}').unwrap();
-                    let start_byte = line_start + offset + 2;
-                    let node = self.node("opérande asm", start, None, vec![]);
-                    self.nodes[node.0].asm_operand = Some(crate::Span {
-                        start: start_byte,
-                        end: start_byte + name_len,
-                    });
-                    operands.push(node);
-                }
-                line_start += line.len();
-            }
-            self.i += 1;
-            return Ok(self.node("asm", start, None, operands));
-        }
-        if self.eat("@") {
-            self.expect("unchecked")?;
-            if self.word() != "{" {
-                return Err(self.error("@unchecked exige un bloc délimité"));
-            }
-            self.unchecked_depth += 1;
-            let block = self.block();
-            self.unchecked_depth -= 1;
-            return Ok(self.node("unchecked", start, None, vec![block?]));
-        }
-        if self.eat("let") {
-            if self.eat("(") {
-                let bindings = self.list(")", |p| {
-                    let start = p.i;
-                    p.eat("mut");
-                    let name = p.declaration_name(false)?;
-                    Ok(p.node("tuple binding", start, Some(name), vec![]))
-                })?;
-                if bindings.len() < 2 {
-                    return Err(self.error("tuple pattern requires at least two bindings"));
-                }
-                let mut children = Vec::new();
-                if self.eat(":") {
-                    children.push(self.ty()?);
-                }
-                self.expect("=")?;
-                children.push(self.expr(0, false)?);
-                self.expect(";")?;
-                children.extend(bindings);
-                return Ok(self.node("tuple let", start, None, children));
-            }
-            self.eat("mut");
-            let name = self.declaration_name(false)?;
-            let mut children = Vec::new();
-            if self.eat(":") {
-                children.push(self.ty()?);
-            }
-            self.expect("=")?;
-            children.push(self.expr(0, false)?);
-            self.expect(";")?;
-            return Ok(self.node("liaison", start, Some(name), children));
-        }
-        if self.word() == "move" && self.word_at(start + 2) == ";" {
-            if !imports {
-                return Err(self.error("move nommé réservé à l’entrée du bloc"));
-            }
-            self.i += 1;
-            let name = self.name()?;
-            self.expect(";")?;
-            return Ok(self.node("move nommé", start, Some(name), vec![]));
-        }
-        let control = self.word();
-        if matches!(control, "return" | "break" | "continue" | "yield") {
-            self.i += 1;
-            let mut children = Vec::new();
-            if matches!(control, "return" | "break") && self.word() != ";" {
-                children.push(self.expr(0, false)?);
-            }
-            self.expect(";")?;
-            let kind = match control {
-                "return" => "return",
-                "break" => "break",
-                "continue" => "continue",
-                _ => "yield",
-            };
-            return Ok(self.node(kind, start, None, children));
-        }
-        if self.eat("while") {
-            let (test, body) = self.test_and_block()?;
-            return Ok(self.node("while", start, None, vec![test, body]));
-        }
-        let left = self.expr(0, false)?;
-        let width = self.assignment_width();
-        if width != 0 {
-            let op = self.i;
-            self.i += width;
-            let right = self.expr(0, false)?;
-            self.expect(";")?;
-            return Ok(self.node("affectation", start, Some(op), vec![left, right]));
-        }
-        if self.eat(";") {
-            return Ok(self.node("instruction", start, None, vec![left]));
-        }
-        if self.word() == close || self.eof() {
-            return Ok(self.node("résultat", start, None, vec![left]));
-        }
+
+    fn assignment_operator(&mut self) -> Option<TokenRef> {
         if matches!(
-            self.nodes[left.0].kind,
-            "scope" | "if" | "match" | "loop" | "move bloc" | "unsafe"
+            self.word(),
+            "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
         ) {
-            return Ok(self.node("instruction", start, None, vec![left]));
+            Some(self.advance())
+        } else {
+            None
         }
-        Err(self.error("point-virgule attendu"))
     }
-    fn expr(&mut self, min: u8, before_block: bool) -> Res<NodeId> {
-        self.nested(|p| p.expression(min, before_block))
-    }
-    fn assignment_width(&self) -> usize {
-        if matches!(self.word(), "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=") {
-            return 1;
-        }
-        if self.word() == ">" && self.word_at(self.i + 1) == ">" && self.word_at(self.i + 2) == "="
-            && self.tokens[self.i].span.end == self.tokens[self.i + 1].span.start
-            && self.tokens[self.i + 1].span.end == self.tokens[self.i + 2].span.start
-        {
-            return 3;
-        }
-        0
-    }
-
-    fn operator(&self) -> Option<(u8, usize)> {
-        let word = self.word();
-        if word == ">" && self.assignment_width() == 3 {
-            return None;
-        }
-        if word == ">"
+    fn special_statement(&mut self) -> Result<Option<NodeId>, ParseError> {
+        let start = self.mark();
+        let node = if self.eat("let").is_some() {
+            let pattern = self.binding_pattern()?;
+            let ty = if self.eat(":").is_some() {
+                Some(self.ty()?)
+            } else {
+                None
+            };
+            self.expect("=")?;
+            let value = self.expr(0, false)?;
+            self.expect(";")?;
+            self.push(start, NodeKind::Let { pattern, ty, value })
+        } else if matches!(self.word(), "return" | "break") {
+            let keyword = self.advance();
+            let value = if self.word() == ";" {
+                None
+            } else {
+                Some(self.expr(0, false)?)
+            };
+            self.expect(";")?;
+            let kind = if &self.source[keyword.span.start..keyword.span.end] == "return" {
+                NodeKind::Return { keyword, value }
+            } else {
+                NodeKind::Break { keyword, value }
+            };
+            self.push(start, kind)
+        } else if matches!(self.word(), "continue" | "yield") {
+            let keyword = self.advance();
+            self.expect(";")?;
+            let kind = if &self.source[keyword.span.start..keyword.span.end] == "continue" {
+                NodeKind::Continue { keyword }
+            } else {
+                NodeKind::Yield { keyword }
+            };
+            self.push(start, kind)
+        } else if self.word() == "move"
             && self
                 .tokens
-                .get(self.i + 1)
-                .is_some_and(|t| self.tokens[self.i].span.end == t.span.start)
+                .get(self.index + 1)
+                .is_some_and(|t| t.kind == Kind::Name)
+            && self.peek(2) == ";"
         {
-            match self.word_at(self.i + 1) {
-                ">" => return Some((7, 2)),
-                "=" => return Some((6, 2)),
-                _ => {}
+            let keyword = self.advance();
+            let name = self.ident()?;
+            self.expect(";")?;
+            self.push(start, NodeKind::NamedMove { keyword, name })
+        } else if self.eat("while").is_some() {
+            let condition = self.expr(0, true)?;
+            let body = self.block()?;
+            self.push(start, NodeKind::While { condition, body })
+        } else if self.eat("for").is_some() {
+            let pattern = self.binding_pattern()?;
+            self.expect("in")?;
+            let source = self.expr(0, true)?;
+            let body = self.block()?;
+            self.push(
+                start,
+                NodeKind::For {
+                    pattern,
+                    source,
+                    body,
+                },
+            )
+        } else {
+            return Ok(None);
+        };
+        Ok(Some(node))
+    }
+    fn binding_pattern(&mut self) -> ResultNode {
+        let start = self.mark();
+        if self.eat("(").is_some() {
+            let mut elements = vec![self.binding_pattern()?];
+            self.expect(",")?;
+            elements.push(self.binding_pattern()?);
+            while !self.comma_end(")")? {
+                elements.push(self.binding_pattern()?)
             }
+            return Ok(self.push(start, NodeKind::Pattern(PatternSyntax::Tuple { elements })));
         }
-        Some((
-            match word {
-                "||" => 1,
-                "&&" => 2,
-                "|" => 3,
-                "^" => 4,
-                "&" => 5,
-                "==" | "!=" | "<" | ">" | "<=" => 6,
-                "<<" => 7,
-                "+" | "-" => 8,
-                "*" | "/" | "%" => 9,
-                "as" => 10,
-                _ => return None,
-            },
-            1,
+        let mutable = self.eat("mut");
+        if self.eat("_").is_some() {
+            return Ok(self.push(start, NodeKind::Pattern(PatternSyntax::Wildcard)));
+        }
+        let name = self.ident()?;
+        Ok(self.push(
+            start,
+            NodeKind::Pattern(PatternSyntax::Binding { mutable, name }),
         ))
     }
-    fn expression(&mut self, min: u8, before_block: bool) -> Res<NodeId> {
-        let start = self.i;
-        let mut left = if matches!(self.word(), "&" | "*" | "-" | "!" | "~") {
-            let op = self.i;
-            self.i += 1;
-            if self.word_at(op) == "&" {
-                self.eat("mut");
-            }
-            let operand = self.expr(11, before_block)?;
-            let kind = match self.word_at(op) {
-                "&" => "emprunt",
-                "*" => "indirection",
-                _ => "unaire",
-            };
-            self.node(kind, start, Some(op), vec![operand])
-        } else {
-            self.primary(before_block)?
-        };
-        loop {
-            if self.eat("?") {
-                left = self.node("propagation", start, Some(self.i - 1), vec![left]);
-            } else if self.eat("(") {
-                let args = self.list(")", |p| p.expr(0, false))?;
-                let mut children = vec![left];
-                children.extend(args);
-                left = self.node("appel", start, None, children);
-            } else if self.eat(".") {
-                let member = self.name()?;
-                if self.word_at(member) == "await" {
-                    left = self.node("await", start, Some(member), vec![left]);
-                } else if self.eat("(") {
-                    let mut children = vec![left];
-                    if self.word_at(member) == "new" && self.word() == "{"
-                        && (self.word_at(self.i + 1) == "}" || self.word_at(self.i + 2) == ":")
-                    {
-                        let start = self.i;
-                        let fields = self.fields(false)?;
-                        self.expect(")")?;
-                        children.push(self.node("initialiseur pool", start, None, fields));
-                    } else if self.word_at(self.i + 1) == ":" {
-                        children.extend(self.named_fields(")", false)?);
-                    } else {
-                        children.extend(self.list(")", |p| {
-                            if p.word_at(member) == "try_slice" {
-                                p.range()
-                            } else {
-                                p.expr(0, false)
-                            }
-                        })?);
-                    }
-                    left = self.node("appel méthode", start, Some(member), children);
-                } else if self.word() == "{" && self.is_constructor(left, before_block) {
-                    let mut children = vec![left];
-                    children.extend(self.fields(false)?);
-                    left = self.node("construction", start, Some(member), children);
-                } else {
-                    left = self.node("projection", start, Some(member), vec![left]);
-                }
-            } else if self.eat("[") {
-                let index = self.range()?;
-                self.expect("]")?;
-                left = self.node("indice", start, None, vec![left, index]);
-            } else {
-                break;
-            }
+    fn pattern(&mut self) -> ResultNode {
+        self.nested(|p| p.pattern_inner())
+    }
+    fn pattern_inner(&mut self) -> ResultNode {
+        let start = self.mark();
+        if self.eat("_").is_some() {
+            return Ok(self.push(start, NodeKind::Pattern(PatternSyntax::Wildcard)));
         }
+        if self.eat("(").is_some() {
+            let mut elements = Vec::new();
+            if self.eat(")").is_none() {
+                loop {
+                    elements.push(self.pattern()?);
+                    if self.comma_end(")")? {
+                        break;
+                    }
+                }
+            }
+            return Ok(self.push(start, NodeKind::Pattern(PatternSyntax::Tuple { elements })));
+        }
+        let mut segments = vec![self.ident()?];
+        while self.word() == "::" {
+            self.advance();
+            segments.push(self.ident()?)
+        }
+        let path = self.push(
+            start,
+            NodeKind::Path {
+                segments,
+                arguments: vec![],
+            },
+        );
+        let mut positional = None;
+        let mut fields = None;
+        if self.eat("(").is_some() {
+            let mut list = vec![self.pattern()?];
+            while !self.comma_end(")")? {
+                list.push(self.pattern()?)
+            }
+            positional = Some(list)
+        } else if self.eat("{").is_some() {
+            let mut list = Vec::new();
+            if self.eat("}").is_none() {
+                loop {
+                    let mark = self.mark();
+                    let name = self.ident()?;
+                    self.expect(":")?;
+                    let binding = self.binding_pattern()?;
+                    list.push(self.push(
+                        mark,
+                        NodeKind::Pattern(PatternSyntax::Field { name, binding }),
+                    ));
+                    if self.comma_end("}")? {
+                        break;
+                    }
+                }
+            }
+            fields = Some(list)
+        }
+        Ok(self.push(
+            start,
+            NodeKind::Pattern(PatternSyntax::Variant {
+                path,
+                positional,
+                fields,
+            }),
+        ))
+    }
+    fn binding_power(&self) -> Option<u8> {
+        Some(match self.word() {
+            "||" => 1,
+            "&&" => 2,
+            "==" | "!=" | "<" | "<=" | ">" | ">=" => 3,
+            "|" => 4,
+            "^" => 5,
+            "&" => 6,
+            "<<" | ">>" => 7,
+            "+" | "-" => 8,
+            "*" | "/" | "%" => 9,
+            "as" => 10,
+            _ => return None,
+        })
+    }
+    fn expr(&mut self, min: u8, header: bool) -> ResultNode {
+        self.nested(|p| p.expression(min, header))
+    }
+    fn expression(&mut self, min: u8, header: bool) -> ResultNode {
+        let start = self.mark();
+        let mut left = if matches!(self.word(), "-" | "!" | "~" | "*" | "&") {
+            let operator = self.advance();
+            let mutable = if &self.source[operator.span.start..operator.span.end] == "&" {
+                self.eat("mut")
+            } else {
+                None
+            };
+            let operand = self.expr(11, header)?;
+            self.push(
+                start,
+                NodeKind::Unary {
+                    operator,
+                    mutable,
+                    operand,
+                },
+            )
+        } else {
+            let primary = self.primary(header)?;
+            self.postfix(primary)?
+        };
         let mut compared = false;
-        while let Some((binding, width)) = self.operator() {
-            if binding < min {
+        while let Some(power) = self.binding_power() {
+            if power < min {
                 break;
             }
-            if binding == 6 && compared {
-                return Err(self.error("comparaison chaînée"));
+            if power == 3 && compared {
+                return Err(self.error("comparison chaining requires explicit parentheses", &[]));
             }
-            compared |= binding == 6;
-            let op = self.i;
-            self.i += width;
-            let right = if self.word_at(op) == "as" {
-                self.ty()?
+            compared |= power == 3;
+            let operator = self.advance();
+            left = if &self.source[operator.span.start..operator.span.end] == "as" {
+                let ty = self.numeric_cast_type()?;
+                self.push(
+                    start,
+                    NodeKind::Conversion {
+                        value: left,
+                        operator,
+                        ty,
+                    },
+                )
             } else {
-                self.expr(binding + 1, before_block)?
+                let right = self.expr(power + 1, header)?;
+                self.push(
+                    start,
+                    NodeKind::Binary {
+                        operator,
+                        left,
+                        right,
+                    },
+                )
             };
-            left = self.node("binaire", start, Some(op), vec![left, right]);
         }
         Ok(left)
     }
-    fn range(&mut self) -> Res<NodeId> {
-        let start = self.i;
-        let mut bounds = Vec::new();
-        if self.word() != ".." {
-            bounds.push(self.expr(0, false)?);
+    // Cast targets are numeric terminals in the grammar, not arbitrary named
+    // types. Do not consult a type table or consume following comparison tokens.
+    fn numeric_cast_type(&mut self) -> ResultNode {
+        if !matches!(
+            self.word(),
+            "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" | "f32" | "f64"
+        ) {
+            return Err(self.error("expected a numeric type after as", &["numeric type"]));
         }
-        let separator = self.i;
-        if !self.eat("..") {
-            return Ok(bounds[0]);
-        }
-        if !matches!(self.word(), "]" | ")" | ",") {
-            bounds.push(self.expr(0, false)?);
-        }
-        Ok(self.node("plage", start, Some(separator), bounds))
+        let start = self.mark();
+        let name = self.advance();
+        Ok(self.push(
+            start,
+            NodeKind::Type(TypeSyntax::Path {
+                segments: vec![name],
+                arguments: vec![],
+            }),
+        ))
     }
-    fn test_and_block(&mut self) -> Res<(NodeId, NodeId)> {
-        let start = self.i;
-        let checkpoint = self.nodes.len();
-        if let Ok(test) = self.expr(0, true) {
-            if matches!(self.word(), "{" | "#") {
-                return Ok((test, self.block()?));
+
+    fn postfix(&mut self, mut value: NodeId) -> ResultNode {
+        let start = self.start_of(value);
+        loop {
+            if let Some(operator) = self.eat("?") {
+                value = self.push(start, NodeKind::Propagate { value, operator })
+            } else if let Some(operator) = self.eat("!") {
+                value = self.push(start, NodeKind::Unwrap { value, operator })
+            } else if self.eat("(").is_some() {
+                let inferred = match &self.nodes[value.0].kind {
+                    NodeKind::Projection { member, .. } => matches!(
+                        &self.source[member.span.start..member.span.end],
+                        "new" | "try"
+                    ),
+                    _ => false,
+                };
+                let range_argument = matches!(&self.nodes[value.0].kind,
+                    NodeKind::Projection { member, .. }
+                        if &self.source[member.span.start..member.span.end] == "try_slice");
+                let arguments = if range_argument && self.word() != ")" {
+                    // The written suffix production selects a range when ..
+                    // occurs. Keep an ordinary argument otherwise; no receiver
+                    // type or method lookup participates in this choice.
+                    let checkpoint = (self.index, self.piece, self.last_end, self.nodes.len());
+                    match self.range(")") {
+                        Ok(argument)
+                            if matches!(self.nodes[argument.0].kind, NodeKind::Range { .. }) =>
+                        {
+                            self.expect(")")?;
+                            vec![argument]
+                        }
+                        _ => {
+                            self.restore(checkpoint);
+                            self.arguments(inferred)?
+                        }
+                    }
+                } else {
+                    self.arguments(inferred)?
+                };
+                value = self.push(
+                    start,
+                    NodeKind::Call {
+                        callee: value,
+                        arguments,
+                    },
+                )
+            } else if self.eat(".").is_some() {
+                if let Some(keyword) = self.eat("await") {
+                    value = self.push(start, NodeKind::Await { value, keyword })
+                } else {
+                    let member = if self.tokens[self.index].kind == Kind::Integer
+                        && self.word().bytes().all(|b| b.is_ascii_digit())
+                    {
+                        self.advance()
+                    } else {
+                        self.ident()?
+                    };
+                    value = self.push(
+                        start,
+                        NodeKind::Projection {
+                            base: value,
+                            member,
+                        },
+                    )
+                }
+            } else if self.eat("[").is_some() {
+                let index = self.range("]")?;
+                self.expect("]")?;
+                value = self.push(start, NodeKind::Index { base: value, index })
+            } else {
+                break;
             }
         }
-        self.i = start;
-        self.nodes.truncate(checkpoint);
-        let previous = std::mem::replace(&mut self.empty_constructor, false);
-        let test = self.expr(0, true);
-        self.empty_constructor = previous;
-        Ok((test?, self.block()?))
+        Ok(value)
     }
-    fn is_constructor(&self, base: NodeId, before_block: bool) -> bool {
-        let node = &self.nodes[base.0];
-        let nominal = node.name.is_some_and(|i| {
-            let mut last = i;
-            while self.word_at(last + 1) == "::" && last + 2 < node.end {
-                last += 2;
+    fn arguments(&mut self, inferred: bool) -> Result<Vec<NodeId>, ParseError> {
+        let mut args = Vec::new();
+        if self.eat(")").is_some() {
+            return Ok(args);
+        }
+        loop {
+            args.push(if inferred && self.word() == "{" {
+                let start = self.mark();
+                let fields = self.initializer_fields()?;
+                self.push(start, NodeKind::Construct { path: None, fields })
+            } else {
+                self.expr(0, false)?
+            });
+            if self.comma_end(")")? {
+                break;
             }
-            self.names.contains(self.word_at(last))
-                || self
-                    .word_at(last)
-                    .starts_with(|c: char| c.is_ascii_uppercase())
-        });
-        (nominal || self.discovering_package
-            && matches!(node.kind, "nom" | "nom qualifié")
-            && (!before_block || self.word_at(self.i + 2) == ":"))
-            && (!before_block
-                || self.word_at(self.i + 2) == ":"
-                || self.empty_constructor && self.word_at(self.i + 1) == "}")
+        }
+        Ok(args)
     }
-    fn primary(&mut self, before_block: bool) -> Res<NodeId> {
-        let start = self.i;
-        if self.eat("if") {
-            let (test, yes) = self.test_and_block()?;
-            let mut children = vec![test, yes];
-            if self.eat("else") {
-                children.push(if self.word() == "if" {
-                    self.nested(|p| p.primary(false))?
+    fn range(&mut self, close: &str) -> ResultNode {
+        let start = self.mark();
+        let first = if self.word() == ".." {
+            None
+        } else {
+            Some(self.expr(0, false)?)
+        };
+        if let Some(separator) = self.eat("..") {
+            let end = if self.word() == close || self.word() == "," {
+                None
+            } else {
+                Some(self.expr(0, false)?)
+            };
+            Ok(self.push(
+                start,
+                NodeKind::Range {
+                    start: first,
+                    separator,
+                    end,
+                },
+            ))
+        } else {
+            first.ok_or_else(|| self.error("expected index or range", &["expression", ".."]))
+        }
+    }
+    fn initializer_fields(&mut self) -> Result<Vec<NodeId>, ParseError> {
+        self.expect("{")?;
+        let mut fields = Vec::new();
+        if self.eat("}").is_some() {
+            return Ok(fields);
+        }
+        loop {
+            let start = self.mark();
+            let name = self.ident()?;
+            let value = if self.eat(":").is_some() {
+                Some(self.expr(0, false)?)
+            } else {
+                None
+            };
+            fields.push(self.push(start, NodeKind::FieldInitializer { name, value }));
+            if self.comma_end("}")? {
+                break;
+            }
+        }
+        Ok(fields)
+    }
+    fn primary(&mut self, header: bool) -> ResultNode {
+        let start = self.mark();
+        if self.eat("if").is_some() {
+            let condition = if self.eat("let").is_some() {
+                let mark = self.mark();
+                let pattern = self.pattern()?;
+                self.expect("=")?;
+                let value = self.expr(0, true)?;
+                self.push(mark, NodeKind::LetCondition { pattern, value })
+            } else {
+                self.expr(0, true)?
+            };
+            let yes = self.block()?;
+            let no = if self.eat("else").is_some() {
+                Some(if self.word() == "if" {
+                    self.primary(false)?
                 } else {
                     self.block()?
-                });
-            }
-            return Ok(self.node("if", start, None, children));
+                })
+            } else {
+                None
+            };
+            return Ok(self.push(start, NodeKind::If { condition, yes, no }));
         }
-        if self.eat("match") {
-            let subject = self.expr(0, true)?;
+        if self.eat("match").is_some() {
+            let value = self.expr(0, true)?;
             self.expect("{")?;
-            let arms = self.list("}", |p| {
-                let start = p.i;
-                let pattern = p.pattern()?;
-                p.expect("=>")?;
-                let body = p.block()?;
-                Ok(p.node("bras", start, None, vec![pattern, body]))
-            })?;
-            if arms.is_empty() {
-                return Err(self.error("match vide"));
+            let mut arms = Vec::new();
+            if self.word() == "}" {
+                return Err(self.error("match requires at least one arm", &["pattern"]));
             }
-            let mut children = vec![subject];
-            children.extend(arms);
-            return Ok(self.node("match", start, None, children));
+            loop {
+                let mark = self.mark();
+                let pattern = self.pattern()?;
+                self.expect("=>")?;
+                let body = self.block()?;
+                arms.push(self.push(mark, NodeKind::MatchArm { pattern, body }));
+                if self.comma_end("}")? {
+                    break;
+                }
+            }
+            return Ok(self.push(start, NodeKind::Match { value, arms }));
         }
-        if self.eat("loop") || self.eat("unsafe") {
-            let block = self.block()?;
-            return Ok(self.node(
-                if self.word_at(start) == "loop" {
-                    "loop"
-                } else {
-                    "unsafe"
-                },
+        if self.eat("loop").is_some() {
+            let body = self.block()?;
+            return Ok(self.push(start, NodeKind::Loop { body }));
+        }
+        if let Some(keyword) = self.eat("async") {
+            let moving = self.eat("move");
+            let body = self.block()?;
+            return Ok(self.push(
                 start,
-                None,
-                vec![block],
+                NodeKind::Async {
+                    keyword,
+                    moving,
+                    body,
+                },
             ));
         }
         let moving = self.eat("move");
         if matches!(self.word(), "|" | "||") {
-            let mut children = Vec::new();
-            if self.eat("|") {
-                children.extend(self.list("|", Self::parameter)?);
-                if children.is_empty() {
-                    return Err(self.error("utiliser || pour une closure sans paramètres"));
+            let mut parameters = Vec::new();
+            if self.eat("||").is_none() {
+                self.expect("|")?;
+                parameters.push(self.parameter()?);
+                while self.eat(",").is_some() {
+                    if self.word() == "|" {
+                        break;
+                    }
+                    parameters.push(self.parameter()?)
                 }
+                self.expect("|")?;
+            }
+            let result = if self.type_starts() {
+                Some(self.ty()?)
             } else {
-                self.i += 1;
-            }
-            if self.eat("->") {
-                children.push(self.ty()?);
-            }
-            children.push(self.block()?);
-            return Ok(self.node("closure", start, moving.then_some(start), children));
+                None
+            };
+            let body = self.block()?;
+            return Ok(self.push(
+                start,
+                NodeKind::Closure {
+                    moving,
+                    parameters,
+                    result,
+                    body,
+                },
+            ));
         }
-        if moving {
-            let block = self.block()?;
-            return Ok(self.node("move bloc", start, Some(start), vec![block]));
+        if let Some(keyword) = moving {
+            let body = self.block()?;
+            return Ok(self.push(start, NodeKind::MoveBlock { keyword, body }));
         }
-        if matches!(self.word(), "{" | "#") {
+        if self.word() == "{" || self.word() == "#" {
             return self.block();
         }
-        if self.eat("(") {
-            let mut children = Vec::new();
-            let mut kind = "groupe";
-            if self.word() != ")" {
-                children.push(self.expr(0, false)?);
-                if self.eat(",") {
-                    kind = "tuple";
-                    children.extend(self.list(")", |p| p.expr(0, false))?);
-                    if children.len() < 2 {
-                        return Err(self.error("tuple requires at least two elements"));
-                    }
-                    return Ok(self.node(kind, start, None, children));
-                }
-            }
-            self.expect(")")?;
-            return Ok(self.node(kind, start, None, children));
-        }
-        if self.eat("[") {
-            let mut values = Vec::new();
-            let mut repeat = false;
-            if self.word() != "]" {
-                values.push(self.expr(0, false)?);
-                repeat = self.eat(";");
-                if repeat {
-                    values.push(self.integer()?);
-                } else {
-                    while self.eat(",") && self.word() != "]" {
-                        values.push(self.expr(0, false)?);
-                    }
-                }
-            }
-            self.expect("]")?;
-            return Ok(self.node(
-                if repeat {
-                    "tableau répété"
-                } else {
-                    "tableau"
-                },
+        if self.eat("@").is_some() {
+            let keyword = self.expect("unchecked")?;
+            self.unchecked += 1;
+            let body = self.block();
+            self.unchecked -= 1;
+            return Ok(self.push(
                 start,
-                None,
-                values,
+                NodeKind::Unchecked {
+                    keyword,
+                    body: body?,
+                },
             ));
         }
         if matches!(
-            self.tokens[start].kind,
+            self.tokens[self.index].kind,
+            Kind::Assembly | Kind::C | Kind::Cpp
+        ) {
+            if self.unchecked == 0 {
+                return Err(self.error("foreign blocks must be inside @unchecked", &["@unchecked"]));
+            }
+            let includes = self.validate_foreign_header()?;
+            let token = self.advance();
+            return Ok(self.push(start, NodeKind::Foreign { token, includes }));
+        }
+        if self.eat("(").is_some() {
+            let mut elements = Vec::new();
+            if self.eat(")").is_some() {
+                return Ok(self.push(start, NodeKind::Tuple { elements }));
+            }
+            let expression = self.expr(0, false)?;
+            if self.eat(")").is_some() {
+                return Ok(self.push(start, NodeKind::Parenthesized { expression }));
+            }
+            self.expect(",")?;
+            elements.push(expression);
+            elements.push(self.expr(0, false)?);
+            while !self.comma_end(")")? {
+                elements.push(self.expr(0, false)?)
+            }
+            return Ok(self.push(start, NodeKind::Tuple { elements }));
+        }
+        if self.eat("[").is_some() {
+            let mut elements = Vec::new();
+            let mut repeat = None;
+            if self.eat("]").is_none() {
+                elements.push(self.expr(0, false)?);
+                if self.eat(";").is_some() {
+                    repeat = Some(self.expr(0, false)?);
+                    self.expect("]")?;
+                } else {
+                    while !self.comma_end("]")? {
+                        elements.push(self.expr(0, false)?);
+                    }
+                }
+            }
+            return Ok(self.push(start, NodeKind::Array { elements, repeat }));
+        }
+        if matches!(
+            self.tokens[self.index].kind,
             Kind::Integer | Kind::Float | Kind::Text
         ) || matches!(self.word(), "true" | "false")
         {
-            self.i += 1;
-            return Ok(self.node("littéral", start, Some(start), vec![]));
+            let token = self.advance();
+            return Ok(self.push(start, NodeKind::Literal { token }));
         }
-        let name = self.path()?;
+        let segments = self.path_segments()?;
+        let mut arguments = Vec::new();
+        let mut segments = segments;
         if self.word() == "<" {
-            let path_end = self.i;
-            let checkpoint = self.nodes.len();
-            if let Ok(arguments) = self.type_arguments() {
-                if path_end == start + 1 && self.word_at(name) == "pool" && self.word() == "(" {
-                    let ty = self.node("type", start, Some(name), arguments);
-                    self.expect("(")?;
-                    let size = self.integer()?;
-                    self.expect(")")?;
-                    return Ok(self.node("pool", start, Some(name), vec![ty, size]));
+            let checkpoint = (self.index, self.piece, self.last_end, self.nodes.len());
+            if let Ok(args) = self.type_arguments() {
+                if self.eat("::").is_some() {
+                    segments.push(self.ident()?);
+                    arguments = args;
+                } else {
+                    self.restore(checkpoint)
                 }
-                if self.word() == "::"
-                    && self.tokens.get(self.i + 1).is_some_and(|token| token.kind == Kind::Name)
-                    && self.word_at(self.i + 2) == "("
-                {
-                    let ty = self.node("type", start, Some(name), arguments);
-                    self.expect("::")?;
-                    let member = self.name()?;
-                    return Ok(self.node("nom qualifié", start, Some(member), vec![ty]));
-                }
-            }
-            // A bare < still belongs to the infix expression parser.
-            self.i = path_end;
-            self.nodes.truncate(checkpoint);
-        }
-        let kind = if self.i - start == 1 {
-            "nom"
-        } else {
-            "nom qualifié"
-        };
-        let base = self.node(kind, start, Some(name), vec![]);
-        if self.word() == "{" && self.is_constructor(base, before_block) {
-            let fields = self.fields(false)?;
-            return Ok(self.node("construction", start, Some(name), fields));
-        }
-        Ok(base)
-    }
-    fn pattern(&mut self) -> Res<NodeId> {
-        self.nested(|p| {
-            let start = p.i;
-            if p.eat("(") {
-                p.expect(")")?;
-                return Ok(p.node("motif unité", start, None, vec![]));
-            }
-            let name = p.path()?;
-            let mut children = Vec::new();
-            let kind = if p.eat(".") {
-                p.name()?;
-                if p.eat("(") {
-                    if p.word() == ")" {
-                        return Err(p.error("motif positionnel attendu"));
-                    }
-                    children = p.list(")", |p| {
-                        let binding = p.name()?;
-                        Ok(p.node("motif nom", binding, Some(binding), vec![]))
-                    })?;
-                    return Ok(p.node("motif variante positionnelle", start, Some(name), children));
-                }
-                if p.eat("{") {
-                    children = p.list("}", |p| {
-                        let start = p.i;
-                        let field = p.name()?;
-                        p.expect(":")?;
-                        let binding = p.name()?;
-                        let value = p.node("motif nom", binding, Some(binding), vec![]);
-                        Ok(p.node("motif champ", start, Some(field), vec![value]))
-                    })?;
-                }
-                "motif variante"
-            } else if p.eat("(") {
-                children.push(p.pattern()?);
-                p.expect(")")?;
-                "motif appel"
             } else {
-                "motif nom"
-            };
-            Ok(p.node(kind, start, Some(name), children))
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn named_types_and_qualified_calls_share_generic_syntax() {
-        let source = "
-            struct Point { x: i64 }
-            fn main() {
-                let p: Point = MonType::new();
-                let m = HashMap<i64, Point>::new();
-                let n: geo::Boite<Option<Point>> = geo::Boite<Option<Point>>::new();
-                let comparison = 1 < 2 && 3 > 2;
+                self.restore(checkpoint)
             }
-        ";
-        let tree = crate::frontend(source, Mode::Program).unwrap();
-        let callees = tree.syntax.nodes.iter().filter_map(|node| {
-            (node.kind == "appel").then(|| &tree.syntax.nodes[node.children[0].0])
-        }).collect::<Vec<_>>();
-        assert_eq!(callees.len(), 3);
-        assert!(callees.iter().all(|node| node.kind == "nom qualifié"));
-        assert!(callees[0].children.is_empty());
-        for callee in &callees[1..] {
-            assert_eq!(callee.children.len(), 1);
-            assert_eq!(tree.syntax.nodes[callee.children[0].0].kind, "type");
         }
-
-        for source in [
-            "fn main() { let x: MonType<> = 0; }",
-            "fn main() { let x: MonType<i64,> = 0; }",
-            "fn main() { let x = MonType<i64>::new; }",
-        ] {
-            assert!(crate::frontend(source, Mode::Program).is_err(), "{source}");
+        let path = self.push(
+            start,
+            NodeKind::Path {
+                segments,
+                arguments,
+            },
+        );
+        if !header && self.word() == "{" {
+            let fields = self.initializer_fields()?;
+            Ok(self.push(
+                start,
+                NodeKind::Construct {
+                    path: Some(path),
+                    fields,
+                },
+            ))
+        } else {
+            Ok(path)
         }
+    }
+    fn restore(&mut self, c: (usize, usize, usize, usize)) {
+        self.index = c.0;
+        self.piece = c.1;
+        self.last_end = c.2;
+        self.nodes.truncate(c.3);
+    }
+    fn validate_foreign_header(&self) -> Result<Vec<TokenRef>, ParseError> {
+        let Payload::Foreign(block) = &self.tokens[self.index].payload else {
+            return Err(self.error("missing lexical foreign payload", &[]));
+        };
+        let tokens = &block.header_tokens;
+        let mut i = 0;
+        let text = |i: usize| {
+            tokens
+                .get(i)
+                .map_or("", |t| &self.source[t.span.start..t.span.end])
+        };
+        if text(i).is_empty() {
+            return Ok(Vec::new());
+        }
+        if self.tokens[self.index].kind == Kind::Assembly {
+            return Err(self.error("@asm does not take header options", &["{"]));
+        }
+        for expected in ["(", "includes", "=", "{"] {
+            if text(i) != expected {
+                return Err(self.error("invalid foreign includes header", &[expected]));
+            }
+            i += 1;
+        }
+        let mut includes = Vec::new();
+        if text(i) != "}" {
+            loop {
+                if tokens.get(i).is_none_or(|t| t.kind != Kind::Text) {
+                    return Err(self.error("header include must be a string", &["string"]));
+                }
+                includes.push(TokenRef {
+                    index: self.index,
+                    span: tokens[i].span,
+                });
+                i += 1;
+                if text(i) != "," {
+                    break;
+                }
+                i += 1;
+                if text(i) == "}" {
+                    break;
+                }
+            }
+        }
+        for expected in ["}", ")", ""] {
+            if text(i) != expected {
+                return Err(self.error("invalid foreign includes header", &[expected]));
+            }
+            i += 1;
+        }
+        Ok(includes)
     }
 }

@@ -1,12 +1,12 @@
 //! Emit C from the typed instructions produced by the verifier.
 
 use crate::placement::{
-    BindingStorage, Destination, Footprint, FootprintStep, FunctionPlacement, GrowthUnit, ValueDestination,
-    ValueReservation,
+    BindingStorage, Destination, Footprint, FootprintStep, FunctionPlacement, GrowthUnit,
+    ValueDestination, ValueReservation,
 };
 use crate::verify::{
-    contains_handle, Expr, Function, Growing, Instr, OwnedResource, Ownership, Referent, Structure, Ty, Value, VerifiedProgram,
-    layout_dependencies,
+    Expr, Function, Growing, Instr, OwnedResource, Ownership, Referent, Structure, Ty, Value,
+    VerifiedProgram, contains_handle, layout_dependencies,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -53,7 +53,11 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
         .iter()
         .any(|function| function.asynchronous);
     let uses_threads = uses_async
-        || program.structures.iter().enumerate().any(|(index, _)| contains_handle(Ty::Struct(index), &program.structures))
+        || program
+            .structures
+            .iter()
+            .enumerate()
+            .any(|(index, _)| contains_handle(Ty::Struct(index), &program.structures))
         || program.functions.iter().any(|function| {
             function.native
                 || matches!(function.result, Ty::Handle(..))
@@ -86,7 +90,9 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
         );
     }
     output.push_str(PRELUDE);
-    if program.process_args { output.push_str(include_str!("process_args.c")); }
+    if program.process_args {
+        output.push_str(include_str!("process_args.c"));
+    }
     if let Some(bits) = program.pointer_width {
         writeln!(output, "_Static_assert(sizeof(uintptr_t) * CHAR_BIT == {bits}, \"Crust target pointer width mismatch\");").unwrap();
     }
@@ -132,9 +138,21 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
                 }
                 if let Some([create, attach, submit, next]) = program.socket_completion {
                     writeln!(output, "extern void crust_fn_{create}(uintptr_t *);").unwrap();
-                    writeln!(output, "extern void crust_fn_{attach}(int64_t *, uintptr_t, uint64_t);").unwrap();
-                    writeln!(output, "extern void crust_fn_{submit}(int64_t *, uintptr_t);").unwrap();
-                    writeln!(output, "extern void crust_fn_{next}(uintptr_t *, uintptr_t);").unwrap();
+                    writeln!(
+                        output,
+                        "extern void crust_fn_{attach}(int64_t *, uintptr_t, uint64_t);"
+                    )
+                    .unwrap();
+                    writeln!(
+                        output,
+                        "extern void crust_fn_{submit}(int64_t *, uintptr_t);"
+                    )
+                    .unwrap();
+                    writeln!(
+                        output,
+                        "extern void crust_fn_{next}(uintptr_t *, uintptr_t);"
+                    )
+                    .unwrap();
                     writeln!(output, "#define CRUST_IOCP_CREATE crust_fn_{create}\n#define CRUST_IOCP_ATTACH crust_fn_{attach}\n#define CRUST_IOCP_SUBMIT crust_fn_{submit}\n#define CRUST_IOCP_NEXT crust_fn_{next}").unwrap();
                     output.push_str(include_str!("socket_iocp.c"));
                 }
@@ -146,13 +164,12 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
     } else {
         output.push_str("#define CRUST_REGION_MARK(name) CRUST_POOL_MARK(name)\n#define crust_scope_rewind(mark, region, fixed_threshold, regional_threshold, force) do { CRUST_POOL_REWIND(region); crust_rewind(mark); } while (0)\n");
     }
-    if uses_threads || program
-        .structures
-        .iter()
-        .enumerate()
-        .any(|(index, layout)| {
-            layout.pool.is_some() || program.ownership[index].is_some()
-        })
+    if uses_threads
+        || program
+            .structures
+            .iter()
+            .enumerate()
+            .any(|(index, layout)| layout.pool.is_some() || program.ownership[index].is_some())
         || program.functions.iter().any(|function| {
             matches!(function.result, Ty::Allocation(_))
                 || function
@@ -162,7 +179,11 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
         })
     {
         output.push_str("#define CRUST_HAS_POOLS 1\n");
-        if program.structures.iter().any(|layout| layout.destructor.is_some()) {
+        if program
+            .structures
+            .iter()
+            .any(|layout| layout.destructor.is_some())
+        {
             output.push_str("#define CRUST_HAS_DESTRUCTORS 1\n");
             output.push_str(include_str!("destructors.c"));
         }
@@ -216,7 +237,11 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
                     writeln!(output, "    {ty} {name};").unwrap();
                 }
                 for (&binding, &ty) in &placement.frame_values {
-                    let pointer = if placement.frame_binding_aliases.contains(&binding) { "*" } else { "" };
+                    let pointer = if placement.frame_binding_aliases.contains(&binding) {
+                        "*"
+                    } else {
+                        ""
+                    };
                     writeln!(output, "    {} {pointer}b{binding};", c_type(ty)).unwrap();
                 }
             } else {
@@ -249,7 +274,12 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
         writeln!(
             output,
             "{};",
-            signature(function, index, &program.placement.functions[index], program.process_args)
+            signature(
+                function,
+                index,
+                &program.placement.functions[index],
+                program.process_args
+            )
         )
         .unwrap();
     }
@@ -267,7 +297,12 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
         .filter(|(_, function)| !function.asynchronous)
     {
         let placement = &program.placement.functions[index];
-        writeln!(output, "\n{} {{", signature(function, index, placement, program.process_args)).unwrap();
+        writeln!(
+            output,
+            "\n{} {{",
+            signature(function, index, placement, program.process_args)
+        )
+        .unwrap();
         if placement.caller_slots > 0 || (!function.entry && scalar_result(function.result)) {
             output.push_str("    (void)crust_out;\n");
         }
@@ -338,7 +373,9 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
             }
         }
         for &(binding, ty) in &placement.parameters {
-            if function.borrowed_parameters.contains(&binding) { continue; }
+            if function.borrowed_parameters.contains(&binding) {
+                continue;
+            }
             let id = binding.0;
             let handle = matches!(ty, Ty::Handle(..) | Ty::Future(_));
             let resource = owned_resource(ty, program);
@@ -349,7 +386,11 @@ pub fn emit_c(program: &VerifiedProgram) -> String {
                 writeln!(output, "    crust_thread_own(*b{id}, crust_thread_depth);").unwrap();
             }
             if matches!(resource, Some(OwnedResource::Slot)) {
-                writeln!(output, "    crust_pool_resource(*b{id}, crust_pool_current_owner(), CRUST_REHOME);").unwrap();
+                writeln!(
+                    output,
+                    "    crust_pool_resource(*b{id}, crust_pool_current_owner(), CRUST_REHOME);"
+                )
+                .unwrap();
             }
         }
         let mut instruction = 0;
@@ -451,13 +492,17 @@ fn emit_native_workers(output: &mut String, program: &VerifiedProgram) {
         let mut attach = String::new();
         for (resource, source, destination) in &captures {
             writeln!(
-                initialize, "    {}",
+                initialize,
+                "    {}",
                 resource_call(*resource, source, "0", "CRUST_DETACH")
-            ).unwrap();
+            )
+            .unwrap();
             writeln!(
-                attach, "    {}",
+                attach,
+                "    {}",
                 resource_call(*resource, destination, "0", "CRUST_ATTACH")
-            ).unwrap();
+            )
+            .unwrap();
         }
         let capture_dispose = if captures.is_empty() {
             "NULL".to_owned()
@@ -465,27 +510,46 @@ fn emit_native_workers(output: &mut String, program: &VerifiedProgram) {
             let name = format!("crust_native_dispose_captures_{index}");
             writeln!(output, "static void {name}(CrustHandle *handle) {{ CrustThreadFrame{index} *frame = (void *)handle;").unwrap();
             for (resource, _, place) in captures.iter().rev() {
-                writeln!(output, "    {}", resource_call(*resource, place, "0", "CRUST_DESTROY")).unwrap();
+                writeln!(
+                    output,
+                    "    {}",
+                    resource_call(*resource, place, "0", "CRUST_DESTROY")
+                )
+                .unwrap();
             }
             output.push_str("}\n");
             name
         };
         let result_cleanup = if let Some(resource) = result_resource(function.result, program) {
             let name = format!("crust_native_dispose_result_{index}");
-            let place = if aggregate { "&frame->result" } else { "frame->result" };
+            let place = if aggregate {
+                "&frame->result"
+            } else {
+                "frame->result"
+            };
             writeln!(output, "static void {name}(CrustHandle *handle) {{ CrustThreadFrame{index} *frame = (void *)handle;").unwrap();
-            writeln!(output, "    {}\n}}", resource_call(resource, place, "0", "CRUST_DESTROY")).unwrap();
+            writeln!(
+                output,
+                "    {}\n}}",
+                resource_call(resource, place, "0", "CRUST_DESTROY")
+            )
+            .unwrap();
             // A returned map is still registered at the address returned by the worker function.
             let source = if aggregate { "result" } else { place };
-            format!("    {}\n    handle->dispose = {name};\n",
-                resource_call(resource, source, "0", "CRUST_DETACH"))
+            format!(
+                "    {}\n    handle->dispose = {name};\n",
+                resource_call(resource, source, "0", "CRUST_DETACH")
+            )
         } else {
             "    handle->dispose = NULL;\n".into()
         };
         let result_parameter = parameters.join(", ");
         let arguments = arguments.join(", ");
         let (result, save_result) = if aggregate {
-            (format!("{} result = ", c_type(function.result)), "    frame->result = *result;\n")
+            (
+                format!("{} result = ", c_type(function.result)),
+                "    frame->result = *result;\n",
+            )
         } else {
             (String::new(), "")
         };
@@ -532,7 +596,10 @@ static CrustHandle *crust_native_start_{index}({result_parameter}) {{
 
 // Any temporary or reservation that spans a poll lives in the Future.
 // Keep the full set for now; no cross-suspension liveness optimization.
-fn async_fields(placement: &FunctionPlacement, program: &VerifiedProgram) -> BTreeMap<String, String> {
+fn async_fields(
+    placement: &FunctionPlacement,
+    program: &VerifiedProgram,
+) -> BTreeMap<String, String> {
     let layouts = &program.structures;
     let mut fields = BTreeMap::new();
     for (&temp, &(ty, read_only)) in &placement.frame_temps {
@@ -596,29 +663,43 @@ fn result_resource(ty: Ty, program: &VerifiedProgram) -> Option<OwnedResource> {
 fn resource_call(resource: OwnedResource, value: &str, owner: &str, action: &str) -> String {
     match resource {
         OwnedResource::Handle => format!("crust_pool_handle_resource({value}, {owner}, {action});"),
-        OwnedResource::Map => format!("crust_map_resource(&({value})->contents, {owner}, {action});"),
+        OwnedResource::Map => {
+            format!("crust_map_resource(&({value})->contents, {owner}, {action});")
+        }
         OwnedResource::Slot => format!("crust_pool_resource({value}, {owner}, {action});"),
-        OwnedResource::Inline(layout) => format!("crust_resources_{layout}({value}, {owner}, {action});"),
+        OwnedResource::Inline(layout) => {
+            format!("crust_resources_{layout}({value}, {owner}, {action});")
+        }
     }
 }
 
 fn emit_resource_walkers(output: &mut String, program: &VerifiedProgram) {
     let ownership = &program.ownership;
-    let walkers = || ownership.iter().enumerate()
-        .filter_map(|(index, plan)| plan.as_ref().map(|plan| (index, plan)));
+    let walkers = || {
+        ownership
+            .iter()
+            .enumerate()
+            .filter_map(|(index, plan)| plan.as_ref().map(|plan| (index, plan)))
+    };
     for (index, _) in walkers() {
         writeln!(output, "static inline __attribute__((unused)) void crust_resources_{index}(CrustStruct{index} *, uintptr_t, int);").unwrap();
     }
     for (layout, structure) in program.structures.iter().enumerate() {
         if let Some(function) = structure.destructor {
-            writeln!(output, "static void crust_destruct_{layout}(void *value) {{ crust_fn_{function}(value); }}").unwrap();
+            writeln!(
+                output,
+                "static void crust_destruct_{layout}(void *value) {{ crust_fn_{function}(value); }}"
+            )
+            .unwrap();
         }
         if crate::verify::inline_destructor(Ty::Struct(layout), &program.structures) {
             writeln!(output, "static inline __attribute__((unused)) void crust_finalize_{layout}(void *value) {{ crust_resources_{layout}(value, 0, CRUST_FINALIZE); }}").unwrap();
         }
     }
     for (layout, structure) in program.structures.iter().enumerate() {
-        if !structure.variants.is_empty() && crate::verify::inline_destructor(Ty::Struct(layout), &program.structures) {
+        if !structure.variants.is_empty()
+            && crate::verify::inline_destructor(Ty::Struct(layout), &program.structures)
+        {
             for tag in 0..structure.variants.len() {
                 writeln!(output, "static inline __attribute__((unused)) void crust_finalize_{layout}_{tag}(void *payload) {{ CrustStruct{layout} value; value.tag = {tag}; value.data.v{tag} = *(CrustVariant{layout}_{tag} *)payload; crust_finalize_{layout}(&value); }}").unwrap();
             }
@@ -631,7 +712,8 @@ fn emit_resource_walkers(output: &mut String, program: &VerifiedProgram) {
                 writeln!(output, "    if ({condition}) crust_destructor_resource(&value->destructor, value, crust_destruct_{index}, action == CRUST_EXTRACT ? crust_pool_current_owner() : owner, action);").unwrap();
             }
         };
-        let register = "action == CRUST_REHOME || action == CRUST_ATTACH || action == CRUST_EXTRACT";
+        let register =
+            "action == CRUST_REHOME || action == CRUST_ATTACH || action == CRUST_EXTRACT";
         destructor(output, &format!("!({register})"));
         let field = |output: &mut String, resource, place: &str| {
             let argument = match resource {
@@ -639,9 +721,19 @@ fn emit_resource_walkers(output: &mut String, program: &VerifiedProgram) {
                 OwnedResource::Inline(_) | OwnedResource::Map => format!("&{place}"),
             };
             if !matches!(resource, OwnedResource::Inline(_)) {
-                writeln!(output, "    if (action != CRUST_FINALIZE && action != CRUST_UNREGISTER) {}", resource_call(resource, &argument, "owner", "action")).unwrap();
+                writeln!(
+                    output,
+                    "    if (action != CRUST_FINALIZE && action != CRUST_UNREGISTER) {}",
+                    resource_call(resource, &argument, "owner", "action")
+                )
+                .unwrap();
             } else {
-                writeln!(output, "    {}", resource_call(resource, &argument, "owner", "action")).unwrap();
+                writeln!(
+                    output,
+                    "    {}",
+                    resource_call(resource, &argument, "owner", "action")
+                )
+                .unwrap();
             }
         };
         match plan {
@@ -697,18 +789,33 @@ fn owned_action(
     .unwrap();
 }
 
-fn detach_destructor_value(output: &mut String, pad: &str, value: Value, program: &VerifiedProgram) {
+fn detach_destructor_value(
+    output: &mut String,
+    pad: &str,
+    value: Value,
+    program: &VerifiedProgram,
+) {
     if crate::verify::inline_destructor(value.ty, &program.structures) {
         owned_action(output, pad, value, "CRUST_UNREGISTER", Some("0"), program);
     }
 }
 
-fn adopt_owned(output: &mut String, pad: &str, parent: &str, value: Value, program: &VerifiedProgram) {
+fn adopt_owned(
+    output: &mut String,
+    pad: &str,
+    parent: &str,
+    value: Value,
+    program: &VerifiedProgram,
+) {
     adopt_owned_at(output, pad, parent, value.ty, &operand(value), program);
 }
 
 fn adopt_owned_at(
-    output: &mut String, pad: &str, parent: &str, ty: Ty, place: &str,
+    output: &mut String,
+    pad: &str,
+    parent: &str,
+    ty: Ty,
+    place: &str,
     program: &VerifiedProgram,
 ) {
     let Some(resource) = result_resource(ty, program) else {
@@ -725,16 +832,24 @@ fn adopt_owned_at(
         "{pad}    CrustAdoption adoption = {{ {parent}, &{parent}->children }};"
     )
     .unwrap();
-    writeln!(output, "{pad}    {}", resource_call(resource, place, "(uintptr_t)&adoption", "CRUST_ADOPT")).unwrap();
+    writeln!(
+        output,
+        "{pad}    {}",
+        resource_call(resource, place, "(uintptr_t)&adoption", "CRUST_ADOPT")
+    )
+    .unwrap();
     writeln!(output, "{pad}    *adoption.tail = previous;").unwrap();
     writeln!(output, "{pad}}}").unwrap();
 }
 
 fn future_parameters(function: &Function) -> String {
     std::iter::once("bool dedicated".to_owned())
-        .chain(function.parameters.iter().map(|(binding, ty)| {
-            format!("{} capture{}", c_type(*ty), binding.0)
-        }))
+        .chain(
+            function
+                .parameters
+                .iter()
+                .map(|(binding, ty)| format!("{} capture{}", c_type(*ty), binding.0)),
+        )
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -785,7 +900,12 @@ fn emit_async_workers(output: &mut String, program: &VerifiedProgram) {
                 writeln!(
                     output,
                     "    {}",
-                    resource_call(resource, &format!("frame->b{}", binding.0), "0", "CRUST_DESTROY")
+                    resource_call(
+                        resource,
+                        &format!("frame->b{}", binding.0),
+                        "0",
+                        "CRUST_DESTROY"
+                    )
                 )
                 .unwrap();
             }
@@ -843,7 +963,8 @@ fn emit_async_workers(output: &mut String, program: &VerifiedProgram) {
                     output,
                     "    {} *b{binding} = frame->b{binding}; (void)b{binding};",
                     c_type(ty)
-                ).unwrap();
+                )
+                .unwrap();
             } else {
                 writeln!(
                     output,
@@ -945,8 +1066,7 @@ fn emit_async_workers(output: &mut String, program: &VerifiedProgram) {
         let footprint = program.placement.worker_footprints.get(&index);
         let global_limit = program.stack_sizes.region_size.unwrap_or(0);
         let global_stack = program.stack_sizes.region_stack_size.unwrap_or(0);
-        let region_limit =
-            emit_region_bound(output, footprint, global_limit == 0);
+        let region_limit = emit_region_bound(output, footprint, global_limit == 0);
         let slots = placement.regions.slots;
         writeln!(output, "    uintmax_t limit = crust_region_scope == NULL ? (UINT64_C({global_limit}) ? UINT64_C({global_limit}) : {region_limit}) : crust_region_scope->limit;").unwrap();
         writeln!(
@@ -991,11 +1111,16 @@ fn emit_async_workers(output: &mut String, program: &VerifiedProgram) {
                 writeln!(
                     output,
                     "    {}",
-                    resource_call(resource, &if !matches!(resource, OwnedResource::Slot) {
+                    resource_call(
+                        resource,
+                        &if !matches!(resource, OwnedResource::Slot) {
                             format!("capture{}", binding.0)
                         } else {
                             format!("frame->b{}", binding.0)
-                        }, "0", "CRUST_DETACH")
+                        },
+                        "0",
+                        "CRUST_DETACH"
+                    )
                 )
                 .unwrap();
             }
@@ -1083,9 +1208,7 @@ fn measure_steps(output: &mut String, steps: &[FootprintStep], depth: usize) {
                     measure_scope(output, arm, depth);
                 }
             }
-            FootprintStep::Grow(..)
-            | FootprintStep::MapGrow(..)
-            | FootprintStep::Thread(..) => {}
+            FootprintStep::Grow(..) | FootprintStep::MapGrow(..) | FootprintStep::Thread(..) => {}
         }
     }
 }
@@ -1259,7 +1382,9 @@ fn emit_assembly_functions(
                 emit_assembly_functions(output, yes, emitted);
                 emit_assembly_functions(output, no, emitted);
             }
-            Instr::Loop { condition, body, .. } => {
+            Instr::Loop {
+                condition, body, ..
+            } => {
                 emit_assembly_functions(output, condition, emitted);
                 emit_assembly_functions(output, body, emitted);
             }
@@ -1272,9 +1397,19 @@ fn scalar_result(ty: Ty) -> bool {
     !matches!(ty, Ty::Void | Ty::Struct(_))
 }
 
-fn signature(function: &Function, index: usize, placement: &FunctionPlacement, process_args: bool) -> String {
+fn signature(
+    function: &Function,
+    index: usize,
+    placement: &FunctionPlacement,
+    process_args: bool,
+) -> String {
     if function.entry {
-        return if process_args { "int main(int argc, char **argv)" } else { "int main(void)" }.to_owned();
+        return if process_args {
+            "int main(int argc, char **argv)"
+        } else {
+            "int main(void)"
+        }
+        .to_owned();
     }
     let mut parameters = function
         .parameters
@@ -1350,11 +1485,19 @@ fn body(
 ) {
     let layouts = &program.structures;
     let pad = "    ".repeat(depth);
-    let free_pages = |body: &[Instr]| body.iter().any(|instruction| matches!(instruction, Instr::FreePages));
+    let free_pages = |body: &[Instr]| {
+        body.iter()
+            .any(|instruction| matches!(instruction, Instr::FreePages))
+    };
     let forced_scopes = enclosing_free_pages + usize::from(free_pages(instructions));
     let fixed_threshold = program.stack_sizes.reclaim_threshold.unwrap_or(0);
     let regional_threshold = program.stack_sizes.region_reclaim_threshold.unwrap_or(0);
-    let reclaim = |force| format!("UINT64_C({fixed_threshold}), UINT64_C({regional_threshold}), {}", u8::from(force));
+    let reclaim = |force| {
+        format!(
+            "UINT64_C({fixed_threshold}), UINT64_C({regional_threshold}), {}",
+            u8::from(force)
+        )
+    };
     let return_reclaim = reclaim(forced_scopes != 0);
     for instruction in instructions {
         let index = *cursor;
@@ -1439,7 +1582,8 @@ fn body(
             writeln!(output, "{pad}{declaration}{name} = {location};").unwrap();
         }
         if let Instr::Reserve(value) = instruction
-            && owned_resource(value.ty, program).is_some() && !map_type(value.ty, layouts)
+            && owned_resource(value.ty, program).is_some()
+            && !map_type(value.ty, layouts)
         {
             writeln!(
                 output,
@@ -1450,15 +1594,30 @@ fn body(
             .unwrap();
         }
         match instruction {
-            Instr::Evaluate(value, expression @ (Expr::SocketWait(socket, argument) | Expr::SocketCompletion(socket, argument))) => {
+            Instr::Evaluate(
+                value,
+                expression @ (Expr::SocketWait(socket, argument)
+                | Expr::SocketCompletion(socket, argument)),
+            ) => {
                 let park = match expression {
                     Expr::SocketWait(..) => "crust_socket_park",
                     _ => "crust_iocp_park",
                 };
-                writeln!(output, "{pad}t{} = {park}({}, {});", value.temp, operand(*socket), operand(*argument)).unwrap();
+                writeln!(
+                    output,
+                    "{pad}t{} = {park}({}, {});",
+                    value.temp,
+                    operand(*socket),
+                    operand(*argument)
+                )
+                .unwrap();
                 writeln!(output, "{pad}if (t{} == 0) {{", value.temp).unwrap();
                 writeln!(output, "{pad}    frame->pc = {};", index + 1).unwrap();
-                writeln!(output, "{pad}    crust_async_exchange(&frame->context); return false;\n{pad}}}").unwrap();
+                writeln!(
+                    output,
+                    "{pad}    crust_async_exchange(&frame->context); return false;\n{pad}}}"
+                )
+                .unwrap();
                 writeln!(output, "resume{index}: ;").unwrap();
             }
             Instr::Evaluate(value, Expr::AwaitHandle(handle)) => {
@@ -1514,7 +1673,12 @@ fn body(
                     writeln!(output, "{pad}t{0} = *o{0};", value.temp).unwrap();
                 }
                 if matches!(value.ty, Ty::Handle(..)) {
-                    writeln!(output, "{pad}crust_handle_resource(t{}, crust_thread_depth, CRUST_ATTACH);", value.temp).unwrap();
+                    writeln!(
+                        output,
+                        "{pad}crust_handle_resource(t{}, crust_thread_depth, CRUST_ATTACH);",
+                        value.temp
+                    )
+                    .unwrap();
                 } else {
                     owned_action(output, &pad, *value, "CRUST_ATTACH", None, program);
                 }
@@ -1553,7 +1717,12 @@ fn body(
                 writeln!(
                     output,
                     "{pad}crust_region_enter(UINT64_C({max_size}), UINT64_C({count}), {});",
-                    placement.regions.scope_slots.get(&index).copied().unwrap_or(0)
+                    placement
+                        .regions
+                        .scope_slots
+                        .get(&index)
+                        .copied()
+                        .unwrap_or(0)
                 )
                 .unwrap();
             }
@@ -1570,7 +1739,11 @@ fn body(
                 } else {
                     format!("(CrustGrowing *){owner}->data")
                 };
-                writeln!(output, "{pad}crust_region_append({descriptor}, {source}, sizeof({ty}));").unwrap();
+                writeln!(
+                    output,
+                    "{pad}crust_region_append({descriptor}, {source}, sizeof({ty}));"
+                )
+                .unwrap();
                 if matches!(handle.ty, Ty::Allocation(_)) {
                     adopt_owned(output, &pad, &owner, *value, program);
                 }
@@ -1635,12 +1808,30 @@ fn body(
                     let id = op.binding.0;
                     // Copy the object representation so narrow/signed slots
                     // preserve their low bytes without integer conversions.
-                    writeln!(output, "{pad}    memcpy(&crust_operands[{slot}], b{id}, sizeof(*b{id}));").unwrap();
+                    writeln!(
+                        output,
+                        "{pad}    memcpy(&crust_operands[{slot}], b{id}, sizeof(*b{id}));"
+                    )
+                    .unwrap();
                 }
-                writeln!(output, "{pad}    crust_asm_{}(crust_operands);", block.offset).unwrap();
-                for (slot, op) in block.operands.iter().enumerate().filter(|(_, op)| op.written) {
+                writeln!(
+                    output,
+                    "{pad}    crust_asm_{}(crust_operands);",
+                    block.offset
+                )
+                .unwrap();
+                for (slot, op) in block
+                    .operands
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, op)| op.written)
+                {
                     let id = op.binding.0;
-                    writeln!(output, "{pad}    memcpy(b{id}, &crust_operands[{slot}], sizeof(*b{id}));").unwrap();
+                    writeln!(
+                        output,
+                        "{pad}    memcpy(b{id}, &crust_operands[{slot}], sizeof(*b{id}));"
+                    )
+                    .unwrap();
                 }
                 writeln!(output, "{pad}}}").unwrap();
             }
@@ -1769,17 +1960,25 @@ fn body(
                 .unwrap();
             }
             Instr::Reserve(_) => {}
-            Instr::Receive(receiver, value) => {
-                receive(output, &pad, *receiver, *value, program)
-            }
+            Instr::Receive(receiver, value) => receive(output, &pad, *receiver, *value, program),
             Instr::Break(assignment) => {
                 if let Some((receiver, value)) = assignment {
                     receive(output, &pad, *receiver, *value, program);
                 }
-                writeln!(output, "{pad}{} break;", rewind(loop_mark.unwrap().0, forced_scopes > loop_mark.unwrap().1)).unwrap();
+                writeln!(
+                    output,
+                    "{pad}{} break;",
+                    rewind(loop_mark.unwrap().0, forced_scopes > loop_mark.unwrap().1)
+                )
+                .unwrap();
             }
             Instr::Continue => {
-                writeln!(output, "{pad}{} continue;", rewind(loop_mark.unwrap().0, forced_scopes > loop_mark.unwrap().1)).unwrap();
+                writeln!(
+                    output,
+                    "{pad}{} continue;",
+                    rewind(loop_mark.unwrap().0, forced_scopes > loop_mark.unwrap().1)
+                )
+                .unwrap();
             }
             Instr::Yield => {
                 writeln!(output, "{pad}frame->pc = {};", index + 1).unwrap();
@@ -1838,11 +2037,17 @@ fn body(
                 if async_body {
                     if let Some(value) = result {
                         if let Some(resource) = result_resource(value.ty, program) {
-                            writeln!(output, "{pad}{}", resource_call(resource, &operand(*value), "0", "CRUST_DETACH")).unwrap();
+                            writeln!(
+                                output,
+                                "{pad}{}",
+                                resource_call(resource, &operand(*value), "0", "CRUST_DETACH")
+                            )
+                            .unwrap();
                             writeln!(output, "{pad}handle->dispose = CRUST_ASYNC_RESULT_DISPOSE;")
                                 .unwrap();
                         }
-                        writeln!(output, "{pad}frame->result = {};", stored_operand(*value)).unwrap();
+                        writeln!(output, "{pad}frame->result = {};", stored_operand(*value))
+                            .unwrap();
                     }
                     writeln!(
                         output,
@@ -1866,8 +2071,17 @@ fn body(
                         .unwrap();
                     }
                 }
-                if let Some(value) = result.filter(|value| matches!(value.ty, Ty::Struct(_)) && !map_type(value.ty, layouts)) {
-                    owned_action(output, &pad, value, "CRUST_REHOME", Some("crust_region_frame_pools"), program);
+                if let Some(value) = result.filter(|value| {
+                    matches!(value.ty, Ty::Struct(_)) && !map_type(value.ty, layouts)
+                }) {
+                    owned_action(
+                        output,
+                        &pad,
+                        value,
+                        "CRUST_REHOME",
+                        Some("crust_region_frame_pools"),
+                        program,
+                    );
                 }
                 if let Some(value) = result.filter(|value| map_type(value.ty, layouts)) {
                     writeln!(
@@ -2009,7 +2223,10 @@ fn evaluate(
             .join(", ")
     };
     let initial = match expression {
-        Expr::Await(_) | Expr::AwaitHandle(_) | Expr::SocketWait(..) | Expr::SocketCompletion(..) => unreachable!(),
+        Expr::Await(_)
+        | Expr::AwaitHandle(_)
+        | Expr::SocketWait(..)
+        | Expr::SocketCompletion(..) => unreachable!(),
         Expr::SocketAttach(socket) => format!("crust_iocp_attach({})", operand(*socket)),
         Expr::Construct(fields) | Expr::Variant(_, fields) => {
             let destination = destination.expect("construction sans réservation");
@@ -2042,7 +2259,12 @@ fn evaluate(
                 let destination = destination.expect("tuple element without storage");
                 writeln!(output, "{pad}{declaration}{target} = {destination};").unwrap();
                 if let Some(resource) = owned_resource(value.ty, program) {
-                    writeln!(output, "{pad}{}", resource_call(resource, &format!("&{place}"), "0", "CRUST_UNREGISTER")).unwrap();
+                    writeln!(
+                        output,
+                        "{pad}{}",
+                        resource_call(resource, &format!("&{place}"), "0", "CRUST_UNREGISTER")
+                    )
+                    .unwrap();
                 }
                 writeln!(output, "{pad}*{target} = {place};").unwrap();
                 owned_action(output, pad, value, "CRUST_REHOME", None, program);
@@ -2057,22 +2279,31 @@ fn evaluate(
                 writeln!(output, "{pad}{declaration}{target} = {place};").unwrap();
                 writeln!(output, "{pad}{place} = NULL;").unwrap();
                 if let Some(resource) = result_resource(value.ty, program) {
-                    writeln!(output, "{pad}{}", resource_call(
-                        resource, &target, "crust_pool_current_owner()", "CRUST_REHOME"
-                    )).unwrap();
+                    writeln!(
+                        output,
+                        "{pad}{}",
+                        resource_call(
+                            resource,
+                            &target,
+                            "crust_pool_current_owner()",
+                            "CRUST_REHOME"
+                        )
+                    )
+                    .unwrap();
                 }
                 return;
             }
             let destination = destination.expect("champ déplacé sans réservation");
             writeln!(output, "{pad}{declaration}{target} = {destination};").unwrap();
-            writeln!(
-                output,
-                "{pad}*{target} = {place};"
-            )
-            .unwrap();
+            writeln!(output, "{pad}*{target} = {place};").unwrap();
             if let Some(resource) = owned_resource(value.ty, program) {
                 let source = format!("&{place}");
-                writeln!(output, "{pad}{}", resource_call(resource, &source, "0", "CRUST_DETACH")).unwrap();
+                writeln!(
+                    output,
+                    "{pad}{}",
+                    resource_call(resource, &source, "0", "CRUST_DETACH")
+                )
+                .unwrap();
                 owned_action(output, pad, value, "CRUST_ATTACH", None, program);
             }
             return;
@@ -2106,14 +2337,20 @@ fn evaluate(
             )
         }
         Expr::FutureNew(function, captures) => {
-            format!("crust_future_new_{function}({})", captures_with_region(captures))
+            format!(
+                "crust_future_new_{function}({})",
+                captures_with_region(captures)
+            )
         }
         Expr::FutureSpawn(future, blocking) => {
             let suffix = if *blocking { "_blocking" } else { "" };
             format!("crust_future_spawn{suffix}({})", operand(*future))
         }
         Expr::NativeStart(worker, captures, _) => {
-            format!("crust_native_start_{worker}({})", captures_with_region(captures))
+            format!(
+                "crust_native_start_{worker}({})",
+                captures_with_region(captures)
+            )
         }
         Expr::NativeJoin(handle) => {
             let destination = destination.expect("résultat de thread sans réservation");
@@ -2135,7 +2372,11 @@ fn evaluate(
         Expr::MapNew => {
             let destination = destination.expect("HashMap sans réservation");
             writeln!(output, "{pad}{declaration}{target} = {destination};").unwrap();
-            writeln!(output, "{pad}crust_map_new(&{target}->contents, {dedicated});").unwrap();
+            writeln!(
+                output,
+                "{pad}crust_map_new(&{target}->contents, {dedicated});"
+            )
+            .unwrap();
             return;
         }
         Expr::MapInsert(map, key, input) => {
@@ -2146,7 +2387,12 @@ fn evaluate(
                 operand(*map), operand(*key), operand(*input)).unwrap();
             if matches!(input.ty, Ty::Allocation(_)) {
                 owned_action(output, pad, *input, "CRUST_DETACH", Some("0"), program);
-                writeln!(output, "{pad}{}->contents.destroy_entry = crust_map_destroy_allocation;", operand(*map)).unwrap();
+                writeln!(
+                    output,
+                    "{pad}{}->contents.destroy_entry = crust_map_destroy_allocation;",
+                    operand(*map)
+                )
+                .unwrap();
                 owned_action(output, pad, value, "CRUST_ATTACH", None, program);
             }
             return;
@@ -2182,12 +2428,12 @@ fn evaluate(
             )
             .unwrap();
             writeln!(output, "{pad}{target}->growing = true;").unwrap();
-            let take = if dedicated { "crust_region_take_dedicated" } else { "crust_region_take" };
-            writeln!(
-                output,
-                "{pad}*(CrustGrowing *){target}->data = {take}();"
-            )
-            .unwrap();
+            let take = if dedicated {
+                "crust_region_take_dedicated"
+            } else {
+                "crust_region_take"
+            };
+            writeln!(output, "{pad}*(CrustGrowing *){target}->data = {take}();").unwrap();
             return;
         }
         Expr::GrowingLen(handle, element) => {
@@ -2214,18 +2460,42 @@ fn evaluate(
             } else if !async_body {
                 writeln!(output, "{pad}{declaration}{target};").unwrap();
             }
-            let call = format!("crust_vector_extract((CrustGrowing *){handle}->data, (uint64_t){index}, sizeof({stored}), {}, &({place}))", u8::from(pop));
+            let call = format!(
+                "crust_vector_extract((CrustGrowing *){handle}->data, (uint64_t){index}, sizeof({stored}), {}, &({place}))",
+                u8::from(pop)
+            );
             if pop {
                 writeln!(output, "{pad}{target}->tag = {call};").unwrap();
-                writeln!(output, "{pad}if (!{target}->tag) {target}->data.v0.empty = 0;").unwrap();
+                writeln!(
+                    output,
+                    "{pad}if (!{target}->tag) {target}->data.v0.empty = 0;"
+                )
+                .unwrap();
             } else {
                 writeln!(output, "{pad}(void){call};").unwrap();
             }
             if let Some(resource) = result_resource(*element, program) {
-                let guard = if pop { format!("if ({target}->tag) ") } else { String::new() };
-                let place = if matches!(element, Ty::Struct(_)) { format!("&({place})") } else { place };
-                writeln!(output, "{pad}{guard}{}", resource_call(resource, &place,
-                    &format!("(uintptr_t){handle}"), "CRUST_EXTRACT")).unwrap();
+                let guard = if pop {
+                    format!("if ({target}->tag) ")
+                } else {
+                    String::new()
+                };
+                let place = if matches!(element, Ty::Struct(_)) {
+                    format!("&({place})")
+                } else {
+                    place
+                };
+                writeln!(
+                    output,
+                    "{pad}{guard}{}",
+                    resource_call(
+                        resource,
+                        &place,
+                        &format!("(uintptr_t){handle}"),
+                        "CRUST_EXTRACT"
+                    )
+                )
+                .unwrap();
             }
             return;
         }
@@ -2246,11 +2516,20 @@ fn evaluate(
             let pool = operand(*pool);
             let init_value = operand(*init);
             if let Some(fields) = placement.pool_initializers.get(&init.temp) {
-                writeln!(output, "{pad}{declaration}{target} = crust_pool_take({pool}, 0);").unwrap();
+                writeln!(
+                    output,
+                    "{pad}{declaration}{target} = crust_pool_take({pool}, 0);"
+                )
+                .unwrap();
                 let stored = stored_type(init.ty);
                 let place = format!("(({stored} *){target}->data)");
                 for (field, input) in fields {
-                    writeln!(output, "{pad}{place}->f{field} = {};", stored_operand(*input)).unwrap();
+                    writeln!(
+                        output,
+                        "{pad}{place}->f{field} = {};",
+                        stored_operand(*input)
+                    )
+                    .unwrap();
                 }
                 if let Ty::Struct(layout) = init.ty
                     && crate::verify::inline_destructor(init.ty, layouts)
@@ -2320,18 +2599,35 @@ fn evaluate(
                 if layouts[layout].variants.is_empty() {
                     writeln!(output, "{pad}*{target} = *({stored} *){allocation}->data;").unwrap();
                 } else {
-                    writeln!(output, "{pad}{target}->tag = {allocation}->tag; switch ({allocation}->tag) {{").unwrap();
+                    writeln!(
+                        output,
+                        "{pad}{target}->tag = {allocation}->tag; switch ({allocation}->tag) {{"
+                    )
+                    .unwrap();
                     for tag in 0..layouts[layout].variants.len() {
                         writeln!(output, "{pad}case {tag}: {target}->data.v{tag} = *(CrustVariant{layout}_{tag} *){allocation}->data; break;").unwrap();
                     }
                     writeln!(output, "{pad}default: abort(); }}").unwrap();
                 }
             } else {
-                writeln!(output, "{pad}{declaration}{target} = *({stored} *){allocation}->data;").unwrap();
+                writeln!(
+                    output,
+                    "{pad}{declaration}{target} = *({stored} *){allocation}->data;"
+                )
+                .unwrap();
             }
             let resource = result_resource(value.ty, program).unwrap();
-            writeln!(output, "{pad}{}", resource_call(resource, &target,
-                &format!("(uintptr_t){allocation}"), "CRUST_EXTRACT")).unwrap();
+            writeln!(
+                output,
+                "{pad}{}",
+                resource_call(
+                    resource,
+                    &target,
+                    &format!("(uintptr_t){allocation}"),
+                    "CRUST_EXTRACT"
+                )
+            )
+            .unwrap();
             if crate::verify::inline_destructor(value.ty, layouts) {
                 writeln!(output, "{pad}{allocation}->finalize = NULL;").unwrap();
             }
@@ -2448,27 +2744,48 @@ fn evaluate(
         Expr::GrowingSlice(handle, element) => {
             let name = format!("{target}_growing");
             let element = stored_type(*element);
-            writeln!(output, "{pad}CrustGrowing *{name} = (CrustGrowing *){}->data;", operand(*handle)).unwrap();
+            writeln!(
+                output,
+                "{pad}CrustGrowing *{name} = (CrustGrowing *){}->data;",
+                operand(*handle)
+            )
+            .unwrap();
             format!("(CrustSlice){{crust_region_data({name}), {name}->used / sizeof({element})}}")
         }
         Expr::Subslice(slice, start, end) => {
-            let Ty::Slice { element, .. } = slice.ty else { unreachable!() };
+            let Ty::Slice { element, .. } = slice.ty else {
+                unreachable!()
+            };
             let element = stored_type(element.ty());
             let source = operand(*slice);
             let lo = operand(*start);
             let hi = operand(*end);
             let mut checks = String::new();
-            if start.ty.signed() { write!(checks, "{lo} < 0 || ").unwrap(); }
-            if end.ty.signed() { write!(checks, "{hi} < 0 || ").unwrap(); }
+            if start.ty.signed() {
+                write!(checks, "{lo} < 0 || ").unwrap();
+            }
+            if end.ty.signed() {
+                write!(checks, "{hi} < 0 || ").unwrap();
+            }
             writeln!(output, "{pad}if ({checks}(uint64_t){lo} > (uint64_t){hi} || (uint64_t){hi} > {source}.len) {{ fputs(\"corbo: bornes de sous-tranche invalides\\n\", stderr); exit(EXIT_FAILURE); }}").unwrap();
-            format!("(CrustSlice){{{lo} == 0 ? {source}.data : ({element} const *){source}.data + (size_t){lo}, (uintptr_t){hi} - (uintptr_t){lo}}}")
+            format!(
+                "(CrustSlice){{{lo} == 0 ? {source}.data : ({element} const *){source}.data + (size_t){lo}, (uintptr_t){hi} - (uintptr_t){lo}}}"
+            )
         }
         Expr::ProcessArgs => {
             let destination = destination.expect("arguments sans réservation");
             writeln!(output, "{pad}{declaration}{target} = {destination};").unwrap();
             writeln!(output, "{pad}{target}->tag = crust_args_status == 0;").unwrap();
-            writeln!(output, "{pad}if ({target}->tag) {target}->data.v1.f0 = crust_args;").unwrap();
-            writeln!(output, "{pad}else {{ {target}->data.v0.f0.tag = crust_args_status - 1; }}").unwrap();
+            writeln!(
+                output,
+                "{pad}if ({target}->tag) {target}->data.v1.f0 = crust_args;"
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "{pad}else {{ {target}->data.v0.f0.tag = crust_args_status - 1; }}"
+            )
+            .unwrap();
             // Unit enum payload fields are initialized like ordinary variant constructors.
             writeln!(output, "{pad}if (!{target}->tag) {{ if (crust_args_status == 1) {target}->data.v0.f0.data.v0.empty = 0; else {target}->data.v0.f0.data.v1.empty = 0; }}").unwrap();
             return;
@@ -2483,19 +2800,27 @@ fn evaluate(
         Expr::StrBytes(text) => operand(*text),
         Expr::SliceLen(slice) => format!("{}.len", operand(*slice)),
         Expr::SliceElementAddress(slice, index) => {
-            let Ty::Slice { element, .. } = slice.ty else { unreachable!() };
+            let Ty::Slice { element, .. } = slice.ty else {
+                unreachable!()
+            };
             let element = stored_type(element.ty());
             let slice = operand(*slice);
             let position = operand(*index);
-            let negative = if index.ty.signed() { format!("{position} < 0 || ") } else { String::new() };
+            let negative = if index.ty.signed() {
+                format!("{position} < 0 || ")
+            } else {
+                String::new()
+            };
             writeln!(output, "{pad}if ({negative}(uint64_t){position} >= {slice}.len) {{ fputs(\"corbo: indice hors de la tranche\\n\", stderr); exit(EXIT_FAILURE); }}").unwrap();
             format!("(uintptr_t)(({element} const *){slice}.data + (size_t){position})")
         }
         Expr::SliceElementBorrow(address) => format!("({ty}){}", operand(*address)),
-        Expr::SliceElement(address) if matches!(value.ty, Ty::Struct(_)) =>
-            format!("({ty}){}", operand(*address)),
-        Expr::SliceElement(address) =>
-            format!("*({} const *){}", stored_type(value.ty), operand(*address)),
+        Expr::SliceElement(address) if matches!(value.ty, Ty::Struct(_)) => {
+            format!("({ty}){}", operand(*address))
+        }
+        Expr::SliceElement(address) => {
+            format!("*({} const *){}", stored_type(value.ty), operand(*address))
+        }
         Expr::Address(reference) => format!("(uintptr_t){}", operand(*reference)),
         Expr::Borrow(binding) => format!("b{}", binding.0),
         Expr::BorrowField(owner, field) => format!("({ty})&{}->f{field}", operand(*owner)),
@@ -2507,7 +2832,9 @@ fn evaluate(
         Expr::Reborrow(binding) => format!("*b{}", binding.0),
         Expr::Temporary(source) => operand(*source),
         Expr::BorrowThrough(reference) => operand(*reference),
-        Expr::DereferenceValue(reference) if matches!(value.ty, Ty::Struct(_)) => operand(*reference),
+        Expr::DereferenceValue(reference) if matches!(value.ty, Ty::Struct(_)) => {
+            operand(*reference)
+        }
         Expr::DereferenceValue(reference) => format!("*({})", operand(*reference)),
         Expr::Dereference(binding) if matches!(value.ty, Ty::Struct(_)) => {
             format!("*b{}", binding.0)
@@ -2515,13 +2842,23 @@ fn evaluate(
         Expr::Dereference(binding) => format!("**b{}", binding.0),
         Expr::Shift(left, right, bits, leftward) => {
             let count = operand(*right);
-            let negative = if right.ty.signed() { format!("{count} < 0 || ") } else { String::new() };
-            writeln!(output, "{pad}if ({negative}(uint64_t){count} >= {bits}) crust_arithmetic_error();").unwrap();
+            let negative = if right.ty.signed() {
+                format!("{count} < 0 || ")
+            } else {
+                String::new()
+            };
+            writeln!(
+                output,
+                "{pad}if ({negative}(uint64_t){count} >= {bits}) crust_arithmetic_error();"
+            )
+            .unwrap();
             let input = operand(*left);
             if !leftward {
                 // C leaves right shift of a negative signed integer implementation-defined.
                 let shifted = if left.ty.signed() {
-                    format!("{input} < 0 ? -1 - ({ty})((uint64_t)(-1 - {input}) >> {count}) : ({ty})((uint64_t){input} >> {count})")
+                    format!(
+                        "{input} < 0 ? -1 - ({ty})((uint64_t)(-1 - {input}) >> {count}) : ({ty})((uint64_t){input} >> {count})"
+                    )
                 } else {
                     format!("({ty})((uint64_t){input} >> {count})")
                 };

@@ -4,10 +4,17 @@
 
 ## Méthode de destruction
 
-`fn drop(&mut self)` est la signature du destructeur d’un type
-déclaré. Le retour omis vaut `Void`. La méthode se définit dans son `impl`. Le nom `drop` est réservé
-à la destruction. Le programmeur demande la destruction avec
-`drop(object)`. Seul le compilateur appelle la méthode.
+`fn drop(&mut self)` est le hook de destruction défini dans la déclaration
+de la struct ou de l'enum. Son retour omis est le type unité. Le nom `drop` est
+réservé : `drop(valeur)` consomme la possession et confie le nettoyage complet à
+la procédure de destruction. Celle-ci appelle le hook avec `&mut self` tant que
+l'objet et ses champs sont valides, détruit les champs possédés selon leurs
+dépendances, puis termine la durée de vie et récupère le stockage. La sortie de
+scope déclenche la même procédure.
+
+Le hook utilisateur remplace seulement le hook vide par défaut. Il ne remplace
+ni le nettoyage des champs ni la récupération du stockage. Chaque copie autorisée
+constitue une valeur distincte avec sa propre responsabilité de nettoyage.
 
 Chaque type déclaré a un destructeur vide par défaut. Si le développeur
 définit un destructeur, sa définition remplace le défaut. Le compilateur

@@ -1,0 +1,79 @@
+// Independent expression oracle. No production parser or AST construction code.
+use crate::{OracleNode, OracleToken, leaf, unary, binary, postfix, Suffix};
+grammar;
+
+pub Expression: OracleNode = Or;
+Or: OracleNode = { <a:And> <rest:("||" <And>)*> => rest.into_iter().fold(a, |a,b| binary("||",a,b)) };
+And: OracleNode = { <a:Compare> <rest:("&&" <Compare>)*> => rest.into_iter().fold(a, |a,b| binary("&&",a,b)) };
+Compare: OracleNode = { BitOr, <a:BitOr> <op:CompareOp> <b:BitOr> => binary(op,a,b) };
+CompareOp: &'static str = { "==" => "==", "!=" => "!=", "<" => "<", "<=" => "<=", ">" => ">", ">=" => ">=" };
+BitOr: OracleNode = { <a:BitXor> <rest:("|" <BitXor>)*> => rest.into_iter().fold(a, |a,b| binary("|",a,b)) };
+BitXor: OracleNode = { <a:BitAnd> <rest:("^" <BitAnd>)*> => rest.into_iter().fold(a, |a,b| binary("^",a,b)) };
+BitAnd: OracleNode = { <a:Shift> <rest:("&" <Shift>)*> => rest.into_iter().fold(a, |a,b| binary("&",a,b)) };
+Shift: OracleNode = { <a:Add> <rest:(<ShiftOp> <Add>)*> => rest.into_iter().fold(a, |a,(op,b)| binary(op,a,b)) };
+ShiftOp: &'static str = { "<<" => "<<", ">>" => ">>" };
+Add: OracleNode = { <a:Mul> <rest:(<AddOp> <Mul>)*> => rest.into_iter().fold(a, |a,(op,b)| binary(op,a,b)) };
+AddOp: &'static str = { "+" => "+", "-" => "-" };
+Mul: OracleNode = { <a:Cast> <rest:(<MulOp> <Cast>)*> => rest.into_iter().fold(a, |a,(op,b)| binary(op,a,b)) };
+MulOp: &'static str = { "*" => "*", "/" => "/", "%" => "%" };
+Cast: OracleNode = { <a:Unary> <rest:("as" <TypeName>)*> => rest.into_iter().fold(a, |a,b| OracleNode::new("as",a.start,b.end,vec![a,b])) };
+TypeName: OracleNode = { <l:@L> <name:"numeric_type"> <r:@R> => leaf("type",name,l,r) };
+Unary: OracleNode = { Postfix,
+    <l:@L> <op:Prefix> <x:Unary> => unary(op,l,x),
+    <l:@L> "&" "mut" <x:Unary> => unary("&mut",l,x),
+};
+Prefix: &'static str = { "-" => "-", "!" => "!", "~" => "~", "*" => "*", "&" => "&" };
+Postfix: OracleNode = { <a:Atom> <rest:Suffix*> => rest.into_iter().fold(a,postfix) };
+Suffix: Suffix = {
+    "(" <args:Comma<Expression>> ")" <r:@R> => Suffix::Call(args,r),
+    "." <member:Member> <r:@R> => Suffix::Field(member,r),
+    "[" <index:Index> "]" <r:@R> => Suffix::Index(index,r),
+    "." "await" <r:@R> => Suffix::Unary("await",r),
+    "?" <r:@R> => Suffix::Unary("?",r),
+    "!" <r:@R> => Suffix::Unary("!",r),
+};
+Member: String = { "identifier", "integer" };
+Index: OracleNode = {
+    Expression,
+    <l:@L> <a:Expression?> ".." <b:Expression?> <r:@R> => OracleNode::new("range",l,r,a.into_iter().chain(b).collect()),
+};
+Atom: OracleNode = {
+    <l:@L> <name:Name> <r:@R> => leaf("path",name,l,r),
+    <l:@L> <value:Literal> <r:@R> => leaf("literal",value,l,r),
+    <l:@L> "(" <x:Expression> ")" <r:@R> => OracleNode::new("paren",l,r,vec![x]),
+    <l:@L> "(" ")" <r:@R> => OracleNode::new("tuple",l,r,vec![]),
+    <l:@L> "(" <a:Expression> "," <b:Expression> <rest:("," <Expression>)*> <_tail:","?> ")" <r:@R> => OracleNode::new("tuple",l,r,std::iter::once(a).chain(std::iter::once(b)).chain(rest).collect()),
+    <l:@L> "[" <items:Comma<Expression>> "]" <r:@R> => OracleNode::new("array",l,r,items),
+    <l:@L> "[" <item:Expression> ";" <count:Expression> "]" <r:@R> => OracleNode::new("repeat",l,r,vec![item,count]),
+};
+NamePart: String = { "identifier", "numeric_type" };
+Name: String = { <first:NamePart> <rest:("::" <NamePart>)*> => std::iter::once(first).chain(rest).collect::<Vec<_>>().join("::") };
+Literal: String = { "integer", "float", "text", "bool" };
+Comma<T>: Vec<T> = { <items:(<T> ",")*> <last:T?> => items.into_iter().chain(last).collect() };
+
+extern {
+ type Location = usize;
+ type Error = &'static str;
+ enum OracleToken {
+  "identifier" => OracleToken::Identifier(<String>),
+  "numeric_type" => OracleToken::NumericType(<String>),
+  "integer" => OracleToken::Integer(<String>),
+  "float" => OracleToken::Float(<String>),
+  "text" => OracleToken::Text(<String>),
+  "bool" => OracleToken::Boolean(<String>),
+  "+" => OracleToken::Symbol("+"), "-" => OracleToken::Symbol("-"),
+  "*" => OracleToken::Symbol("*"), "/" => OracleToken::Symbol("/"), "%" => OracleToken::Symbol("%"),
+  "&" => OracleToken::Symbol("&"), "|" => OracleToken::Symbol("|"), "^" => OracleToken::Symbol("^"),
+  "!" => OracleToken::Symbol("!"), "~" => OracleToken::Symbol("~"),
+  "||" => OracleToken::Symbol("||"), "&&" => OracleToken::Symbol("&&"),
+  "==" => OracleToken::Symbol("=="), "!=" => OracleToken::Symbol("!="),
+  "<" => OracleToken::Symbol("<"), "<=" => OracleToken::Symbol("<="),
+  ">" => OracleToken::Symbol(">"), ">=" => OracleToken::Symbol(">="),
+  "<<" => OracleToken::Symbol("<<"), ">>" => OracleToken::Symbol(">>"),
+  "as" => OracleToken::Symbol("as"), "mut" => OracleToken::Symbol("mut"), "await" => OracleToken::Symbol("await"),
+  "(" => OracleToken::Symbol("("), ")" => OracleToken::Symbol(")"),
+  "[" => OracleToken::Symbol("["), "]" => OracleToken::Symbol("]"),
+  "." => OracleToken::Symbol("."), ".." => OracleToken::Symbol(".."),
+  "::" => OracleToken::Symbol("::"), "," => OracleToken::Symbol(","), ";" => OracleToken::Symbol(";"), "?" => OracleToken::Symbol("?"),
+ }
+}

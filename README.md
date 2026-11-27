@@ -123,7 +123,7 @@ shows how a developer supplies a particular limit directly in the code.
 
 ## Getting started
 
-You need a compatible `corboc` and a host C11 toolchain. If you need to build the
+You need a compatible `corboc` and a host C++20 toolchain. If you need to build the
 compiler, follow [the source-build instructions](#build-the-compiler-from-source)
 below; the current compiler requires an existing compatible self-hosted seed.
 
@@ -1496,7 +1496,7 @@ Foreign code belongs inside `@unchecked`. `${name}` binds an existing Corbo oper
 fn main() {
     let mut answer: i64 = 0;
     @unchecked {
-        @c(includes={"stdint.h"}) {
+        @c++(includes={"stdint.h"}) {
             ${answer} = (int64_t)42;
         }
         @asm { nop }
@@ -1667,17 +1667,19 @@ encryption support. API availability is not a claim of an independent security a
 
 | Location | Responsibility |
 | --- | --- |
-| [omework/corboc](https://github.com/omework/corboc) | Active self-hosted lexer, parser, representations, verifier, placement and C11 backend |
+| [omework/corboc](https://github.com/omework/corboc) | Active self-hosted lexer, parser, representations, verifier, placement and primitive C++20 backend |
 | [stdlib/src](stdlib/src/) | STD APIs and their portable/platform-specific implementations |
 | [runtime/corbo](runtime/corbo/README.md) | Runtime allocation, collection, cleanup, scheduling and reactor algorithms in Corbo |
-| [runtime](runtime/README.md) | Canonical C ABI and retained C comparison implementation |
+| [runtime](runtime/README.md) | Primitive C++ runtime and retained historical comparison implementations |
 | [ide](ide/README.md) | Vim/Neovim and VS Code support for `.crb` |
 | [rust_frontend](rust_frontend/README.md) / [prototype](prototype/README.md) | Frozen/historical reference implementations |
 
-`corboc` pins STD/runtime inputs with `corbo.lock`. The current backend generates
-C11. Runtime machine/ABI primitives retain explicit `@unchecked`/`@c` bindings;
-the algorithm port does not make the toolchain C-free. The shared memory library
-is also available to C through [corbo_runtime.h](runtime/corbo_runtime.h).
+`corboc` pins STD/runtime inputs with `corbo.lock`. The backend generates primitive
+C++20 with explicit storage and cleanup. Runtime machine/ABI primitives retain
+explicit `@unchecked`/`@c++` and `@asm` bindings. The readable support library is
+[corbo_runtime.hpp](runtime/corbo_runtime.hpp); generated layouts expose the same
+plain representations to unchecked C++ blocks. See [the C++ target](docs/CPP_BACKEND.md)
+for the boundary and validation limits.
 
 The [runtime cycle report](docs/cycles/CORBO_RUNTIME_CYCLE.md) records differential
 C/Corbo execution and self-reconstruction evidence, including platform limits.
@@ -1759,7 +1761,7 @@ python3 scripts/stdlib_docs.py --check
 python3 validation/check_documentation.py --corboc ../corboc/build/install/bin/corboc
 ```
 
-The last command needs a host C11 compiler and local loopback socket access.
+The last command needs a host C++20 compiler and local loopback socket access.
 Results and generated programs are retained in `build/documentation/`.
 This documentation pass validates execution on the macOS ARM64 host; it does
 not repeat the full platform matrix. Windows ARM64 execution remains deferred.

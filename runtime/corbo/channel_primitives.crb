@@ -4,12 +4,12 @@
 /// Allocates metadata; payload storage is initialized separately under the runtime lock.
 fn channel_allocate()->usize {
     let mut raw:usize=0;
-    @unchecked { @c { ${raw}=sizeof(CorboChannelState); } }
+    @unchecked { @c++ { ${raw}=sizeof(CorboChannelState); } }
     os_metadata(raw)
 }
 /// Creates a detached managed region retained by the channel until destruction.
 fn channel_storage(raw:usize,capacity:usize,width:usize) {
-    @unchecked { @c {
+    @unchecked { @c++ {
         CorboChannelState *c=(void*)${raw};
         if(!${capacity}||!${width}||${capacity}>SIZE_MAX/${width})abort();
         c->capacity=${capacity};c->width=${width};
@@ -19,7 +19,7 @@ fn channel_storage(raw:usize,capacity:usize,width:usize) {
 }
 /// Releases detached payload storage before its stable metadata.
 fn channel_free(raw:usize) {
-    @unchecked { @c {
+    @unchecked { @c++ {
         CorboChannelState *c=(void*)${raw};
         if(c->count||c->heads[0]||c->heads[1])abort();
         region_drop(&c->storage);
@@ -29,96 +29,96 @@ fn channel_free(raw:usize) {
 /// Exact extent of the stable channel control block.
 fn channel_metadata_size()->usize {
     let mut size:usize=0;
-    @unchecked { @c { ${size}=sizeof(CorboChannelState); } }
+    @unchecked { @c++ { ${size}=sizeof(CorboChannelState); } }
     size
 }
 /// Stores the observed epoch independently of pointer width.
 fn channel_epoch_write(pointer:usize,value:u64) {
-    @unchecked { @c { *(uint64_t*)${pointer}=${value}; } }
+    @unchecked { @c++ { *(uint64_t*)${pointer}=${value}; } }
 }
 /// Acquires the short scheduler lock even in a program without launched workers.
-fn channel_lock() { @unchecked { @c { pthread_mutex_lock(&task_lock); } } }
+fn channel_lock() { @unchecked { @c++ { pthread_mutex_lock(&task_lock); } } }
 /// Releases the channel/scheduler state lock.
-fn channel_unlock() { @unchecked { @c { pthread_mutex_unlock(&task_lock); } } }
+fn channel_unlock() { @unchecked { @c++ { pthread_mutex_unlock(&task_lock); } } }
 /// Atomically parks a native thread, releasing and reacquiring task_lock.
-fn channel_condition_wait() { @unchecked { @c { pthread_cond_wait(&task_ready,&task_lock); } } }
+fn channel_condition_wait() { @unchecked { @c++ { pthread_cond_wait(&task_ready,&task_lock); } } }
 /// Wakes native condition waiters; the caller holds task_lock.
-fn channel_broadcast() { @unchecked { @c { pthread_cond_broadcast(&task_ready); } } }
+fn channel_broadcast() { @unchecked { @c++ { pthread_cond_broadcast(&task_ready); } } }
 /// Reads the channel's capacity; caller holds task_lock.
 fn channel_get_capacity(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=((CorboChannelState*)${raw})->capacity; } }
+    @unchecked { @c++ { ${value}=((CorboChannelState*)${raw})->capacity; } }
     value
 }
 /// Updates the channel's capacity; caller holds task_lock.
-fn channel_set_capacity(raw:usize,value:usize) { @unchecked { @c { ((CorboChannelState*)${raw})->capacity=${value}; } } }
+fn channel_set_capacity(raw:usize,value:usize) { @unchecked { @c++ { ((CorboChannelState*)${raw})->capacity=${value}; } } }
 /// Reads the channel's width; caller holds task_lock.
 fn channel_get_width(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=((CorboChannelState*)${raw})->width; } }
+    @unchecked { @c++ { ${value}=((CorboChannelState*)${raw})->width; } }
     value
 }
 /// Updates the channel's width; caller holds task_lock.
-fn channel_set_width(raw:usize,value:usize) { @unchecked { @c { ((CorboChannelState*)${raw})->width=${value}; } } }
+fn channel_set_width(raw:usize,value:usize) { @unchecked { @c++ { ((CorboChannelState*)${raw})->width=${value}; } } }
 /// Reads the channel's count; caller holds task_lock.
 fn channel_get_count(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=((CorboChannelState*)${raw})->count; } }
+    @unchecked { @c++ { ${value}=((CorboChannelState*)${raw})->count; } }
     value
 }
 /// Updates the channel's count; caller holds task_lock.
-fn channel_set_count(raw:usize,value:usize) { @unchecked { @c { ((CorboChannelState*)${raw})->count=${value}; } } }
+fn channel_set_count(raw:usize,value:usize) { @unchecked { @c++ { ((CorboChannelState*)${raw})->count=${value}; } } }
 /// Reads the channel's head; caller holds task_lock.
 fn channel_get_head(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=((CorboChannelState*)${raw})->head; } }
+    @unchecked { @c++ { ${value}=((CorboChannelState*)${raw})->head; } }
     value
 }
 /// Updates the channel's head; caller holds task_lock.
-fn channel_set_head(raw:usize,value:usize) { @unchecked { @c { ((CorboChannelState*)${raw})->head=${value}; } } }
+fn channel_set_head(raw:usize,value:usize) { @unchecked { @c++ { ((CorboChannelState*)${raw})->head=${value}; } } }
 /// Reads the channel's epoch; caller holds task_lock.
 fn channel_get_epoch(raw:usize)->u64 {
     let mut value:u64=0;
-    @unchecked { @c { ${value}=((CorboChannelState*)${raw})->epoch; } }
+    @unchecked { @c++ { ${value}=((CorboChannelState*)${raw})->epoch; } }
     value
 }
 /// Updates the channel's epoch; caller holds task_lock.
-fn channel_set_epoch(raw:usize,value:u64) { @unchecked { @c { ((CorboChannelState*)${raw})->epoch=${value}; } } }
+fn channel_set_epoch(raw:usize,value:u64) { @unchecked { @c++ { ((CorboChannelState*)${raw})->epoch=${value}; } } }
 /// Reads the channel's closed; caller holds task_lock.
 fn channel_get_closed(raw:usize)->bool {
     let mut value:bool=false;
-    @unchecked { @c { ${value}=((CorboChannelState*)${raw})->closed; } }
+    @unchecked { @c++ { ${value}=((CorboChannelState*)${raw})->closed; } }
     value
 }
 /// Updates the channel's closed; caller holds task_lock.
-fn channel_set_closed(raw:usize,value:bool) { @unchecked { @c { ((CorboChannelState*)${raw})->closed=${value}; } } }
+fn channel_set_closed(raw:usize,value:bool) { @unchecked { @c++ { ((CorboChannelState*)${raw})->closed=${value}; } } }
 /// Reads one side's heads pointer; side 0 receives, side 1 sends.
 fn channel_get_heads(raw:usize,side:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((CorboChannelState*)${raw})->heads[${side}]; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((CorboChannelState*)${raw})->heads[${side}]; } }
     value
 }
 /// Updates one side's heads pointer under task_lock.
-fn channel_set_heads(raw:usize,side:usize,value:usize) { @unchecked { @c { ((CorboChannelState*)${raw})->heads[${side}]=(Task*)${value}; } } }
+fn channel_set_heads(raw:usize,side:usize,value:usize) { @unchecked { @c++ { ((CorboChannelState*)${raw})->heads[${side}]=(Task*)${value}; } } }
 /// Reads one side's tails pointer; side 0 receives, side 1 sends.
 fn channel_get_tails(raw:usize,side:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((CorboChannelState*)${raw})->tails[${side}]; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((CorboChannelState*)${raw})->tails[${side}]; } }
     value
 }
 /// Updates one side's tails pointer under task_lock.
-fn channel_set_tails(raw:usize,side:usize,value:usize) { @unchecked { @c { ((CorboChannelState*)${raw})->tails[${side}]=(Task*)${value}; } } }
+fn channel_set_tails(raw:usize,side:usize,value:usize) { @unchecked { @c++ { ((CorboChannelState*)${raw})->tails[${side}]=(Task*)${value}; } } }
 /// Addresses one aligned slot in the channel's fixed ring.
 fn channel_slot(raw:usize,index:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { CorboChannelState*c=(void*)${raw};${value}=(uintptr_t)(c->storage.data+${index}*c->width); } }
+    @unchecked { @c++ { CorboChannelState*c=(void*)${raw};${value}=(uintptr_t)(c->storage.data+${index}*c->width); } }
     value
 }
 /// Reads whether an existing task wait record belongs to a channel.
 fn channel_waiting(task:usize)->bool {
     let mut value:bool=false;
-    @unchecked { @c { ${value}=((Task*)${task})->channel_wait; } }
+    @unchecked { @c++ { ${value}=((Task*)${task})->channel_wait; } }
     value
 }
 /// Marks a task's intrusive record as channel-owned.
-fn channel_mark(task:usize,value:bool) { @unchecked { @c { ((Task*)${task})->channel_wait=${value}; } } }
+fn channel_mark(task:usize,value:bool) { @unchecked { @c++ { ((Task*)${task})->channel_wait=${value}; } } }

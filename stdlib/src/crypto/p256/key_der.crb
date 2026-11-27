@@ -38,21 +38,21 @@ fn read_sec1(input: &[u8], outer_parameters: bool) Result<SigningKey, Error> {
     let sequence = der(&input[0..size], 0, copy(size), 48);
     if sequence.end == 0 || sequence.end != size
        || !version_is(&input[0..size], sequence.body, copy(size), 1) {
-        return Err(Error.InvalidPrivateKey);
+        return Err(Error::InvalidPrivateKey);
     }
     let secret = der(&input[0..size], sequence.body + 3, copy(size), 4);
     if secret.end == 0 || secret.end - secret.body != 32 {
-        return Err(Error.InvalidPrivateKey);
+        return Err(Error::InvalidPrivateKey);
     }
     let mut at = secret.end;
     if at < size && input[at] == 160 {
         let scope = der(&input[0..size], copy(at), copy(size), 160);
         let curve: [u8; 10] = [6,8,42,134,72,206,61,3,1,7];
         if scope.end == 0 || !bytes_equal(&input[scope.body..scope.end], &curve[..]) {
-            return Err(Error.InvalidPrivateKey);
+            return Err(Error::InvalidPrivateKey);
         }
         at = scope.end;
-    } else if !outer_parameters { return Err(Error.InvalidPrivateKey); }
+    } else if !outer_parameters { return Err(Error::InvalidPrivateKey); }
 
     let mut scalar: [u8; 32] = [0; 32];
     let mut index: u64 = 0;
@@ -66,14 +66,14 @@ fn read_sec1(input: &[u8], outer_parameters: bool) Result<SigningKey, Error> {
     };
     if at < size {
         let scope = der(&input[0..size], at, copy(size), 161);
-        if scope.end != size { return Err(Error.InvalidPrivateKey); }
+        if scope.end != size { return Err(Error::InvalidPrivateKey); }
         let public = der(&input[0..size], scope.body, copy(size), 3);
         if public.end != size || public.end - public.body != 66 || input[public.body] != 0 {
-            return Err(Error.InvalidPrivateKey);
+            return Err(Error::InvalidPrivateKey);
         }
         let actual = key.public_key();
         let bytes = actual.to_sec1_uncompressed();
-        if !bytes_equal(&input[public.body + 1..size], &bytes[..]) { return Err(Error.InvalidPrivateKey); }
+        if !bytes_equal(&input[public.body + 1..size], &bytes[..]) { return Err(Error::InvalidPrivateKey); }
     }
     Ok(key)
 }
@@ -83,15 +83,15 @@ fn read_pkcs8(input: &[u8]) Result<SigningKey, Error> {
     let size = input.len() as u64;
     let outer = der(&input[0..size], 0, copy(size), 48);
     if outer.end == 0 || outer.end != size || !version_is(&input[0..size], outer.body, copy(size), 0) {
-        return Err(Error.InvalidPrivateKey);
+        return Err(Error::InvalidPrivateKey);
     }
     let start = outer.body + 3;
     let algorithm = der(&input[0..size], copy(start), copy(size), 48);
     if algorithm.end == 0 || !p256_algorithm(&input[0..size], start, algorithm.end) {
-        return Err(Error.InvalidPrivateKey);
+        return Err(Error::InvalidPrivateKey);
     }
     let private = der(&input[0..size], algorithm.end, copy(size), 4);
-    if private.end != size { return Err(Error.InvalidPrivateKey); }
+    if private.end != size { return Err(Error::InvalidPrivateKey); }
     read_sec1(&input[private.body..private.end], true)
 }
 
@@ -130,6 +130,6 @@ fn write_key_pem(input: &[u8], label: &[u8], output: &mut [u8]) Result<usize, Er
     match encode_pem(input, label, output) {
         Ok(written) => { Ok(written) },
         // The label and DER length are fixed by the caller in this module.
-        Err(error) => { drop(error); Err(Error.BufferTooSmall) },
+        Err(error) => { drop(error); Err(Error::BufferTooSmall) },
     }
 }

@@ -22,33 +22,33 @@
         write_descriptor: u64;
 
         /// Borrows separate read and write views from the connection, which still owns the socket.
-        fn split(&mut self) (ReadHalf, WriteHalf) {
+        pub fn split(&mut self) (ReadHalf, WriteHalf) {
             let read = &mut (*self).read_descriptor;
             let write = &mut (*self).write_descriptor;
             (ReadHalf { descriptor: read }, WriteHalf { descriptor: write })
         }
 
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) SocketAddr {
+        pub fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Returns the remote IPv4 address and port associated with the connection.
-        fn peer(&self) SocketAddr {
+        pub fn peer(&self) SocketAddr {
             let remote = &(*self).remote_address;
             from_parts(remote.ipv4_bits(), remote.port())
         }
 
         /// Awaits a write from the borrowed slice and returns the actual byte count.
-        async fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
+        pub async fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
             if buffer.len() == 0 { return Ok(0); }
             let inner = &(*self).__din_package_socket;
             write_nonblocking(socket_descriptor(inner), buffer).await
         }
 
         /// Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
-        async fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
+        pub async fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
             let inner = &(*self).__din_package_socket;
             read_nonblocking(socket_descriptor(inner), buffer).await
         }
@@ -61,7 +61,7 @@
         descriptor: &mut u64;
 
         /// Awaits bytes into the borrowed output slice. Zero indicates EOF when the slice is nonempty.
-        async fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
+        pub async fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
             read_nonblocking(*(*self).descriptor, buffer).await
         }
 
@@ -73,7 +73,7 @@
         descriptor: &mut u64;
 
         /// Awaits a write from the borrowed slice and returns the actual byte count.
-        async fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
+        pub async fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
             write_nonblocking(*(*self).descriptor, buffer).await
         }
 
@@ -89,7 +89,7 @@
         local_address: SocketAddr;
 
         /// Binds a TCP listener and prepares its native socket for asynchronous accepts.
-        fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError> {
+        pub fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError> {
             let limit = match backlog {
                 Some(value) => { value },
                 None => { 2147483647 },
@@ -109,13 +109,13 @@
         }
 
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) SocketAddr {
+        pub fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Awaits an incoming TCP connection and returns its owned socket wrapper.
-        async fn accept(&mut self) Result<Connection, SocketError> {
+        pub async fn accept(&mut self) Result<Connection, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             let accepted = match accept_nonblocking(inner).await {
                 Ok(value) => { value },

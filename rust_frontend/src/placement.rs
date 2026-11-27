@@ -24,7 +24,10 @@ struct Contract {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Destination {
-    Slot { slot: usize, scope: Option<(usize, u8)> },
+    Slot {
+        slot: usize,
+        scope: Option<(usize, u8)>,
+    },
     Caller(usize),
     FrameResult,
 }
@@ -98,7 +101,7 @@ impl ValueReservation {
             Self::Receiver(value) | Self::CallResult(value) => {
                 (!placement.value_aliases.contains_key(&value.temp)
                     && !(placement.asynchronous && value.ty.scalar().is_some()))
-                    .then_some(value.ty)
+                .then_some(value.ty)
             }
         }
     }
@@ -266,7 +269,8 @@ impl<'a> Inventory<'a> {
             let entry = origins.entry(value.temp).or_default();
             match expr {
                 Expr::Construct(_)
-                | Expr::Variant(..) | Expr::ProcessArgs
+                | Expr::Variant(..)
+                | Expr::ProcessArgs
                 | Expr::Array(..)
                 | Expr::Pool
                 | Expr::MapNew
@@ -284,7 +288,8 @@ impl<'a> Inventory<'a> {
                 }
                 Expr::Local(_) => {
                     let (ValueProvenance::LocalRead(binding)
-                    | ValueProvenance::LocalMove { binding, .. }) = value.provenance else {
+                    | ValueProvenance::LocalMove { binding, .. }) = value.provenance
+                    else {
                         unreachable!("a local evaluation must record its binding");
                     };
                     if let Some(source) = self.bindings.get(&binding) {
@@ -299,7 +304,10 @@ impl<'a> Inventory<'a> {
                         entry.insert(Origin::Fresh(value.temp));
                     }
                     for &index in &contract.parameters {
-                        consumers.entry(args[index].temp).or_default().push(value.temp);
+                        consumers
+                            .entry(args[index].temp)
+                            .or_default()
+                            .push(value.temp);
                     }
                 }
                 _ => {}
@@ -346,7 +354,11 @@ fn aggregate(value: Value) -> bool {
     matches!(value.ty, Ty::Struct(_))
 }
 
-pub(crate) fn plan(functions: &[Function], layouts: &[Structure], region_size: Option<u64>) -> Result<Placement, Error> {
+pub(crate) fn plan(
+    functions: &[Function],
+    layouts: &[Structure],
+    region_size: Option<u64>,
+) -> Result<Placement, Error> {
     let inventories = functions.iter().map(Inventory::new).collect::<Vec<_>>();
     let mut contracts = functions
         .iter()
@@ -385,7 +397,11 @@ pub(crate) fn plan(functions: &[Function], layouts: &[Structure], region_size: O
         .map(|((function, inventory), origins)| place_function(function, inventory, origins))
         .collect::<Vec<_>>();
     dimension(&inventories, &mut placements)?;
-    for (placement, regions) in placements.iter_mut().zip(crate::regions::plan(functions, layouts, region_size)) {
+    for (placement, regions) in
+        placements
+            .iter_mut()
+            .zip(crate::regions::plan(functions, layouts, region_size))
+    {
         placement.regions = regions;
     }
     let (footprint, worker_footprints) = footprints(functions, &placements);
@@ -559,7 +575,9 @@ fn growth_steps(
             FootprintStep::Branch([left, right]) => {
                 let mut growth = growth_steps(left, bounds)?;
                 for (unit, count) in growth_steps(right, bounds)? {
-                    if let Some((_, previous)) = growth.iter_mut().find(|(existing, _)| *existing == unit) {
+                    if let Some((_, previous)) =
+                        growth.iter_mut().find(|(existing, _)| *existing == unit)
+                    {
                         *previous = (*previous).max(count);
                     } else {
                         growth.push((unit, count));
@@ -569,7 +587,10 @@ fn growth_steps(
             }
             FootprintStep::Loop(steps) => {
                 let iteration = growth_steps(steps, bounds)?;
-                if iteration.iter().any(|(unit, _)| !matches!(unit, GrowthUnit::ThreadFrame(_))) {
+                if iteration
+                    .iter()
+                    .any(|(unit, _)| !matches!(unit, GrowthUnit::ThreadFrame(_)))
+                {
                     return None;
                 }
                 iteration
@@ -597,7 +618,9 @@ fn final_value_destination(
     aliases: &HashMap<usize, ValueDestination>,
 ) -> ValueDestination {
     while let ValueDestination::Receiver(temp) = destination {
-        let Some(&next) = aliases.get(&temp) else { break };
+        let Some(&next) = aliases.get(&temp) else {
+            break;
+        };
         destination = next;
     }
     destination
@@ -628,7 +651,13 @@ fn scalar_binding_storage(
                 reassigned.insert(*binding);
             }
             Instr::Assembly(block) => {
-                reassigned.extend(block.operands.iter().filter(|op| op.written).map(|op| op.binding));
+                reassigned.extend(
+                    block
+                        .operands
+                        .iter()
+                        .filter(|op| op.written)
+                        .map(|op| op.binding),
+                );
             }
             Instr::Evaluate(value, _) if value.ty.scalar().is_some() => {
                 if call_results.contains(&value.temp) {
@@ -673,7 +702,8 @@ fn scalar_binding_storage(
         if reassigned.contains(&binding) || moves[&binding].len() != outgoing.len() {
             continue;
         }
-        let destinations = outgoing.iter()
+        let destinations = outgoing
+            .iter()
             .map(|&(_, target)| final_value_destination(target, aliases))
             .collect::<HashSet<_>>();
         let mut redirects = Vec::new();
@@ -716,7 +746,10 @@ fn scalar_binding_storage(
             let construction_site = if initial.receiver {
                 &inventory.reserve_sites[&initial.temp]
             } else {
-                call_sites.get(&initial.temp).copied().unwrap_or(binding_site)
+                call_sites
+                    .get(&initial.temp)
+                    .copied()
+                    .unwrap_or(binding_site)
             };
             if let ValueDestination::Receiver(receiver) = destination
                 && !inventory.reserve_sites[&receiver].dominates(construction_site)
@@ -724,11 +757,16 @@ fn scalar_binding_storage(
                 break;
             }
             chain.push((current, initial, construction_site));
-            let ValueProvenance::LocalMove { binding: source, .. } = initial.provenance else {
+            let ValueProvenance::LocalMove {
+                binding: source, ..
+            } = initial.provenance
+            else {
                 break;
             };
             if reassigned.contains(&source)
-                || moves.get(&source).is_none_or(|moves| moves.as_slice() != [initial.temp])
+                || moves
+                    .get(&source)
+                    .is_none_or(|moves| moves.as_slice() != [initial.temp])
             {
                 break;
             }
@@ -738,7 +776,10 @@ fn scalar_binding_storage(
             continue;
         };
         let previous = promoted.entry(destination).or_default();
-        if !previous.iter().all(|site| site.exclusive(construction_site)) {
+        if !previous
+            .iter()
+            .all(|site| site.exclusive(construction_site))
+        {
             continue;
         }
         previous.push(construction_site);
@@ -761,14 +802,23 @@ fn scalar_binding_storage(
     // If no outer reservation is available, a moved scalar can keep its
     // existing address while the source's storage scope still encloses it.
     for &(instruction, ref site) in &inventory.instructions {
-        let Instr::Bind(binding, value) = instruction else { continue };
-        let ValueProvenance::LocalMove { binding: source, .. } = value.provenance else {
+        let Instr::Bind(binding, value) = instruction else {
+            continue;
+        };
+        let ValueProvenance::LocalMove {
+            binding: source, ..
+        } = value.provenance
+        else {
             continue;
         };
         if !storage.contains_key(binding)
             && !reassigned.contains(&source)
-            && moves.get(&source).is_some_and(|moves| moves.as_slice() == [value.temp])
-            && local_bindings.get(&source).is_some_and(|(_, source_site)| source_site.dominates(site))
+            && moves
+                .get(&source)
+                .is_some_and(|moves| moves.as_slice() == [value.temp])
+            && local_bindings
+                .get(&source)
+                .is_some_and(|(_, source_site)| source_site.dominates(site))
         {
             storage.insert(*binding, BindingStorage::Binding(source));
         }
@@ -783,14 +833,17 @@ fn place_function(
 ) -> FunctionPlacement {
     // A fresh literal immediately consumed by PoolNew has no observable
     // intermediate address. Its inputs have already been evaluated.
-    let pool_initializers = inventory.instructions.windows(2).filter_map(|pair| {
-        match (pair[0].0, pair[1].0) {
-            (Instr::Evaluate(value, Expr::Construct(fields)),
-             Instr::Evaluate(_, Expr::PoolNew(_, init, 0)))
-                if value.temp == init.temp => Some((value.temp, fields.clone())),
+    let pool_initializers = inventory
+        .instructions
+        .windows(2)
+        .filter_map(|pair| match (pair[0].0, pair[1].0) {
+            (
+                Instr::Evaluate(value, Expr::Construct(fields)),
+                Instr::Evaluate(_, Expr::PoolNew(_, init, 0)),
+            ) if value.temp == init.temp => Some((value.temp, fields.clone())),
             _ => None,
-        }
-    }).collect::<HashMap<_, _>>();
+        })
+        .collect::<HashMap<_, _>>();
     let mut slots = BTreeMap::<usize, (Ty, Site)>::new();
     for &(instruction, ref site) in &inventory.instructions {
         if let Instr::Evaluate(value, _) = instruction
@@ -822,10 +875,18 @@ fn place_function(
         for &(instruction, ref site) in &inventory.instructions {
             match instruction {
                 Instr::Evaluate(value, expr) => {
-                    if matches!(expr, Expr::Await(_) | Expr::AwaitHandle(_) | Expr::SocketWait(..) | Expr::SocketCompletion(..)) {
+                    if matches!(
+                        expr,
+                        Expr::Await(_)
+                            | Expr::AwaitHandle(_)
+                            | Expr::SocketWait(..)
+                            | Expr::SocketCompletion(..)
+                    ) {
                         placement.suspension_sites.push(site.instruction);
                     }
-                    if value.ty != Ty::Void && !placement.pool_initializers.contains_key(&value.temp) {
+                    if value.ty != Ty::Void
+                        && !placement.pool_initializers.contains_key(&value.temp)
+                    {
                         placement
                             .frame_temps
                             .insert(value.temp, (value.ty, expr.reads_aggregate_place()));
@@ -853,7 +914,9 @@ fn place_function(
         .iter()
         .filter_map(|&(instruction, _)| match instruction {
             Instr::Evaluate(value, Expr::Call(..)) => Some(value.temp),
-            Instr::Evaluate(value, Expr::Await(_)) if value.ty.scalar().is_some() => Some(value.temp),
+            Instr::Evaluate(value, Expr::Await(_)) if value.ty.scalar().is_some() => {
+                Some(value.temp)
+            }
             _ => None,
         })
         .collect::<BTreeSet<_>>();
@@ -869,7 +932,9 @@ fn place_function(
                     .insert(value.temp, ValueDestination::Receiver(receiver.temp));
             }
             Instr::Return(Some(value))
-                if !function.entry && is_slot(*value) && (!function.asynchronous || value.ty.scalar().is_some()) =>
+                if !function.entry
+                    && is_slot(*value)
+                    && (!function.asynchronous || value.ty.scalar().is_some()) =>
             {
                 placement
                     .value_aliases
@@ -888,7 +953,9 @@ fn place_function(
         let reservation = match instruction {
             Instr::Bind(binding, value) if function.asynchronous => {
                 placement.frame_values.insert(binding.0, value.ty);
-                let Some(storage) = scalar_bindings.remove(binding) else { continue };
+                let Some(storage) = scalar_bindings.remove(binding) else {
+                    continue;
+                };
                 placement.frame_binding_aliases.insert(binding.0);
                 ValueReservation::Binding(*binding, value.ty, Some(storage))
             }
@@ -896,7 +963,9 @@ fn place_function(
                 ValueReservation::Binding(*binding, value.ty, scalar_bindings.remove(binding))
             }
             Instr::Reserve(value) if !aggregate(*value) => ValueReservation::Receiver(*value),
-            Instr::Evaluate(value, _) if !aggregate(*value) && call_results.contains(&value.temp) => {
+            Instr::Evaluate(value, _)
+                if !aggregate(*value) && call_results.contains(&value.temp) =>
+            {
                 ValueReservation::CallResult(*value)
             }
             _ => continue,
@@ -968,7 +1037,11 @@ fn place_function(
             caller_groups.push(candidate);
         }
     }
-    let placed_results = caller_groups.iter().flatten().copied().collect::<BTreeSet<_>>();
+    let placed_results = caller_groups
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<BTreeSet<_>>();
     if !function.asynchronous {
         placement.caller_slots = caller_groups.len();
     }
@@ -1002,8 +1075,11 @@ fn place_function(
         if candidates.len() < 2 {
             continue;
         }
-        let common = candidates.iter().map(|temp| slots[temp].1.clone())
-            .reduce(|left, right| left.common(&right)).unwrap();
+        let common = candidates
+            .iter()
+            .map(|temp| slots[temp].1.clone())
+            .reduce(|left, right| left.common(&right))
+            .unwrap();
         let scope = common.ancestors.last().copied();
         scope_values.entry(scope).or_default().extend(&candidates);
         candidates_by_receiver.push((scope, receiver, candidates));
@@ -1068,7 +1144,8 @@ fn dimension(
                     Instr::Evaluate(
                         value,
                         Expr::Construct(_)
-                        | Expr::Variant(..) | Expr::ProcessArgs
+                        | Expr::Variant(..)
+                        | Expr::ProcessArgs
                         | Expr::Array(..)
                         | Expr::Pool
                         | Expr::MapNew
@@ -1147,7 +1224,7 @@ fn dimension(
         for (&temp, destination) in &mut function.summaries.destinations {
             match destination {
                 Destination::Caller(group) => *group = offsets[*group],
-                Destination::FrameResult => {},
+                Destination::FrameResult => {}
                 Destination::Slot { slot, .. } => {
                     let size = slots.entry(*slot).or_default();
                     *size = (*size).max(width(producers[index][&temp], &capacities));
@@ -1249,7 +1326,7 @@ mod tests {
     use super::*;
     use crate::{
         frontend,
-        parser::Mode,
+        legacy_parser::Mode,
         verify::{Position, verify},
     };
 
@@ -1268,9 +1345,7 @@ mod tests {
         let tree = frontend(source, Mode::Program).unwrap();
         let program = verify(source, &tree).unwrap();
         let inventory = Inventory::new(&program.functions[0]);
-        let binding = |name| {
-            BindingId(tree.bindings.iter().position(|b| b.name == name).unwrap())
-        };
+        let binding = |name| BindingId(tree.bindings.iter().position(|b| b.name == name).unwrap());
         let boite = inventory.bindings[&binding("boite")];
         let recu = inventory.bindings[&binding("recu")];
         let local_move = inventory
@@ -1302,7 +1377,10 @@ mod tests {
 
         let placement = &program.placement.functions[0];
         let roots = &placement.summaries.origins;
-        assert_eq!(roots[&recu.temp], BTreeSet::from([Origin::Fresh(boite.temp)]));
+        assert_eq!(
+            roots[&recu.temp],
+            BTreeSet::from([Origin::Fresh(boite.temp)])
+        );
         assert_eq!(roots[&recu.temp], roots[&inner]);
         assert!(matches!(
             placement.construction_destination(boite),
@@ -1328,15 +1406,16 @@ mod tests {
         let tree = frontend(source, Mode::Program).unwrap();
         let program = verify(source, &tree).unwrap();
         let inventory = Inventory::new(&program.functions[0]);
-        let binding = |name| {
-            BindingId(tree.bindings.iter().position(|b| b.name == name).unwrap())
-        };
+        let binding = |name| BindingId(tree.bindings.iter().position(|b| b.name == name).unwrap());
         let recu = inventory.bindings[&binding("recu")];
         assert_eq!(recu.provenance, ValueProvenance::Merged);
         assert_eq!(inventory.receives[&recu.temp].len(), 2);
         let origins = program.dependency_summaries.origins(recu.dependencies.loan);
         assert_eq!(
-            origins.iter().map(|origin| origin.root.0).collect::<BTreeSet<_>>(),
+            origins
+                .iter()
+                .map(|origin| origin.root.0)
+                .collect::<BTreeSet<_>>(),
             BTreeSet::from([binding("a").0, binding("b").0])
         );
         let summaries = &program.placement.functions[0].summaries;

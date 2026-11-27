@@ -74,6 +74,39 @@ and branch-completion obligations remain. Corboc implements the separation with 
 
 <a id="noyau-mémoire--grille-de-lecture"></a>
 
+## Enum variant qualification
+
+Enum variants use `::` exclusively: `State::Ready`, `Outcome::Data(value)` and
+`Error::Os { code: value }`. Variant patterns use the same separator. The former
+dot spelling is not a compatibility alias.
+
+The parser remains syntax-only. An ordinary dotted value expression or call is
+recorded as unresolved member access/call syntax. Semantic resolution must reject
+it if it actually names an enum variant; parsing must not consult declared or
+imported enum names. Dotted patterns and dotted named constructions do not match
+the corresponding qualified-path syntax. The new reference semantic resolver is
+not implemented by the syntax-parser work.
+
+## Assignment target syntax
+
+Assignment targets and assigned values have separate grammar productions.
+Targets may be names, dereferences, field accesses, indexed elements or
+parenthesized targets. Calls may occur inside a target: `*get_target() = 7` and
+`items.mut_ref()[index] = 7` are syntactically permitted. A bare call, arithmetic
+expression or literal is not an assignment target.
+
+Parsing checks the expression shape only. It does not determine whether a call
+returns a reference, whether a field exists, or whether mutation/lifetime rules
+permit the write. Those facts belong to later stages. This decision does not
+alter their obligations or evaluation order.
+
+## Annotation and visibility order
+
+All declaration annotations precede `pub`, consistently for functions, methods,
+structs, enums and constants. For example, `#(type: T) pub fn ...` is the accepted
+order; `pub #(type: T) fn ...` is rejected during parsing. Annotations must not be
+split around `pub`. This syntax rule does not resolve or apply their contracts.
+
 ## Core memory invariants
 
 N1–N8 group the rules already adopted. The normative sections and their
@@ -1550,7 +1583,7 @@ The error type is part of the concrete adapter type. A variant pattern uses
 the surrounding match type to select its specialization.
 
 
-## Conditional annotations and foreign C
+## Conditional annotations and foreign C++
 
 `#(if: condition)` opens a compile-time selection and `#(endif)` closes it.
 The source lies between the annotations, outside their parentheses. Selections
@@ -1563,45 +1596,19 @@ and unmatched end markers are syntax errors. The former parenthesized-body
 spelling is replaced in the active compiler and STD; historical Rust-reference
 fixtures retain their old spelling.
 
-Inside `@unchecked`, `@c { ... }` embeds opaque C statements. Its optional
-parameter is `@c(includes={"stdint.h", "path/to/header.h"}) { ... }`. Entries
-are nonempty literal header paths containing ASCII letters, digits, `_`, `.`,
-`/`, `-` or `:`. There are no command-line flags or arbitrary preprocessor
-text in this parameter. Selected headers are emitted once per translation
-unit as quoted C includes. The native C toolchain resolves those paths using
-its normal header search; absolute paths are permitted. Blocks selected out
-by a target annotation contribute no includes.
+Inside `@unchecked`, `@c++ { ... }` embeds opaque C++ statements. Its optional
+`includes` parameter takes literal header paths. `@asm` also requires
+`@unchecked`. The retired `@c` spelling is not accepted. The compiler exposes
+concrete plain layouts and typed operands to C++, while ownership, retained
+addresses, foreign threads and synchronization effects inside that boundary
+remain developer responsibilities. Immutable aggregate operands are constant
+views of their existing storage. See [the foreign-C++ interface](FOREIGN_CPP.md).
 
-`${name}` names an existing typed Corbo binding, including aggregates. Mutable
-bindings expose their C storage; immutable scalars are C rvalues and immutable
-aggregates are const C views of their storage. Assembly and C text
-inside strings and comments is kept opaque. Corbo verifies the binding's type
-and availability at the crossing; it does not verify C control flow, pointer
-accesses, retained addresses or resource cleanup inside `@unchecked`.
-The developer remains responsible for those effects and the target C ABI.
-The braces of a foreign C block delimit its own C statement scope.
-
-A trusted Corbo implementation may create a mutable borrow of a record field
-through a shared reference inside `@unchecked`, for example after acquiring an
-interior-mutability lock. The reference retains its ordinary target/provenance
-and lifetime checks. This bypasses the shared-reference mutation-permission
-check at that borrow only; it does not create synchronization. The implementer
-must uphold the lock contract. The same borrow outside `@unchecked` remains
-refused. Native addresses still cannot escape their unchecked block.
-
-The compiler provides compatible C
-representations of the relevant concrete Corbo types and access to the C runtime
-library, including shared pools, datastacks and regions, automatically in `@c`.
-The C runtime remains a library when the native Corbo backend is introduced.
-This representation/access mechanism does not apply Corbo ownership or borrow
-checking to C code. Within `@unchecked`, copies, aliases, transfers, lifetimes,
-cleanup and stack cursor operations remain the developer's responsibility and
-must be documented with the C interface. Checked ownership wrappers are not
-required by this extension. The shared C11 layouts and memory-runtime API are
-declared in `runtime/corbo_runtime.h`. Program-specific declarations and operand
-type aliases are emitted before foreign statements; requested headers follow
-the generated type declarations. See [the foreign-C interface](FOREIGN_C.md)
-for naming, library linkage and the developer's responsibilities.
+A trusted implementation may create a mutable borrow through a shared reference
+inside `@unchecked`, for example after acquiring its interior-mutability lock.
+The reference retains its target/provenance and lifetime checks. This bypasses
+only the mutation-permission check; it does not create synchronization or allow
+native addresses to escape the unchecked block.
 
 ## Thread transfer eligibility (TR1)
 
@@ -1640,3 +1647,85 @@ arguments. Lowercase `self` remains the receiver binding.
 ## Reference methods and wrapper dereferencing
 
 [Accepted reference-method resolution](DEREFERENCE.md) defines explicit-method precedence, native A<T> payload borrows and static wrapper dereferencing. Existing ownership, lifetime and lock rules remain unchanged.
+
+## Bare block statements and expression boundaries
+
+A bare block-form at statement start finishes before a following operator. Thus
+`{ 10 } -2` inside an outer block is an inner block statement followed by the
+unary `-2` result. A final bare block without `;` remains a result expression.
+Use parentheses to continue an expression from a block at statement start:
+`({ 10 }) - 2`. Ordinary expression contexts, including assignment right sides,
+arguments and explicit returns, retain normal operator composition.
+This is a syntax boundary, not a type-dependent choice.
+
+## Numeric cast target syntax
+
+`as` is followed by a numeric type name: `i32`, `i64`, `u8`, `u16`, `u32`,
+`u64`, `usize`, `f32` or `f64`. It does not accept an arbitrary named, generic,
+reference, tuple or array type, nor `bool`. This restriction is syntactic and
+requires no name resolution. Generic types remain valid in other type positions.
+Thus `x as u64 < y` means `(x as u64) < y`; `<` is not consumed as a generic
+argument opener. Existing semantic representability checks remain separate.
+
+## Alternative structural type contracts
+
+`|` inside a type annotation is logical OR between complete structural method
+contracts for the same annotated type. All methods within one branch are required
+together; satisfying at least one complete branch satisfies the annotation.
+`with` appears once before the complete alternative list. When present, every
+branch requires at least its listed methods. When absent, every branch requires
+an exact match. `with` after `|` is invalid; mixed per-branch modes are not allowed.
+Every branch is nonempty. An unconstrained `#(type: T)` remains valid; `|` does
+not introduce an empty or unconstrained alternative.
+
+```rust
+#(type: T)
+#(type: I with {
+    fn next(&mut self) Option<&T>;
+    fn reset(&mut self);
+} | {
+    fn next(&mut self) Option<&mut T>;
+    fn reset(&mut self);
+})
+```
+
+The payload returned by `next()` retains its declared reference type and
+permissions. OR does not merge the two reference types or introduce a conversion.
+This syntax can express the shared/mutable iterator alternatives without a
+collection-specific parser exception. The agreed future collection names are
+`iter()` returning `Iter`, `mut_iter()` returning `MutIter`, and mutable adapters
+such as `MutMap` and `MutFilter`.
+
+Status: grammar and syntax AST/parser implemented in the Rust reference stage,
+with independent expected-AST comparisons. Semantic contract matching and
+iterator API changes remain separate work. No first-matching-branch selection
+policy is introduced.
+
+
+## Unreachable statements and non-blocking diagnostics
+
+After an unconditional `return`, `break` or `continue`, statements that cannot
+execute are reported as unreachable. An undefined name in this unreachable source
+is also reported, but these diagnostics are warnings: they do not prevent
+compilation. For example, `fn example() i64 { return 42; let value = missing_name + true; }`
+is accepted with an unreachable-statement warning and an undefined-name warning.
+The same undefined name in reachable code remains an error. Syntactically invalid
+source remains a parser error.
+
+Unreachable source retains its lexical locations and diagnostic name outcomes.
+It receives no fabricated symbol/type for an undefined name and introduces no
+executable values, memory owners or execution moments. Diagnostic-only local
+bindings follow lexical scope and do not become bindings in executable code.
+A terminating control-flow expression has an internal bottom/control outcome,
+which is distinct from a fabricated runtime value and has no physical layout.
+
+
+### Lexical binding shadowing
+
+A later `let` may reuse a binding name in the same block. Its initializer is
+resolved before the new binding is introduced. Each declaration creates a distinct
+binding identity, type and mutability; subsequent name uses select the latest
+visible binding. Earlier values retain their ownership, references and ordinary
+cleanup responsibilities. Shadowing does not assign to, destroy or invalidate the
+earlier value. Tuple destructuring follows the same rule across separate `let`
+statements; repeated names within a single tuple pattern are duplicate bindings.

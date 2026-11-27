@@ -21,7 +21,7 @@ pub struct Channel<T> {
     fn new(capacity: usize) Channel<T> {
         let prototype: Option<T> = None;
         let mut raw: usize = 0;
-        @unchecked { @c { ${raw}=channel_create(${capacity},sizeof(${prototype})); } }
+        @unchecked { @c++ { ${raw}=channel_create(${capacity},sizeof(${prototype})); } }
         Channel { raw: raw }
     }
 
@@ -33,12 +33,12 @@ pub struct Channel<T> {
         let mut status: i64 = 1;
         let mut epoch: u64 = 0;
         while status == 1 {
-            @unchecked { @c { ${status}=channel_send(${raw},&${incoming},&${epoch},false); } }
+            @unchecked { @c++ { ${status}=channel_send(${raw},&${incoming},&${epoch},false); } }
             if status == 1 { drop(channel_wait_binding(raw, epoch, true).await); }
         }
         if status == 0 { return Ok(()); }
         match incoming {
-            Some(value) => { Err(SendError.Closed { value: value }) },
+            Some(value) => { Err(SendError::Closed { value: value }) },
             None => { Ok(()) },
         }
     }
@@ -51,7 +51,7 @@ pub struct Channel<T> {
         let mut status: i64 = 1;
         let mut epoch: u64 = 0;
         while status == 1 {
-            @unchecked { @c { ${status}=channel_receive(${raw},&${output},&${epoch},false); } }
+            @unchecked { @c++ { ${status}=channel_receive(${raw},&${output},&${epoch},false); } }
             if status == 1 { drop(channel_wait_binding(raw, epoch, false).await); }
         }
         output
@@ -61,24 +61,24 @@ pub struct Channel<T> {
     #(lock: on=self)
     fn close(&self) {
         let raw = (*self).raw;
-        @unchecked { @c { channel_close(${raw}); } }
+        @unchecked { @c++ { channel_close(${raw}); } }
     }
 
     /// Closes, destroys each queued value once, then releases bounded storage.
     fn drop(&mut self) {
         let raw = (*self).raw;
-        @unchecked { @c { channel_close(${raw}); } }
+        @unchecked { @c++ { channel_close(${raw}); } }
         loop {
             let mut output: Option<T> = None;
             let mut status: i64 = 0;
             let mut epoch: u64 = 0;
-            @unchecked { @c { ${status}=channel_receive(${raw},&${output},&${epoch},false); } }
+            @unchecked { @c++ { ${status}=channel_receive(${raw},&${output},&${epoch},false); } }
             match output {
                 Some(value) => { drop(value); },
                 None => { break; },
             }
         }
-        @unchecked { @c { channel_destroy(${raw}); } }
+        @unchecked { @c++ { channel_destroy(${raw}); } }
     }
 }
 

@@ -200,9 +200,9 @@ fn fixed(output: &mut [u8], bits: &mut Bits, value: u64) {
 /// Output may contain a partial member on an error; input and workspace are never retained.
 pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64]) Result<usize, Error> {
     let level = (*params).level;
-    if level > 9 { return Err(Error.InvalidParams); }
-    if level != 0 && workspace.len() < 36864 { return Err(Error.WorkspaceTooSmall); }
-    if output.len() < 18 { return Err(Error.BufferTooSmall); }
+    if level > 9 { return Err(Error::InvalidParams); }
+    if level != 0 && workspace.len() < 36864 { return Err(Error::WorkspaceTooSmall); }
+    if output.len() < 18 { return Err(Error::BufferTooSmall); }
     let header: [u8; 10] = [31,139,8,0,0,0,0,0,0,255];
     let mut i: u64 = 0; while i < 10 { output[i] = header[i]; i = i + 1; }
     let mut bits = Bits { bit: 80, error: 0 };
@@ -268,7 +268,7 @@ pub fn compress(input: &[u8], output: &mut [u8], params: &Params, workspace: &mu
     let crc = crc32(&input[0..input.len()]);
     i = 0; while i < 4 { write_bits(&mut output[0..output.len()], &mut bits, (crc >> (i * 8)) & 255, 8); i = i + 1; }
     i = 0; while i < 4 { write_bits(&mut output[0..output.len()], &mut bits, (size >> (i * 8)) & 255, 8); i = i + 1; }
-    if bits.error != 0 { return Err(Error.BufferTooSmall); }
+    if bits.error != 0 { return Err(Error::BufferTooSmall); }
     Ok((bits.bit / 8) as usize)
 }
 
@@ -278,18 +278,18 @@ fn inflate(input: &[u8], bits: &mut Bits, output: &mut [u8], start: u64) Result<
     loop {
         let last = read_bits(&input[0..input.len()], &mut *bits, 1);
         let kind = read_bits(&input[0..input.len()], &mut *bits, 2);
-        if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+        if (*bits).error != 0 { return Err(Error::TruncatedInput); }
         if kind == 0 {
             let pad: u64 = (8 - (*bits).bit % 8) % 8; drop(read_bits(&input[0..input.len()], &mut *bits, pad));
             let count = read_bits(&input[0..input.len()], &mut *bits, 16);
             let complement = read_bits(&input[0..input.len()], &mut *bits, 16);
-            if (*bits).error != 0 { return Err(Error.TruncatedInput); }
-            if (count ^ complement) != 65535 { return Err(Error.InvalidData); }
-            if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+            if (*bits).error != 0 { return Err(Error::TruncatedInput); }
+            if (count ^ complement) != 65535 { return Err(Error::InvalidData); }
+            if count > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
             let mut i: u64 = 0;
             while i < count {
                 let byte = read_bits(&input[0..input.len()], &mut *bits, 8);
-                if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+                if (*bits).error != 0 { return Err(Error::TruncatedInput); }
                 output[written] = octet(byte);
                 written = written + 1; i = i + 1;
             }
@@ -307,66 +307,66 @@ fn inflate(input: &[u8], bits: &mut Bits, output: &mut [u8], start: u64) Result<
                 literal_count = read_bits(&input[0..input.len()], &mut *bits, 5) + 257;
                 distance_count = read_bits(&input[0..input.len()], &mut *bits, 5) + 1;
                 let count = read_bits(&input[0..input.len()], &mut *bits, 4) + 4;
-                if literal_count > 286 { return Err(Error.InvalidData); }
+                if literal_count > 286 { return Err(Error::InvalidData); }
                 let alphabet: [u64; 19] = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
                 let mut code_lengths: [u64; 19] = [0; 19]; let mut i: u64 = 0;
                 while i < count { code_lengths[alphabet[i]] = read_bits(&input[0..input.len()], &mut *bits, 3); i = i + 1; }
-                if (*bits).error != 0 { return Err(Error.TruncatedInput); }
+                if (*bits).error != 0 { return Err(Error::TruncatedInput); }
                 let mut codes = Tree { counts: [0; 16], symbols: [0; 288] };
-                if !tree(&code_lengths[..], &mut codes, true) { return Err(Error.InvalidData); }
+                if !tree(&code_lengths[..], &mut codes, true) { return Err(Error::InvalidData); }
                 i = 0;
                 while i < literal_count + distance_count {
                     let code = symbol(&input[0..input.len()], &mut *bits, &codes);
-                    if (*bits).error == 1 { return Err(Error.TruncatedInput); }
-                    if (*bits).error != 0 { return Err(Error.InvalidData); }
+                    if (*bits).error == 1 { return Err(Error::TruncatedInput); }
+                    if (*bits).error != 0 { return Err(Error::InvalidData); }
                     if code < 16 { lengths[i] = code; i = i + 1; }
                     else {
                         let mut value: u64 = 0; let mut repeats: u64 = 0;
                         if code == 16 {
-                            if i == 0 { return Err(Error.InvalidData); }
+                            if i == 0 { return Err(Error::InvalidData); }
                             value = lengths[i - 1]; repeats = read_bits(&input[0..input.len()], &mut *bits, 2) + 3;
                         } else if code == 17 { repeats = read_bits(&input[0..input.len()], &mut *bits, 3) + 3; }
                         else if code == 18 { repeats = read_bits(&input[0..input.len()], &mut *bits, 7) + 11; }
-                        else { return Err(Error.InvalidData); }
-                        if (*bits).error == 1 { return Err(Error.TruncatedInput); }
-                        if repeats > literal_count + distance_count - i { return Err(Error.InvalidData); }
+                        else { return Err(Error::InvalidData); }
+                        if (*bits).error == 1 { return Err(Error::TruncatedInput); }
+                        if repeats > literal_count + distance_count - i { return Err(Error::InvalidData); }
                         let end = i + repeats;
                         while i < end { lengths[i] = copy(value); i = i + 1; }
                     }
                 }
-                if lengths[256] == 0 { return Err(Error.InvalidData); }
+                if lengths[256] == 0 { return Err(Error::InvalidData); }
             }
             let mut literals = Tree { counts: [0; 16], symbols: [0; 288] };
             let mut distances = Tree { counts: [0; 16], symbols: [0; 288] };
-            if !tree(&lengths[0..literal_count], &mut literals, false) { return Err(Error.InvalidData); }
+            if !tree(&lengths[0..literal_count], &mut literals, false) { return Err(Error::InvalidData); }
             let mut nonzero = false; let mut i: u64 = 0;
             while i < distance_count { if lengths[literal_count + i] != 0 { nonzero = true; } i = i + 1; }
-            if nonzero && !tree(&lengths[literal_count..literal_count + distance_count], &mut distances, false) { return Err(Error.InvalidData); }
+            if nonzero && !tree(&lengths[literal_count..literal_count + distance_count], &mut distances, false) { return Err(Error::InvalidData); }
             loop {
                 let code = symbol(&input[0..input.len()], &mut *bits, &literals);
-                if (*bits).error == 1 { return Err(Error.TruncatedInput); }
-                if (*bits).error != 0 { return Err(Error.InvalidData); }
+                if (*bits).error == 1 { return Err(Error::TruncatedInput); }
+                if (*bits).error != 0 { return Err(Error::InvalidData); }
                 if code < 256 {
-                    if written == output.len() as u64 { return Err(Error.BufferTooSmall); }
+                    if written == output.len() as u64 { return Err(Error::BufferTooSmall); }
                     output[written] = octet(code);
                     written = written + 1;
                 } else if code == 256 { break; }
                 else {
-                    if code > 285 { return Err(Error.InvalidData); }
+                    if code > 285 { return Err(Error::InvalidData); }
                     let (base, extra) = length_info(code - 257);
                     let count = base + read_bits(&input[0..input.len()], &mut *bits, extra);
                     let distance_code = symbol(&input[0..input.len()], &mut *bits, &distances);
-                    if distance_code > 29 { return Err(Error.InvalidData); }
+                    if distance_code > 29 { return Err(Error::InvalidData); }
                     let (distance_base, distance_bits) = distance_info(distance_code);
                     let distance = distance_base + read_bits(&input[0..input.len()], &mut *bits, distance_bits);
-                    if (*bits).error == 1 { return Err(Error.TruncatedInput); }
-                    if (*bits).error != 0 || distance > written - start { return Err(Error.InvalidData); }
-                    if count > output.len() as u64 - written { return Err(Error.BufferTooSmall); }
+                    if (*bits).error == 1 { return Err(Error::TruncatedInput); }
+                    if (*bits).error != 0 || distance > written - start { return Err(Error::InvalidData); }
+                    if count > output.len() as u64 - written { return Err(Error::BufferTooSmall); }
                     i = 0;
                     while i < count { output[written] = output[written - distance]; written = written + 1; i = i + 1; }
                 }
             }
-        } else { return Err(Error.InvalidData); }
+        } else { return Err(Error::InvalidData); }
         if last != 0 { break; }
     }
     Ok(written)
@@ -383,30 +383,30 @@ struct Frame {
 /// Decodes one complete member and returns its compressed and decoded sizes.
 fn decode_member(input: &[u8], output: &mut [u8]) Result<Frame, Error> {
     let size = input.len() as u64;
-    if size == 0 { return Err(Error.TruncatedInput); }
+    if size == 0 { return Err(Error::TruncatedInput); }
     let mut at: u64 = 0; let mut written: u64 = 0;
     while at < size {
         let member = copy(at);
-        if size - at < 10 { return Err(Error.TruncatedInput); }
-        if input[at] != 31 || input[at + 1] != 139 || input[at + 2] != 8 || (input[at + 3] & 224) != 0 { return Err(Error.InvalidData); }
+        if size - at < 10 { return Err(Error::TruncatedInput); }
+        if input[at] != 31 || input[at + 1] != 139 || input[at + 2] != 8 || (input[at + 3] & 224) != 0 { return Err(Error::InvalidData); }
         let flags = input[at + 3]; at = at + 10;
         if (flags & 4) != 0 {
-            if size - at < 2 { return Err(Error.TruncatedInput); }
+            if size - at < 2 { return Err(Error::TruncatedInput); }
             let length = input[at] as u64 | ((input[at + 1] as u64) << 8); at = at + 2;
-            if length > size - at { return Err(Error.TruncatedInput); } at = at + length;
+            if length > size - at { return Err(Error::TruncatedInput); } at = at + length;
         }
         if (flags & 8) != 0 {
             while at < size && input[at] != 0 { at = at + 1; }
-            if at == size { return Err(Error.TruncatedInput); } at = at + 1;
+            if at == size { return Err(Error::TruncatedInput); } at = at + 1;
         }
         if (flags & 16) != 0 {
             while at < size && input[at] != 0 { at = at + 1; }
-            if at == size { return Err(Error.TruncatedInput); } at = at + 1;
+            if at == size { return Err(Error::TruncatedInput); } at = at + 1;
         }
         if (flags & 2) != 0 {
-            if size - at < 2 { return Err(Error.TruncatedInput); }
+            if size - at < 2 { return Err(Error::TruncatedInput); }
             let expected = input[at] as u64 | ((input[at + 1] as u64) << 8);
-            if (crc32(&input[member..at]) & 65535) != expected { return Err(Error.ChecksumMismatch); } at = at + 2;
+            if (crc32(&input[member..at]) & 65535) != expected { return Err(Error::ChecksumMismatch); } at = at + 2;
         }
         let mut bits = Bits { bit: at * 8, error: 0 };
         let start = copy(written);
@@ -415,18 +415,18 @@ fn decode_member(input: &[u8], output: &mut [u8]) Result<Frame, Error> {
         };
         written = decoded;
         at = (bits.bit + 7) / 8;
-        if size - at < 8 { return Err(Error.TruncatedInput); }
+        if size - at < 8 { return Err(Error::TruncatedInput); }
         if le32(&input[0..input.len()], copy(at)) != crc32(&output[start..written])
-            || le32(&input[0..input.len()], at + 4) != ((written - start) & 0xffffffff) { return Err(Error.ChecksumMismatch); }
+            || le32(&input[0..input.len()], at + 4) != ((written - start) & 0xffffffff) { return Err(Error::ChecksumMismatch); }
         at = at + 8;
         return Ok(Frame { read: at, written: written });
     }
-    Err(Error.TruncatedInput)
+    Err(Error::TruncatedInput)
 }
 
 /// Decompresses concatenated members. Errors may leave a partial output prefix.
 pub fn decompress(input: &[u8], output: &mut [u8]) Result<usize, Error> {
-    if input.len() == 0 { return Err(Error.TruncatedInput); }
+    if input.len() == 0 { return Err(Error::TruncatedInput); }
     let mut at: u64 = 0; let mut written: u64 = 0;
     while at < input.len() as u64 {
         let frame = match decode_member(&input[at..input.len()], &mut output[written..output.len()]) {

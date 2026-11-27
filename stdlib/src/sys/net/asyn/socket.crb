@@ -69,7 +69,7 @@
                 if waited != 0 { return Err(socket_error(waited)); }
             }
         }
-        Err(SocketError.Os { code: -1 })
+        Err(SocketError::Os { code: -1 })
     }
 
     /// Retries a nonblocking read after the reactor reports read readiness.
@@ -85,7 +85,7 @@
                 if waited != 0 { return Err(socket_error(waited)); }
             }
         }
-        Err(SocketError.Os { code: -1 })
+        Err(SocketError::Os { code: -1 })
     }
 
     /// Retries a nonblocking write after the reactor reports write readiness.
@@ -101,7 +101,7 @@
                 if waited != 0 { return Err(socket_error(waited)); }
             }
         }
-        Err(SocketError.Os { code: -1 })
+        Err(SocketError::Os { code: -1 })
     }
     /// Waits for a readable datagram and preserves the sender and truncation status.
     pub async fn recv_datagram(socket: u64, buffer: &mut [u8]) Result<Datagram, SocketError> {
@@ -114,7 +114,7 @@
                 if waited != 0 { return Err(socket_error(waited)); }
             }
         }
-        Err(SocketError.Os { code: -1 })
+        Err(SocketError::Os { code: -1 })
     }
 
     /// Performs one send attempt to either the connected peer or an explicit destination.
@@ -126,7 +126,7 @@
     /// Retries sending a complete datagram after write readiness.
     pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) Result<usize, SocketError> {
         let length = buffer.len();
-        if copy(length) > 65507 { return Err(SocketError.DatagramTooLarge); }
+        if copy(length) > 65507 { return Err(SocketError::DatagramTooLarge); }
         let dummy: [u8; 1] = [0];
         while true {
             let (error, count) = if copy(length) == 0 {
@@ -141,6 +141,6 @@
                 if waited != 0 { return Err(socket_error(waited)); }
             }
         }
-        Err(SocketError.Os { code: -1 })
+        Err(SocketError::Os { code: -1 })
     }
 #(endif)

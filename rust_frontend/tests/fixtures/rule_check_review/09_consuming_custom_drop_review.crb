@@ -1,0 +1,22 @@
+// Review only: acceptance is not presumed. Analyze initialization and cleanup under N1/N2/N7.
+struct Item {
+    value: i64;
+}
+
+enum Packet {
+    Stored(Item);
+
+    fn drop(&mut self) {
+        match &*self {
+            Packet::Stored(item) => { let observed = item.value; }
+        }
+    }
+}
+
+fn extract(packet: Packet) Item {
+    match packet {
+        Packet::Stored(item) => { item }
+    }
+}
+
+fn main() {}

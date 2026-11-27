@@ -1,0 +1,14 @@
+// The helper completes the task before the caller's borrowed target is cleaned.
+async fn read(value: &i64) i64 {
+    *value
+}
+
+fn finish(execution: runtime::Handle<i64>) {
+    let result = execution.join();
+}
+
+fn main() {
+    let value: i64 = 42;
+    let execution = runtime::spawn(read(&value));
+    finish(execution);
+}

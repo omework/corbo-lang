@@ -1,0 +1,28 @@
+// Analysis-only reduction of conversion/type/comparison/shift productions.
+// Individual > views represent the generic-closing split of the original >>.
+// No declaration-name lookup or semantic cast restriction participates.
+grammar;
+pub Expression: () = {
+    Cast => (),
+    Cast "<" Shift => (),
+    Cast ">" Shift => (),
+};
+Cast: () = "identifier" "as" Type => ();
+Type: () = {
+    "identifier" => (),
+    "identifier" "<" "identifier" ">" => (),
+};
+Shift: () = {
+    "identifier" => (),
+    "identifier" ">" ">" "identifier" => (),
+};
+extern {
+ type Location = usize;
+ type Error = &'static str;
+ enum CastAuditToken {
+    "identifier" => CastAuditToken::Identifier,
+    "as" => CastAuditToken::As,
+    "<" => CastAuditToken::Less,
+    ">" => CastAuditToken::Greater,
+ }
+}

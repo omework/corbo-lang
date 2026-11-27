@@ -47,10 +47,10 @@ impl Target {
             pointer_width: match arch {
                 "x86_64" if triple.ends_with("gnux32") => Some(32),
                 "aarch64" if triple.ends_with("gnu_ilp32") => Some(32),
-                "x86_64" | "aarch64" | "riscv64" | "powerpc64" | "powerpc64le"
-                | "s390x" | "mips64" | "mips64el" | "loongarch64" | "sparc64" => Some(64),
-                "x86" | "arm" | "armv7" | "armv7s" | "thumbv7neon" | "riscv32"
-                | "powerpc" | "mips" | "mipsel" | "sparc" => Some(32),
+                "x86_64" | "aarch64" | "riscv64" | "powerpc64" | "powerpc64le" | "s390x"
+                | "mips64" | "mips64el" | "loongarch64" | "sparc64" => Some(64),
+                "x86" | "arm" | "armv7" | "armv7s" | "thumbv7neon" | "riscv32" | "powerpc"
+                | "mips" | "mipsel" | "sparc" => Some(32),
                 _ => None,
             },
         })
@@ -62,7 +62,9 @@ impl Target {
 
     pub(crate) fn assembly_abi(&self) -> Option<crate::assembly::Abi> {
         use crate::assembly::Abi;
-        if self.pointer_width != Some(64) { return None; }
+        if self.pointer_width != Some(64) {
+            return None;
+        }
         match (self.os.as_str(), self.arch.as_str()) {
             ("linux", "x86_64") => Some(Abi::Linux),
             ("linux", "aarch64") => Some(Abi::LinuxArm64),
@@ -128,9 +130,13 @@ pub(crate) fn select(
                         return Err(error(condition + offset, "malformed target condition"));
                     }
                 }
-                let actual = target.property(word(condition + 2))
+                let actual = target
+                    .property(word(condition + 2))
                     .ok_or_else(|| error(condition + 2, "unknown target property"))?;
-                if tokens.get(condition + 4).is_none_or(|token| token.kind != Kind::Text) {
+                if tokens
+                    .get(condition + 4)
+                    .is_none_or(|token| token.kind != Kind::Text)
+                {
                     return Err(error(condition + 4, "target condition expects a string"));
                 }
                 conjunction &= decoded_text(word(condition + 4)) == actual.as_bytes();

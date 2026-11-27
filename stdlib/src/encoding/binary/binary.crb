@@ -13,14 +13,14 @@ pub enum Error {
 
 /// Reads 1 bytes as u8.
 pub fn read_u8(input: &[u8]) Result<u8, Error> {
-    if input.len() < 1 { return Err(Error.BufferTooSmall); }
+    if input.len() < 1 { return Err(Error::BufferTooSmall); }
 
     Ok(input[0])
 }
 
 /// Writes 1 bytes of u8; short-buffer errors leave output unchanged.
 pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 1 { return Err(Error.BufferTooSmall); }
+    if output.len() < 1 { return Err(Error::BufferTooSmall); }
 
     output[0] = value;
 
@@ -29,7 +29,7 @@ pub fn write_u8(value: u8, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads 2 bytes as u16 in le order.
 pub fn read_u16_le(input: &[u8]) Result<u16, Error> {
-    if input.len() < 2 { return Err(Error.BufferTooSmall); }
+    if input.len() < 2 { return Err(Error::BufferTooSmall); }
 
     let mut value: u16 = 0;
     let mut i: usize = 0;
@@ -45,14 +45,14 @@ pub fn read_u16_le(input: &[u8]) Result<u16, Error> {
 
 /// Writes 2 bytes of u16; short-buffer errors leave output unchanged.
 pub fn write_u16_le(value: u16, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 2 { return Err(Error.BufferTooSmall); }
+    if output.len() < 2 { return Err(Error::BufferTooSmall); }
 
     let mut i: usize = 0;
     while i < 2 {
 
         let shift: usize = i * 8;
         let byte: u16 = (copy(value) >> shift) & 255;
-        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error.BufferTooSmall); }, };
+        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error::BufferTooSmall); }, };
         output[i] = narrowed;
         i += 1;
     }
@@ -62,7 +62,7 @@ pub fn write_u16_le(value: u16, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads 2 bytes as u16 in be order.
 pub fn read_u16_be(input: &[u8]) Result<u16, Error> {
-    if input.len() < 2 { return Err(Error.BufferTooSmall); }
+    if input.len() < 2 { return Err(Error::BufferTooSmall); }
 
     let mut value: u16 = 0;
     let mut i: usize = 0;
@@ -78,14 +78,14 @@ pub fn read_u16_be(input: &[u8]) Result<u16, Error> {
 
 /// Writes 2 bytes of u16; short-buffer errors leave output unchanged.
 pub fn write_u16_be(value: u16, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 2 { return Err(Error.BufferTooSmall); }
+    if output.len() < 2 { return Err(Error::BufferTooSmall); }
 
     let mut i: usize = 0;
     while i < 2 {
 
         let shift: usize = (2 - 1 - i) * 8;
         let byte: u16 = (copy(value) >> shift) & 255;
-        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error.BufferTooSmall); }, };
+        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error::BufferTooSmall); }, };
         output[i] = narrowed;
         i += 1;
     }
@@ -95,7 +95,7 @@ pub fn write_u16_be(value: u16, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads 4 bytes as u32 in le order.
 pub fn read_u32_le(input: &[u8]) Result<u32, Error> {
-    if input.len() < 4 { return Err(Error.BufferTooSmall); }
+    if input.len() < 4 { return Err(Error::BufferTooSmall); }
 
     let mut value: u32 = 0;
     let mut i: usize = 0;
@@ -111,14 +111,14 @@ pub fn read_u32_le(input: &[u8]) Result<u32, Error> {
 
 /// Writes 4 bytes of u32; short-buffer errors leave output unchanged.
 pub fn write_u32_le(value: u32, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 4 { return Err(Error.BufferTooSmall); }
+    if output.len() < 4 { return Err(Error::BufferTooSmall); }
 
     let mut i: usize = 0;
     while i < 4 {
 
         let shift: usize = i * 8;
         let byte: u32 = (copy(value) >> shift) & 255;
-        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error.BufferTooSmall); }, };
+        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error::BufferTooSmall); }, };
         output[i] = narrowed;
         i += 1;
     }
@@ -128,7 +128,7 @@ pub fn write_u32_le(value: u32, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads 4 bytes as u32 in be order.
 pub fn read_u32_be(input: &[u8]) Result<u32, Error> {
-    if input.len() < 4 { return Err(Error.BufferTooSmall); }
+    if input.len() < 4 { return Err(Error::BufferTooSmall); }
 
     let mut value: u32 = 0;
     let mut i: usize = 0;
@@ -144,14 +144,14 @@ pub fn read_u32_be(input: &[u8]) Result<u32, Error> {
 
 /// Writes 4 bytes of u32; short-buffer errors leave output unchanged.
 pub fn write_u32_be(value: u32, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 4 { return Err(Error.BufferTooSmall); }
+    if output.len() < 4 { return Err(Error::BufferTooSmall); }
 
     let mut i: usize = 0;
     while i < 4 {
 
         let shift: usize = (4 - 1 - i) * 8;
         let byte: u32 = (copy(value) >> shift) & 255;
-        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error.BufferTooSmall); }, };
+        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error::BufferTooSmall); }, };
         output[i] = narrowed;
         i += 1;
     }
@@ -161,7 +161,7 @@ pub fn write_u32_be(value: u32, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads 8 bytes as u64 in le order.
 pub fn read_u64_le(input: &[u8]) Result<u64, Error> {
-    if input.len() < 8 { return Err(Error.BufferTooSmall); }
+    if input.len() < 8 { return Err(Error::BufferTooSmall); }
 
     let mut value: u64 = 0;
     let mut i: usize = 0;
@@ -177,14 +177,14 @@ pub fn read_u64_le(input: &[u8]) Result<u64, Error> {
 
 /// Writes 8 bytes of u64; short-buffer errors leave output unchanged.
 pub fn write_u64_le(value: u64, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 8 { return Err(Error.BufferTooSmall); }
+    if output.len() < 8 { return Err(Error::BufferTooSmall); }
 
     let mut i: usize = 0;
     while i < 8 {
 
         let shift: usize = i * 8;
         let byte: u64 = (copy(value) >> shift) & 255;
-        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error.BufferTooSmall); }, };
+        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error::BufferTooSmall); }, };
         output[i] = narrowed;
         i += 1;
     }
@@ -194,7 +194,7 @@ pub fn write_u64_le(value: u64, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads 8 bytes as u64 in be order.
 pub fn read_u64_be(input: &[u8]) Result<u64, Error> {
-    if input.len() < 8 { return Err(Error.BufferTooSmall); }
+    if input.len() < 8 { return Err(Error::BufferTooSmall); }
 
     let mut value: u64 = 0;
     let mut i: usize = 0;
@@ -210,14 +210,14 @@ pub fn read_u64_be(input: &[u8]) Result<u64, Error> {
 
 /// Writes 8 bytes of u64; short-buffer errors leave output unchanged.
 pub fn write_u64_be(value: u64, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 8 { return Err(Error.BufferTooSmall); }
+    if output.len() < 8 { return Err(Error::BufferTooSmall); }
 
     let mut i: usize = 0;
     while i < 8 {
 
         let shift: usize = (8 - 1 - i) * 8;
         let byte: u64 = (copy(value) >> shift) & 255;
-        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error.BufferTooSmall); }, };
+        let narrowed = match u8::try_from(byte) { Ok(v) => { v }, Err(e) => { drop(e); return Err(Error::BufferTooSmall); }, };
         output[i] = narrowed;
         i += 1;
     }
@@ -627,14 +627,14 @@ pub fn write_f64_be(value: f64, output: &mut [u8]) Result<usize, Error> {
 
 /// Reads canonical bool encoding; rejects bytes other than zero and one.
 pub fn read_bool(input: &[u8]) Result<bool, Error> {
-    if input.len() < 1 { return Err(Error.BufferTooSmall); }
+    if input.len() < 1 { return Err(Error::BufferTooSmall); }
     if input[0] == 0 { return Ok(false); }
     if input[0] == 1 { return Ok(true); }
-    Err(Error.InvalidBoolean)
+    Err(Error::InvalidBoolean)
 }
 /// Writes one byte: zero for false, one for true.
 pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error> {
-    if output.len() < 1 { return Err(Error.BufferTooSmall); }
+    if output.len() < 1 { return Err(Error::BufferTooSmall); }
     output[0] = if value { 1 } else { 0 };
     Ok(1)
 }
@@ -643,21 +643,21 @@ pub fn write_bool(value: bool, output: &mut [u8]) Result<usize, Error> {
 /// Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed widths on disk.
 pub fn read_usize_le(input: &[u8]) Result<usize, Error> {
     let value = read_u64_le(input)?;
-    Ok(value)
+    Ok(value as usize)
 }
 /// Writes a pointer-width unsigned integer on supported 64-bit targets.
 pub fn write_usize_le(value: usize, output: &mut [u8]) Result<usize, Error> {
-    let count = write_u64_le(value, output)?;
+    let count = write_u64_le(value as u64, output)?;
     Ok(count)
 }
 /// Reads a pointer-width unsigned integer on supported 64-bit targets; prefer fixed widths on disk.
 pub fn read_usize_be(input: &[u8]) Result<usize, Error> {
     let value = read_u64_be(input)?;
-    Ok(value)
+    Ok(value as usize)
 }
 /// Writes a pointer-width unsigned integer on supported 64-bit targets.
 pub fn write_usize_be(value: usize, output: &mut [u8]) Result<usize, Error> {
-    let count = write_u64_be(value, output)?;
+    let count = write_u64_be(value as u64, output)?;
     Ok(count)
 }
 #(endif)

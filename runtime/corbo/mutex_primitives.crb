@@ -6,7 +6,7 @@ fn mutex_allocate(asynchronous:bool)->usize {
     let pointer=os_metadata(size_mutex_state());
     if copy(pointer)==0 { return 0; }
     let mut ok:bool=false;
-    @unchecked { @c {
+    @unchecked { @c++ {
         CorboMutexState *m=(CorboMutexState*)${pointer};
         ${ok}=pthread_mutex_init(&m->gate,NULL)==0;
         m->asynchronous=${asynchronous};
@@ -17,26 +17,26 @@ fn mutex_allocate(asynchronous:bool)->usize {
 /// Returns the exact native metadata extent on this platform.
 fn size_mutex_state()->usize {
     let mut size:usize=0;
-    @unchecked { @c { ${size}=sizeof(CorboMutexState); } }
+    @unchecked { @c++ { ${size}=sizeof(CorboMutexState); } }
     size
 }
 /// Blocks on a native mutex and records the acquiring thread for guard cleanup.
 fn mutex_native_lock(raw:usize) {
-    @unchecked { @c {
+    @unchecked { @c++ {
         CorboMutexState *m=(CorboMutexState*)${raw};
         if(pthread_mutex_lock(&m->gate))abort(); m->owner=pthread_self();
     } }
 }
 /// Releases a synchronous guard only on its acquiring thread.
 fn mutex_native_unlock(raw:usize) {
-    @unchecked { @c {
+    @unchecked { @c++ {
         CorboMutexState *m=(CorboMutexState*)${raw};
         if(!pthread_equal(m->owner,pthread_self()) || pthread_mutex_unlock(&m->gate))abort();
     } }
 }
 /// Destroys unlocked native metadata after all guard/waiter references have ended.
 fn mutex_native_destroy(raw:usize) {
-    @unchecked { @c {
+    @unchecked { @c++ {
         CorboMutexState *m=(CorboMutexState*)${raw};
         if(pthread_mutex_trylock(&m->gate))abort();
         if(pthread_mutex_unlock(&m->gate) || pthread_mutex_destroy(&m->gate))abort();
@@ -47,87 +47,87 @@ fn mutex_native_destroy(raw:usize) {
 /// Reads CorboMutexState.head; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_head(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((CorboMutexState*)${raw})->head; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((CorboMutexState*)${raw})->head; } }
     value
 }
 /// Updates CorboMutexState.head; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_head(raw:usize,value:usize) {
-    @unchecked { @c { ((CorboMutexState*)${raw})->head=(__typeof__(((CorboMutexState*)${raw})->head))${value}; } }
+    @unchecked { @c++ { ((CorboMutexState*)${raw})->head=(__typeof__(((CorboMutexState*)${raw})->head))${value}; } }
 }
 
 /// Reads CorboMutexState.tail; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_tail(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((CorboMutexState*)${raw})->tail; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((CorboMutexState*)${raw})->tail; } }
     value
 }
 /// Updates CorboMutexState.tail; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_tail(raw:usize,value:usize) {
-    @unchecked { @c { ((CorboMutexState*)${raw})->tail=(__typeof__(((CorboMutexState*)${raw})->tail))${value}; } }
+    @unchecked { @c++ { ((CorboMutexState*)${raw})->tail=(__typeof__(((CorboMutexState*)${raw})->tail))${value}; } }
 }
 
 /// Reads CorboMutexState.reservation; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_reservation(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((CorboMutexState*)${raw})->reservation; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((CorboMutexState*)${raw})->reservation; } }
     value
 }
 /// Updates CorboMutexState.reservation; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_reservation(raw:usize,value:usize) {
-    @unchecked { @c { ((CorboMutexState*)${raw})->reservation=(__typeof__(((CorboMutexState*)${raw})->reservation))${value}; } }
+    @unchecked { @c++ { ((CorboMutexState*)${raw})->reservation=(__typeof__(((CorboMutexState*)${raw})->reservation))${value}; } }
 }
 
 /// Reads CorboMutexState.held; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_held(raw:usize)->bool {
     let mut value:bool=false;
-    @unchecked { @c { ${value}=(bool)((CorboMutexState*)${raw})->held; } }
+    @unchecked { @c++ { ${value}=(bool)((CorboMutexState*)${raw})->held; } }
     value
 }
 /// Updates CorboMutexState.held; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_held(raw:usize,value:bool) {
-    @unchecked { @c { ((CorboMutexState*)${raw})->held=(__typeof__(((CorboMutexState*)${raw})->held))${value}; } }
+    @unchecked { @c++ { ((CorboMutexState*)${raw})->held=(__typeof__(((CorboMutexState*)${raw})->held))${value}; } }
 }
 
 /// Reads CorboMutexState.asynchronous; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_asynchronous(raw:usize)->bool {
     let mut value:bool=false;
-    @unchecked { @c { ${value}=(bool)((CorboMutexState*)${raw})->asynchronous; } }
+    @unchecked { @c++ { ${value}=(bool)((CorboMutexState*)${raw})->asynchronous; } }
     value
 }
 /// Updates CorboMutexState.asynchronous; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_asynchronous(raw:usize,value:bool) {
-    @unchecked { @c { ((CorboMutexState*)${raw})->asynchronous=(__typeof__(((CorboMutexState*)${raw})->asynchronous))${value}; } }
+    @unchecked { @c++ { ((CorboMutexState*)${raw})->asynchronous=(__typeof__(((CorboMutexState*)${raw})->asynchronous))${value}; } }
 }
 
 /// Reads Task.mutex_next; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_next(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((Task*)${raw})->mutex_next; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((Task*)${raw})->mutex_next; } }
     value
 }
 /// Updates Task.mutex_next; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_next(raw:usize,value:usize) {
-    @unchecked { @c { ((Task*)${raw})->mutex_next=(__typeof__(((Task*)${raw})->mutex_next))${value}; } }
+    @unchecked { @c++ { ((Task*)${raw})->mutex_next=(__typeof__(((Task*)${raw})->mutex_next))${value}; } }
 }
 
 /// Reads Task.mutex_owner; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_owner(raw:usize)->usize {
     let mut value:usize=0;
-    @unchecked { @c { ${value}=(uintptr_t)((Task*)${raw})->mutex_owner; } }
+    @unchecked { @c++ { ${value}=(uintptr_t)((Task*)${raw})->mutex_owner; } }
     value
 }
 /// Updates Task.mutex_owner; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_owner(raw:usize,value:usize) {
-    @unchecked { @c { ((Task*)${raw})->mutex_owner=(__typeof__(((Task*)${raw})->mutex_owner))${value}; } }
+    @unchecked { @c++ { ((Task*)${raw})->mutex_owner=(__typeof__(((Task*)${raw})->mutex_owner))${value}; } }
 }
 
 /// Reads Task.mutex_reserved; caller holds the scheduler lock for shared queue fields.
 fn g_mutex_reserved(raw:usize)->bool {
     let mut value:bool=false;
-    @unchecked { @c { ${value}=(bool)((Task*)${raw})->mutex_reserved; } }
+    @unchecked { @c++ { ${value}=(bool)((Task*)${raw})->mutex_reserved; } }
     value
 }
 /// Updates Task.mutex_reserved; caller holds the scheduler lock for shared queue fields.
 fn s_mutex_reserved(raw:usize,value:bool) {
-    @unchecked { @c { ((Task*)${raw})->mutex_reserved=(__typeof__(((Task*)${raw})->mutex_reserved))${value}; } }
+    @unchecked { @c++ { ((Task*)${raw})->mutex_reserved=(__typeof__(((Task*)${raw})->mutex_reserved))${value}; } }
 }

@@ -1,3 +1,137 @@
+## Exhaustive PostAST → C++ handoff
+
+The backend scope is defined by the exhaustive Rust inventory in
+`rust_frontend/src/cpp_backend_inventory.rs`, not by its tests. The inventory
+classifies every applicable operation plus nested semantic and physical-plan
+variant, and `Backend::audit_representation_inventory` traverses the concrete
+handoff before emission. Abstract-only representations are diagnosed if they
+reach concrete generation.
+
+Validation after this inventory was connected: semantic grammar dispatch 2/2,
+N1–N8 focused verification 87/87, physical memory planning 15/15 (including all
+six supported target descriptions), and generated C++ 12/12 with compilation
+and native execution witnesses. These results validate the implementation; the
+exhaustive inventory remains the completion criterion. See
+[`architecture/CPP_BACKEND_INVENTORY.md`](architecture/CPP_BACKEND_INVENTORY.md).
+
+## Restarted STD audit under the frozen specification
+
+The current grammar and N1–N8 are immutable unless explicitly changed by the
+language designer. Every admitted program needs proof of all applicable
+obligations. No diagnostic is not a proof. The six-target PostAST audit has
+completed with a canonical applicability inventory and proof/rejection link for
+every emitted obligation. No STD compliance certificate is claimed because all
+six target selections reject the same 49 N4 obligations and one N5 obligation.
+
+[Suspected valid rejections and controls](cycles/POST_AST_REJECTED_ACCEPTANCE_CANDIDATES.md).
+[Audit snapshot](../validation/post_ast_std_rule_restart.json).
+
+## Current PostAST-only verifier evidence
+
+Core analysis. Eighty-seven focused verifier checks, 73 semantic representation
+checks and four decision-graph unit checks pass. The destructor hook borrows
+`&mut self`; runtime teardown separately cleans owned components and ends the
+lifetime. Recursive formal origins, selected field dependencies, unchecked
+confinement, loop-occurrence joins, flow aliases, foreign-address writeback and
+source-pool liveness after explicit destruction have focused regressions.
+
+The whole-STD rule audit completed for Linux, macOS and Windows target selection,
+each on x86-64 and ARM64. Every run covered 107 files; all emitted obligations
+are proved or explicitly rejected, with no unproved, unaccounted or derived
+diagnostic. The STD remains rejected on 49 N4 HTTP contract obligations and one
+N5 iterator contract obligation. No physical planning, backend or generated-code
+validation was run for this stage. [Source, evidence and limits](cycles/RUST_POST_AST_RULE_VERIFICATION.md).
+
+## Approved PostAST hierarchy and pass ordering — definitions only
+
+Execution occurrences now use parent-linked contexts with typed known/symbolic
+iteration coordinates (3.x, nested 3.x.5.y.a). Logical final cleanup destinations
+are complete before rule checking. Physical planning accepts CheckedPostAst and
+realizes those destinations with parent/caller reservations; no deferred N1–N8
+placement outcome remains. Rust definitions compile; no engine or runtime behavior
+is implemented or validated.
+[Architecture and handoffs](architecture/POST_AST_PASS_CONTRACTS.md).
+
+## Typed PostAST architecture proposal — definitions only
+
+A standalone Rust schema covers explicit timelines/moments/branch relationships
+and 110 distinct operation types. All 55 current syntax NodeKind variants and 35
+operator forms are mapped. Rust formatting/type-checking succeeded. These checks
+do not validate semantic behavior or establish schema completeness. The proposal
+is not imported by the compiler; unresolved architectural choices and the N5
+documentation conflict are explicit. No resolution engine was added.
+[Approach, definitions and limitations](architecture/POST_AST_APPROACH.md).
+
+## Structural-contract OR — Rust syntax implemented
+
+One annotation-wide with and explicit source-preserving alternative nodes are
+parsed. All 15 focused cases match LALRPOP: eight accepted ASTs agree on branch
+structure, method signatures and reference permissions; seven malformed forms
+are rejected. All 161 productions are reachable: 847 generated cases and 566
+mutations match. All 106 STD files parse unchanged (91,919 nodes). Semantic
+matching remains pending; no first-match policy is introduced.
+[Source, commands and limits](cycles/RUST_OR_CONTRACT_CASES.md).
+
+## Grammar-derived bounded syntax coverage
+
+All 160 remaining EBNF productions are reachable and exercised in 843
+derivations (443 unique programs). Independent chart recognition and Rust parsing
+agree on those derivations and 559 mutations (557 refusals, two valid).
+AST integrity and source/token retention pass. Six new LALRPOP range-call cases
+also match expected AST structures. The three unused definitions have been removed with user approval; a regression
+now rejects unreachable productions. Full AST oracle coverage remains open. [Method, fixes and limits](cycles/RUST_GRAMMAR_GENERATION.md).
+
+## Parser grammar audit: current decision boundary
+
+The user resolved cast/comparison ambiguity by restricting as targets to numeric
+terminal types. The Rust parser and independent oracle match all 307 expression
+cases (280 accepted, 27 rejected). No type lookup or STD changes were introduced.
+[Decision, source and validation](cycles/RUST_PARSER_CAST_COMPARISON.md).
+
+Annotation-before-pub is uniform: eleven declaration cases match the generated
+oracle. The user also chose to finish a bare inner block before a following
+operator: ten block cases now match. Seven carrier-contract cases match their
+written production. All 106 STD files parse unchanged in these passes.
+[Block decision and evidence](cycles/RUST_PARSER_BLOCK_OPERATOR.md).
+Full parser conformance remains unestablished.
+
+## Resolved grammar contradiction: declaration annotation order
+
+The initial declaration/method comparison reported four differences. The user
+selected annotations before pub; grammar and oracle were updated accordingly.
+All eleven cases now match. No parser-complete claim is made, and the whole-STD
+suite still passes.
+[Witnesses, command and limits](cycles/RUST_PARSER_DECLARATION_ORDER.md).
+
+## Entire standard library: permanent Rust parser regression
+
+All 106 STD files pass direct syntax parsing and retained-source/token/AST integrity
+audits: 145,730 original tokens and 91,901 reachable nodes. No STD edits, grammar
+relaxations, target selection or expected-rejection exemptions in this pass.
+[Per-file scope, command and limits](cycles/RUST_STDLIB_PARSER_AUDIT.md).
+
+## Rust reference syntax parser
+
+Source/tokens/AST are retained without name lookup or semantic stages. Dispatcher
+and five seeded STD modules pass; all 106 STD files parse. Corpus: 293 accepted,
+53 individually reviewed syntax rejections, zero unexpected failures. LALRPOP
+matches 307 expression cases; full grammar oracle coverage remains open. STD enum
+qualification uses :: exclusively. [Evidence and limits](cycles/RUST_PARSER_STAGE.md).
+
+## Independent Logos lexical comparison
+
+SubDB dispatcher: 608 tokens match. Corpus: 346 lexically accepted files and
+795,136 tokens match, zero differences. Independent generated rules and JSON
+string decoding, plus focused accepted/rejected fixtures. Rejected-fixture offsets
+are compared within failing lexemes, not exact message/offset parity. No parsing
+or semantic claim. [Evidence and commands](cycles/RUST_LEXER_LOGOS.md).
+
+## Rust reference lexer boundary
+
+Twelve focused lexical observations and library/CLI compilation pass in the shared
+`rust_frontend/target` directory. No parser, semantic, rule-verification or backend
+completion is claimed. Source and command: [lexer stage report](cycles/RUST_LEXER_STAGE.md).
+
 ## Definition-local method syntax
 
 Grammar/STD migration is recorded in [the syntax specification](DEFINITION_METHODS.md).
@@ -5210,3 +5344,153 @@ passed fatal UBSan on macOS ARM64, including cleanup metrics and pooled/inline
 compatibility; four rule refusals and two runtime constraints passed. The cycle
 also fixed grouped-text provenance loss. Other platforms were not executed.
 Compiler evidence: docs/STANDALONE_STRING_CYCLE.md.
+
+## Rust semantic population (initial, no rule checker)
+
+The canonical PostAST is integrated into Rust source. The new syntax-only-AST
+resolver populates local symbols, concrete typing, provenance, dependency graphs,
+hierarchical execution contexts and logical destinations for its supported subset.
+Sixteen focused structural/population checks passed on macOS ARM64. Deliberately
+conflicting mutable borrows are accepted and recorded as obligations, demonstrating
+that this stage does not run N4/N5 checks. There is no new N1–N8 proof, physical
+memory plan or backend result. Full grammar coverage remains open; see
+[the scope/evidence/limitations report](cycles/RUST_SEMANTIC_POPULATION.md).
+
+### Semantic grammar-coverage continuation
+
+Twenty focused semantic-population checks pass, including forward/associated
+constant expressions, dynamic borrowed slices, unchecked C/C++/asm operands and
+writebacks, and enum equality/copy plans. The entire STD parser regression also
+passes. No rule-checking or executable backend evidence is claimed. Unreachable
+statement resolution is awaiting an explicit language-policy decision; remaining
+coverage is tracked in the semantic population report and implementation checklist.
+
+### Unreachable source, terminating control flow and enum patterns
+
+The accepted policy is now warning-only unreachable/undefined-name diagnostics
+for source excluded by unconditional terminators. Twenty-seven semantic-stage
+checks pass, including the exact requested example, diagnostic lexical scopes,
+terminating if/match arms, loop break/continue paths, explicit unwind chains,
+and borrowed/owned enum extraction. This evidence concerns populated PostAST
+facts only. Match exhaustiveness and N1–N8 obligations are not proved here.
+
+
+### Semantic specialization, propagation, replication and iteration
+
+41/41 focused `semantic_stage` checks pass. Evidence covers nominal specialization,
+Option/Result branch/payload identities, failure-only error conversions, exact
+From overloads, recursive structural replication plans, dereference method links,
+array/slice and concrete next-method loops, and named child captures. Loop cases
+include borrowed tuple items and break/continue. The checks inspect populated
+PostAST, not execution or N1–N8 verdicts. Full grammar coverage, contracts, async,
+imports and complete cleanup/dependency precision remain open; see
+[the semantic population report](cycles/RUST_SEMANTIC_POPULATION.md).
+
+
+### Core grammar semantic handoff — 2026-11-26
+
+Executed: 59 semantic-stage representation checks and 2 grammar-family checks.
+The multi-module semantic corpus covers all 55 mapped AST families; the Rust
+inventory and expression dispatch are exhaustive. Regressions inspect temporary
+places/callable fields, async task identities, configured constant values,
+reference projections and event-linked dependency facts. Structural integrity
+checks retained IDs and moments. Context mismatches are recorded for a later N8
+checker, demonstrating that population is not that checker.
+
+This is construct-level semantic coverage, not a proof of arbitrary-combination
+coverage, STD API completeness, lifetime safety or generated-code correctness.
+See [the current evidence and boundaries](cycles/RUST_SEMANTIC_POPULATION.md#core-grammar-handoff-audit--2026-11-26).
+
+### Whole-STD staged frontend audit — 2026-11-26
+
+All 107 STD sources passed lexer/parser preservation (145,740 tokens, 91,923 AST
+nodes). Resolving the complete package stopped at `http::Header.name`, which is
+both a field and method, contrary to ME3. No complete STD PostAST was produced;
+later semantic bodies are unassessed. The new chain records N1–N8 obligations
+but has no rule checker. Two focused existing tests confirmed that conflicting
+mutable borrows and a synchronous await produce obligations rather than a rule
+rejection. See [the audit and reproduction command](cycles/RUST_STDLIB_SEMANTIC_AUDIT.md).
+
+
+The continuation fixes the HTTP Header collision and passes an independent direct
+member inventory over all 107 STD files. General receiver lookup, primitive
+signatures/views and nested type-evidence fixes pass 61 focused semantic checks.
+Whole-package resolution next stops at repeated same-block `let (base, extra)`
+in gzip; a binding-policy decision is pending, and no shadowing change was applied.
+The full STD PostAST and N1–N8 enforcement remain unvalidated.
+
+
+### Whole-STD PostAST completion after confirmed classical shadowing
+
+The package audit now passes on macOS ARM64: all 107 files parse and resolve as
+one package, yielding 849 bodies, 1,268 concrete instances, 1,097 types, 58,010
+values and 91,257 execution moments. The normal permanent semantic STD test and
+direct field/method collision inventory pass. All 65 focused semantic checks,
+2 grammar checks and the permanent STD parser regression pass.
+
+General fixes cover distinct shadowed binding identities, receiver/lexical
+namespace separation, literal constraints, mixed integer shift counts, enum
+payload visibility, primitive/runtime signatures, explicit namespace exports and
+shared poll transitions. STD source corrections retain ME3 and privacy rather
+than relaxing them. There is still no new-chain rule checker or code generator.
+Generic templates and inactive target branches are bounded as described in the
+[current audit report](cycles/RUST_STDLIB_SEMANTIC_AUDIT.md).
+
+
+### All-target STD semantic resolution and symbolic generic bodies — 2026-11-26
+
+The permanent `semantic_stdlib` audit passes on all six target selections using
+`resolve_package_for_target`. All 107 STD files parse/preserve source for every
+selection; active generic definitions have canonical symbolic semantic bodies.
+
+| Target | Files | Bodies | Generic definitions resolved symbolically | Function instances (total) |
+| --- | ---: | ---: | ---: | ---: |
+| linux / x86_64 | 107 | 912 | 71 / 71 | 1451 |
+| linux / aarch64 | 107 | 713 | 57 / 57 | 1123 |
+| macos / aarch64 | 107 | 931 | 71 / 71 | 1478 |
+| macos / x86_64 | 107 | 913 | 71 / 71 | 1453 |
+| windows / x86_64 | 107 | 928 | 71 / 71 | 1473 |
+| windows / aarch64 | 107 | 928 | 71 / 71 | 1473 |
+
+Core semantic mechanisms retain contract-call identities, forwarding implication
+witnesses, rigid type parameters, parametric captures/transfers and abstract async
+poll protocols. The 72 focused semantic checks, 2 grammar-family checks and the
+permanent all-STD parser regression pass. Both canonical architecture reexports
+compile as standalone Rust definitions; `git diff --check` passes.
+
+This is host-executed source resolution with explicit target facts, not native
+execution on six platforms. It performs no rule checking, physical memory
+planning or C++ generation. Existing target conditions can still exclude APIs;
+identical platform API availability is not asserted. Earlier host-only/template
+limitations above are superseded for this audit, not for the legacy pipeline.
+See the [current audit report](cycles/RUST_STDLIB_SEMANTIC_AUDIT.md).
+
+
+### Initial PostAST-only rule verification — 2026-11-26 (partial)
+
+| Area | Executed evidence | Limit |
+| --- | --- | --- |
+| N1/N3/N6 | Typed operands, static scalar failures, guarded availability/moves, loop back-edges and nested enum pattern coverage | Initial consumers, not complete rule enforcement |
+| N4 | Target/pool escape, stored-reference replacement, returned references through calls/join/await, unfinished borrowed branch rejection | Full interprocedural/collection effect completeness remains open |
+| N5/N8 | Mutation permission, disjointness, last use/reborrow, object lock re-entry, context and resolved call boundaries | Complete generic/concurrent contract verification remains open |
+| N2/N7 | Runtime-owned task identity, explicit consuming drop, reserved hooks and implicit cleanup exclusion after explicit drop | Logical cleanup consumer and proof accounting remain partial |
+| Regression | 44 focused checks, 72 semantic checks, 2 grammar-family checks, permanent all-STD parser regression and six-target STD semantic population pass | No executable/backend/sanitizer validation; no independent safety audit |
+| Copy/drop correction | Each copied eligible enum has an independent cleanup owner; drop consumes its own argument | The initially reported design blocker was incorrect and has been removed |
+
+The loop resumed using the existing copy/drop rules. No claim of complete N1–N8 coverage
+or successful whole-STD **rule checking** is made. See the
+[implementation report](cycles/RUST_POST_AST_RULE_VERIFICATION.md).
+
+### PostAST physical memory planning — 2026-11-27
+
+The new `CheckedPostAst -> PlannedPostAst` stage is implemented without using
+the legacy verifier or placement backend. It computes target layouts, fixed
+reservations, pool areas, growing regions/classes, cursor ranges, cleanup and
+requirement-realization evidence. Twelve focused planner checks plus the 73
+semantic and 87 N1–N8 regressions pass. The planner fixtures include all six
+supported target descriptions. See the
+[cycle report](cycles/RUST_POST_AST_MEMORY_PLANNING.md).
+
+This is physical-plan evidence, not C++ execution evidence. The full STD is not
+passed around its current N1–N8 rejections; only `Established(CheckedPostAst)` is
+accepted by the planner.

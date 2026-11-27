@@ -15,102 +15,102 @@
         fd: i64;
 
         /// Opens or creates a file through the target Unix backend.
-        fn open(path: &[u8], mode: i64, create: bool, perm: u32) Result<File, FileError> {
+        pub fn open(path: &[u8], mode: i64, create: bool, perm: u32) Result<File, FileError> {
             let (valid, fd) = syscalls::open(path, mode, create, copy(perm));
             if !valid {
-                return Err(FileError.InvalidPath);
+                return Err(FileError::InvalidPath);
             }
             if fd < 0 {
-                return Err(FileError.Os { code: fd });
+                return Err(FileError::Os { code: fd });
             }
             if copy(perm) != 0xffffffff {
                 let (status, size, permissions) = syscalls::stats(copy(fd));
                 drop(size);
                 if copy(status) < 0 {
                     syscalls::close(fd);
-                    return Err(FileError.Os { code: status });
+                    return Err(FileError::Os { code: status });
                 }
                 if (permissions & (perm ^ 0x1ff)) != 0 {
                     syscalls::close(fd);
-                    return Err(FileError.Os { code: syscalls::unsupported_permissions() });
+                    return Err(FileError::Os { code: syscalls::unsupported_permissions() });
                 }
             }
             Ok(File { fd: fd })
         }
 
         /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
-        fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError> {
+        pub fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError> {
             let fd = (*self).fd;
             let (raw, count) = syscalls::read(fd, buffer);
             if raw < 0 {
-                return Err(FileError.Os { code: raw });
+                return Err(FileError::Os { code: raw });
             }
             Ok(count)
         }
 
         /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-        fn write(&mut self, buffer: &[u8]) Result<usize, FileError> {
+        pub fn write(&mut self, buffer: &[u8]) Result<usize, FileError> {
             let (raw, count) = syscalls::write((*self).fd, buffer);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(count)
         }
 
         /// Performs a positioned read without changing the original descriptor/handle cursor.
-        fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError> {
+        pub fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError> {
             let (raw, count) = syscalls::read_at((*self).fd, buffer, offset);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(count)
         }
 
         /// Performs a positioned write without changing the original descriptor/handle cursor.
-        fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError> {
+        pub fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError> {
             let (raw, count) = syscalls::write_at((*self).fd, buffer, offset);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(count)
         }
 
         /// Seeks relative to the native origin and returns the resulting offset.
-        fn seek(&mut self, offset: i64, origin: i64) Result<u64, FileError> {
+        pub fn seek(&mut self, offset: i64, origin: i64) Result<u64, FileError> {
             let (raw, position) = syscalls::seek((*self).fd, offset, origin);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(position)
         }
 
         /// Persists file contents and metadata, propagating native flush failures.
-        fn sync_all(&mut self) Result<(), FileError> {
+        pub fn sync_all(&mut self) Result<(), FileError> {
             let raw = syscalls::sync_all((*self).fd);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(())
         }
 
         /// Changes file length without moving the cursor; growth is zero-filled by the OS.
-        fn truncate(&mut self, length: u64) Result<(), FileError> {
+        pub fn truncate(&mut self, length: u64) Result<(), FileError> {
             let raw = syscalls::truncate((*self).fd, length);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(())
         }
 
         /// Queries the file size from the open descriptor.
-        fn size(&self) Result<u64, FileError> {
+        pub fn size(&self) Result<u64, FileError> {
             let (raw, count, permissions) = syscalls::stats((*self).fd);
             drop(permissions);
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(count)
         }
 
         /// Renames a filesystem entry using the Unix backend.
-        fn rename(source: &[u8], destination: &[u8]) Result<(), FileError> {
+        pub fn rename(source: &[u8], destination: &[u8]) Result<(), FileError> {
             let (valid, raw) = syscalls::rename(source, destination);
-            if !valid { return Err(FileError.InvalidPath); }
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if !valid { return Err(FileError::InvalidPath); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(())
         }
 
         /// Removes the named file using the Unix backend.
-        fn delete(path: &[u8]) Result<(), FileError> {
+        pub fn delete(path: &[u8]) Result<(), FileError> {
             let (valid, raw) = syscalls::delete(path);
-            if !valid { return Err(FileError.InvalidPath); }
-            if raw < 0 { return Err(FileError.Os { code: raw }); }
+            if !valid { return Err(FileError::InvalidPath); }
+            if raw < 0 { return Err(FileError::Os { code: raw }); }
             Ok(())
         }
 

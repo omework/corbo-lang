@@ -1,6 +1,6 @@
 use crate::{
+    legacy_parser::{NodeId, Syntax},
     lexer::Token,
-    parser::{NodeId, Syntax},
 };
 use std::collections::HashMap;
 
@@ -229,9 +229,9 @@ impl StaticTree {
         let node = &self.syntax.nodes[id.0];
         let (kind, start, name, children) =
             (node.kind, node.start, node.name, node.children.clone());
-        let name = name.map(|token| self.text(source, token)).or_else(|| {
-            node.asm_operand.map(|span| &source[span.start..span.end])
-        });
+        let name = name
+            .map(|token| self.text(source, token))
+            .or_else(|| node.asm_operand.map(|span| &source[span.start..span.end]));
         let point = PointId(self.points.len());
         self.points.push(Point {
             syntax: id,

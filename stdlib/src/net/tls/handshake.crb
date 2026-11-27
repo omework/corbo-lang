@@ -24,7 +24,7 @@
             match writer.send_record(&mut *socket, APPLICATION_DATA, &content[0..content.len()],
                         0, &mut fragment[0..fragment.len()], &mut wire[0..wire.len()]) {
                 Ok(()) => {},
-                Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+                Err(error) => { drop(error); return Err(HandshakeError::Transport); },
             };
             Ok(())
         }
@@ -39,14 +39,14 @@
                 let record = match reader.receive_record(&mut *socket, &mut wire[0..capacity],
                         &mut output[0..space]) {
                     Ok(value) => { value },
-                    Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+                    Err(error) => { drop(error); return Err(HandshakeError::Transport); },
                 };
                 if record.is_close_notify() { return Ok(0); }
-                if record.kind() != APPLICATION_DATA { return Err(HandshakeError.Protocol); }
+                if record.kind() != APPLICATION_DATA { return Err(HandshakeError::Protocol); }
                 let count = record.len();
                 if count != 0 { return Ok(count); }
             }
-            Err(HandshakeError.Protocol)
+            Err(HandshakeError::Protocol)
         }
 
         /// Sends the authenticated TLS close_notify alert.
@@ -56,7 +56,7 @@
             match writer.close_notify(&mut *socket, &mut fragment[0..fragment.len()],
                       &mut wire[0..wire.len()]) {
                 Ok(()) => {},
-                Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+                Err(error) => { drop(error); return Err(HandshakeError::Transport); },
             };
             Ok(())
         }
@@ -69,11 +69,11 @@
         let size = secret.len();
         let key = match aes128_key(&secret[0..size]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let iv = match traffic_iv(&secret[0..size]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         if sending {
             let writer = RecordCipher::writer(&key, &iv);
@@ -88,33 +88,33 @@
         let size = encoded.len();
         let peer = match PublicKey::from_sec1_uncompressed(&encoded[0..size]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Authentication); },
+            Err(error) => { drop(error); return Err(HandshakeError::Authentication); },
         };
         let mut shared: [u8; 32] = [0; 32];
         match ephemeral.agree(&peer, &mut shared) {
             Ok(()) => {},
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let early = match early_secret() {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let secret = match handshake_secret(&early[..], &shared[..]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         Ok(secret)
     }
 
     /// Derives the application traffic secrets and installs directional record ciphers.
     fn application_session(master: &[u8], hash: &[u8], server: bool) Result<Session, HandshakeError> {
-        let client = match traffic_secret(&master[0..32], &hash[0..32], Traffic.ClientApplication) {
+        let client = match traffic_secret(&master[0..32], &hash[0..32], Traffic::ClientApplication) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
-        let peer = match traffic_secret(&master[0..32], &hash[0..32], Traffic.ServerApplication) {
+        let peer = match traffic_secret(&master[0..32], &hash[0..32], Traffic::ServerApplication) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         if server {
             let reader = match cipher(&client[..], false) {
@@ -144,7 +144,7 @@
     fn encode_finished(secret: &[u8], hash: &[u8], message: &mut [u8]) Result<(), HandshakeError> {
         let data = match finished_verify_data(&secret[0..32], &hash[0..32]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         handshake_header(&mut message[0..36], 20, 36);
         place(&mut message[0..36], 4, &data[..]);
@@ -153,12 +153,12 @@
 
     /// Validates Finished framing and verifies the peer's authentication data.
     fn check_finished(secret: &[u8], hash: &[u8], message: &[u8]) Result<(), HandshakeError> {
-        if message.len() != 36 { return Err(HandshakeError.Protocol); }
+        if message.len() != 36 { return Err(HandshakeError::Protocol); }
         let valid = match verify_finished(&secret[0..32], &hash[0..32], &message[4..36]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Authentication); },
+            Err(error) => { drop(error); return Err(HandshakeError::Authentication); },
         };
-        if !valid { return Err(HandshakeError.Authentication); }
+        if !valid { return Err(HandshakeError::Authentication); }
         Ok(())
     }
 
@@ -180,7 +180,7 @@
                                   Result<Session, HandshakeError> {
         let size = hostname.len();
         if !valid_dns_name(&hostname[0..size]) || anchor.len() == 0 {
-            return Err(HandshakeError.Authentication);
+            return Err(HandshakeError::Authentication);
         }
         let empty: [u8; 0] = [];
         client_negotiate(&mut *socket, &anchor[0..anchor.len()], &hostname[0..size], &empty[..], now,
@@ -196,15 +196,15 @@
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
-        if !decoded.supports_server_certificate() { return Err(HandshakeError.Protocol); }
+        if !decoded.supports_server_certificate() { return Err(HandshakeError::Protocol); }
         if pinned_key.len() != 0 {
             let (start, end) = decoded.der_range(0);
             if decoded.count() != 1 || !equal_bytes(&certificate[start..end], &identity[0..identity_size]) {
-                return Err(HandshakeError.Authentication);
+                return Err(HandshakeError::Authentication);
             }
             let key = match X509PublicKey::from_p256_sec1(&pinned_key[0..65]) {
                 Ok(value) => { value },
-                Err(error) => { drop(error); return Err(HandshakeError.Authentication); },
+                Err(error) => { drop(error); return Err(HandshakeError::Authentication); },
             };
             return Ok(key);
         }
@@ -223,20 +223,20 @@
         let host_size = hostname.len();
         let key_size = pinned_key.len();
         if !has_workspace(copy(w), copy(f), copy(m)) || m < 154 + host_size {
-            return Err(HandshakeError.BufferTooSmall);
+            return Err(HandshakeError::BufferTooSmall);
         }
         if key_size != 0 && (identity_size == 0 || identity_size > m - 13) {
-            return Err(HandshakeError.BufferTooSmall);
+            return Err(HandshakeError::BufferTooSmall);
         }
         let mut transcript = Transcript::new();
         let mut random: [u8; 32] = [0; 32];
         match fill(&mut random[..]) {
             Ok(()) => {},
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let ephemeral = match EphemeralKey::generate() {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let public_key = ephemeral.public_key();
         let point = public_key.to_sec1_uncompressed();
@@ -255,7 +255,7 @@
             Err(error) => { return Err(error); },
         };
         let share = server_share(&message[0..reply]);
-        if share == 0 { return Err(HandshakeError.Protocol); }
+        if share == 0 { return Err(HandshakeError::Protocol); }
         let handshake = match shared_secret(ephemeral, &message[share..share + 65]) {
             Ok(value) => { value },
             Err(error) => { return Err(error); },
@@ -265,17 +265,17 @@
             Err(error) => { return Err(error); },
         };
         let hello_hash = transcript.digest();
-        let client_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic.ClientHandshake) {
+        let client_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic::ClientHandshake) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
-        let server_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic.ServerHandshake) {
+        let server_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic::ServerHandshake) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let master = match master_secret(&handshake[..]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let mut flight = new_flight();
         let mut reader = match cipher(&server_traffic[..], false) {
@@ -291,7 +291,7 @@
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
-        if !valid_encrypted_extensions(&message[0..ee], host_size != 0) { return Err(HandshakeError.Protocol); }
+        if !valid_encrypted_extensions(&message[0..ee], host_size != 0) { return Err(HandshakeError::Protocol); }
         match append_message(&mut transcript, &message[0..ee]) {
             Ok(()) => {},
             Err(error) => { return Err(error); },
@@ -314,15 +314,15 @@
             Err(error) => { return Err(error); },
         };
         if cv < 9 || get16(&message[0..cv], 4) != 1027 || get16(&message[0..cv], 6) != cv - 8 {
-            return Err(HandshakeError.Protocol);
+            return Err(HandshakeError::Protocol);
         }
         let cv_hash = transcript.digest();
         let input = certificate_input(&cv_hash[..]);
         let signature_ok = match peer_key.verify_ecdsa_sha256(&input[..], &message[8..cv]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Authentication); },
+            Err(error) => { drop(error); return Err(HandshakeError::Authentication); },
         };
-        if !signature_ok { return Err(HandshakeError.Authentication); }
+        if !signature_ok { return Err(HandshakeError::Authentication); }
         match append_message(&mut transcript, &message[0..cv]) {
             Ok(()) => {},
             Err(error) => { return Err(error); },
@@ -331,7 +331,7 @@
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
-        if !flight_empty(&flight) { return Err(HandshakeError.Protocol); }
+        if !flight_empty(&flight) { return Err(HandshakeError::Protocol); }
         let before = transcript.digest();
         match check_finished(&server_traffic[..], &before[..], &message[0..server_finished]) {
             Ok(()) => {},
@@ -369,7 +369,7 @@
                                   wire: &mut [u8], fragment: &mut [u8], message: &mut [u8])
                                    Result<Session, HandshakeError> {
         let size = chain.len();
-        if !valid_outgoing_chain(&chain[0..size]) { return Err(HandshakeError.Protocol); }
+        if !valid_outgoing_chain(&chain[0..size]) { return Err(HandshakeError::Protocol); }
         server_negotiate(&mut *socket, &chain[0..size], true, &*signing_key,
             &mut wire[0..wire.len()], &mut fragment[0..fragment.len()], &mut message[0..message.len()])
     }
@@ -383,14 +383,14 @@
         let m = message.len();
         let cert_size = certificate.len();
         if !has_workspace(copy(w), copy(f), copy(m)) || cert_size == 0 || cert_size > 16777215 - 9
-           || cert_size > m - 13 { return Err(HandshakeError.BufferTooSmall); }
+           || cert_size > m - 13 { return Err(HandshakeError::BufferTooSmall); }
         let mut transcript = Transcript::new();
         let hello = match receive_hello(&mut *socket, 1, &mut wire[0..w], &mut message[0..m]) {
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
         let share = client_share(&message[0..hello]);
-        if share == 0 { return Err(HandshakeError.Protocol); }
+        if share == 0 { return Err(HandshakeError::Protocol); }
         let session_size = message[38] as usize;
         let mut session: [u8; 32] = [0; 32];
         place(&mut session[..], 0, &message[39..39 + session_size]);
@@ -402,11 +402,11 @@
         let mut random: [u8; 32] = [0; 32];
         match fill(&mut random[..]) {
             Ok(()) => {},
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let ephemeral = match EphemeralKey::generate() {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let public_key = ephemeral.public_key();
         let point = public_key.to_sec1_uncompressed();
@@ -424,17 +424,17 @@
             Err(error) => { return Err(error); },
         };
         let hello_hash = transcript.digest();
-        let client_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic.ClientHandshake) {
+        let client_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic::ClientHandshake) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
-        let server_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic.ServerHandshake) {
+        let server_traffic = match traffic_secret(&handshake[..], &hello_hash[..], Traffic::ServerHandshake) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let master = match master_secret(&handshake[..]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let mut flight = new_flight();
         let mut reader = match cipher(&client_traffic[..], false) {
@@ -475,7 +475,7 @@
         let mut signature: [u8; 72] = [0; 72];
         let signed = match signing_key.sign_sha256(&input[..], &mut signature) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Crypto); },
+            Err(error) => { drop(error); return Err(HandshakeError::Crypto); },
         };
         let cv_size = 8 + signed;
         handshake_header(&mut message[0..cv_size], 15, copy(cv_size));
@@ -509,7 +509,7 @@
             Ok(value) => { value },
             Err(error) => { return Err(error); },
         };
-        if !flight_empty(&flight) { return Err(HandshakeError.Protocol); }
+        if !flight_empty(&flight) { return Err(HandshakeError::Protocol); }
         match check_finished(&client_traffic[..], &app_hash[..], &message[0..client_finished]) {
             Ok(()) => {},
             Err(error) => { return Err(error); },

@@ -103,7 +103,7 @@
         if copy(status) != 0 { return datagram_result(status, 0, 0); }
         let error = status_code(request[10]);
         if error == -234 || (request[11] & 32768) != 0 || (length == 0 && request[9] != 0) {
-            return Err(SocketError.DatagramTooLarge);
+            return Err(SocketError::DatagramTooLarge);
         }
         datagram_result(status_code(request[10]), request[9] as usize, peer_bits(request[12]))
     }
@@ -111,7 +111,7 @@
     /// Awaits transmission of a connected or addressed datagram.
     pub async fn send_datagram(socket: u64, buffer: &[u8], direct: bool, ip: u32, port: u16) Result<usize, SocketError> {
         let length = buffer.len();
-        if copy(length) > 65507 { return Err(SocketError.DatagramTooLarge); }
+        if copy(length) > 65507 { return Err(SocketError::DatagramTooLarge); }
         let dummy: [u8; 1] = [0];
         let mut request: [u64; 25] = [0; 25];
         request[6] = if direct { 2 } else { 4 };
@@ -143,7 +143,7 @@
         let status = execute(copy(descriptor), &mut request[..]).await;
         if copy(status) != 0 { return Err(socket_error(status)); }
         let error = status_code(request[10]);
-        if error == -1225 { return Err(SocketError.ConnectionRefused); }
+        if error == -1225 { return Err(SocketError::ConnectionRefused); }
         let error = status_code(request[10]);
         if copy(error) != 0 { return Err(socket_error(error)); }
         let updated = raw::update_context(descriptor, false, 0);

@@ -41,10 +41,10 @@ pub fn fill(output: &mut [u8]) Result<(), RandomError> {
         let (status, count) = read_random(&mut output[written..end]);
         if status != 0 {
             if interrupted(copy(status)) { continue; }
-            return Err(RandomError.Os { code: status });
+            return Err(RandomError::Os { code: status });
         }
         if count == 0 || count > end - written {
-            return Err(RandomError.InvalidCount);
+            return Err(RandomError::InvalidCount);
         }
         written = written + count;
     }

@@ -16,26 +16,26 @@
         remote_address: SocketAddr;
 
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) SocketAddr {
+        pub fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Returns the remote IPv4 address and port associated with the connection.
-        fn peer(&self) SocketAddr {
+        pub fn peer(&self) SocketAddr {
             let remote = &(*self).remote_address;
             from_parts(remote.ipv4_bits(), remote.port())
         }
 
         /// Writes bytes from the caller's slice and returns the number accepted, which may be less than its length.
-        fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
+        pub fn write(&mut self, buffer: &[u8]) Result<usize, SocketError> {
             if buffer.len() == 0 { return Ok(0); }
             let inner = &mut (*self).__din_package_socket;
             inner.send(buffer)
         }
 
         /// Reads into the caller's slice and returns the bytes copied. An empty buffer returns zero.
-        fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
+        pub fn read(&mut self, buffer: &mut [u8]) Result<usize, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             inner.receive(buffer)
         }
@@ -50,7 +50,7 @@
         local_address: SocketAddr;
 
         /// Binds and listens at the supplied endpoint. Use port zero for an assigned port and None for the system maximum backlog.
-        fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError> {
+        pub fn bind(address: SocketAddr, backlog: Option<i32>) Result<Listener, SocketError> {
             let limit = match backlog {
                 Some(value) => { value },
                 None => { 2147483647 },
@@ -67,13 +67,13 @@
         }
 
         /// Returns the local IPv4 address and port, including a port assigned by the OS.
-        fn addr(&self) SocketAddr {
+        pub fn addr(&self) SocketAddr {
             let local = &(*self).local_address;
             from_parts(local.ipv4_bits(), local.port())
         }
 
         /// Blocks until it can return an owned accepted TCP connection or an error.
-        fn accept(&mut self) Result<Connection, SocketError> {
+        pub fn accept(&mut self) Result<Connection, SocketError> {
             let inner = &mut (*self).__din_package_socket;
             let accepted = match inner.accept() {
                 Ok(value) => { value },

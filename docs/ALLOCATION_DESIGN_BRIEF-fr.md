@@ -109,6 +109,14 @@ choisi après la construction, l’emplacement choisi doit survivre
 à toutes les destinations possibles. Les réservations comptent
 dans le pic d’occupation jusqu’à leur récupération.
 
+L’adresse physique d’une valeur construite ne doit jamais dépendre d’un
+prédicat calculé après cette construction. Lorsque plusieurs chemins
+exclusifs ultérieurs conservent la même valeur, le plan réserve un seul
+emplacement dans leur ancêtre lexical commun le plus proche et tous les
+chemins le réutilisent. Les gardes de chemin sélectionnent toujours le
+nettoyage et le contrôle ; elles ne sélectionnent pas une adresse qui devait
+déjà exister auparavant.
+
 Le plan distingue l’état de l’emplacement et la position du curseur.
 Sur chaque chemin, un emplacement peut être **réservé**, **construit**
 ou **libérable**. Un emplacement libérable peut encore se trouver sous

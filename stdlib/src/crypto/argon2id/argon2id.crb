@@ -273,12 +273,12 @@ fn derive_internal(
     let passes = params.passes as u64;
     let memory = work.len() as u64;
     let output_size = output.len() as u64;
-    if lanes == 0 || lanes > 0xffffff || passes == 0 { return Err(Error.InvalidParams); }
-    if memory < 8 * lanes || memory > ARGON_LOW_WORD { return Err(Error.InvalidMemory); }
-    if output_size < 4 || output_size > ARGON_LOW_WORD { return Err(Error.InvalidOutput); }
+    if lanes == 0 || lanes > 0xffffff || passes == 0 { return Err(Error::InvalidParams); }
+    if memory < 8 * lanes || memory > ARGON_LOW_WORD { return Err(Error::InvalidMemory); }
+    if output_size < 4 || output_size > ARGON_LOW_WORD { return Err(Error::InvalidOutput); }
     if (password.len() as u64) > ARGON_LOW_WORD || (salt.len() as u64) > ARGON_LOW_WORD
         || (secret.len() as u64) > ARGON_LOW_WORD || (associated_data.len() as u64) > ARGON_LOW_WORD {
-        return Err(Error.InputTooLong);
+        return Err(Error::InputTooLong);
     }
     let mut hash = blake_new(64);
     blake_le32(&mut hash, copy(lanes));

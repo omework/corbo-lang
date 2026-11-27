@@ -1,0 +1,37 @@
+// Independent structural-contract subset, including OR branches and iterator
+// signatures. This does not resolve method names or infer reference types.
+use crate::{OracleToken,OracleContract,OracleContractMethod};
+grammar;
+pub Contract: OracleContract = "#" "(" "type" ":" <parameter:"identifier"> <details:Details?> ")"
+    => { let (inclusive,alternatives)=details.unwrap_or((false,vec![])); OracleContract {parameter,inclusive,alternatives} };
+Details: (bool,Vec<Vec<OracleContractMethod>>) = Arguments? <mode:"with"?> <first:Branch> <rest:("|" <Branch>)*>
+    => (mode.is_some(),std::iter::once(first).chain(rest).collect());
+Branch: Vec<OracleContractMethod> = "{" <methods:Method+> "}" => methods;
+Arguments: () = "<" Parameter ">" => ();
+Parameter: () = "identifier" (":" Bounds)? => ();
+Bounds: () = Type ("," Type)* => ();
+Method: OracleContractMethod = <asynchronous:"async"?> "fn" <name:"identifier"> "(" <receiver:Receiver?> ")" <result:Type?> ";"
+    => OracleContractMethod {name,asynchronous:asynchronous.is_some(),mutable_receiver:receiver,result};
+Receiver: bool = "&" <mutable:"mut"?> "self" => mutable.is_some();
+Type: String = {
+    "&" <mutable:"mut"?> <target:Type> => format!("&{}{}",if mutable.is_some() {"mut "}else{""},target),
+    <name:"identifier"> <arguments:TypeArguments?> => match arguments {
+        Some(arguments)=>format!("{}<{}>",name,arguments.join(",")),None=>name,
+    },
+};
+TypeArguments: Vec<String> = "<" <first:Type> <rest:("," <Type>)*> ">" => std::iter::once(first).chain(rest).collect();
+extern {
+ type Location = usize;
+ type Error = &'static str;
+ enum OracleToken {
+   "identifier" => OracleToken::Identifier(<String>),
+   "type" => OracleToken::Symbol("type"), "with" => OracleToken::Symbol("with"), "fn" => OracleToken::Symbol("fn"),
+   "self" => OracleToken::Symbol("self"), "mut" => OracleToken::Symbol("mut"), "async" => OracleToken::Symbol("async"),
+   "#" => OracleToken::Symbol("#"), ":" => OracleToken::Symbol(":"),
+   "(" => OracleToken::Symbol("("), ")" => OracleToken::Symbol(")"),
+   "{" => OracleToken::Symbol("{"), "}" => OracleToken::Symbol("}"),
+   "<" => OracleToken::Symbol("<"), ">" => OracleToken::Symbol(">"),
+   "," => OracleToken::Symbol(","), ";" => OracleToken::Symbol(";"),
+   "|" => OracleToken::Symbol("|"), "&" => OracleToken::Symbol("&"),
+ }
+}

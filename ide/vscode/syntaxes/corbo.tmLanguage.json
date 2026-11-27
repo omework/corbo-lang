@@ -13,7 +13,7 @@
       "include": "#assembly"
     },
     {
-      "include": "#c"
+      "include": "#cpp"
     },
     {
       "match": "(#\\s*\\()\\s*(if|endif|branch|datastack|directive|free_pages|lock|stack_region|type|configurable|override|thread)\\b",
@@ -160,43 +160,6 @@
         }
       ]
     },
-    "c": {
-      "begin": "(@c)\\b(?=[ \\t]*(?:\\(|\\{|$))",
-      "end": "(?<=\\})|(?=[^\\s{])",
-      "beginCaptures": {
-        "1": {
-          "name": "keyword.other.corbo"
-        }
-      },
-      "patterns": [
-        {
-          "include": "#c-body"
-        }
-      ]
-    },
-    "c-body": {
-      "contentName": "meta.embedded.block.c.corbo",
-      "begin": "\\{",
-      "end": "\\}",
-      "beginCaptures": {
-        "0": {
-          "name": "punctuation.section.block.begin.c"
-        }
-      },
-      "endCaptures": {
-        "0": {
-          "name": "punctuation.section.block.end.c"
-        }
-      },
-      "patterns": [
-        {
-          "include": "#c-body"
-        },
-        {
-          "include": "source.c"
-        }
-      ]
-    },
     "assembly": {
       "begin": "(@asm)\\b(?=[ \\t]*(?:\\(|\\{|$))",
       "end": "(?<=\\})|(?=[^\\s{])",
@@ -273,6 +236,59 @@
           "name": "punctuation.section.block.end.corbo"
         }
       }
+    },
+    "cpp": {
+      "begin": "(@c\\+\\+)(?=[ \\t]*(?:\\(|\\{|$))",
+      "end": "(?<=\\})|(?=[^\\s{(])",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.corbo"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#cpp-options"
+        },
+        {
+          "include": "#cpp-body"
+        }
+      ]
+    },
+    "cpp-body": {
+      "contentName": "meta.embedded.block.cpp.corbo",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.block.begin.c"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.c"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#cpp-body"
+        },
+        {
+          "include": "source.cpp"
+        }
+      ]
+    },
+    "cpp-options": {
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#strings"
+        },
+        {
+          "match": "\\bincludes\\b",
+          "name": "entity.other.attribute-name.corbo"
+        }
+      ]
     }
   }
 }

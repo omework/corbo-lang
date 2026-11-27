@@ -30,7 +30,7 @@
 
         /// Reads authenticated application data into the caller's slice.
         fn read(&mut self, destination: &mut [u8]) Result<usize, TlsError> {
-            if (*self).failed { return Err(TlsError.TransportFailed); }
+            if (*self).failed { return Err(TlsError::TransportFailed); }
             let length = destination.len();
             if length == 0 { return Ok(0); }
             let (status, count) = read_session((*self).session, destination, length);
@@ -38,27 +38,27 @@
             if status == -6 { return Ok(0); } // SSL_ERROR_ZERO_RETURN
             let failed = &mut (*self).failed;
             *failed = true;
-            Err(TlsError.TransportFailed)
+            Err(TlsError::TransportFailed)
         }
 
         /// Sends application bytes and returns the count accepted by the TLS session.
         fn write(&mut self, source: &[u8]) Result<usize, TlsError> {
-            if (*self).failed { return Err(TlsError.TransportFailed); }
+            if (*self).failed { return Err(TlsError::TransportFailed); }
             let length = source.len();
             if length == 0 { return Ok(0); }
             let (status, count) = write_session((*self).session, source, length);
             if status == 1 { return Ok(count); }
             let failed = &mut (*self).failed;
             *failed = true;
-            Err(TlsError.TransportFailed)
+            Err(TlsError::TransportFailed)
         }
 
         // A terminal operation. OpenSSL returns zero after sending its alert
         // when the peer has yet to send its own.
         /// Consumes the connection and requests a TLS shutdown.
         fn close(self: Connection) Result<(), TlsError> {
-            if self.failed { return Err(TlsError.TransportFailed); }
-            if shutdown_session(self.session) < 0 { return Err(TlsError.TransportFailed); }
+            if self.failed { return Err(TlsError::TransportFailed); }
+            if shutdown_session(self.session) < 0 { return Err(TlsError::TransportFailed); }
             Ok(())
         }
 
@@ -74,20 +74,20 @@
         let name_length = hostname.len();
         let trust_length = trust_file.len();
         if !valid_file_path(&hostname[0..name_length]) || !valid_file_path(&trust_file[0..trust_length]) {
-            return Err(TlsError.InvalidInput);
+            return Err(TlsError::InvalidInput);
         }
         let handle = descriptor(&socket);
         let context = tls_context();
-        if context == 0 { return Err(TlsError.ConfigurationFailed); }
+        if context == 0 { return Err(TlsError::ConfigurationFailed); }
         let session = client_session(copy(context), handle, hostname, trust_file);
         free_context(context);
-        if session == 0 { return Err(TlsError.ConfigurationFailed); }
+        if session == 0 { return Err(TlsError::ConfigurationFailed); }
         let connected = handshake(copy(session), false);
         if connected != 1 {
             let verified = verification_result(copy(session));
             free_session(session);
-            if verified != 0 { return Err(TlsError.PeerVerificationFailed); }
-            return Err(TlsError.HandshakeFailed);
+            if verified != 0 { return Err(TlsError::PeerVerificationFailed); }
+            return Err(TlsError::HandshakeFailed);
         }
         Ok(Connection { socket: socket, session: session, failed: false })
     }
@@ -97,17 +97,17 @@
         let cert_length = certificate.len();
         let key_length = private_key.len();
         if !valid_file_path(&certificate[0..cert_length]) || !valid_file_path(&private_key[0..key_length]) {
-            return Err(TlsError.InvalidInput);
+            return Err(TlsError::InvalidInput);
         }
         let handle = descriptor(&socket);
         let context = tls_context();
-        if context == 0 { return Err(TlsError.ConfigurationFailed); }
+        if context == 0 { return Err(TlsError::ConfigurationFailed); }
         let session = server_session(copy(context), handle, certificate, private_key);
         free_context(context);
-        if session == 0 { return Err(TlsError.ConfigurationFailed); }
+        if session == 0 { return Err(TlsError::ConfigurationFailed); }
         if handshake(copy(session), true) != 1 {
             free_session(session);
-            return Err(TlsError.HandshakeFailed);
+            return Err(TlsError::HandshakeFailed);
         }
         Ok(Connection { socket: socket, session: session, failed: false })
     }

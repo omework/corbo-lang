@@ -12,51 +12,56 @@ selection_cible     = "#", "(", "if", ":", condition_cible, ")",
 condition_cible     = conjonction_cible, { "||", conjonction_cible } ;
 conjonction_cible   = test_cible, { "&&", test_cible } ;
 test_cible          = "target", ".", ( "os" | "family" | "arch" | "pointer_width" | "endian" ), "==", texte ;
-declaration         = [ "pub" ], ( fonction | fonction_externe | structure | enumeration | constante )
-                    | ( contrat_type | contrat_lock_objet | annotation_thread ),
-                      { contrat_type | contrat_lock_objet | annotation_thread }, "pub", corps_structure
-                    | ( contrat_type | annotation_thread ), { contrat_type | annotation_thread },
-                      "pub", corps_enumeration
-                    | constante_configurable
-                    ;
+declaration         = fonction | fonction_externe | structure | enumeration
+                    | [ "pub" ], constante | constante_configurable ;
+(* Annotations always precede pub. No declaration category permits a
+   contiguous annotation group after pub or annotations on both sides of it. *)
 importation         = "use", chemin, "::",
                       ( import_element | "{", import_element, { ",", import_element }, [ "," ], "}" ),
                       ";" ;
 import_element      = nom, [ "as", identifiant ] ;
 
-fonction            = { contrat_type }, [ contrat_branche ], [ "async" ], signature, bloc ;
+fonction            = { contrat_type }, [ contrat_branche ], [ "pub" ], [ "async" ], signature, bloc ;
 signature           = "fn", identifiant, "(", [ parametres ], ")",
                       [ type ] ;
 contrat_type        = "#", "(", "type", ":", identifiant,
-                      [ [ "<", parametre_type, ">" ], [ "with" ], "{",
-                        exigence_methode, { exigence_methode }, "}" ], ")" ;
+                      [ [ "<", parametre_type, ">" ], [ "with" ], alternative_contrat_type,
+                        { "|", alternative_contrat_type } ], ")" ;
+alternative_contrat_type = "{", exigence_methode,
+                            { exigence_methode }, "}" ;
+(* | is logical OR between complete structural contracts for the same type.
+   Each alternative contains at least one method requirement. All requirements
+   inside an alternative must hold together; at least one alternative must hold.
+   with appears once before the list and applies to every alternative:
+   at least the listed methods when present, exact matching when absent.
+   Repeating with after | is invalid. Bare #(type: T) is unchanged. *)
 parametre_type      = identifiant, [ ":", type, { ",", type } ] ;
 contrat_branche     = "#", "(", "branch",
                       [ ":", "join", "=", "result", ".",
                         ( identifiant, "(", ")" | "await" ) ], ")" ;
 parametres          = parametre, { ",", parametre }, [ "," ] ;
 parametre           = [ "mut" ], identifiant, ":", type ;
-fonction_externe    = "extern", abi_c, "fn", identifiant, "(",
+fonction_externe    = [ "pub" ], "extern", abi_c, "fn", identifiant, "(",
                       [ parametres_externes ], ")", [ resultat_externe ], ";" ;
 parametres_externes = parametre_externe, { ",", parametre_externe }, [ "," ] ;
 parametre_externe   = identifiant, ":", primitif ;
 resultat_externe    = primitif | "Void" | "(", ")" ;
 
-structure           = { contrat_type | contrat_lock_objet | annotation_thread }, corps_structure ;
+structure           = { contrat_type | contrat_lock_objet | annotation_thread }, [ "pub" ], corps_structure ;
 corps_structure     = "struct", identifiant, [ parametres_generiques ],
                       "{", { champ_definition | membre_definition }, "}" ;
 parametres_generiques = "<", identifiant, { ",", identifiant }, [ "," ], ">" ;
-enumeration         = { contrat_type | annotation_thread }, corps_enumeration ;
+enumeration         = { contrat_type | annotation_thread }, [ "pub" ], corps_enumeration ;
 corps_enumeration    = "enum", identifiant, [ parametres_generiques ], "{",
                       { membre_definition }, variante, ";", { variante, ";" | membre_definition }, "}" ;
 variante            = identifiant, [ "{", { champ_definition }, "}"
                                     | "(", type, { ",", type }, [ "," ], ")" ] ;
-(* :: is the preferred enum-variant separator. Dot remains accepted for
-   compatibility with the existing STD and source corpus. Associated functions
-   keep qualified-call syntax and are distinguished by name resolution. *)
-separateur_variante = "::" | "." ;
-champs_types        = champ_type, { ",", champ_type }, [ "," ] ;
-champ_type          = identifiant, ":", type ;
+(* Enum variants use :: exclusively. A dotted value expression remains
+   ordinary projection/call syntax; only semantic resolution can determine that
+   it incorrectly targets a variant. The parser must not consult declarations
+   to distinguish such accesses. Variant patterns and named constructions use
+   their syntactic qualified-path forms, never a dotted variant separator. *)
+separateur_variante = "::" ;
 champ_definition    = identifiant, ":", type, ";" ;
 membre_definition   = methode | [ annotation_configurable ], [ "pub" ], constante | selection_membres ;
 selection_membres   = "#", "(", "if", ":", condition_cible, ")",
@@ -111,8 +116,9 @@ argument_type       = type | entier ;
    une fonctionnalité générale de paramètres constants pour les types utilisateur.
    Le parseur conserve la borne littérale ; la spécialisation produit un layout fixe. *)
 type_appelable      = "fn", "(", [ type, { ",", type } ], ")", type ;
-primitif            = "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
-                    | "bool" | "f32" | "f64" | "usize" ;
+type_numerique      = "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
+                    | "f32" | "f64" | "usize" ;
+primitif            = type_numerique | "bool" ;
 type_tableau        = "[", type, ";", longueur_constante, "]" ;
 longueur_constante  = entier | chemin_valeur ;
 type_tranche        = "[", type, "]" ;
@@ -138,19 +144,30 @@ annotation_free_pages = "#", "(", "free_pages", ")" ;
 
 bloc                = [ annotation_override ], [ annotation_region ],
                       [ annotation_free_pages ], bloc_delimite ;
-bloc_delimite       = "{", { entree_move },
-                      { instruction }, [ expression ], "}" ;
+bloc_delimite       = "{", { entree_move }, suite_bloc, "}" ;
+suite_bloc          = [ instruction_simple, suite_bloc
+                      | forme_bloc, [ ";" ], suite_bloc
+                      | expression_debut_instruction, [ ";", suite_bloc ] ] ;
+(* A bare block-form at statement start is complete before the next expression.
+   A final bare block without ; supplies the result; a non-final one is a
+   statement. Parenthesize it to continue with operators in statement position.
+   Assignment RHSs, arguments and return values remain ordinary expressions. *)
 entree_move         = "move", identifiant, ";" ;
 bloc_capture        = "move", bloc ;
 bloc_unsafe         = "unsafe", bloc ;
-bloc_unchecked      = "@", "unchecked", "{", { instruction | bloc_asm | bloc_c }, "}" ;
+bloc_unchecked      = "@", "unchecked", "{", { instruction | bloc_asm | bloc_c | bloc_cpp }, "}" ;
 bloc_asm            = "@asm", "{", { texte_assembleur | operande_asm }, "}" ;
 bloc_c              = "@c", [ "(", "includes", "=", "{",
                       [ chemin_entete, { ",", chemin_entete }, [ "," ] ], "}", ")" ],
                       "{", { texte_c | operande_asm }, "}" ;
+bloc_cpp              = "@c++", [ "(", "includes", "=", "{",
+                      [ chemin_entete, { ",", chemin_entete }, [ "," ] ], "}", ")" ],
+                      "{", { texte_cpp | operande_asm }, "}" ;
 chemin_entete       = texte ;
 (* Header paths contain ASCII letters, digits, _, ., /, - or :.
-   Both foreign blocks require lexical enclosure in @unchecked.
+   All three foreign block forms require lexical enclosure in @unchecked.
+   @c remains a C-source region; @c++ is a distinct C++-source region.
+   Rewriting existing implementations in C++ did not remove the @c form.
    ${name} binds a typed Corbo operand, including aggregates;
    includes are emitted once per unit after generated type declarations. *)
 operande_asm        = "${", identifiant, "}" ;
@@ -158,24 +175,35 @@ operande_asm        = "${", identifiant, "}" ;
    Un bloc asm doit être lexicalement sous @unchecked. addr(reference)
    est un appel de primitive qui produit un usize. *)
 
-instruction         = liaison | affectation | retour | rupture | reprise | suspension
-                    | boucle_while | boucle_for | expression, ";" | forme_bloc | bloc_unchecked ;
+instruction_simple  = liaison | affectation | retour | rupture | reprise | suspension
+                    | boucle_while | boucle_for | bloc_unchecked | bloc_asm | bloc_c | bloc_cpp ;
+instruction         = instruction_simple | expression_debut_instruction, ";" | forme_bloc ;
 liaison             = "let", ( liaison_nommee | motif_tuple ), [ ":", type ], "=",
                       expression, ";" ;
 liaison_nommee      = [ "mut" ], identifiant ;
 motif_tuple         = "(", liaison_nommee, ",", liaison_nommee,
                       { ",", liaison_nommee }, [ "," ], ")" ;
-affectation         = place, operateur_affectation, expression, ";" ;
+affectation         = assignment_left_expression, operateur_affectation,
+                      assignment_right_expression, ";" ;
 operateur_affectation = "=" | "+=" | "-=" | "*=" | "/=" | "%="
                        | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
-place               = [ "*", [ "*" ] ], ( identifiant | "self" ),
-                      { ".", ( identifiant | indice_tuple ) | "[", expression, "]" } ;
+assignment_left_expression = identifiant | "self"
+                           | "*", unaire
+                           | "(", assignment_left_expression, ")"
+                           | postfixee_debut_instruction, assignment_place_suffix ;
+assignment_place_suffix = ".", ( identifiant | indice_tuple )
+                        | "[", expression, "]" ;
+assignment_right_expression = expression ;
+(* The two assignment roles are separate productions. Calls are permitted inside
+   targets: *get_target() and items.mut_ref()[index] identify syntactic places.
+   A bare call or arithmetic expression is not a target. Parsing checks this
+   syntax only; type, mutability and lifetime checks belong to later stages. *)
 retour              = "return", [ expression ], ";" ;
 rupture             = "break", [ expression ], ";" ;
 reprise             = "continue", ";" ;
 suspension          = "yield", ";" ;
-boucle_while        = "while", expression, bloc ;
-boucle_for          = "for", ( liaison_nommee | motif_tuple ), "in", expression, bloc ;
+boucle_while        = "while", expression_entete, bloc ;
+boucle_for          = "for", ( liaison_nommee | motif_tuple ), "in", expression_entete, bloc ;
 (* The source is evaluated once. Borrowed arrays/slices yield references;
    next()-based sources yield their Option payload by the existing value rules.
    break/continue target this loop; the binding is local to each iteration. *)
@@ -183,23 +211,51 @@ forme_bloc          = bloc | bloc_capture | bloc_unsafe | conditionnelle | match
 
 expression          = disjonction ;
 disjonction         = conjonction, { "||", conjonction } ;
-conjonction         = ou_bits, { "&&", ou_bits } ;
+conjonction         = comparaison, { "&&", comparaison } ;
+comparaison         = ou_bits, [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), ou_bits ] ;
 ou_bits             = xor_bits, { "|", xor_bits } ;
 xor_bits            = et_bits, { "^", et_bits } ;
-et_bits             = comparaison, { "&", comparaison } ;
-comparaison         = decalage, [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), decalage ] ;
+et_bits             = decalage, { "&", decalage } ;
+(* Bitwise operators bind more tightly than comparisons:
+   flags & mask == 0 means (flags & mask) == 0.
+   Comparisons remain non-associative: no unparenthesized comparison chains. *)
 decalage            = somme, { ( "<<" | ">>" ), somme } ;
 somme               = produit, { ( "+" | "-" ), produit } ;
 produit             = conversion, { ( "*" | "/" | "%" ), conversion } ;
 (* Numeric as checks the actual value for exact representability and aborts on
    failure. try_from retains recoverable Result semantics. *)
-conversion          = unaire, { "as", type } ;
+conversion          = unaire, { "as", type_numerique } ;
 unaire              = ( "-" | "!" | "~" | "*" | ( "&", [ "mut" ] ) ), unaire | postfixee ;
 postfixee           = primaire, { suffixe } ;
-(* En position d'appel, new ou try sélectionne la production initialisation_pool.
-   Dans new et try, {} et { champ: expression, ... } sont des initialiseurs
-   de structure dont le type est fourni par le pool. Les autres blocs
-   restent des expressions.
+(* Same precedence as expression, but the leftmost primary is not a bare
+   block-form. This factors statement boundaries without semantic lookups. *)
+expression_debut_instruction = disjonction_debut_instruction ;
+disjonction_debut_instruction = conjonction_debut_instruction, { "||", conjonction } ;
+conjonction_debut_instruction = comparaison_debut_instruction, { "&&", comparaison } ;
+comparaison_debut_instruction = ou_bits_debut_instruction,
+                    [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), ou_bits ] ;
+ou_bits_debut_instruction = xor_bits_debut_instruction, { "|", xor_bits } ;
+xor_bits_debut_instruction = et_bits_debut_instruction, { "^", et_bits } ;
+et_bits_debut_instruction = decalage_debut_instruction, { "&", decalage } ;
+decalage_debut_instruction = somme_debut_instruction, { ( "<<" | ">>" ), somme } ;
+somme_debut_instruction = produit_debut_instruction, { ( "+" | "-" ), produit } ;
+produit_debut_instruction = conversion_debut_instruction, { ( "*" | "/" | "%" ), conversion } ;
+conversion_debut_instruction = unaire_debut_instruction, { "as", type_numerique } ;
+unaire_debut_instruction = ( "-" | "!" | "~" | "*" | ( "&", [ "mut" ] ) ), unaire
+                        | postfixee_debut_instruction ;
+postfixee_debut_instruction = primaire_debut_instruction, { suffixe } ;
+primaire_debut_instruction = litteral | chemin_valeur, [ "(", [ arguments ], ")" ] | "self"
+                    | "(", [ expression ], ")" | tableau | tuple
+                    | expression_closure | appel_closure | expression_async
+                    | construction | lancement | groupe_selection | thread_natif | appel_type ;
+
+(* In a direct argument to .new(...) or .try(...), an opening { selects
+   initialiseur_structure_pool, never block evaluation. Both explicit field
+   values and field shorthand are accepted, including {} and { field }.
+   The parser records an inferred initializer; semantic resolution supplies
+   its type. Explicit Type { ... } construction remains accepted.
+   This syntactic selection takes precedence over the ordinary method-call
+   alternative below; it does not inspect the receiver type.
    try_slice avec un séparateur .. sélectionne la production plage. *)
 suffixe             = emprunt_suffixe
                     | ".", identifiant, [ "(", [ arguments ], ")" ]
@@ -222,11 +278,14 @@ arguments           = expression, { ",", expression }, [ "," ] ;
    closure, qui capture la liaison de référence. L'appel via une liaison
    suit la forme chemin_valeur avec arguments. *)
 expression_closure  = [ "move" ], parametres_closure, [ type ], bloc_delimite ;
+expression_async    = "async", [ "move" ], bloc_delimite ;
+(* Anonymous async blocks use async { ... } or async move { ... }.
+   The keyword order is async before move, never move async. *)
 parametres_closure  = "||" | "|", parametres, "|" ;
 appel_closure       = "(", expression_closure, ")", "(", [ arguments ], ")" ;
 primaire            = litteral | chemin_valeur, [ "(", [ arguments ], ")" ] | "self"
                     | "(" , [ expression ], ")" | tableau | tuple
-                    | expression_closure | appel_closure
+                    | expression_closure | appel_closure | expression_async
                     | construction | lancement | groupe_selection | thread_natif
                     | appel_type
                     | forme_bloc ;
@@ -244,15 +303,24 @@ valeur_champ        = identifiant, [ ":", expression ] ;
    La capacité reste un entier statique strictement positif. *)
 initialisation_pool = initialiseur_structure_pool | valeurs_champs | expression ;
 initialiseur_structure_pool = "{", [ valeurs_champs ], "}" ;
+(* If the direct argument begins with {, only initialiseur_structure_pool
+   applies; the expression alternative cannot reinterpret it as a block. *)
 
-conditionnelle      = "if", ( expression | "let", motif, "=", expression ),
+expression_entete   = expression ;
+(* Contextual syntax restriction for if/while conditions, match subjects and
+   for sources: an unparenthesized named construction cannot consume the
+   brace that begins the following body. A construction in these headers
+   must be enclosed in parentheses, e.g. (Point { x: 1, y: 2 }).is_valid().
+   Parentheses delimit an ordinary expression context, including function
+   arguments. This is a parsing restriction, not declared-type resolution. *)
+conditionnelle      = "if", ( expression_entete | "let", motif, "=", expression_entete ),
                       bloc, [ "else", ( bloc | conditionnelle ) ] ;
 (* if let uses any enum variant pattern from match. The scrutinee is evaluated
    once. Binders belong only to the matching branch; else is optional.
    All-empty or direct-primitive-payload enums copy implicitly by value.
    == and != compare the tag and active primitive fields, never padding. *)
 boucle              = "loop", bloc ;
-match               = "match", expression, "{", bras, { ",", bras }, [ "," ], "}" ;
+match               = "match", expression_entete, "{", bras, { ",", bras }, [ "," ], "}" ;
 bras                = motif, "=>", bloc ;
 motif               = "_" | "(" , ")" | chemin_valeur, [ "(", motif, ")" ]
                     | nom_enum, separateur_variante, identifiant, [ "{", [ motifs_champs ], "}"
@@ -320,8 +388,9 @@ groupe_selection    = "runtime", "::", "select_group", "(", ")" ;
    dans l'ordre d'écriture, avant les infixes. Le suffixe ! extrait Ok/Some
    ou arrête le programme sur Err/None ; le préfixe ! reste la négation booléenne.
    Les répétitions d'infixes à un même niveau s'associent à gauche.
-   Une construction de structure est reconnue par son nom déclaré, y compris
-   devant un "{" qui pourrait sinon ouvrir un corps de if ou while.
+   In control-flow headers, expression_entete distinguishes construction
+   braces from body braces syntactically through required parentheses;
+   parsing must not consult declared types to make that distinction.
 
    Le programme exige un main synchrone. yield et .await exigent un contexte
    async. Handle<T> expose join() en contexte synchrone. AsyncHandle<T>
@@ -413,3 +482,8 @@ chiffre             = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" 
    arguments. It is accepted wherever that type or its constructor/associated
    name is accepted. Self outside impl and Self<...> are rejected. Lowercase
    self remains the receiver binding; this alias changes no move/borrow rule. *)
+
+(* Recorded assignment-expression decisions include
+   bitwise precedence above comparisons, inferred initializer shorthand,
+   parenthesized constructions in control-flow headers, and anonymous async
+   blocks with the optional move keyword following async. *)

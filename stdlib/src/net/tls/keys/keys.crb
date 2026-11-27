@@ -35,7 +35,7 @@ pub struct Transcript {
     hash: Sha256;
 
     /// Starts an empty handshake transcript.
-    fn new() Transcript {
+    pub fn new() Transcript {
         let hash = Sha256::new();
         Transcript { hash: hash }
     }
@@ -43,17 +43,17 @@ pub struct Transcript {
     // Hash the encoded handshake bytes, including handshake headers.
     // The caller supplies fragments in wire order without record headers.
     /// Adds handshake bytes in protocol order without record headers.
-    fn append(&mut self, message: &[u8]) Result<(), KeyError> {
+    pub fn append(&mut self, message: &[u8]) Result<(), KeyError> {
         let hash = &mut (*self).hash;
         let length = message.len();
         match hash.update(&message[0..length]) {
             Ok(()) => { Ok(()) },
-            Err(error) => { drop(error); Err(KeyError.HashFailed) },
+            Err(error) => { drop(error); Err(KeyError::HashFailed) },
         }
     }
 
     /// Returns a snapshot of the current transcript hash.
-    fn digest(&self) [u8; 32] {
+    pub fn digest(&self) [u8; 32] {
         let hash = &(*self).hash;
         hash.snapshot()
     }
@@ -80,10 +80,10 @@ pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8],
     let label_size = label.len();
     let context_size = context.len();
     let output_size = output.len();
-    if secret.len() != 32 { return Err(KeyError.InvalidSecret); }
-    if label_size == 0 || label_size > 249 { return Err(KeyError.InvalidLabel); }
-    if context_size > 255 { return Err(KeyError.InvalidContext); }
-    if output_size > 8160 { return Err(KeyError.OutputTooLong); }
+    if secret.len() != 32 { return Err(KeyError::InvalidSecret); }
+    if label_size == 0 || label_size > 249 { return Err(KeyError::InvalidLabel); }
+    if context_size > 255 { return Err(KeyError::InvalidContext); }
+    if output_size > 8160 { return Err(KeyError::OutputTooLong); }
 
     let prefix: [u8; 6] = [116, 108, 115, 49, 51, 32]; // "tls13 "
     let mut info: [u8; 514] = [0; 514];
@@ -108,7 +108,7 @@ pub fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8],
     }
     match hkdf_expand(&secret[0..32], &info[..10 + label_size + context_size], &mut output[0..output_size]) {
         Ok(()) => { Ok(()) },
-        Err(error) => { drop(error); Err(KeyError.HashFailed) },
+        Err(error) => { drop(error); Err(KeyError::HashFailed) },
     }
 }
 
@@ -130,7 +130,7 @@ fn extract(salt: &[u8], input: &[u8]) Result<[u8; 32], KeyError> {
     let size = input.len();
     match hkdf_extract(&salt[0..salt_size], &input[0..size]) {
         Ok(value) => { Ok(value) },
-        Err(error) => { drop(error); Err(KeyError.HashFailed) },
+        Err(error) => { drop(error); Err(KeyError::HashFailed) },
     }
 }
 
@@ -143,7 +143,7 @@ pub fn early_secret() Result<[u8; 32], KeyError> {
 
 /// Derives a 32-byte secret from the given label and transcript hash.
 pub fn derive_secret(secret: &[u8], label: &[u8], transcript_hash: &[u8]) Result<[u8; 32], KeyError> {
-    if transcript_hash.len() != 32 { return Err(KeyError.InvalidContext); }
+    if transcript_hash.len() != 32 { return Err(KeyError::InvalidContext); }
     let label_size = label.len();
     let key_size = secret.len();
     expand_32(&secret[0..key_size], &label[0..label_size], &transcript_hash[0..32])
@@ -155,7 +155,7 @@ pub fn derived_secret(secret: &[u8]) Result<[u8; 32], KeyError> {
     let empty: [u8; 0] = [];
     let empty_hash = match digest(&empty[..]) {
         Ok(value) => { value },
-        Err(error) => { drop(error); return Err(KeyError.HashFailed); },
+        Err(error) => { drop(error); return Err(KeyError::HashFailed); },
     };
     let size = secret.len();
     derive_secret(&secret[0..size], &label[..], &empty_hash[..])
@@ -163,7 +163,7 @@ pub fn derived_secret(secret: &[u8]) Result<[u8; 32], KeyError> {
 
 /// Mixes the ECDHE shared secret into the key schedule.
 pub fn handshake_secret(early: &[u8], shared: &[u8]) Result<[u8; 32], KeyError> {
-    if shared.len() != 32 { return Err(KeyError.InvalidSecret); }
+    if shared.len() != 32 { return Err(KeyError::InvalidSecret); }
     let size = early.len();
     let salt = match derived_secret(&early[0..size]) {
         Ok(value) => { value },
@@ -189,10 +189,10 @@ pub fn traffic_secret(secret: &[u8], transcript_hash: &[u8], traffic: Traffic) R
     let hash_size = transcript_hash.len();
     let mut label: [u8; 12] = [99, 32, 104, 115, 32, 116, 114, 97, 102, 102, 105, 99]; // "c hs traffic"
     match traffic {
-        Traffic.ClientHandshake => {},
-        Traffic.ServerHandshake => { label[0] = 115; },
-        Traffic.ClientApplication => { label[2] = 97; label[3] = 112; },
-        Traffic.ServerApplication => { label[0] = 115; label[2] = 97; label[3] = 112; },
+        Traffic::ClientHandshake => {},
+        Traffic::ServerHandshake => { label[0] = 115; },
+        Traffic::ClientApplication => { label[2] = 97; label[3] = 112; },
+        Traffic::ServerApplication => { label[0] = 115; label[2] = 97; label[3] = 112; },
     };
     derive_secret(&secret[0..size], &label[..], &transcript_hash[0..hash_size])
 }
@@ -231,7 +231,7 @@ pub fn finished_key(handshake_traffic: &[u8]) Result<[u8; 32], KeyError> {
 
 /// Computes Finished verify_data over the transcript before Finished.
 pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) Result<[u8; 32], KeyError> {
-    if transcript_hash.len() != 32 { return Err(KeyError.InvalidContext); }
+    if transcript_hash.len() != 32 { return Err(KeyError::InvalidContext); }
     let size = handshake_traffic.len();
     let key = match finished_key(&handshake_traffic[0..size]) {
         Ok(value) => { value },
@@ -239,7 +239,7 @@ pub fn finished_verify_data(handshake_traffic: &[u8], transcript_hash: &[u8]) Re
     };
     match hmac(&key[..], &transcript_hash[0..32]) {
         Ok(value) => { Ok(value) },
-        Err(error) => { drop(error); Err(KeyError.HashFailed) },
+        Err(error) => { drop(error); Err(KeyError::HashFailed) },
     }
 }
 

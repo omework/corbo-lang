@@ -61,7 +61,7 @@ fn fixed_hmac(key: &[u8], input: &[u8]) Result<[u8; 32], Error> {
     let size = input.len();
     match hmac(&key[0..32], &input[0..size]) {
         Ok(hash) => { Ok(hash) },
-        Err(error) => { drop(error); Err(Error.InputTooLong) },
+        Err(error) => { drop(error); Err(Error::InputTooLong) },
     }
 }
 
@@ -94,7 +94,7 @@ fn hash_scalar(message: &[u8]) Result<[u64; 8], Error> {
     let size = message.len();
     let hash = match digest(&message[0..size]) {
         Ok(value) => { value },
-        Err(error) => { drop(error); return Err(Error.InputTooLong); },
+        Err(error) => { drop(error); return Err(Error::InputTooLong); },
     };
     let words = read_words(&hash[..], 0);
     let order = modulus(true);
@@ -152,25 +152,25 @@ fn sign_message(secret: &[u64], message: &[u8], output: &mut [u8]) Result<usize,
             Err(error) => { return Err(error); },
         };
     }
-    Err(Error.InvalidSignature)
+    Err(Error::InvalidSignature)
 }
 
 /// Validates and verifies an ECDSA signature against the supplied point and message.
 fn verify_message(point: &[u64], message: &[u8], signature: &[u8]) Result<bool, Error> {
     let size = signature.len();
-    if size < 8 || size > 72 { return Err(Error.InvalidSignature); }
+    if size < 8 || size > 72 { return Err(Error::InvalidSignature); }
     if signature[0] != 48 || (signature[1] as usize) + 2 != size {
-        return Err(Error.InvalidSignature);
+        return Err(Error::InvalidSignature);
     }
     let mut rb: [u8; 32] = [0; 32];
     let mut sb: [u8; 32] = [0; 32];
     let next = decode_integer(&signature[0..size], 2, &mut rb[..]);
-    if next == 0 { return Err(Error.InvalidSignature); }
+    if next == 0 { return Err(Error::InvalidSignature); }
     let end = decode_integer(&signature[0..size], next, &mut sb[..]);
-    if end != size { return Err(Error.InvalidSignature); }
+    if end != size { return Err(Error::InvalidSignature); }
     let r = read_words(&rb[..], 0);
     let s = read_words(&sb[..], 0);
-    if !valid_scalar(&r[..]) || !valid_scalar(&s[..]) { return Err(Error.InvalidSignature); }
+    if !valid_scalar(&r[..]) || !valid_scalar(&s[..]) { return Err(Error::InvalidSignature); }
 
     let length = message.len();
     let z = match hash_scalar(&message[0..length]) {

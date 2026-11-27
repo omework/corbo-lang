@@ -1,0 +1,34 @@
+// Independent block/statement boundary subset. A block at statement start is
+// self-contained; value operands use a separate expression production.
+use crate::{OracleToken, OracleNode, leaf, unary, binary, block_sequence, value_sequence};
+grammar;
+
+pub Block: OracleNode = <l:@L> "{" <body:Content> "}" <r:@R> => OracleNode::new("block",l,r,body);
+Content: Vec<OracleNode> = {
+    => vec![],
+    <block:Block> <semicolon:Semicolon?> <rest:Content> => block_sequence(block,semicolon,rest),
+    <value:StatementExpression> <after:AfterValue> => value_sequence(value,after),
+};
+AfterValue: Option<(usize,Vec<OracleNode>)> = {
+    => None,
+    <end:Semicolon> <rest:Content> => Some((end,rest)),
+};
+Semicolon: usize = ";" <r:@R> => r;
+StatementExpression: OracleNode = <first:StatementAtom> <rest:("-" <ValueAtom>)*> => rest.into_iter().fold(first,|a,b|binary("-",a,b));
+ValueExpression: OracleNode = <first:ValueAtom> <rest:("-" <ValueAtom>)*> => rest.into_iter().fold(first,|a,b|binary("-",a,b));
+ValueAtom: OracleNode = { StatementAtom, Block };
+StatementAtom: OracleNode = {
+    <l:@L> <number:"integer"> <r:@R> => leaf("literal",number,l,r),
+    <l:@L> "-" <value:ValueAtom> => unary("-",l,value),
+    <l:@L> "(" <value:ValueExpression> ")" <r:@R> => OracleNode::new("paren",l,r,vec![value]),
+};
+extern {
+ type Location = usize;
+ type Error = &'static str;
+ enum OracleToken {
+   "integer" => OracleToken::Integer(<String>),
+   "{" => OracleToken::Symbol("{"), "}" => OracleToken::Symbol("}"),
+   "(" => OracleToken::Symbol("("), ")" => OracleToken::Symbol(")"),
+   "-" => OracleToken::Symbol("-"), ";" => OracleToken::Symbol(";"),
+ }
+}

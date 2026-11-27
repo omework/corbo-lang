@@ -20,7 +20,7 @@ pub struct VectorValue<T> {
     pub fn len(&self) usize {
         let raw = (*self).raw;
         let mut length: usize = 0;
-        @unchecked { @c(includes={"corbo_runtime.h"}) {
+        @unchecked { @c++(includes={"corbo_runtime.hpp"}) {
             ${length}=((CorboRegion*)${raw})->len;
         } }
         length
@@ -33,7 +33,7 @@ pub struct VectorValue<T> {
     pub fn push(&mut self, value: T) {
         let raw = (*self).raw;
         let mut retained: Option<T> = Some(value);
-        @unchecked { @c(includes={"corbo_runtime.h","string.h"}) {
+        @unchecked { @c++(includes={"corbo_runtime.hpp","string.h"}) {
             CorboRegion *region=(CorboRegion*)${raw};
             __typeof__((${retained}).value) element=(${retained}).value;
             if(!region->len)region->width=sizeof(element);
@@ -47,7 +47,7 @@ pub struct VectorValue<T> {
     pub fn pop(&mut self) Option<T> {
         let raw = (*self).raw;
         let mut result: Option<T> = None;
-        @unchecked { @c(includes={"corbo_runtime.h"}) {
+        @unchecked { @c++(includes={"corbo_runtime.hpp"}) {
             (${result}).some=vector_pop((CorboRegion*)${raw},&(${result}).value);
         } }
         result
@@ -58,7 +58,7 @@ pub struct VectorValue<T> {
         let raw = (*self).raw;
         loop {
             let mut removed: Option<T> = None;
-            @unchecked { @c(includes={"corbo_runtime.h"}) {
+            @unchecked { @c++(includes={"corbo_runtime.hpp"}) {
                 (${removed}).some=vector_pop((CorboRegion*)${raw},&(${removed}).value);
             } }
             match removed {
@@ -73,7 +73,7 @@ pub struct VectorValue<T> {
         let raw = (*self).raw;
         loop {
             let mut removed: Option<T> = None;
-            @unchecked { @c(includes={"corbo_runtime.h"}) {
+            @unchecked { @c++(includes={"corbo_runtime.hpp"}) {
                 (${removed}).some=vector_pop((CorboRegion*)${raw},&(${removed}).value);
             } }
             match removed {
@@ -86,46 +86,18 @@ pub struct VectorValue<T> {
 
 }
 
-#(if: target.family == "unix")
-/// Maps fixed runtime registration storage and captures the current region policy.
+/// Allocates stable registration storage through the ordinary datastack runtime.
 fn new_vector_region() usize {
     let mut raw: usize = 0;
-    @unchecked { @c(includes={"corbo_runtime.h","sys/mman.h"}) {
-        void *memory=mmap(NULL,sizeof(CorboRegion),PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
-        if(memory==MAP_FAILED)abort();
-        ${raw}=(uintptr_t)memory;
-        corbo_region_new((CorboRegion*)memory,1,false);
+    @unchecked { @c++(includes={"corbo_runtime.hpp"}) {
+        ${raw} = (uintptr_t)corbo_region_register(1);
     } }
     raw
 }
 
-/// Releases region data and then its registration's virtual-memory mapping.
+/// Releases payload ownership before its fixed registration storage.
 fn release_vector_region(raw: usize) {
-    @unchecked { @c(includes={"corbo_runtime.h","sys/mman.h"}) {
-        corbo_region_drop((CorboRegion*)${raw});
-        if(munmap((void*)${raw},sizeof(CorboRegion)))abort();
+    @unchecked { @c++(includes={"corbo_runtime.hpp"}) {
+        corbo_region_unregister((CorboRegion*)${raw});
     } }
 }
-#(endif)
-
-#(if: target.family == "windows")
-/// Allocates stable Windows registration storage and captures the region policy.
-fn new_vector_region() usize {
-    let mut raw: usize = 0;
-    @unchecked { @c(includes={"corbo_runtime.h","windows.h"}) {
-        void *memory=VirtualAlloc(NULL,sizeof(CorboRegion),MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
-        if(!memory)abort();
-        ${raw}=(uintptr_t)memory;
-        corbo_region_new((CorboRegion*)memory,1,false);
-    } }
-    raw
-}
-
-/// Releases region data before returning the Windows registration mapping.
-fn release_vector_region(raw: usize) {
-    @unchecked { @c(includes={"corbo_runtime.h","windows.h"}) {
-        corbo_region_drop((CorboRegion*)${raw});
-        if(!VirtualFree((void*)${raw},0,MEM_RELEASE))abort();
-    } }
-}
-#(endif)

@@ -58,3 +58,52 @@ API/standard library. Keep language mechanisms separate from library APIs.
 Apply validation guidance proportionately to this classification. Retain the
 agreed supported-platform coverage for affected platform-specific behavior;
 an API change alone does not require rebuilding the compiler on every platform.
+
+## Language design and compiler architecture
+
+The current grammar and rules N1–N8 are immutable unless explicitly changed by the language designer.
+
+Programs either comply with the specification or they do not. No discussion or reinterpretation of the specification is permitted.
+
+If compliance cannot be proven, reject the program.
+
+Never modify the grammar or the rules to accommodate existing code or compiler implementation difficulties.
+
+- Every accepted program must have all applicable N1–N8 obligations proven.
+  The absence of a detected violation is not proof of compliance.
+- Distinguish a demonstrated rule violation from an inability to establish
+  compliance. Successful parsing or semantic resolution is not a rule proof.
+- Collect reproducible suspected false rejections for analysis against the existing
+  rules. A missing implementation or proof is not, by itself, missing semantics.
+- Never make implicit language design decisions.
+- Never implement a feature to compensate for a missing architectural foundation.
+- Distinguish grammar, semantic resolution, rule verification and code generation.
+- Never duplicate semantic resolution across stages.
+- PostAST and the memory plan are the only sources of truth for C++ generation.
+  The C++ backend must not inspect syntax, resolve names or types, reconstruct
+  semantic facts, or infer physical placement. If required information is
+  absent, enrich the responsible upstream representation instead of deriving
+  it in code generation.
+- Back every implementation claim with inspectable source code references.
+- Passing tests does not establish architectural compliance.
+- Report architectural inconsistencies before fixing their symptoms.
+- New combinations of language constructs must compose through existing general
+  semantic mechanisms. Never add combination-specific dispatch or special-case
+  implementations merely to accept a particular program.
+- When composition fails, identify missing PostAST information, an incomplete
+  contract between semantic units, or a defect in a general resolution mechanism,
+  and fix that general foundation. Report failures to establish compliance;
+  never reopen or reinterpret the frozen specification to accommodate a combination.
+- Regression snippets demonstrate defects and corrections; they must not become
+  compiler dispatch conditions. Construct coverage and passing tests alone do not
+  establish architectural composability.
+
+## Rust reference builds
+
+Rust is the reference implementation for the staged compiler work; the previous
+freeze is superseded. Reuse `rust_frontend/target` for Cargo builds and tests
+(`--target-dir rust_frontend/target` when running from the repository root).
+Let Cargo fingerprints reuse unchanged artifacts. Do not create timestamped or
+per-cycle build directories, run routine cleans, or add build variants without
+need. Audit and migrate later stages separately; lexer completion does not imply
+parser, semantic-resolution, verification or backend completion.

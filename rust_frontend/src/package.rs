@@ -1,6 +1,6 @@
 use crate::{
+    legacy_parser::Mode,
     lexer::Kind,
-    parser::Mode,
     target::{self, Target as BuildTarget},
     tree::{Fact, StaticTree},
 };
@@ -87,7 +87,7 @@ fn parse_file(path: PathBuf, module: Module, source: String, target: &BuildTarge
         target,
     )
     .map_err(diagnose)?;
-    let syntax = crate::parser::parse_with_names(&source, &tokens, Mode::Program, &[], true)
+    let syntax = crate::legacy_parser::parse_with_names(&source, &tokens, Mode::Program, &[], true)
         .map_err(diagnose)?;
     let tree = StaticTree::from_syntax(&source, tokens, syntax);
     Ok(File {
@@ -123,8 +123,14 @@ impl Symbols {
         if path.starts_with(&["std".to_owned(), "sys".to_owned()]) && from[0] != "std" {
             return Err(format!("private platform component {}", path.join("::")));
         }
-        if path.iter().map(String::as_str).eq(["std", "net", "tcp", "__din_package_socket"])
-            && !from.iter().map(String::as_str).eq(["std", "net", "tls", "openssl"])
+        if path
+            .iter()
+            .map(String::as_str)
+            .eq(["std", "net", "tcp", "__din_package_socket"])
+            && !from
+                .iter()
+                .map(String::as_str)
+                .eq(["std", "net", "tls", "openssl"])
         {
             return Err(format!("private platform component {}", path.join("::")));
         }
@@ -243,7 +249,7 @@ fn lower(
         (item.nominal && (item.public || path[..path.len() - 1] == file.module))
             .then(|| path.last().unwrap().clone())
     }));
-    let syntax = crate::parser::parse_with_names(
+    let syntax = crate::legacy_parser::parse_with_names(
         &file.source,
         &file.tree.tokens,
         Mode::Program,
@@ -259,7 +265,10 @@ fn lower(
         let node = &syntax.nodes[id.0];
         if node.kind == "use" {
             edits.insert(span(node.start).start, (span(node.end - 1).end, ""));
-        } else if matches!(node.kind, "fn" | "async fn" | "extern" | "struct" | "enum" | "const") {
+        } else if matches!(
+            node.kind,
+            "fn" | "async fn" | "extern" | "struct" | "enum" | "const"
+        ) {
             let token = node.name.unwrap();
             let mut path = file.module.clone();
             path.push(file.word(token).to_owned());
@@ -282,13 +291,23 @@ fn lower(
     for (index, node) in syntax.nodes.iter().enumerate() {
         if !matches!(
             node.kind,
-            "nom" | "nom qualifié" | "type" | "construction" | "motif variante" | "motif variante positionnelle" | "impl"
+            "nom"
+                | "nom qualifié"
+                | "type"
+                | "construction"
+                | "motif variante"
+                | "motif variante positionnelle"
+                | "impl"
         ) || file.tree.tokens[node.start].kind != Kind::Name
-            || locals.contains(&crate::parser::NodeId(index))
+            || locals.contains(&crate::legacy_parser::NodeId(index))
         {
             continue;
         }
-        let path_start = if node.kind == "impl" { node.start + 1 } else { node.start };
+        let path_start = if node.kind == "impl" {
+            node.start + 1
+        } else {
+            node.start
+        };
         let (mut path, mut end) = path_tokens(file, path_start, node.end);
         // Resolve the type prefix of Type::associated before checking the
         // method signature in the flattened program.
@@ -317,7 +336,11 @@ fn lower(
                     }
                     _ => prefix,
                 };
-                if symbols.items.get(&qualified).is_some_and(|item| item.nominal) {
+                if symbols
+                    .items
+                    .get(&qualified)
+                    .is_some_and(|item| item.nominal)
+                {
                     path.pop();
                     end -= 2;
                 }
@@ -666,7 +689,10 @@ pub fn load_for_target(root: &Path, target: &BuildTarget) -> Result<String> {
     load_with_std_range(root, target).map(|(source, _, _)| source)
 }
 
-pub fn load_with_std_range(root: &Path, target: &BuildTarget) -> Result<(String, std::ops::Range<usize>, std::ops::Range<usize>)> {
+pub fn load_with_std_range(
+    root: &Path,
+    target: &BuildTarget,
+) -> Result<(String, std::ops::Range<usize>, std::ops::Range<usize>)> {
     let (source, file_range, env_range, _, _, _) = load_for_verification(root, target)?;
     Ok((source, file_range, env_range))
 }
@@ -677,7 +703,14 @@ type SourceRange = std::ops::Range<usize>;
 pub(crate) fn load_for_verification(
     root: &Path,
     target: &BuildTarget,
-) -> Result<(String, SourceRange, SourceRange, Vec<SourceRange>, Vec<SourceRange>, OpaqueLayouts)> {
+) -> Result<(
+    String,
+    SourceRange,
+    SourceRange,
+    Vec<SourceRange>,
+    Vec<SourceRange>,
+    OpaqueLayouts,
+)> {
     let root = local_root(root)?;
     let entry = root.join("src/main.crb");
     let mut loader = Loader::default();
@@ -688,28 +721,46 @@ pub(crate) fn load_for_verification(
         return Err("bundled standard library must be named std and have no dependencies".into());
     }
     let sources: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/stdlib.rs"));
-    let uses_crypto = loader.packages.iter().flat_map(|package| &package.files).any(|file| {
-        let qualified = file.tree.tokens.windows(3).enumerate().any(|(i, _)| {
-            file.word(i) == "std" && file.word(i + 1) == "::" && file.word(i + 2) == "crypto"
-        });
-        qualified || file.tree.syntax.nodes[file.tree.syntax.root.0].children.iter().any(|&id| {
-            let node = &file.tree.syntax.nodes[id.0];
-            node.kind == "use" && file.word(node.start + 1) == "std"
-                && file.word(node.start + 3) == "{"
-                && node.children.iter().any(|&child| {
-                    let member = &file.tree.syntax.nodes[child.0];
-                    member.kind == "import member" && file.word(member.name.unwrap()) == "crypto"
-                })
-        })
-    });
-    let mentions_module = |component: &str| loader.packages.iter().flat_map(|package| &package.files)
+    let uses_crypto = loader
+        .packages
+        .iter()
+        .flat_map(|package| &package.files)
         .any(|file| {
-            file.tree.tokens.windows(2).enumerate().any(|(i, _)| {
-                file.word(i) == "::" && file.word(i + 1) == component
-            }) || file.tree.syntax.nodes.iter().any(|node| {
-                node.kind == "import member" && file.word(node.name.unwrap()) == component
-            })
+            let qualified = file.tree.tokens.windows(3).enumerate().any(|(i, _)| {
+                file.word(i) == "std" && file.word(i + 1) == "::" && file.word(i + 2) == "crypto"
+            });
+            qualified
+                || file.tree.syntax.nodes[file.tree.syntax.root.0]
+                    .children
+                    .iter()
+                    .any(|&id| {
+                        let node = &file.tree.syntax.nodes[id.0];
+                        node.kind == "use"
+                            && file.word(node.start + 1) == "std"
+                            && file.word(node.start + 3) == "{"
+                            && node.children.iter().any(|&child| {
+                                let member = &file.tree.syntax.nodes[child.0];
+                                member.kind == "import member"
+                                    && file.word(member.name.unwrap()) == "crypto"
+                            })
+                    })
         });
+    let mentions_module = |component: &str| {
+        loader
+            .packages
+            .iter()
+            .flat_map(|package| &package.files)
+            .any(|file| {
+                file.tree
+                    .tokens
+                    .windows(2)
+                    .enumerate()
+                    .any(|(i, _)| file.word(i) == "::" && file.word(i + 1) == component)
+                    || file.tree.syntax.nodes.iter().any(|node| {
+                        node.kind == "import member" && file.word(node.name.unwrap()) == component
+                    })
+            })
+    };
     let mentions_tls = mentions_module("tls");
     let mentions_openssl = mentions_tls && mentions_module("openssl");
     let files = sources
@@ -767,7 +818,10 @@ pub(crate) fn load_for_verification(
                     "datastack configuration belongs in src/main.crb",
                 ));
             }
-            if !matches!(node.kind, "fn" | "async fn" | "extern" | "struct" | "enum" | "const") {
+            if !matches!(
+                node.kind,
+                "fn" | "async fn" | "extern" | "struct" | "enum" | "const"
+            ) {
                 continue;
             }
             let local = file.word(node.name.unwrap());
@@ -795,15 +849,37 @@ pub(crate) fn load_for_verification(
                 ITER_ADAPTER.to_owned()
             } else if path.iter().map(String::as_str).eq(["std", "io", "File"]) {
                 "__crust_package_opaque_file".to_owned()
-            } else if path.iter().map(String::as_str).eq(["std", "net", "tls", "openssl", "Connection"]) {
+            } else if path.iter().map(String::as_str).eq([
+                "std",
+                "net",
+                "tls",
+                "openssl",
+                "Connection",
+            ]) {
                 TLS_CONNECTION.to_owned()
             } else if path.iter().map(String::as_str).eq(["std", "env", "args"]) {
                 "__crust_package_env_args".to_owned()
-            } else if path.iter().map(String::as_str).eq(["std", "bytes", "content_eq"]) {
+            } else if path
+                .iter()
+                .map(String::as_str)
+                .eq(["std", "bytes", "content_eq"])
+            {
                 "__crust_package_byte_content_eq".to_owned()
-            } else if file.module.iter().map(String::as_str).eq(["std", "sys", "net", "reactor"])
-                && matches!(local, "queue_create" | "queue_watch" | "queue_wait" |
-                    "completion_create" | "completion_attach" | "completion_submit" | "completion_next")
+            } else if file
+                .module
+                .iter()
+                .map(String::as_str)
+                .eq(["std", "sys", "net", "reactor"])
+                && matches!(
+                    local,
+                    "queue_create"
+                        | "queue_watch"
+                        | "queue_wait"
+                        | "completion_create"
+                        | "completion_attach"
+                        | "completion_submit"
+                        | "completion_next"
+                )
             {
                 format!("__crust_package_socket_{local}")
             } else {
@@ -847,11 +923,19 @@ pub(crate) fn load_for_verification(
                 file_range = start..source.len();
             } else if file.module.iter().map(String::as_str).eq(["std", "env"]) {
                 env_range = start..source.len();
-            } else if file.module.iter().map(String::as_str).eq(["std", "sys", "net", "reactor"]) {
+            } else if file
+                .module
+                .iter()
+                .map(String::as_str)
+                .eq(["std", "sys", "net", "reactor"])
+            {
                 socket_wait_ranges.push(start..source.len());
             } else {
                 let module = file.module.iter().map(String::as_str).collect::<Vec<_>>();
-                if matches!(module.as_slice(), ["std", "io", "asyn", ..] | ["std", "sys", "net", "asyn"] | ["std", "net", ..]) {
+                if matches!(
+                    module.as_slice(),
+                    ["std", "io", "asyn", ..] | ["std", "sys", "net", "asyn"] | ["std", "net", ..]
+                ) {
                     async_io_ranges.push(start..source.len());
                 }
                 let label = match module.as_slice() {
@@ -861,19 +945,46 @@ pub(crate) fn load_for_verification(
                     ["std", "net", "tcp"] => "représentation privée de std::net::tcp",
                     ["std", "net", "udp"] => "représentation privée de std::net::udp",
                     ["std", "sys", "net"] => "représentation privée de std::sys::net",
-                    ["std", "net", "tls", "openssl"] => "représentation privée de std::net::tls::openssl",
+                    ["std", "net", "tls", "openssl"] => {
+                        "représentation privée de std::net::tls::openssl"
+                    }
                     ["std", "crypto", "aes"] => "représentation privée de std::crypto::aes",
                     ["std", "crypto", "md5"] => "représentation privée de std::crypto::md5",
                     ["std", "crypto", "sha256"] => "représentation privée de std::crypto::sha256",
                     ["std", "crypto", "sha512"] => "représentation privée de std::crypto::sha512",
                     ["std", "crypto", "sha3"] => "représentation privée de std::crypto::sha3",
                     ["std", "net", "tls"] => "représentation privée de std::net::tls",
-                    ["std", "net", "tls", "record"] => "représentation privée de std::net::tls::record",
+                    ["std", "net", "tls", "record"] => {
+                        "représentation privée de std::net::tls::record"
+                    }
                     ["std", "crypto", "x509"] => "représentation privée de std::crypto::x509",
                     ["std", "crypto", "p256"] => "représentation privée de std::crypto::p256",
                     _ => continue,
                 };
-                for name in ["File", "Connection", "Listener", "PlatformSocket", "ReadHalf", "WriteHalf", "Md5", "Sha256", "Sha384", "Sha512", "Sha3_224", "Sha3_256", "Sha3_384", "Sha3_512", "AES128GCM", "AES256GCM", "EphemeralKey", "SigningKey", "PublicKey", "RecordCipher", "Session", "Certificate"] {
+                for name in [
+                    "File",
+                    "Connection",
+                    "Listener",
+                    "PlatformSocket",
+                    "ReadHalf",
+                    "WriteHalf",
+                    "Md5",
+                    "Sha256",
+                    "Sha384",
+                    "Sha512",
+                    "Sha3_224",
+                    "Sha3_256",
+                    "Sha3_384",
+                    "Sha3_512",
+                    "AES128GCM",
+                    "AES256GCM",
+                    "EphemeralKey",
+                    "SigningKey",
+                    "PublicKey",
+                    "RecordCipher",
+                    "Session",
+                    "Certificate",
+                ] {
                     let mut symbol = file.module.clone();
                     symbol.push(name.to_owned());
                     if let Some(item) = symbols.items.get(&symbol)
@@ -885,5 +996,12 @@ pub(crate) fn load_for_verification(
             }
         }
     }
-    Ok((source, file_range, env_range, socket_wait_ranges, async_io_ranges, opaque_layouts))
+    Ok((
+        source,
+        file_range,
+        env_range,
+        socket_wait_ranges,
+        async_io_ranges,
+        opaque_layouts,
+    ))
 }

@@ -38,7 +38,7 @@ fn sequence_block(output: &mut [u8], start: u64, prefix: &[u8], matched: u64, di
     let header: u64 = if count < 32 { 1 } else if count < 4096 { 2 } else { 3 };
     let bits = ll_bits + ml_bits + off_code;
     let payload = header + count + 5 + (bits + 1 + 7) / 8;
-    if payload > output.len() as u64 - start - 3 { return Err(Error.BufferTooSmall); }
+    if payload > output.len() as u64 - start - 3 { return Err(Error::BufferTooSmall); }
     let flag: u64 = if last { 1 } else { 0 };
     put_little(&mut output[0..output.len()], copy(start), (payload << 3) | 4 | flag, 3);
     let mut at = start + 3;
@@ -73,10 +73,10 @@ pub fn compress_with_dictionary(input: &[u8], output: &mut [u8], params: &Params
 /// Implements native encoding with a validated dictionary content view.
 fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params, workspace: &mut [u64], dictionary: &[u8], dictionary_id: u64) Result<usize, Error> {
     let configured = (*params).level;
-    if configured > 22 { return Err(Error.InvalidParams); }
+    if configured > 22 { return Err(Error::InvalidParams); }
     let level: u64 = if configured == 0 { 3 } else { configured as u64 };
-    if workspace.len() < 36864 { return Err(Error.WorkspaceTooSmall); }
-    if output.len() < 16 { return Err(Error.BufferTooSmall); }
+    if workspace.len() < 36864 { return Err(Error::WorkspaceTooSmall); }
+    if output.len() < 16 { return Err(Error::BufferTooSmall); }
     let size = input.len() as u64;
     let width: u64 = if size < 256 { 1 } else if size < 65792 { 2 } else if size <= 0xffffffff { 4 } else { 8 };
     let flag: u64 = if width == 1 { 0 } else if width == 2 { 64 } else if width == 4 { 128 } else { 192 };
@@ -91,7 +91,7 @@ fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params,
         let flag: u64 = if width == 4 { 128 } else { 192 };
         let dict_flag: u64 = if dictionary_id == 0 { 0 } else { 3 };
         let needed: u64 = 6 + (if dict_flag == 0 { 0 } else { 4 }) + width;
-        if needed > output.len() as u64 { return Err(Error.BufferTooSmall); }
+        if needed > output.len() as u64 { return Err(Error::BufferTooSmall); }
         output[4] = byte(flag | dict_flag | (if (*params).checksum { 4 } else { 0 }));
         output[5] = 56; written = 6;
         if dict_flag != 0 { put_little(&mut output[0..output.len()], copy(written), dictionary_id, 4); written = written + 4; }
@@ -135,7 +135,7 @@ fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params,
         let decoded_fields_4 = baseline(2, ml_code); let base = decoded_fields_4 >> 32; let ml_bits = decoded_fields_4 & 0xffffffff; drop(base);
         let payload = header + prefix + 5 + (ll_bits + ml_bits + log2(distance + 3) + 8) / 8;
         if best >= 4 && payload < prefix + best && payload <= 131072 {
-            if output.len() as u64 - written < 3 { return Err(Error.BufferTooSmall); }
+            if output.len() as u64 - written < 3 { return Err(Error::BufferTooSmall); }
             let next = match sequence_block(&mut output[0..output.len()], copy(written), &input[at..scan], copy(best), distance, scan + best == size) {
                 Ok(value) => { value }, Err(error) => { return Err(error); },
             };
@@ -147,7 +147,7 @@ fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params,
             }
             at = scan + best;
         } else {
-            if output.len() as u64 - written < 3 || count > output.len() as u64 - written - 3 { return Err(Error.BufferTooSmall); }
+            if output.len() as u64 - written < 3 || count > output.len() as u64 - written - 3 { return Err(Error::BufferTooSmall); }
             let final: u64 = if end == size { 1 } else { 0 };
             put_little(&mut output[0..output.len()], copy(written), (count << 3) | final, 3); written = written + 3;
             i = 0; while i < count { output[written] = input[at + i]; written = written + 1; i = i + 1; } at = end;
@@ -155,7 +155,7 @@ fn compress_dictionary_content(input: &[u8], output: &mut [u8], params: &Params,
         if at == size { break; }
     }
     if (*params).checksum {
-        if output.len() as u64 - written < 4 { return Err(Error.BufferTooSmall); }
+        if output.len() as u64 - written < 4 { return Err(Error::BufferTooSmall); }
         put_little(&mut output[0..output.len()], copy(written), checksum(&input[0..input.len()]) & 0xffffffff, 4); written = written + 4;
     }
     Ok(written as usize)

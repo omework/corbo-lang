@@ -10,17 +10,17 @@
         inner: BlockingFile;
 
         /// Awaits opening an existing file with the selected mode. The path is UTF-8 without a trailing NUL.
-        async fn open(path: &str, mode: i64) Result<File, FileError> {
-            open_file(path, mode, false, FilePerm.DefaultMode).await
+        pub async fn open(path: &str, mode: i64) Result<File, FileError> {
+            open_file(path, mode, false, FilePerm::DefaultMode).await
         }
 
         /// Awaits opening or creating a file with the selected mode and permissions. The path is UTF-8 without a trailing NUL.
-        async fn create(path: &str, mode: i64, perm: FilePerm) Result<File, FileError> {
+        pub async fn create(path: &str, mode: i64, perm: FilePerm) Result<File, FileError> {
             open_file(path, mode, true, perm).await
         }
 
         /// Awaits a read into the caller's buffer and returns the actual byte count.
-        async fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError> {
+        pub async fn read(&mut self, buffer: &mut [u8]) Result<usize, FileError> {
             if buffer.len() == 0 { return Ok(0); }
             let inner = &mut (*self).inner;
             let worker = runtime::spawn_blocking(read_on_worker(inner, buffer));
@@ -31,12 +31,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits a write from the caller's buffer and returns the actual byte count.
-        async fn write(&mut self, buffer: &[u8]) Result<usize, FileError> {
+        pub async fn write(&mut self, buffer: &[u8]) Result<usize, FileError> {
             if buffer.len() == 0 { return Ok(0); }
             let inner = &mut (*self).inner;
             let worker = runtime::spawn_blocking(write_on_worker(inner, buffer));
@@ -47,14 +47,14 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits a positioned read, preserving the cursor and retaining file/buffer borrows until completion.
-        async fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError> {
+        pub async fn read_at(&self, buffer: &mut [u8], offset: u64) Result<usize, FileError> {
             if copy(offset) > 9223372036854775807 || buffer.len() as u64 > 9223372036854775807 - copy(offset) {
-                return Err(FileError.InvalidOptions);
+                return Err(FileError::InvalidOptions);
             }
             if buffer.len() == 0 { return Ok(0); }
             let inner = &(*self).inner;
@@ -66,14 +66,14 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits a positioned write, preserving the cursor and retaining file/buffer borrows until completion.
-        async fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError> {
+        pub async fn write_at(&self, buffer: &[u8], offset: u64) Result<usize, FileError> {
             if copy(offset) > 9223372036854775807 || buffer.len() as u64 > 9223372036854775807 - copy(offset) {
-                return Err(FileError.InvalidOptions);
+                return Err(FileError::InvalidOptions);
             }
             if buffer.len() == 0 { return Ok(0); }
             let inner = &(*self).inner;
@@ -85,12 +85,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits moving the file cursor and returns the new absolute byte offset.
-        async fn seek(&mut self, from: SeekFrom) Result<u64, FileError> {
+        pub async fn seek(&mut self, from: SeekFrom) Result<u64, FileError> {
             let inner = &mut (*self).inner;
             let worker = runtime::spawn_blocking(seek_on_worker(inner, from));
             match worker.await {
@@ -100,12 +100,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits sync_all on a blocking worker, retaining mutable permission and the file dependency.
-        async fn sync_all(&mut self) Result<(), FileError> {
+        pub async fn sync_all(&mut self) Result<(), FileError> {
             let inner = &mut (*self).inner;
             let worker = runtime::spawn_blocking(sync_on_worker(inner));
             match worker.await {
@@ -115,12 +115,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(_error) => { Err(FileError.LaunchFailed) },
+                Err(_error) => { Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits truncate on a blocking worker, retaining mutable permission and the file dependency.
-        async fn truncate(&mut self, length: u64) Result<(), FileError> {
+        pub async fn truncate(&mut self, length: u64) Result<(), FileError> {
             let inner = &mut (*self).inner;
             let worker = runtime::spawn_blocking(truncate_on_worker(inner, length));
             match worker.await {
@@ -130,12 +130,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(_error) => { Err(FileError.LaunchFailed) },
+                Err(_error) => { Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits a snapshot of the open file's metadata.
-        async fn stats(&self) Result<FileStats, FileError> {
+        pub async fn stats(&self) Result<FileStats, FileError> {
             let inner = &(*self).inner;
             let worker = runtime::spawn_blocking(stats_on_worker(inner));
             match worker.await {
@@ -145,12 +145,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits moving a filesystem entry to a different path.
-        async fn rename(source: &str, destination: &str) Result<(), FileError> {
+        pub async fn rename(source: &str, destination: &str) Result<(), FileError> {
             let worker = runtime::spawn_blocking(rename_on_worker(source, destination));
             match worker.await {
                 Ok(result) => {
@@ -159,12 +159,12 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
         /// Awaits removing a file by path.
-        async fn delete(path: &str) Result<(), FileError> {
+        pub async fn delete(path: &str) Result<(), FileError> {
             let worker = runtime::spawn_blocking(delete_on_worker(path));
             match worker.await {
                 Ok(result) => {
@@ -173,7 +173,7 @@
                         Err(error) => { Err(translate_error(error)) },
                     }
                 },
-                Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+                Err(error) => { drop(error); Err(FileError::LaunchFailed) },
             }
         }
 
@@ -197,9 +197,9 @@
     /// Converts a backend error to the corresponding error of this API.
     fn translate_error(error: BlockingError) FileError {
         match error {
-            BlockingError.InvalidPath => { FileError.InvalidPath },
-            BlockingError.InvalidOptions => { FileError.InvalidOptions },
-            BlockingError.Os { code: code } => { FileError.Os { code: code } },
+            BlockingError::InvalidPath => { FileError::InvalidPath },
+            BlockingError::InvalidOptions => { FileError::InvalidOptions },
+            BlockingError::Os { code: code } => { FileError::Os { code: code } },
         }
     }
 
@@ -219,7 +219,7 @@
                     Err(error) => { Err(translate_error(error)) },
                 }
             },
-            Err(error) => { drop(error); Err(FileError.LaunchFailed) },
+            Err(error) => { drop(error); Err(FileError::LaunchFailed) },
         }
     }
 

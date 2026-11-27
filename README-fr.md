@@ -125,7 +125,7 @@ La limite porte sur le stockage des éléments ; le descripteur et les métadonn
 
 ## Démarrage
 
-Il faut un `corboc` compatible et une chaîne de compilation C11 sur la machine hôte. Pour construire le compilateur, suivez les [instructions de construction à partir des sources](#build-the-compiler-from-source) ci-dessous ; le compilateur actuel nécessite un compilateur auto-hébergé de départ déjà compatible.
+Il faut un `corboc` compatible et une chaîne de compilation C++20 sur la machine hôte. Pour construire le compilateur, suivez les [instructions de construction à partir des sources](#build-the-compiler-from-source) ci-dessous ; le compilateur actuel nécessite un compilateur auto-hébergé de départ déjà compatible.
 
 Clonez le dépôt du langage, puis construisez et lancez le premier exemple :
 
@@ -1512,7 +1512,7 @@ Le code externe appartient à un bloc `@unchecked`. `${name}` lie une opérande 
 fn main() {
     let mut answer: i64 = 0;
     @unchecked {
-        @c(includes={"stdint.h"}) {
+        @c++(includes={"stdint.h"}) {
             ${answer} = (int64_t)42;
         }
         @asm { nop }
@@ -1676,14 +1676,14 @@ La référence des API décrit les profils cryptographiques effectivement pris e
 
 | Emplacement | Responsabilité |
 | --- | --- |
-| [omework/corboc](https://github.com/omework/corboc) | Lexeur, parseur, représentations, vérificateur, placement et backend C11 auto-hébergés actifs |
+| [omework/corboc](https://github.com/omework/corboc) | Lexeur, parseur, représentations, vérificateur, placement et backend C++20 primitif auto-hébergés actifs |
 | [stdlib/src](stdlib/src/) | API de la STD et implémentations portables ou propres aux plateformes |
 | [runtime/corbo](runtime/corbo/README.md) | Algorithmes d’allocation, de collections, de nettoyage, d’ordonnancement et de réacteur du runtime en Corbo |
-| [runtime](runtime/README.md) | ABI C canonique et implémentation C conservée pour comparaison |
+| [runtime](runtime/README.md) | Runtime C++ primitif et implémentations historiques conservées pour comparaison |
 | [ide](ide/README.md) | Prise en charge de `.crb` dans Vim/Neovim et VS Code |
 | [rust_frontend](rust_frontend/README.md) / [prototype](prototype/README.md) | Implémentations de référence figées ou historiques |
 
-`corboc` fixe ses entrées STD/runtime avec `corbo.lock`. Le backend actuel génère du C11. Les primitives machine/ABI du runtime conservent des liaisons explicites `@unchecked`/`@c` ; le portage des algorithmes ne supprime pas le C de la chaîne de compilation. La bibliothèque mémoire partagée est également accessible depuis le C grâce à [corbo_runtime.h](runtime/corbo_runtime.h).
+`corboc` fixe ses entrées STD/runtime avec `corbo.lock`. Le backend génère du C++20 primitif avec stockage et nettoyage explicites. Les primitives machine/ABI conservent des liaisons `@unchecked`/`@c++` et `@asm`. La bibliothèque lisible est [corbo_runtime.hpp](runtime/corbo_runtime.hpp) ; les blocs C++ non vérifiés accèdent aux mêmes représentations simples. Voir [la cible C++](docs/CPP_BACKEND.md) pour la frontière et les limites de validation.
 
 Le [rapport du cycle runtime](docs/cycles/CORBO_RUNTIME_CYCLE.md) consigne les comparaisons d’exécution C/Corbo et les éléments de validation de la reconstruction du compilateur, avec les limites de plateforme.
 
@@ -1748,7 +1748,7 @@ python3 scripts/stdlib_docs.py --check
 python3 validation/check_documentation.py --corboc ../corboc/build/install/bin/corboc
 ```
 
-La dernière commande nécessite un compilateur C11 sur la machine hôte et l’accès aux sockets de boucle locale. Les résultats et programmes générés sont conservés dans `build/documentation/`. Cette passe de documentation valide l’exécution sur la machine hôte macOS ARM64 ; elle ne répète pas la matrice complète des plateformes. L’exécution sous Windows ARM64 reste différée.
+La dernière commande nécessite un compilateur C++20 sur la machine hôte et l’accès aux sockets de boucle locale. Les résultats et programmes générés sont conservés dans `build/documentation/`. Cette passe de documentation valide l’exécution sur la machine hôte macOS ARM64 ; elle ne répète pas la matrice complète des plateformes. L’exécution sous Windows ARM64 reste différée.
 
 La documentation est en anglais par défaut. Les versions françaises utilisent le suffixe `-fr.md`.
 

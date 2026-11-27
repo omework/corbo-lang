@@ -28,7 +28,7 @@ fn nibble(byte: u8) u8 {
 /// Writes lowercase hexadecimal and returns the bytes written. Errors leave the output unchanged.
 pub fn encode(input: &[u8], output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
-    if size > output.len() / 2 { return Err(Error.BufferTooSmall); }
+    if size > output.len() / 2 { return Err(Error::BufferTooSmall); }
     let mut i: usize = 0;
     while i < size {
         output[2 * i] = digit(input[i] >> 4);
@@ -41,14 +41,14 @@ pub fn encode(input: &[u8], output: &mut [u8]) Result<usize, Error> {
 /// Decodes an even number of hexadecimal digits in either case. Errors leave the output unchanged.
 pub fn decode(input: &[u8], output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
-    if size % 2 != 0 { return Err(Error.InvalidLength); }
+    if size % 2 != 0 { return Err(Error::InvalidLength); }
     let mut i: usize = 0;
     while i < size {
-        if nibble(input[i]) == 16 { return Err(Error.InvalidCharacter); }
+        if nibble(input[i]) == 16 { return Err(Error::InvalidCharacter); }
         i = i + 1;
     }
     let written = size / 2;
-    if written > output.len() { return Err(Error.BufferTooSmall); }
+    if written > output.len() { return Err(Error::BufferTooSmall); }
     i = 0;
     while i < written {
         output[i] = (nibble(input[2 * i]) << 4) | nibble(input[2 * i + 1]);

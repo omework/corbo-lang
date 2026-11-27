@@ -1,4 +1,8 @@
-# Runtime implemented in Corbo
+# Historical runtime implemented in Corbo
+
+This directory preserves the previous runtime and its historical build path.
+The active primitive C++ backend uses [runtime/cpp](../cpp/) and does not call
+`--emit-runtime-c`. Commands below require the earlier compiler generation.
 
 The algorithms corresponding to all 114 function definitions in the C reference
 are implemented in the `.crb` files here. The existing C files remain the

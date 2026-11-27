@@ -56,12 +56,12 @@
                 if requested >= capacity {
                     match stream.read(output).await {
                         Ok(count) => { return Ok(count); },
-                        Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                        Err(error) => { return Err(BufferedError::Stream { error: error }); },
                     }
                 }
                 let received = match stream.read(&mut buffer[0..capacity]).await {
                     Ok(count) => { count as u64 },
-                    Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                    Err(error) => { return Err(BufferedError::Stream { error: error }); },
                 };
                 end = received;
                 start = 0;
@@ -119,10 +119,10 @@
                 let stream = &mut *(*self).stream;
                 match stream.write(input).await {
                     Ok(count) => {
-                        if copy(count) == 0 { return Err(BufferedError.WriteZero); }
+                        if copy(count) == 0 { return Err(BufferedError::WriteZero); }
                         return Ok(count);
                     },
-                    Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                    Err(error) => { return Err(BufferedError::Stream { error: error }); },
                 }
             }
             if (*self).end == capacity {
@@ -158,9 +158,9 @@
             while start < end {
                 let count = match stream.write(&buffer[start..end]).await {
                     Ok(count) => { count as u64 },
-                    Err(error) => { return Err(BufferedError.Stream { error: error }); },
+                    Err(error) => { return Err(BufferedError::Stream { error: error }); },
                 };
-                if count == 0 { return Err(BufferedError.WriteZero); }
+                if count == 0 { return Err(BufferedError::WriteZero); }
                 start = start + count;
                 *cursor = copy(start);
             }

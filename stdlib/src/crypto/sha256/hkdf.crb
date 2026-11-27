@@ -22,17 +22,17 @@ pub fn hkdf_extract(salt: &[u8], input_key_material: &[u8]) Result<[u8; 32], Has
 /// The pseudorandom key needs at least 32 bytes and the output can hold up to 8160 bytes.
 pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) Result<(), KdfError> {
     let length = output.len();
-    if length > 8160 { return Err(KdfError.OutputTooLong); }
+    if length > 8160 { return Err(KdfError::OutputTooLong); }
     let key_len = prk.len();
-    if key_len < 32 { return Err(KdfError.InvalidPrkLength); }
-    if (key_len as u64) > SHA256_MAX_INPUT_BYTES { return Err(KdfError.InputTooLong); }
+    if key_len < 32 { return Err(KdfError::InvalidPrkLength); }
+    if (key_len as u64) > SHA256_MAX_INPUT_BYTES { return Err(KdfError::InputTooLong); }
     if length == 0 { return Ok(()); }
 
     let info_len = info.len();
     // Preflight the longest HMAC input before writing output. It contains
     // the 64-byte pad, the optional previous digest and the counter byte.
     let overhead: u64 = if length > 32 { 97 } else { 65 };
-    if (info_len as u64) > SHA256_MAX_INPUT_BYTES - overhead { return Err(KdfError.InputTooLong); }
+    if (info_len as u64) > SHA256_MAX_INPUT_BYTES - overhead { return Err(KdfError::InputTooLong); }
 
     let mut previous: [u8; 32] = [0; 32];
     let mut prefix_len: usize = 0;
@@ -41,7 +41,7 @@ pub fn hkdf_expand(prk: &[u8], info: &[u8], output: &mut [u8]) Result<(), KdfErr
     while written < length {
         let suffix: [u8; 1] = [copy(counter)];
         match hmac_parts(&prk[0..key_len], &previous[..prefix_len], &info[0..info_len], &suffix[..]) {
-            Err(error) => { drop(error); return Err(KdfError.InputTooLong); },
+            Err(error) => { drop(error); return Err(KdfError::InputTooLong); },
             Ok(block) => {
                 let mut i: usize = 0;
                 while i < 32 {

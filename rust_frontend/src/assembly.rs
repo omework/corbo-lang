@@ -19,7 +19,10 @@ pub(crate) enum Abi {
 
 impl Abi {
     fn arm(self) -> bool {
-        matches!(self, Self::LinuxArm64 | Self::DarwinArm64 | Self::WindowsArm64)
+        matches!(
+            self,
+            Self::LinuxArm64 | Self::DarwinArm64 | Self::WindowsArm64
+        )
     }
 
     pub fn routine(self, name: &str, body: &str) -> String {

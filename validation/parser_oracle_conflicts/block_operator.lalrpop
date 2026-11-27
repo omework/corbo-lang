@@ -1,0 +1,27 @@
+// Reduced block/control-flow ambiguity witness from CORE_GRAMMAR.ebnf.
+// Final bare blocks are treated as results, as already specified; only non-final
+// bare blocks can be statements. This still leaves a genuine operator ambiguity.
+grammar;
+
+pub Block: () = "{" Content "}" => ();
+Content: () = { => (), Nonempty => () };
+Nonempty: () = {
+    Terminated Content => (),
+    Block Nonempty => (),
+    Expression => (),
+};
+Terminated: () = Expression ";" => ();
+Expression: () = Atom ("-" Atom)* => ();
+Atom: () = { "integer" => (), "-" Atom => (), Block => () };
+
+extern {
+ type Location = usize;
+ type Error = &'static str;
+ enum BlockAuditToken {
+   "integer" => BlockAuditToken::Integer,
+   "{" => BlockAuditToken::Open,
+   "}" => BlockAuditToken::Close,
+   "-" => BlockAuditToken::Minus,
+   ";" => BlockAuditToken::Semicolon,
+ }
+}

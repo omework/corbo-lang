@@ -1,0 +1,232 @@
+{
+  "cases": [
+    {
+      "diagnostics": [
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "            Packet::Stored(item) => { item.value }",
+            "line": 11
+          },
+          "message": "access overlaps an active incompatible borrow",
+          "related": [
+            {
+              "excerpt": "    fn value(&mut self) i64 {",
+              "line": 9
+            }
+          ],
+          "rule": "N5"
+        }
+      ],
+      "file": "01_mutable_enum_reborrow.crb",
+      "status": "rejected"
+    },
+    {
+      "diagnostics": [
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "fn main() {",
+            "line": 10
+          },
+          "message": "execution branch can still use a borrowed target when its lifetime ends",
+          "related": [
+            {
+              "excerpt": "    let execution = runtime::spawn(read(&value));",
+              "line": 12
+            }
+          ],
+          "rule": "N4"
+        }
+      ],
+      "file": "02_join_through_helper.crb",
+      "status": "rejected"
+    },
+    {
+      "diagnostics": [
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "    drop(first);",
+            "line": 11
+          },
+          "message": "access overlaps an active incompatible borrow",
+          "related": [
+            {
+              "excerpt": "    let mut view = View { target: &first };",
+              "line": 9
+            }
+          ],
+          "rule": "N5"
+        },
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "    let observed = *view.target;",
+            "line": 12
+          },
+          "message": "value depends on an object whose destruction already ended its lifetime",
+          "related": [
+            {
+              "excerpt": "    drop(first);",
+              "line": 11
+            }
+          ],
+          "rule": "N4"
+        },
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "    let observed = *view.target;",
+            "line": 12
+          },
+          "message": "value depends on an object whose destruction already ended its lifetime",
+          "related": [
+            {
+              "excerpt": "    drop(first);",
+              "line": 11
+            }
+          ],
+          "rule": "N4"
+        }
+      ],
+      "file": "03_replaced_reference_target.crb",
+      "status": "rejected"
+    },
+    {
+      "file": "04_pool_allocation_through_helper.crb",
+      "full_rule_coverage_claimed": false,
+      "status": "checker_established"
+    },
+    {
+      "file": "05_borrowed_array_iteration.crb",
+      "full_rule_coverage_claimed": false,
+      "status": "checker_established"
+    },
+    {
+      "file": "06_shared_reference_closure.crb",
+      "full_rule_coverage_claimed": false,
+      "status": "checker_established"
+    },
+    {
+      "file": "07_borrowed_tuple_return.crb",
+      "full_rule_coverage_claimed": false,
+      "status": "checker_established"
+    },
+    {
+      "diagnostics": [
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "    drop(first);",
+            "line": 16
+          },
+          "message": "access overlaps an active incompatible borrow",
+          "related": [
+            {
+              "excerpt": "    let mut view = View { target: &first };",
+              "line": 13
+            }
+          ],
+          "rule": "N5"
+        },
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "    let observed = *view.target;",
+            "line": 17
+          },
+          "message": "value depends on an object whose destruction already ended its lifetime",
+          "related": [
+            {
+              "excerpt": "    drop(first);",
+              "line": 16
+            }
+          ],
+          "rule": "N4"
+        },
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "    let observed = *view.target;",
+            "line": 17
+          },
+          "message": "value depends on an object whose destruction already ended its lifetime",
+          "related": [
+            {
+              "excerpt": "    drop(first);",
+              "line": 16
+            }
+          ],
+          "rule": "N4"
+        }
+      ],
+      "file": "08_deferred_write_after_join.crb",
+      "status": "rejected"
+    },
+    {
+      "diagnostics": [
+        {
+          "classification": "unproved",
+          "location": {
+            "excerpt": "        Packet::Stored(item) => { item }",
+            "line": 18
+          },
+          "message": "cannot prove N1/N2/N7: the parent destructor requires a fully initialized object after ownership of a payload has been transferred; no compliant destruction sequence has been established",
+          "related": [],
+          "rule": "N7"
+        }
+      ],
+      "file": "09_consuming_custom_drop_review.crb",
+      "status": "rejected"
+    },
+    {
+      "diagnostics": [
+        {
+          "classification": "reported_violation",
+          "location": {
+            "excerpt": "            &mut (*self).value",
+            "line": 7
+          },
+          "message": "cannot write through a shared reference",
+          "related": [],
+          "rule": "N3"
+        }
+      ],
+      "file": "10_trusted_interior_borrow.crb",
+      "status": "rejected"
+    },
+    {
+      "diagnostics": [
+        {
+          "classification": "unproved",
+          "location": {
+            "excerpt": "        while index < limit && index != 3 {",
+            "line": 9
+          },
+          "message": "availability is not established on every reaching path",
+          "related": [],
+          "rule": "N6"
+        },
+        {
+          "classification": "unproved",
+          "location": {
+            "excerpt": "        while index < limit && index != 3 {",
+            "line": 9
+          },
+          "message": "availability is not established on every reaching path",
+          "related": [],
+          "rule": "N6"
+        }
+      ],
+      "file": "11_initialized_counter_loops.crb",
+      "status": "rejected"
+    }
+  ],
+  "compiler": "Rust staged frontend and PostAST verifier; legacy checker and backend not invoked",
+  "host": {
+    "arch": "aarch64",
+    "os": "macos"
+  },
+  "purpose": "suspected false-rejection review; observed verdicts are not an acceptance oracle"
+}

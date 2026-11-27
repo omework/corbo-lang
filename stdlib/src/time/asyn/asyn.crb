@@ -14,7 +14,7 @@ pub async fn sleep(duration: Duration) Result<(), Error> {
     let worker = runtime::spawn_blocking(sleep_worker(duration));
     match worker.await {
         Ok(result) => { result },
-        Err(error) => { drop(error); Err(Error.LaunchFailed) },
+        Err(error) => { drop(error); Err(Error::LaunchFailed) },
     }
 }
 
@@ -24,22 +24,22 @@ pub struct Timer {
     inner: BlockingTimer;
 
     /// Creates an asynchronous timer after the supplied span.
-    fn after(duration: Duration) Result<Timer, Error> {
+    pub fn after(duration: Duration) Result<Timer, Error> {
         let inner = BlockingTimer::after(duration)?;
         Ok(Timer { inner: inner })
     }
     /// Creates an asynchronous timer at an existing monotonic instant.
-    fn at(deadline: Instant) Timer {
+    pub fn at(deadline: Instant) Timer {
         let inner = BlockingTimer::at(deadline);
         Timer { inner: inner }
     }
     /// Suspends until the deadline; the timer outlives its borrowed worker wait.
-    async fn wait(&self) Result<(), Error> {
+    pub async fn wait(&self) Result<(), Error> {
         let timer = &(*self).inner;
         let worker = runtime::spawn_blocking(wait_worker(timer));
         match worker.await {
             Ok(result) => { result },
-            Err(error) => { drop(error); Err(Error.LaunchFailed) },
+            Err(error) => { drop(error); Err(Error::LaunchFailed) },
         }
     }
 }

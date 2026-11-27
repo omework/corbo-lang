@@ -47,7 +47,7 @@ pub enum HandshakeError {
         let size = message.len();
         match transcript.append(&message[0..size]) {
             Ok(()) => { Ok(()) },
-            Err(error) => { drop(error); Err(HandshakeError.Crypto) },
+            Err(error) => { drop(error); Err(HandshakeError::Crypto) },
         }
     }
 
@@ -57,11 +57,11 @@ pub enum HandshakeError {
         let length = message.len();
         let total = match encode_plaintext(HANDSHAKE, initial, &message[0..length], &mut wire[0..capacity]) {
             Ok(value) => { value },
-            Err(error) => { drop(error); return Err(HandshakeError.Protocol); },
+            Err(error) => { drop(error); return Err(HandshakeError::Protocol); },
         };
         match write_record(&mut *socket, &wire[0..total]) {
             Ok(()) => {},
-            Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+            Err(error) => { drop(error); return Err(HandshakeError::Transport); },
         };
         Ok(())
     }
@@ -76,24 +76,24 @@ pub enum HandshakeError {
         while written < needed {
             let total = match read_record(&mut *socket, &mut wire[0..capacity]) {
                 Ok(value) => { value },
-                Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+                Err(error) => { drop(error); return Err(HandshakeError::Transport); },
             };
             let record = match decode_plaintext(&wire[0..total]) {
                 Ok(value) => { value },
-                Err(error) => { drop(error); return Err(HandshakeError.Protocol); },
+                Err(error) => { drop(error); return Err(HandshakeError::Protocol); },
             };
-            if record.kind() != HANDSHAKE { return Err(HandshakeError.Protocol); }
+            if record.kind() != HANDSHAKE { return Err(HandshakeError::Protocol); }
             let size = record.len() as usize;
             let mut i: usize = 0;
             while i < size {
-                if written == needed || written == space { return Err(HandshakeError.Protocol); }
+                if written == needed || written == space { return Err(HandshakeError::Protocol); }
                 message[written] = wire[5 + i];
                 written = written + 1;
                 i = i + 1;
                 if written == 4 {
-                    if message[0] != expected { return Err(HandshakeError.Protocol); }
+                    if message[0] != expected { return Err(HandshakeError::Protocol); }
                     needed = 4 + get24(&message[0..4], 1);
-                    if needed > space { return Err(HandshakeError.BufferTooSmall); }
+                    if needed > space { return Err(HandshakeError::BufferTooSmall); }
                 }
             }
         }
@@ -112,7 +112,7 @@ pub enum HandshakeError {
             match writer.send_record(&mut *socket, HANDSHAKE, &message[written..next], 0,
                                       &mut fragment[0..space], &mut wire[0..capacity]) {
                 Ok(()) => {},
-                Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+                Err(error) => { drop(error); return Err(HandshakeError::Transport); },
             };
             written = next;
         }
@@ -127,26 +127,26 @@ pub enum HandshakeError {
         while true {
             let total = match read_record(&mut *socket, &mut wire[0..capacity]) {
                 Ok(value) => { value },
-                Err(error) => { drop(error); return Err(HandshakeError.Transport); },
+                Err(error) => { drop(error); return Err(HandshakeError::Transport); },
             };
             if wire[0] == CHANGE_CIPHER_SPEC {
-                if (*flight).ccs || total != 6 || wire[5] != 1 { return Err(HandshakeError.Protocol); }
+                if (*flight).ccs || total != 6 || wire[5] != 1 { return Err(HandshakeError::Protocol); }
                 let seen = &mut (*flight).ccs;
                 *seen = true;
                 continue;
             }
             let record = match reader.open(&wire[0..total], &mut fragment[0..space]) {
                 Ok(value) => { value },
-                Err(error) => { drop(error); return Err(HandshakeError.Authentication); },
+                Err(error) => { drop(error); return Err(HandshakeError::Authentication); },
             };
-            if record.kind() != HANDSHAKE { return Err(HandshakeError.Protocol); }
+            if record.kind() != HANDSHAKE { return Err(HandshakeError::Protocol); }
             let start = &mut (*flight).offset;
             *start = 0;
             let end = &mut (*flight).end;
             *end = record.len();
             return Ok(());
         }
-        Err(HandshakeError.Protocol)
+        Err(HandshakeError::Protocol)
     }
 
     /// Collects a complete handshake message across one or more protected records.
@@ -173,9 +173,9 @@ pub enum HandshakeError {
                 written = written + 1;
                 cursor = cursor + 1;
                 if written == 4 {
-                    if message[0] != expected { return Err(HandshakeError.Protocol); }
+                    if message[0] != expected { return Err(HandshakeError::Protocol); }
                     needed = 4 + get24(&message[0..4], 1);
-                    if needed > maximum { return Err(HandshakeError.BufferTooSmall); }
+                    if needed > maximum { return Err(HandshakeError::BufferTooSmall); }
                 }
             }
             let at = &mut (*flight).offset;

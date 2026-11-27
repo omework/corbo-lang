@@ -4,7 +4,7 @@
 
 /// Runs readiness initialization once with pthread_once; callers observe its recorded queue/error state.
 fn once_socket() {
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 pthread_once(&socket_once,socket_initialize);
 }}
 }
@@ -12,7 +12,7 @@ pthread_once(&socket_once,socket_initialize);
 /// Returns the socket_events callback address for the matching native ABI.
 /// The caller must invoke it through the exact declared function-pointer type.
 fn pointer_socket_events()->usize {let mut out:usize=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=(uintptr_t)&socket_events;
 }}
 copy(out)
@@ -20,7 +20,7 @@ copy(out)
 
 /// Calls the target readiness-queue primitive and returns its descriptor or negative error.
 fn queue_create()->i64 {let mut out:i64=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_queue_create();
 }}
 copy(out)
@@ -28,7 +28,7 @@ copy(out)
 
 /// Obtains the next platform readiness token; event meanings are interpreted by the Corbo dispatcher.
 fn queue_wait(queue:i64)->usize {let mut out:usize=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_queue_wait(${queue});
 }}
 copy(out)
@@ -36,7 +36,7 @@ copy(out)
 
 /// Installs or updates a descriptor's combined readiness mask and generation token through the target ABI.
 fn queue_watch(queue:i64, descriptor:u64, mask:usize, token:usize)->i64 {let mut out:i64=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_queue_watch(${queue},${descriptor},(unsigned)${mask},${token});
 }}
 copy(out)
@@ -44,7 +44,7 @@ copy(out)
 
 /// Closes the native readiness-queue descriptor after failed initialization.
 fn queue_close(queue:i64) {
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 close((int)${queue});
 }}
 }

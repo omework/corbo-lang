@@ -56,3 +56,22 @@ Appliquer les consignes de validation proportionnellement à cette distinction.
 Conserver la couverture convenue des plateformes pour les comportements
 spécifiques affectés ; une modification d'API n'impose pas à elle seule de
 reconstruire le compilateur sur chaque plateforme.
+
+## Preuve du respect des règles
+
+La grammaire actuelle et les règles N1–N8 sont immuables, sauf modification explicite par le concepteur du langage.
+
+Les programmes respectent la spécification ou ne la respectent pas. Aucune discussion ni réinterprétation de la spécification n'est permise.
+
+Si la conformité ne peut pas être prouvée, refuser le programme.
+
+Ne jamais modifier la grammaire ou les règles pour adapter le langage à du code existant ou à des difficultés d'implémentation du compilateur.
+
+- Tout programme accepté doit avoir une preuve pour chacune des obligations
+  N1–N8 applicables. L'absence de violation détectée n'est pas une preuve de
+  conformité.
+- Distinguer une violation démontrée d'une impossibilité d'établir la conformité.
+  La réussite du parsing ou de la résolution sémantique n'est pas une preuve.
+- Collecter des refus suspects et reproductibles pour les analyser avec les
+  règles existantes. Une implémentation ou une preuve manquante ne signifie pas,
+  à elle seule, qu'il manque une décision de sémantique.

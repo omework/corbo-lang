@@ -90,7 +90,7 @@ pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
     let size = input.len();
     let extra: usize = 16 - size % 16;
     let capacity = output.len();
-    if size > capacity || extra > capacity - size { return Err(CbcError.BufferTooSmall); }
+    if size > capacity || extra > capacity - size { return Err(CbcError::BufferTooSmall); }
     let total = size + extra;
     // The padding byte is bounded by the block width.
     let pad = public_byte(extra as u64);
@@ -126,8 +126,8 @@ pub fn cbc_encrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
 pub fn cbc_decrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
                           output: &mut [u8]) Result<usize, CbcError> {
     let size = input.len();
-    if size < 16 || size % 16 != 0 { return Err(CbcError.InvalidCiphertext); }
-    if size > output.len() { return Err(CbcError.BufferTooSmall); }
+    if size < 16 || size % 16 != 0 { return Err(CbcError::InvalidCiphertext); }
+    if size > output.len() { return Err(CbcError::BufferTooSmall); }
     let schedule = cbc_schedule(&*key);
     let mut block: [u8; 16] = [0; 16];
     let mut at: usize = 0;
@@ -159,7 +159,7 @@ pub fn cbc_decrypt_padded(key: &[u8; 32], iv: &[u8; 16], input: &[u8],
     if pad == 0 || pad > 16 || difference != 0 {
         i = 0;
         while i < size { output[i] = 0; i = i + 1; }
-        return Err(CbcError.InvalidCiphertext);
+        return Err(CbcError::InvalidCiphertext);
     }
     i = size - pad as usize;
     while i < size { output[i] = 0; i = i + 1; }

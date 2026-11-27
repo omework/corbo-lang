@@ -3,7 +3,7 @@
 use crate::{
     Error,
     flow::Flow,
-    parser::{Node, NodeId},
+    legacy_parser::{Node, NodeId},
     tree::{BindingId, Fact, StaticTree},
 };
 use std::collections::HashMap;
@@ -65,14 +65,32 @@ pub(crate) enum ReferenceBase {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TyScalar { Bool, I32, I64, U8, U16, U32, U64, Usize, F32, F64 }
+pub(crate) enum TyScalar {
+    Bool,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    Usize,
+    F32,
+    F64,
+}
 
 impl TyScalar {
     fn referent(self) -> Referent {
         match self {
-            Self::Bool => Referent::Bool, Self::I32 => Referent::I32, Self::I64 => Referent::I64,
-            Self::U8 => Referent::U8, Self::U16 => Referent::U16, Self::U32 => Referent::U32,
-            Self::U64 => Referent::U64, Self::Usize => Referent::Usize, Self::F32 => Referent::F32, Self::F64 => Referent::F64,
+            Self::Bool => Referent::Bool,
+            Self::I32 => Referent::I32,
+            Self::I64 => Referent::I64,
+            Self::U8 => Referent::U8,
+            Self::U16 => Referent::U16,
+            Self::U32 => Referent::U32,
+            Self::U64 => Referent::U64,
+            Self::Usize => Referent::Usize,
+            Self::F32 => Referent::F32,
+            Self::F64 => Referent::F64,
         }
     }
 }
@@ -111,13 +129,22 @@ impl Referent {
     }
     fn encoding(self) -> (ReferenceBase, u128) {
         let scalar = match self {
-            Self::Bool => TyScalar::Bool, Self::I32 => TyScalar::I32, Self::I64 => TyScalar::I64,
-            Self::U8 => TyScalar::U8, Self::U16 => TyScalar::U16, Self::U32 => TyScalar::U32,
-            Self::U64 => TyScalar::U64, Self::Usize => TyScalar::Usize, Self::F32 => TyScalar::F32, Self::F64 => TyScalar::F64,
+            Self::Bool => TyScalar::Bool,
+            Self::I32 => TyScalar::I32,
+            Self::I64 => TyScalar::I64,
+            Self::U8 => TyScalar::U8,
+            Self::U16 => TyScalar::U16,
+            Self::U32 => TyScalar::U32,
+            Self::U64 => TyScalar::U64,
+            Self::Usize => TyScalar::Usize,
+            Self::F32 => TyScalar::F32,
+            Self::F64 => TyScalar::F64,
             Self::Str => return (ReferenceBase::Str, 1),
             Self::Aggregate(index) => return (ReferenceBase::Aggregate(index), 1),
             Self::Pool(index) => return (ReferenceBase::Pool(index), 1),
-            Self::Handle(layout, asynchronous) => return (ReferenceBase::Handle(layout, asynchronous), 1),
+            Self::Handle(layout, asynchronous) => {
+                return (ReferenceBase::Handle(layout, asynchronous), 1);
+            }
             Self::Indirect { base, modes } => return (base, modes),
         };
         (ReferenceBase::Scalar(scalar), 1)
@@ -130,13 +157,14 @@ impl Referent {
                 ReferenceBase::Scalar(scalar) => return scalar.referent(),
                 ReferenceBase::Aggregate(index) => return Self::Aggregate(index),
                 ReferenceBase::Pool(index) => return Self::Pool(index),
-                ReferenceBase::Handle(layout, asynchronous) => return Self::Handle(layout, asynchronous),
+                ReferenceBase::Handle(layout, asynchronous) => {
+                    return Self::Handle(layout, asynchronous);
+                }
                 _ => {}
             }
         }
         Self::Indirect { base, modes }
     }
-
 }
 
 impl Ty {
@@ -149,7 +177,10 @@ impl Ty {
     }
 
     pub(crate) fn unsigned(self) -> bool {
-        matches!(self, Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::Usize)
+        matches!(
+            self,
+            Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::Usize
+        )
     }
 
     fn integer_bits(self, pointer_width: Option<u32>) -> Option<u32> {
@@ -188,7 +219,8 @@ impl Ty {
             Self::Ref { target, mutable } => {
                 let (base, modes) = target.encoding();
                 (modes <= u128::MAX / 2).then_some(Referent::Indirect {
-                    base, modes: (modes << 1) | u128::from(mutable),
+                    base,
+                    modes: (modes << 1) | u128::from(mutable),
                 })
             }
             Self::Allocation(target) => {
@@ -443,7 +475,9 @@ impl Ownership {
         let resource = |ty| match ty {
             Ty::Allocation(_) => Some(OwnedResource::Slot),
             Ty::Handle(..) => Some(OwnedResource::Handle),
-            Ty::Struct(index) if matches!(layouts[index].growing, Some(Growing::Map(..))) => Some(OwnedResource::Map),
+            Ty::Struct(index) if matches!(layouts[index].growing, Some(Growing::Map(..))) => {
+                Some(OwnedResource::Map)
+            }
             Ty::Struct(index) if owns_resources(ty, layouts) => Some(OwnedResource::Inline(index)),
             _ => None,
         };
@@ -546,7 +580,8 @@ impl Position {
         self == other
             || matches!(
                 (self, other),
-                (Self::Index(None), Self::Index(_)) | (Self::Index(_), Self::Index(None))
+                (Self::Index(None), Self::Index(_))
+                    | (Self::Index(_), Self::Index(None))
                     | (Self::MapEntry(None), Self::MapEntry(_))
                     | (Self::MapEntry(_), Self::MapEntry(None))
             )
@@ -671,25 +706,38 @@ struct Checker<'a> {
 
 pub fn verify(source: &str, tree: &StaticTree) -> Result<VerifiedProgram, Error> {
     if let Some(expansion) = crate::generics::specialize(source, tree)? {
-        let mut concrete = crate::frontend_for_target(&expansion.source, crate::parser::Mode::Program, &tree.target)?;
+        let mut concrete = crate::frontend_for_target(
+            &expansion.source,
+            crate::legacy_parser::Mode::Program,
+            &tree.target,
+        )?;
         let relocate = |range: &std::ops::Range<usize>| {
             expansion.offsets[range.start]..expansion.offsets[range.end]
         };
         concrete.std_file_range = relocate(&tree.std_file_range);
         concrete.std_env_range = relocate(&tree.std_env_range);
-        concrete.std_socket_wait_ranges = tree.std_socket_wait_ranges.iter().map(relocate).collect();
+        concrete.std_socket_wait_ranges =
+            tree.std_socket_wait_ranges.iter().map(relocate).collect();
         concrete.std_async_io_ranges = tree.std_async_io_ranges.iter().map(relocate).collect();
-        concrete.opaque_layouts = tree.opaque_layouts.iter().map(|(name, range)| {
-            (name.clone(), (relocate(&range.0), range.1))
-        }).collect();
+        concrete.opaque_layouts = tree
+            .opaque_layouts
+            .iter()
+            .map(|(name, range)| (name.clone(), (relocate(&range.0), range.1)))
+            .collect();
         for (generated, original) in &expansion.generated_ranges {
-            if tree.std_async_io_ranges.iter().any(|range| range.contains(&original.start)) {
+            if tree
+                .std_async_io_ranges
+                .iter()
+                .any(|range| range.contains(&original.start))
+            {
                 concrete.std_async_io_ranges.push(generated.clone());
             }
         }
         for (original, name, extent) in &expansion.layouts {
             if let Some((_, message)) = tree.opaque_layouts.get(original) {
-                concrete.opaque_layouts.insert(name.clone(), (extent.clone(), *message));
+                concrete
+                    .opaque_layouts
+                    .insert(name.clone(), (extent.clone(), *message));
             }
         }
         return verify(&expansion.source, &concrete);
@@ -785,16 +833,29 @@ pub fn verify(source: &str, tree: &StaticTree) -> Result<VerifiedProgram, Error>
     checker.structures()?;
     checker.constants()?;
     checker.signatures()?;
-    checker.field_pop_contracts = checker.signatures.iter()
-        .map(|signature| if signature.asynchronous { None } else { checker.pop_field_contract(signature) })
+    checker.field_pop_contracts = checker
+        .signatures
+        .iter()
+        .map(|signature| {
+            if signature.asynchronous {
+                None
+            } else {
+                checker.pop_field_contract(signature)
+            }
+        })
         .collect();
     checker.check_raw_addresses()?;
     let mut functions = checker.functions()?;
     functions.extend(checker.generated_functions.drain(..).map(Option::unwrap));
     checker.check_destructor_layouts()?;
     let stack_sizes = checker.stack_sizes()?;
-    let mut placement = crate::placement::plan(&functions, &checker.structures, stack_sizes.region_size)?;
-    if checker.structures.iter().any(|layout| layout.destructor.is_some()) {
+    let mut placement =
+        crate::placement::plan(&functions, &checker.structures, stack_sizes.region_size)?;
+    if checker
+        .structures
+        .iter()
+        .any(|layout| layout.destructor.is_some())
+    {
         // Implicit calls are not yet represented in the footprint graph.
         placement.footprint = None;
         placement.worker_footprints.clear();
@@ -803,7 +864,12 @@ pub fn verify(source: &str, tree: &StaticTree) -> Result<VerifiedProgram, Error>
         None
     } else {
         let symbols = ["queue_create", "queue_watch", "queue_wait"];
-        let indexes = symbols.map(|name| checker.names.get(format!("__crust_package_socket_{name}").as_str()).copied());
+        let indexes = symbols.map(|name| {
+            checker
+                .names
+                .get(format!("__crust_package_socket_{name}").as_str())
+                .copied()
+        });
         match indexes {
             [Some(create), Some(watch), Some(wait)] => Some([create, watch, wait]),
             _ => None,
@@ -812,9 +878,21 @@ pub fn verify(source: &str, tree: &StaticTree) -> Result<VerifiedProgram, Error>
     let socket_completion = if tree.std_socket_wait_ranges.is_empty() {
         None
     } else {
-        let symbols = ["completion_create", "completion_attach", "completion_submit", "completion_next"];
-        match symbols.map(|name| checker.names.get(format!("__crust_package_socket_{name}").as_str()).copied()) {
-            [Some(create), Some(attach), Some(submit), Some(next)] => Some([create, attach, submit, next]),
+        let symbols = [
+            "completion_create",
+            "completion_attach",
+            "completion_submit",
+            "completion_next",
+        ];
+        match symbols.map(|name| {
+            checker
+                .names
+                .get(format!("__crust_package_socket_{name}").as_str())
+                .copied()
+        }) {
+            [Some(create), Some(attach), Some(submit), Some(next)] => {
+                Some([create, attach, submit, next])
+            }
             _ => None,
         }
     };
@@ -829,7 +907,9 @@ pub fn verify(source: &str, tree: &StaticTree) -> Result<VerifiedProgram, Error>
         process_args: !tree.std_env_range.is_empty(),
         socket_reactor,
         socket_completion,
-        requires_openssl: tree.opaque_layouts.contains_key(crate::package::TLS_CONNECTION),
+        requires_openssl: tree
+            .opaque_layouts
+            .contains_key(crate::package::TLS_CONNECTION),
     })
 }
 
@@ -849,7 +929,9 @@ impl<'a> Checker<'a> {
 
     fn error(&self, id: NodeId, message: &'static str) -> Error {
         let node = self.node(id);
-        let offset = node.asm_operand.map_or(self.tree.tokens[node.start].span.start, |s| s.start);
+        let offset = node
+            .asm_operand
+            .map_or(self.tree.tokens[node.start].span.start, |s| s.start);
         Error::new(offset, message)
     }
 
@@ -857,8 +939,10 @@ impl<'a> Checker<'a> {
         let node = self.node(id);
         if matches!(self.text(node.start), "&" | "&&") && node.children.len() == 1 {
             let inner = self.node(node.children[0]);
-            if self.name(node.children[0]) == Some("str") && inner.children.is_empty()
-                && self.text(node.start) == "&" && self.text(node.start + 1) != "mut"
+            if self.name(node.children[0]) == Some("str")
+                && inner.children.is_empty()
+                && self.text(node.start) == "&"
+                && self.text(node.start + 1) != "mut"
             {
                 return Ok(Ty::Str);
             }
@@ -866,18 +950,27 @@ impl<'a> Checker<'a> {
                 if self.text(node.start) == "&&" {
                     return Err(self.error(id, "tranche empruntée imbriquée hors périmètre"));
                 }
-                let element = self.ty(inner.children[0])?.referent()
-                    .ok_or_else(|| self.error(id, "type d’élément de tranche non pris en charge"))?;
-                return Ok(Ty::Slice { element, mutable: self.text(node.start + 1) == "mut" });
+                let element = self.ty(inner.children[0])?.referent().ok_or_else(|| {
+                    self.error(id, "type d’élément de tranche non pris en charge")
+                })?;
+                return Ok(Ty::Slice {
+                    element,
+                    mutable: self.text(node.start + 1) == "mut",
+                });
             }
             let target = self
                 .ty(node.children[0])?
                 .referent()
                 .ok_or_else(|| self.error(id, "type d’emprunt non pris en charge"))?;
-            let inner = Ty::Ref { target, mutable: self.text(node.start + 1) == "mut" };
+            let inner = Ty::Ref {
+                target,
+                mutable: self.text(node.start + 1) == "mut",
+            };
             return if self.text(node.start) == "&&" {
                 Ok(Ty::Ref {
-                    target: inner.referent().ok_or_else(|| self.error(id, "type d’emprunt trop imbriqué"))?,
+                    target: inner
+                        .referent()
+                        .ok_or_else(|| self.error(id, "type d’emprunt trop imbriqué"))?,
                     mutable: false,
                 })
             } else {
@@ -885,8 +978,12 @@ impl<'a> Checker<'a> {
             };
         }
         if self.text(node.start) == "(" && !node.children.is_empty() {
-            let types = node.children.clone().into_iter()
-                .map(|id| self.ty(id)).collect::<Result<Vec<_>, Error>>()?;
+            let types = node
+                .children
+                .clone()
+                .into_iter()
+                .map(|id| self.ty(id))
+                .collect::<Result<Vec<_>, Error>>()?;
             return self.tuple_type(id, types);
         }
         if self.text(node.start) == "[" && node.children.len() == 2 {
@@ -947,7 +1044,9 @@ impl<'a> Checker<'a> {
             let key = self.ty(node.children[0])?;
             let value = self.ty(node.children[1])?;
             if !(key.signed() || key.unsigned() || key == Ty::Bool)
-                || !(value.scalar().is_some() || matches!(value, Ty::Ref { .. } | Ty::Allocation(_))) {
+                || !(value.scalar().is_some()
+                    || matches!(value, Ty::Ref { .. } | Ty::Allocation(_)))
+            {
                 return Err(self.error(
                     id,
                     "HashMap exige une clé entière ou booléenne et une valeur primitive, empruntée ou allouée",
@@ -992,7 +1091,10 @@ impl<'a> Checker<'a> {
     }
 
     fn usize_type(&self, id: NodeId) -> Result<Ty, Error> {
-        self.tree.target.pointer_width().map(|_| Ty::Usize)
+        self.tree
+            .target
+            .pointer_width()
+            .map(|_| Ty::Usize)
             .ok_or_else(|| self.error(id, "largeur des pointeurs inconnue pour cette cible"))
     }
 
@@ -1023,7 +1125,12 @@ impl<'a> Checker<'a> {
 
     // Store a handle's result dependencies under its position when it travels
     // inside another value. They become active only after extracting the handle.
-    fn append_value_origins(&mut self, origins: &mut Vec<Origin>, value: Value, prefix: &[Position]) {
+    fn append_value_origins(
+        &mut self,
+        origins: &mut Vec<Origin>,
+        value: Value,
+        prefix: &[Position],
+    ) {
         self.append_origins(origins, value.dependencies.loan, prefix);
         let mut output = prefix.to_vec();
         output.push(Position::TaskOutput);
@@ -1036,10 +1143,13 @@ impl<'a> Checker<'a> {
                 && matches!(value.ty, Ty::Handle(..))
         });
         value.dependencies.loan = (!current.is_empty()).then(|| self.intern(current));
-        let output = output.into_iter().map(|mut origin| {
-            origin.at = self.path(self.dependencies.paths[origin.at.0][1..].to_vec());
-            origin
-        }).collect::<Vec<_>>();
+        let output = output
+            .into_iter()
+            .map(|mut origin| {
+                origin.at = self.path(self.dependencies.paths[origin.at.0][1..].to_vec());
+                origin
+            })
+            .collect::<Vec<_>>();
         value.dependencies.awaited_loan = (!output.is_empty()).then(|| self.intern(output));
     }
 
@@ -1063,15 +1173,30 @@ impl<'a> Checker<'a> {
     }
 
     fn result_type(&mut self, payload: Ty, error: Ty) -> Ty {
-        if let Some(&(_, _, index)) = self.results.iter().find(|&&(p, e, _)| (p, e) == (payload, error)) {
+        if let Some(&(_, _, index)) = self
+            .results
+            .iter()
+            .find(|&&(p, e, _)| (p, e) == (payload, error))
+        {
             return Ty::Struct(index);
         }
         let index = self.structures.len();
         self.structures.push(Structure {
-            destructor: None, fields: vec![], array: None, pool: None, growing: None,
+            destructor: None,
+            fields: vec![],
+            array: None,
+            pool: None,
+            growing: None,
             variants: vec![
                 ("Err".into(), vec![("error".into(), error)]),
-                ("Ok".into(), if payload == Ty::Void { vec![] } else { vec![("value".into(), payload)] }),
+                (
+                    "Ok".into(),
+                    if payload == Ty::Void {
+                        vec![]
+                    } else {
+                        vec![("value".into(), payload)]
+                    },
+                ),
             ],
         });
         self.results.push((payload, error, index));
@@ -1137,7 +1262,12 @@ impl<'a> Checker<'a> {
         (self.runtime_call(id, "thread") && launch.children.len() == 2).then(|| launch.children[1])
     }
 
-    fn native_output_loan(&mut self, id: NodeId, index: usize, captures: &[Value]) -> Result<Option<LoanId>, Error> {
+    fn native_output_loan(
+        &mut self,
+        id: NodeId,
+        index: usize,
+        captures: &[Value],
+    ) -> Result<Option<LoanId>, Error> {
         let mut output = Vec::new();
         for dep in self.native_contracts[index].clone() {
             let from = self.dependencies.paths[dep.from.0].clone();
@@ -1201,11 +1331,17 @@ impl<'a> Checker<'a> {
             if self.dependent_handle(ty, value.dependencies.loan)
                 || self.has_dependent_handle_output(ty, value.dependencies.awaited_loan)
             {
-                return Err(self.error(entry, "un lancement faillible ne peut pas abandonner le handle dépendant capturé"));
+                return Err(self.error(
+                    entry,
+                    "un lancement faillible ne peut pas abandonner le handle dépendant capturé",
+                ));
             }
-            capture_origins.extend(self.origins(value.dependencies.loan).iter().map(|origin| Origin {
-                capture_exclusive: origin.capture_exclusive || self.has_exclusive_dependencies(ty),
-                ..*origin
+            capture_origins.extend(self.origins(value.dependencies.loan).iter().map(|origin| {
+                Origin {
+                    capture_exclusive: origin.capture_exclusive
+                        || self.has_exclusive_dependencies(ty),
+                    ..*origin
+                }
             }));
             if value.dependencies.loan.is_some() {
                 self.pending.push(value);
@@ -1306,7 +1442,8 @@ impl<'a> Checker<'a> {
                     Ty::Void
                 })
         };
-        self.native_entry_contracts[index] = std::mem::replace(&mut self.entry_effects, entry_effects);
+        self.native_entry_contracts[index] =
+            std::mem::replace(&mut self.entry_effects, entry_effects);
         self.waited_parameters = waited_parameters;
         self.propagation_waits = propagation_waits;
         self.native_returned_entries[index] =
@@ -1375,10 +1512,14 @@ impl<'a> Checker<'a> {
         match node.kind {
             "nom" => {
                 let binding = &self.tree.bindings[self.uses.get(&id)?.0];
-                if binding.mutable { return None; }
+                if binding.mutable {
+                    return None;
+                }
                 let init = binding.initializer?;
                 // Only syntax known to denote a constant. Do not chase binding aliases.
-                if !matches!(self.node(init).kind, "littéral" | "unaire" | "groupe") { return None; }
+                if !matches!(self.node(init).kind, "littéral" | "unaire" | "groupe") {
+                    return None;
+                }
                 self.map_literal_key(init)
             }
             "emprunt" | "groupe" => self.map_key(node.children[0]),
@@ -1390,37 +1531,61 @@ impl<'a> Checker<'a> {
         let node = self.node(id);
         match node.kind {
             "groupe" => self.map_literal_key(node.children[0]),
-            "unaire" if self.name(id) == Some("-") =>
-                self.map_literal_key(node.children[0])?.checked_neg(),
+            "unaire" if self.name(id) == Some("-") => {
+                self.map_literal_key(node.children[0])?.checked_neg()
+            }
             "littéral" => match self.name(id)? {
                 "true" => Some(1),
                 "false" => Some(0),
-                digits => digits.strip_prefix("0x").or_else(|| digits.strip_prefix("0X"))
-                    .map_or_else(|| digits.parse().ok(), |hex| i128::from_str_radix(hex, 16).ok()),
+                digits => digits
+                    .strip_prefix("0x")
+                    .or_else(|| digits.strip_prefix("0X"))
+                    .map_or_else(
+                        || digits.parse().ok(),
+                        |hex| i128::from_str_radix(hex, 16).ok(),
+                    ),
             },
             _ => None,
         }
     }
 
     fn update_map_entry(
-        &mut self, id: NodeId, map: BindingId, key: Option<i128>,
-        incoming: Option<LoanId>, definite: bool,
+        &mut self,
+        id: NodeId,
+        map: BindingId,
+        key: Option<i128>,
+        incoming: Option<LoanId>,
+        definite: bool,
     ) -> Result<(), Error> {
         self.check_dependency_scope(id, self.tree.bindings[map.0].scope, incoming)?;
         let slot = self.live_slot(id, map)?;
         let entry = Position::MapEntry(key);
-        let mut origins = self.origins(slot.loan).iter().copied().filter(|origin| {
-            !(definite && key.is_some() && self.dependencies.paths[origin.at.0].first() == Some(&entry))
-        }).collect::<Vec<_>>();
+        let mut origins = self
+            .origins(slot.loan)
+            .iter()
+            .copied()
+            .filter(|origin| {
+                !(definite
+                    && key.is_some()
+                    && self.dependencies.paths[origin.at.0].first() == Some(&entry))
+            })
+            .collect::<Vec<_>>();
         self.append_origins(&mut origins, incoming, &[entry]);
-        self.slots[map.0] = Some(Slot { loan: (!origins.is_empty()).then(|| self.intern(origins)), ..slot });
+        self.slots[map.0] = Some(Slot {
+            loan: (!origins.is_empty()).then(|| self.intern(origins)),
+            ..slot
+        });
         Ok(())
     }
 
     // A call may write through its parameter on only some paths. Preserve
     // the old origins at the call site and add the possible incoming ones.
     fn replace_entry_loan(
-        &mut self, id: NodeId, reference: Option<LoanId>, incoming: Option<LoanId>, definite: bool,
+        &mut self,
+        id: NodeId,
+        reference: Option<LoanId>,
+        incoming: Option<LoanId>,
+        definite: bool,
     ) -> Result<(), Error> {
         let mut maps = Vec::new();
         let mut parameters = Vec::new();
@@ -1429,7 +1594,8 @@ impl<'a> Checker<'a> {
                 [Position::MapEntry(key)] if origin.storage => maps.push((origin.root, *key)),
                 _ if !origin.storage => {
                     if let Some(index) = self.parameters.iter().position(|&(binding, ty)| {
-                        binding == origin.root && matches!(ty, Ty::Ref { target, mutable: true }
+                        binding == origin.root
+                            && matches!(ty, Ty::Ref { target, mutable: true }
                             if matches!(target.ty(), Ty::Ref { .. }))
                     }) {
                         parameters.push(index);
@@ -1451,10 +1617,19 @@ impl<'a> Checker<'a> {
         }
         for target in parameters {
             for origin in self.origins(incoming).to_vec() {
-                let source = self.parameters.iter().position(|&(binding, _)| {
-                    binding == origin.root && !origin.storage
-                }).ok_or_else(|| self.error(id, "la référence installée vise une cible locale"))?;
-                let effect = EntryEffect { target, source, path: origin.from, output: PathId::default() };
+                let source = self
+                    .parameters
+                    .iter()
+                    .position(|&(binding, _)| binding == origin.root && !origin.storage)
+                    .ok_or_else(|| {
+                        self.error(id, "la référence installée vise une cible locale")
+                    })?;
+                let effect = EntryEffect {
+                    target,
+                    source,
+                    path: origin.from,
+                    output: PathId::default(),
+                };
                 if !self.entry_effects.contains(&effect) {
                     self.entry_effects.push(effect);
                 }
@@ -1464,23 +1639,42 @@ impl<'a> Checker<'a> {
     }
 
     fn defer_entry_effects(
-        &mut self, id: NodeId, effects: &[EntryEffect], arguments: &[Value], origins: &mut Vec<Origin>,
+        &mut self,
+        id: NodeId,
+        effects: &[EntryEffect],
+        arguments: &[Value],
+        origins: &mut Vec<Origin>,
     ) -> Result<(), Error> {
         for effect in effects {
-            let target = arguments[effect.target].dependencies.loan
+            let target = arguments[effect.target]
+                .dependencies
+                .loan
                 .ok_or_else(|| self.error(id, "provenance de l’entrée cible inconnue"))?;
             let path = self.dependencies.paths[effect.path.0].clone();
-            let source = self.selected_loan(arguments[effect.source].dependencies.loan, &path)
+            let source = self
+                .selected_loan(arguments[effect.source].dependencies.loan, &path)
                 .ok_or_else(|| self.error(id, "provenance de la référence installée inconnue"))?;
             let mut found = false;
             for origin in self.origins(Some(target)) {
-                if origin.storage && matches!(self.dependencies.paths[origin.lock.0].as_slice(), [Position::MapEntry(_)]) {
-                    self.check_dependency_scope(id, self.tree.bindings[origin.root.0].scope, Some(source))?;
+                if origin.storage
+                    && matches!(
+                        self.dependencies.paths[origin.lock.0].as_slice(),
+                        [Position::MapEntry(_)]
+                    )
+                {
+                    self.check_dependency_scope(
+                        id,
+                        self.tree.bindings[origin.root.0].scope,
+                        Some(source),
+                    )?;
                     found = true;
-                } else if !origin.storage && self.parameters.iter().any(|&(binding, ty)| {
-                    binding == origin.root && matches!(ty, Ty::Ref { target, mutable: true }
+                } else if !origin.storage
+                    && self.parameters.iter().any(|&(binding, ty)| {
+                        binding == origin.root
+                            && matches!(ty, Ty::Ref { target, mutable: true }
                         if matches!(target.ty(), Ty::Ref { .. }))
-                }) {
+                    })
+                {
                     found = true;
                 }
             }
@@ -1488,27 +1682,40 @@ impl<'a> Checker<'a> {
                 return Err(self.error(id, "entrée cible de l’effet différé inconnue"));
             }
             let pair = (target, source);
-            let index = self.deferred_entries.iter().position(|item| *item == pair).unwrap_or_else(|| {
-                let index = self.deferred_entries.len();
-                self.deferred_entries.push(pair);
-                index
-            });
+            let index = self
+                .deferred_entries
+                .iter()
+                .position(|item| *item == pair)
+                .unwrap_or_else(|| {
+                    let index = self.deferred_entries.len();
+                    self.deferred_entries.push(pair);
+                    index
+                });
             let mut position = self.dependencies.paths[effect.output.0].clone();
             position.push(Position::TaskEffect(index));
             let marker = self.path(position);
-            origins.extend(self.origins(Some(target)).iter().map(|origin| Origin { at: marker, ..*origin }));
+            origins.extend(self.origins(Some(target)).iter().map(|origin| Origin {
+                at: marker,
+                ..*origin
+            }));
         }
         Ok(())
     }
 
     fn complete_entry_effects(&mut self, id: NodeId, task: Value) -> Result<(), Error> {
-        let mut effects = self.origins(task.dependencies.loan).iter().filter_map(|origin| {
-            let path = &self.dependencies.paths[origin.at.0];
-            match path.last() {
-                Some(Position::TaskEffect(index)) if !path.contains(&Position::TaskOutput) => Some(*index),
-                _ => None,
-            }
-        }).collect::<Vec<_>>();
+        let mut effects = self
+            .origins(task.dependencies.loan)
+            .iter()
+            .filter_map(|origin| {
+                let path = &self.dependencies.paths[origin.at.0];
+                match path.last() {
+                    Some(Position::TaskEffect(index)) if !path.contains(&Position::TaskOutput) => {
+                        Some(*index)
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
         for origin in self.origins(task.dependencies.loan).to_vec() {
             let path = &self.dependencies.paths[origin.at.0];
             let waits = match task.ty {
@@ -1518,9 +1725,11 @@ impl<'a> Checker<'a> {
             if origin.storage || !waits {
                 continue;
             }
-            if let Some(parameter) = self.parameters.iter().position(|&(binding, ty)| {
-                binding == origin.root && self.carries_handle(ty)
-            }) {
+            if let Some(parameter) = self
+                .parameters
+                .iter()
+                .position(|&(binding, ty)| binding == origin.root && self.carries_handle(ty))
+            {
                 let wait = (parameter, origin.from);
                 if !self.waited_parameters.contains(&wait) {
                     self.waited_parameters.push(wait);
@@ -1538,18 +1747,28 @@ impl<'a> Checker<'a> {
     }
 
     fn refresh_entry_reborrows(
-        &mut self, id: NodeId, target: Option<LoanId>, source: Option<LoanId>,
+        &mut self,
+        id: NodeId,
+        target: Option<LoanId>,
+        source: Option<LoanId>,
     ) -> Result<(), Error> {
-        let mut parents = self.origins(target).iter().filter_map(|origin| origin.parent).collect::<Vec<_>>();
+        let mut parents = self
+            .origins(target)
+            .iter()
+            .filter_map(|origin| origin.parent)
+            .collect::<Vec<_>>();
         let mut visited = std::collections::HashSet::new();
         while let Some(parent) = parents.pop() {
-            if !visited.insert(parent) { continue; }
+            if !visited.insert(parent) {
+                continue;
+            }
             let slot = self.live_slot(id, parent)?;
             let mut origins = self.origins(slot.loan).to_vec();
             parents.extend(origins.iter().filter_map(|origin| origin.parent));
             origins.extend_from_slice(self.origins(source));
             self.slots[parent.0] = Some(Slot {
-                loan: (!origins.is_empty()).then(|| self.intern(origins)), ..slot
+                loan: (!origins.is_empty()).then(|| self.intern(origins)),
+                ..slot
             });
         }
         Ok(())
@@ -1593,11 +1812,16 @@ impl<'a> Checker<'a> {
         let (output, expression, incoming) = match operation {
             "insert" => {
                 let incoming = self.expression(children[2], Some(value_type), Access::Move, out)?;
-                (value_type, Expr::MapInsert(map, key, incoming), Some(incoming))
+                (
+                    value_type,
+                    Expr::MapInsert(map, key, incoming),
+                    Some(incoming),
+                )
             }
             "get" | "get_mut" => {
                 let output = Ty::Ref {
-                    target: value_type.referent()
+                    target: value_type
+                        .referent()
                         .ok_or_else(|| self.error(id, "type d’entrée non empruntable"))?,
                     mutable: writes,
                 };
@@ -1630,8 +1854,16 @@ impl<'a> Checker<'a> {
         value.dependencies.loan = (!origins.is_empty()).then(|| self.intern(origins));
         value = value.finish_evaluation(out);
         if writes && !matches!(operation, "get_mut") && self.has_dependencies(value_type) {
-            let Position::MapEntry(key) = position else { unreachable!() };
-            self.update_map_entry(id, binding, key, incoming.and_then(|input| input.dependencies.loan), true)?;
+            let Position::MapEntry(key) = position else {
+                unreachable!()
+            };
+            self.update_map_entry(
+                id,
+                binding,
+                key,
+                incoming.and_then(|input| input.dependencies.loan),
+                true,
+            )?;
         }
         Ok(value)
     }
@@ -1675,23 +1907,42 @@ impl<'a> Checker<'a> {
 
     fn vector_field(&self, place: NodeId) -> Option<(BindingId, bool, usize, Ty)> {
         let node = self.node(place);
-        if node.kind != "projection" { return None; }
+        if node.kind != "projection" {
+            return None;
+        }
         let mut root = node.children[0];
         while self.node(root).kind == "groupe" {
             root = self.node(root).children[0];
         }
         let borrowed = self.node(root).kind == "indirection";
-        let name = if borrowed { self.node(root).children[0] } else { root };
+        let name = if borrowed {
+            self.node(root).children[0]
+        } else {
+            root
+        };
         let binding = *self.uses.get(&name)?;
         let layout = match (borrowed, self.slots[binding.0]?.ty) {
-            (true, Ty::Ref { target: Referent::Aggregate(layout), .. })
+            (
+                true,
+                Ty::Ref {
+                    target: Referent::Aggregate(layout),
+                    ..
+                },
+            )
             | (false, Ty::Struct(layout)) => layout,
             _ => return None,
         };
-        let (field, (_, ty)) = self.structures[layout].fields.iter().enumerate()
+        let (field, (_, ty)) = self.structures[layout]
+            .fields
+            .iter()
+            .enumerate()
             .find(|(_, (name, _))| Some(name.as_str()) == self.name(place))?;
-        let Ty::Allocation(content) = ty else { return None; };
-        let Growing::Vector(element) = self.growing_layout(content.ty())? else { return None; };
+        let Ty::Allocation(content) = ty else {
+            return None;
+        };
+        let Growing::Vector(element) = self.growing_layout(content.ty())? else {
+            return None;
+        };
         Some((binding, borrowed, field, element))
     }
 
@@ -1700,7 +1951,11 @@ impl<'a> Checker<'a> {
             return None;
         }
         lengths.sort_unstable();
-        if let Some(index) = self.vector_field_lengths.iter().position(|existing| *existing == lengths) {
+        if let Some(index) = self
+            .vector_field_lengths
+            .iter()
+            .position(|existing| *existing == lengths)
+        {
             return Some(index);
         }
         let index = self.vector_field_lengths.len();
@@ -1709,52 +1964,99 @@ impl<'a> Checker<'a> {
     }
 
     fn pop_field_contract(&self, signature: &Signature) -> Option<usize> {
-        let [(formal, Ty::Ref { target: Referent::Aggregate(layout), mutable: true })] =
-            signature.parameters.as_slice() else { return None; };
-        let &[tail] = self.node(signature.body).children.as_slice() else { return None; };
+        let [
+            (
+                formal,
+                Ty::Ref {
+                    target: Referent::Aggregate(layout),
+                    mutable: true,
+                },
+            ),
+        ] = signature.parameters.as_slice()
+        else {
+            return None;
+        };
+        let &[tail] = self.node(signature.body).children.as_slice() else {
+            return None;
+        };
         let tail = self.node(tail);
-        if !matches!(tail.kind, "résultat" | "return") { return None; }
-        let [call] = tail.children[..] else { return None; };
-        if self.node(call).kind != "appel méthode" || self.name(call) != Some("pop") { return None; }
-        let [place] = self.node(call).children[..] else { return None; };
-        if self.node(place).kind != "projection" { return None; }
+        if !matches!(tail.kind, "résultat" | "return") {
+            return None;
+        }
+        let [call] = tail.children[..] else {
+            return None;
+        };
+        if self.node(call).kind != "appel méthode" || self.name(call) != Some("pop") {
+            return None;
+        }
+        let [place] = self.node(call).children[..] else {
+            return None;
+        };
+        if self.node(place).kind != "projection" {
+            return None;
+        }
         let mut owner = self.node(place).children[0];
         while self.node(owner).kind == "groupe" {
             owner = self.node(owner).children[0];
         }
         if self.node(owner).kind != "indirection"
-            || self.uses.get(&self.node(owner).children[0]) != Some(formal) {
+            || self.uses.get(&self.node(owner).children[0]) != Some(formal)
+        {
             return None;
         }
-        self.structures[*layout].fields.iter()
+        self.structures[*layout]
+            .fields
+            .iter()
             .position(|(name, _)| Some(name.as_str()) == self.name(place))
     }
 
     fn precise_field_pop(&self, root: BindingId, field: usize) -> Option<usize> {
         let lengths = self.slots[root.0]?.field_lengths?;
-        self.vector_field_lengths[lengths].iter().find_map(|&(position, len)| (position == field).then_some(len))
+        self.vector_field_lengths[lengths]
+            .iter()
+            .find_map(|&(position, len)| (position == field).then_some(len))
     }
 
     fn mutable_record_root(&self, ty: Ty, loan: Option<LoanId>) -> Option<BindingId> {
-        if !matches!(ty, Ty::Ref { target: Referent::Aggregate(_), mutable: true }) {
+        if !matches!(
+            ty,
+            Ty::Ref {
+                target: Referent::Aggregate(_),
+                mutable: true
+            }
+        ) {
             return None;
         }
-        let mut roots = self.origins(loan).iter().filter(|origin| {
-            origin.storage && !origin.pool && !origin.opaque
-                && origin.at == PathId::default() && origin.from == PathId::default()
-        }).map(|origin| origin.root);
+        let mut roots = self
+            .origins(loan)
+            .iter()
+            .filter(|origin| {
+                origin.storage
+                    && !origin.pool
+                    && !origin.opaque
+                    && origin.at == PathId::default()
+                    && origin.from == PathId::default()
+            })
+            .map(|origin| origin.root);
         let root = roots.next()?;
         roots.all(|other| other == root).then_some(root)
     }
 
     fn finish_field_pop(&mut self, root: BindingId, field: usize, len: usize) {
-        if len == 0 { return; }
+        if len == 0 {
+            return;
+        }
         let selected = [Position::Field(field), Position::Index(Some(len - 1))];
         let slot = self.slots[root.0].unwrap();
-        let remaining = self.origins(slot.loan).iter().copied().filter(|origin| {
-            let path = &self.dependencies.paths[origin.at.0];
-            !path.starts_with(&selected)
-        }).collect::<Vec<_>>();
+        let remaining = self
+            .origins(slot.loan)
+            .iter()
+            .copied()
+            .filter(|origin| {
+                let path = &self.dependencies.paths[origin.at.0];
+                !path.starts_with(&selected)
+            })
+            .collect::<Vec<_>>();
         let mut lengths = self.vector_field_lengths[slot.field_lengths.unwrap()].clone();
         if let Some((_, current)) = lengths.iter_mut().find(|(position, _)| *position == field) {
             *current = len - 1;
@@ -1768,19 +2070,38 @@ impl<'a> Checker<'a> {
         // in several successive iterator stages. Remove only the selected
         // index beneath an exact storage edge to this particular container.
         for binding in 0..self.slots.len() {
-            let Some(alias) = self.slots[binding] else { continue; };
-            if binding == root.0 || alias.state != State::Live { continue; }
+            let Some(alias) = self.slots[binding] else {
+                continue;
+            };
+            if binding == root.0 || alias.state != State::Live {
+                continue;
+            }
             let origins = self.origins(alias.loan);
-            let prefixes = origins.iter().filter(|origin| origin.storage && origin.root == root
-                && origin.from == PathId::default() && !origin.pool && !origin.opaque)
+            let prefixes = origins
+                .iter()
+                .filter(|origin| {
+                    origin.storage
+                        && origin.root == root
+                        && origin.from == PathId::default()
+                        && !origin.pool
+                        && !origin.opaque
+                })
                 .map(|origin| self.dependencies.paths[origin.at.0].clone())
                 .collect::<Vec<_>>();
-            if prefixes.is_empty() { continue; }
-            let remaining = origins.iter().copied().filter(|origin| {
-                let path = &self.dependencies.paths[origin.at.0];
-                !prefixes.iter().any(|prefix| path.strip_prefix(prefix.as_slice())
-                    .is_some_and(|tail| tail.starts_with(&selected)))
-            }).collect::<Vec<_>>();
+            if prefixes.is_empty() {
+                continue;
+            }
+            let remaining = origins
+                .iter()
+                .copied()
+                .filter(|origin| {
+                    let path = &self.dependencies.paths[origin.at.0];
+                    !prefixes.iter().any(|prefix| {
+                        path.strip_prefix(prefix.as_slice())
+                            .is_some_and(|tail| tail.starts_with(&selected))
+                    })
+                })
+                .collect::<Vec<_>>();
             if remaining.len() != origins.len() {
                 self.slots[binding] = Some(Slot {
                     loan: (!remaining.is_empty()).then(|| self.intern(remaining)),
@@ -1836,7 +2157,10 @@ impl<'a> Checker<'a> {
     fn vector_extract(&mut self, id: NodeId, out: &mut Vec<Instr>) -> Result<Value, Error> {
         let children = &self.node(id).children;
         if let Some((binding, borrowed, field, element)) = self.vector_field(children[0]) {
-            if self.name(id) != Some("pop") || children.len() != 1 || !contains_handle(element, &self.structures) {
+            if self.name(id) != Some("pop")
+                || children.len() != 1
+                || !contains_handle(element, &self.structures)
+            {
                 return Err(self.error(id, "pop sur un champ de vecteur de handles attendu"));
             }
             let slot = self.live_slot(id, binding)?;
@@ -1845,16 +2169,24 @@ impl<'a> Checker<'a> {
             } else {
                 self.tree.bindings[binding.0].mutable
             };
-            if !mutable { return Err(self.error(id, "vecteur mutable attendu")); }
+            if !mutable {
+                return Err(self.error(id, "vecteur mutable attendu"));
+            }
             self.access_projected(id, binding, borrowed, true, &[Position::Field(field)])?;
             let vector = self.projection_value(children[0], Access::Read, out)?;
             let ty = self.option_type(element);
             let mut value = self.emit(ty, Expr::VectorExtract(vector, None, element), out);
-            let root = if borrowed { self.mutable_record_root(slot.ty, slot.loan) } else { Some(binding) };
-            let exact = root.and_then(|root| self.precise_field_pop(root, field).map(|len| (root, len)));
+            let root = if borrowed {
+                self.mutable_record_root(slot.ty, slot.loan)
+            } else {
+                Some(binding)
+            };
+            let exact =
+                root.and_then(|root| self.precise_field_pop(root, field).map(|len| (root, len)));
             let mut origins = match exact {
                 Some((_, 0)) => Vec::new(),
-                Some((_, len)) => self.selected_origins(vector.dependencies.loan, &[Position::Index(Some(len - 1))]),
+                Some((_, len)) => self
+                    .selected_origins(vector.dependencies.loan, &[Position::Index(Some(len - 1))]),
                 None => self.selected_origins(vector.dependencies.loan, &[Position::Index(None)]),
             };
             for origin in &mut origins {
@@ -1863,14 +2195,19 @@ impl<'a> Checker<'a> {
                 origin.at = self.path(path);
             }
             self.unpack_output(&mut value, origins);
-            if let Some((root, len)) = exact { self.finish_field_pop(root, field, len); }
+            if let Some((root, len)) = exact {
+                self.finish_field_pop(root, field, len);
+            }
             return Ok(value.finish_evaluation(out));
         }
         let (binding, Growing::Vector(element)) = self.growing_handle(children[0]).unwrap() else {
             return Err(self.error(id, "vecteur attendu"));
         };
         if !matches!(element, Ty::Allocation(_)) && !contains_handle(element, &self.structures) {
-            return Err(self.error(id, "extraction prise en charge pour les allocations et éléments contenant des handles"));
+            return Err(self.error(
+                id,
+                "extraction prise en charge pour les allocations et éléments contenant des handles",
+            ));
         }
         if !self.tree.bindings[binding.0].mutable {
             return Err(self.error(id, "vecteur mutable attendu"));
@@ -1895,20 +2232,30 @@ impl<'a> Checker<'a> {
             slot.vector_len.and_then(|length| length.checked_sub(1))
         } else {
             match index.and_then(|index| index.integer) {
-                Some(index) => Some(usize::try_from(index)
-                    .map_err(|_| self.error(id, "indice hors du vecteur"))?),
+                Some(index) => Some(
+                    usize::try_from(index).map_err(|_| self.error(id, "indice hors du vecteur"))?,
+                ),
                 None if slot.vector_len == Some(1) => Some(0),
                 None => None,
             }
         };
         let dependent = self.dependent_handle(slot.ty, slot.loan);
         if !pop && dependent && (position.is_none() || slot.vector_len.is_none()) {
-            return Err(self.error(id, "l’extraction doit identifier la case du handle dépendant"));
+            return Err(self.error(
+                id,
+                "l’extraction doit identifier la case du handle dépendant",
+            ));
         }
-        if let Some((position, length)) = position.zip(slot.vector_len) && position >= length {
+        if let Some((position, length)) = position.zip(slot.vector_len)
+            && position >= length
+        {
             return Err(self.error(id, "indice hors du vecteur"));
         }
-        let ty = if pop { self.option_type(element) } else { element };
+        let ty = if pop {
+            self.option_type(element)
+        } else {
+            element
+        };
         let mut result = self.emit(ty, Expr::VectorExtract(vector, index, element), out);
         if self.has_dependencies(element) {
             let mut selected = Vec::new();
@@ -1920,9 +2267,16 @@ impl<'a> Checker<'a> {
                     continue;
                 };
                 if position.is_none() || previous.is_none() || position == previous {
-                    let mut output = if pop { vec![Position::Variant(1), Position::Field(0)] } else { vec![] };
+                    let mut output = if pop {
+                        vec![Position::Variant(1), Position::Field(0)]
+                    } else {
+                        vec![]
+                    };
                     output.extend_from_slice(rest);
-                    selected.push(Origin { at: self.path(output), ..origin });
+                    selected.push(Origin {
+                        at: self.path(output),
+                        ..origin
+                    });
                 }
                 if slot.vector_len == Some(1) {
                     continue;
@@ -2042,24 +2396,34 @@ impl<'a> Checker<'a> {
         };
         let init = match &children[1..] {
             [] => self.default_value(id, element, out)?,
-            [arg] if self.node(*arg).kind == "construction"
-                && let Ty::Struct(index) = element
-                && self.structures[index].variants.is_empty()
-                && self.name(*arg).and_then(|name| self.structure_names.get(name)) == Some(&index) =>
-                self.construct_fields(*arg, index, None, &self.node(*arg).children, true, out)?,
-            [arg] if !matches!(self.node(*arg).kind, "champ" | "initialiseur pool") =>
-                self.expression(*arg, Some(element), Access::Move, out)?,
+            [arg]
+                if self.node(*arg).kind == "construction"
+                    && let Ty::Struct(index) = element
+                    && self.structures[index].variants.is_empty()
+                    && self
+                        .name(*arg)
+                        .and_then(|name| self.structure_names.get(name))
+                        == Some(&index) =>
+            {
+                self.construct_fields(*arg, index, None, &self.node(*arg).children, true, out)?
+            }
+            [arg] if !matches!(self.node(*arg).kind, "champ" | "initialiseur pool") => {
+                self.expression(*arg, Some(element), Access::Move, out)?
+            }
             args => {
                 let Ty::Struct(index) = element else {
                     return Err(self.error(id, "initialiseur de structure attendu"));
                 };
-                if variants != 0 || self.structures[index].array.is_some()
+                if variants != 0
+                    || self.structures[index].array.is_some()
                     || self.structures[index].pool.is_some()
                 {
                     return Err(self.error(id, "initialiseur de structure attendu"));
                 }
                 let fields = match args {
-                    [arg] if self.node(*arg).kind == "initialiseur pool" => &self.node(*arg).children,
+                    [arg] if self.node(*arg).kind == "initialiseur pool" => {
+                        &self.node(*arg).children
+                    }
                     _ => args,
                 };
                 self.construct_fields(id, index, None, fields, true, out)?
@@ -2125,10 +2489,8 @@ impl<'a> Checker<'a> {
     }
 
     fn array_type(&mut self, id: NodeId, element: Ty, length: usize) -> Result<Ty, Error> {
-        if matches!(
-            element,
-            Ty::Void | Ty::Pool(_) | Ty::Future(_)
-        ) || self.pool_layout(element).is_some()
+        if matches!(element, Ty::Void | Ty::Pool(_) | Ty::Future(_))
+            || self.pool_layout(element).is_some()
             || self.growing_layout(element).is_some()
         {
             return Err(self.error(id, "élément avec dépendance ou sans stockage"));
@@ -2168,9 +2530,7 @@ impl<'a> Checker<'a> {
                 return Err(self.error(field, "champ dupliqué"));
             }
             let ty = self.ty(self.node(field).children[0])?;
-            if matches!(ty, Ty::Void | Ty::Pool(_))
-                || self.growing_layout(ty).is_some()
-            {
+            if matches!(ty, Ty::Void | Ty::Pool(_)) || self.growing_layout(ty).is_some() {
                 return Err(self.error(field, "champ avec dépendance ou sans stockage"));
             }
             fields.push((name, ty));
@@ -2315,16 +2675,29 @@ impl<'a> Checker<'a> {
                     }
                 }
                 "impl" => {
-                    let layout = *self.structure_names.get(name.unwrap())
+                    let layout = *self
+                        .structure_names
+                        .get(name.unwrap())
                         .ok_or_else(|| self.error(item, "type déclaré attendu pour impl"))?;
                     for member in self.node(item).children.clone() {
-                        if self.node(member).kind != "const" { continue; }
+                        if self.node(member).kind != "const" {
+                            continue;
+                        }
                         let name = self.name(member).unwrap();
-                        if name == "drop" || self.structures[layout].fields.iter().any(|(field, _)| field == name) {
+                        if name == "drop"
+                            || self.structures[layout]
+                                .fields
+                                .iter()
+                                .any(|(field, _)| field == name)
+                        {
                             return Err(self.error(member, "nom de constante associée en conflit"));
                         }
                         let constant = self.constant_value(member)?;
-                        if self.associated_constants.insert((layout, name), constant).is_some() {
+                        if self
+                            .associated_constants
+                            .insert((layout, name), constant)
+                            .is_some()
+                        {
                             return Err(self.error(member, "constante associée dupliquée"));
                         }
                     }
@@ -2341,7 +2714,9 @@ impl<'a> Checker<'a> {
             "nom" if !self.uses.contains_key(&id) => self.constants.get(self.name(id)?).copied(),
             "nom qualifié" if node.children.is_empty() && node.end == node.start + 3 => {
                 let owner = *self.structure_names.get(self.text(node.start))?;
-                self.associated_constants.get(&(owner, self.text(node.start + 2))).copied()
+                self.associated_constants
+                    .get(&(owner, self.text(node.start + 2)))
+                    .copied()
             }
             _ => None,
         }
@@ -2410,7 +2785,9 @@ impl<'a> Checker<'a> {
             if asynchronous
                 && (name == "main"
                     || result != Ty::Void && !async_fixed(result, &self.structures)
-                    || parameters.iter().any(|(_, ty)| !async_fixed(*ty, &self.structures)))
+                    || parameters
+                        .iter()
+                        .any(|(_, ty)| !async_fixed(*ty, &self.structures)))
             {
                 return Err(self.error(
                     id,
@@ -2431,11 +2808,17 @@ impl<'a> Checker<'a> {
         }
         let implementations = root.children.clone();
         for id in implementations {
-            if self.node(id).kind != "impl" { continue; }
-            let layout = *self.structure_names.get(self.name(id).unwrap())
+            if self.node(id).kind != "impl" {
+                continue;
+            }
+            let layout = *self
+                .structure_names
+                .get(self.name(id).unwrap())
                 .ok_or_else(|| self.error(id, "type déclaré attendu pour impl"))?;
             for method in self.node(id).children.clone() {
-                if self.node(method).kind == "const" { continue; }
+                if self.node(method).kind == "const" {
+                    continue;
+                }
                 let children = self.node(method).children.clone();
                 let asynchronous = self.node(method).kind == "async fn";
                 if self.name(method) != Some("drop") {
@@ -2449,15 +2832,25 @@ impl<'a> Checker<'a> {
                         match member.kind {
                             "paramètre" if self.name(child) == Some("self") => {
                                 if !parameters.is_empty() {
-                                    return Err(self.error(child, "le receveur doit être le premier paramètre"));
+                                    return Err(self.error(
+                                        child,
+                                        "le receveur doit être le premier paramètre",
+                                    ));
                                 }
                                 let ty = match member.children.as_slice() {
                                     [] if self.text(member.start) == "&" => Ty::Ref {
                                         target: Referent::Aggregate(layout),
                                         mutable: self.text(member.start + 1) == "mut",
                                     },
-                                    [annotation] if self.ty(*annotation)? == Ty::Struct(layout) => Ty::Struct(layout),
-                                    _ => return Err(self.error(child, "le type de self doit correspondre au type de impl")),
+                                    [annotation] if self.ty(*annotation)? == Ty::Struct(layout) => {
+                                        Ty::Struct(layout)
+                                    }
+                                    _ => {
+                                        return Err(self.error(
+                                            child,
+                                            "le type de self doit correspondre au type de impl",
+                                        ));
+                                    }
                                 };
                                 receiver = true;
                                 parameters.push((self.bindings[&child], ty));
@@ -2465,11 +2858,14 @@ impl<'a> Checker<'a> {
                             "paramètre" => {
                                 let ty = self.ty(member.children[0])?;
                                 if matches!(ty, Ty::Void | Ty::Pool(_)) {
-                                    return Err(self.error(child, "paramètre sans valeur transmissible"));
+                                    return Err(
+                                        self.error(child, "paramètre sans valeur transmissible")
+                                    );
                                 }
                                 let binding = self.bindings[&child];
                                 if parameters.iter().any(|&(previous, _)| {
-                                    self.tree.bindings[previous.0].name == self.tree.bindings[binding.0].name
+                                    self.tree.bindings[previous.0].name
+                                        == self.tree.bindings[binding.0].name
                                 }) {
                                     return Err(self.error(child, "paramètre dupliqué"));
                                 }
@@ -2477,24 +2873,40 @@ impl<'a> Checker<'a> {
                             }
                             "type" => result = self.ty(child)?,
                             "scope" => body = Some(child),
-                            _ => return Err(self.error(child, "annotation de méthode hors périmètre")),
+                            _ => {
+                                return Err(
+                                    self.error(child, "annotation de méthode hors périmètre")
+                                );
+                            }
                         }
                     }
                     if matches!(result, Ty::Pool(_)) {
                         return Err(self.error(method, "un pool se passe uniquement par emprunt"));
                     }
-                    if asynchronous && (result != Ty::Void && !async_fixed(result, &self.structures)
-                        || parameters.iter().any(|(_, ty)| !async_fixed(*ty, &self.structures)))
+                    if asynchronous
+                        && (result != Ty::Void && !async_fixed(result, &self.structures)
+                            || parameters
+                                .iter()
+                                .any(|(_, ty)| !async_fixed(*ty, &self.structures)))
                     {
-                        return Err(self.error(method, "async exige des captures et résultats fixes pris en charge"));
+                        return Err(self.error(
+                            method,
+                            "async exige des captures et résultats fixes pris en charge",
+                        ));
                     }
                     if self.associated_constants.contains_key(&(layout, name))
-                        || self.structures[layout].fields.iter().any(|(field, _)| field == name)
+                        || self.structures[layout]
+                            .fields
+                            .iter()
+                            .any(|(field, _)| field == name)
                     {
                         return Err(self.error(method, "nom de méthode en conflit"));
                     }
                     let index = self.signatures.len();
-                    if name == "from" && !asynchronous && !receiver && result == Ty::Struct(layout)
+                    if name == "from"
+                        && !asynchronous
+                        && !receiver
+                        && result == Ty::Struct(layout)
                         && let [(_, input)] = parameters.as_slice()
                     {
                         if self.methods.contains_key(&(layout, name)) {
@@ -2502,45 +2914,73 @@ impl<'a> Checker<'a> {
                         }
                         let conversions = self.conversions.entry(layout).or_default();
                         if conversions.iter().any(|&(source, _)| source == *input) {
-                            return Err(self.error(method, "surcharge from dupliquée pour le même type source"));
+                            return Err(self.error(
+                                method,
+                                "surcharge from dupliquée pour le même type source",
+                            ));
                         }
                         conversions.push((*input, index));
                     } else if (name == "from" && self.conversions.contains_key(&layout))
-                        || self.methods.insert((layout, name), (index, receiver)).is_some()
+                        || self
+                            .methods
+                            .insert((layout, name), (index, receiver))
+                            .is_some()
                     {
                         return Err(self.error(method, "nom de méthode en conflit"));
                     }
                     self.signatures.push(Signature {
-                        parameters, result, entry: false, asynchronous,
+                        parameters,
+                        result,
+                        entry: false,
+                        asynchronous,
                         body: body.ok_or_else(|| self.error(method, "corps de méthode requis"))?,
                     });
                     continue;
                 }
                 let [receiver, tail @ ..] = children.as_slice() else {
-                    return Err(self.error(method, "signature attendue : fn drop(&mut self) -> Void"));
+                    return Err(
+                        self.error(method, "signature attendue : fn drop(&mut self) -> Void")
+                    );
                 };
                 let result_ok = match tail {
                     [_] => true,
-                    [result, _] if self.node(*result).kind == "type" => self.ty(*result)? == Ty::Void,
+                    [result, _] if self.node(*result).kind == "type" => {
+                        self.ty(*result)? == Ty::Void
+                    }
                     _ => false,
                 };
-                if asynchronous || self.node(*receiver).kind != "paramètre"
+                if asynchronous
+                    || self.node(*receiver).kind != "paramètre"
                     || self.name(*receiver) != Some("self")
                     || self.text(self.node(*receiver).start) != "&"
                     || self.text(self.node(*receiver).start + 1) != "mut"
                     || !self.node(*receiver).children.is_empty()
-                    || !result_ok || self.node(*tail.last().unwrap()).kind != "scope"
+                    || !result_ok
+                    || self.node(*tail.last().unwrap()).kind != "scope"
                 {
-                    return Err(self.error(method, "signature attendue : fn drop(&mut self) -> Void"));
+                    return Err(
+                        self.error(method, "signature attendue : fn drop(&mut self) -> Void")
+                    );
                 }
-                if self.structures[layout].destructor.replace(self.signatures.len()).is_some() {
+                if self.structures[layout]
+                    .destructor
+                    .replace(self.signatures.len())
+                    .is_some()
+                {
                     return Err(self.error(method, "destructeur dupliqué"));
                 }
                 self.signatures.push(Signature {
-                    parameters: vec![(self.bindings[receiver], Ty::Ref {
-                        target: Referent::Aggregate(layout), mutable: true,
-                    })],
-                    result: Ty::Void, entry: false, asynchronous: false, body: *tail.last().unwrap(),
+                    parameters: vec![(
+                        self.bindings[receiver],
+                        Ty::Ref {
+                            target: Referent::Aggregate(layout),
+                            mutable: true,
+                        },
+                    )],
+                    result: Ty::Void,
+                    entry: false,
+                    asynchronous: false,
+                    body: *tail.last().unwrap(),
                 });
             }
         }
@@ -2551,9 +2991,14 @@ impl<'a> Checker<'a> {
     }
 
     fn check_destructor_layouts(&self) -> Result<(), Error> {
-        if self.structures.iter().any(|layout| matches!(layout.growing,
-            Some(Growing::Vector(element)) if inline_destructor(element, &self.structures))) {
-            return Err(Error::new(0, "destructeur personnalisé dans un vecteur hors périmètre"));
+        if self.structures.iter().any(|layout| {
+            matches!(layout.growing,
+            Some(Growing::Vector(element)) if inline_destructor(element, &self.structures))
+        }) {
+            return Err(Error::new(
+                0,
+                "destructeur personnalisé dans un vecteur hors périmètre",
+            ));
         }
         Ok(())
     }
@@ -2569,36 +3014,45 @@ impl<'a> Checker<'a> {
             order.push(index);
         }
 
-        let calls = self.signatures.iter().map(|signature| {
-            let mut nodes = vec![signature.body];
-            let mut callees = Vec::new();
-            while let Some(id) = nodes.pop() {
-                let node = self.node(id);
-                if node.kind == "appel" {
-                    if let Some(callee) = self.function_index(id) {
-                        callees.push(callee);
-                    } else if self.iter_constructor(id) {
-                        callees.extend(self.methods.iter().filter_map(|(&(_, name), &(index, receiver))| {
-                            (receiver && name == "next").then_some(index)
-                        }));
-                    } else if let Some(layout) = self.explicit_conversion_target(id) {
-                        callees.extend(self.conversions[&layout].iter().map(|&(_, index)| index));
+        let calls = self
+            .signatures
+            .iter()
+            .map(|signature| {
+                let mut nodes = vec![signature.body];
+                let mut callees = Vec::new();
+                while let Some(id) = nodes.pop() {
+                    let node = self.node(id);
+                    if node.kind == "appel" {
+                        if let Some(callee) = self.function_index(id) {
+                            callees.push(callee);
+                        } else if self.iter_constructor(id) {
+                            callees.extend(self.methods.iter().filter_map(
+                                |(&(_, name), &(index, receiver))| {
+                                    (receiver && name == "next").then_some(index)
+                                },
+                            ));
+                        } else if let Some(layout) = self.explicit_conversion_target(id) {
+                            callees
+                                .extend(self.conversions[&layout].iter().map(|&(_, index)| index));
+                        }
+                    } else if node.kind == "appel méthode" {
+                        callees.extend(self.methods.iter().filter_map(
+                            |(&(_, name), &(index, receiver))| {
+                                (receiver && self.name(id) == Some(name)).then_some(index)
+                            },
+                        ));
+                    } else if node.kind == "propagation"
+                        && let Some((layout, true)) = self.propagation_layout(signature.result)
+                        && let Ty::Struct(error) = self.structures[layout].variants[0].1[0].1
+                        && let Some(conversions) = self.conversions.get(&error)
+                    {
+                        callees.extend(conversions.iter().map(|&(_, index)| index));
                     }
-                } else if node.kind == "appel méthode" {
-                    callees.extend(self.methods.iter().filter_map(|(&(_, name), &(index, receiver))| {
-                        (receiver && self.name(id) == Some(name)).then_some(index)
-                    }));
-                } else if node.kind == "propagation"
-                    && let Some((layout, true)) = self.propagation_layout(signature.result)
-                    && let Ty::Struct(error) = self.structures[layout].variants[0].1[0].1
-                    && let Some(conversions) = self.conversions.get(&error)
-                {
-                    callees.extend(conversions.iter().map(|&(_, index)| index));
+                    nodes.extend(&node.children);
                 }
-                nodes.extend(&node.children);
-            }
-            callees
-        }).collect::<Vec<_>>();
+                callees
+            })
+            .collect::<Vec<_>>();
         let mut seen = vec![false; calls.len()];
         let mut order = Vec::new();
         for index in 0..calls.len() {
@@ -2665,7 +3119,10 @@ impl<'a> Checker<'a> {
                     self.entry_effects.sort_unstable();
                     if !self.carries_handle(self.function_result) {
                         for (parameter, path) in &mut self.waited_parameters {
-                            if matches!(self.parameters[*parameter].1, Ty::Struct(_) | Ty::Handle(..)) {
+                            if matches!(
+                                self.parameters[*parameter].1,
+                                Ty::Struct(_) | Ty::Handle(..)
+                            ) {
                                 *path = PathId::default();
                             }
                         }
@@ -2685,21 +3142,33 @@ impl<'a> Checker<'a> {
                 if !cyclic || !changed {
                     break;
                 }
-                let contracts = group.iter().map(|&index| (
-                    self.contracts[index].clone(), self.entry_contracts[index].clone(),
-                    self.wait_contracts[index].clone(), self.returned_entry_contracts[index].clone(),
-                )).collect::<Vec<_>>();
+                let contracts = group
+                    .iter()
+                    .map(|&index| {
+                        (
+                            self.contracts[index].clone(),
+                            self.entry_contracts[index].clone(),
+                            self.wait_contracts[index].clone(),
+                            self.returned_entry_contracts[index].clone(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 if seen.contains(&contracts) || seen.len() == 64 {
-                    return Err(self.error(self.signatures[group[0]].body,
-                        "le contrat du cycle récursif ne se stabilise pas"));
+                    return Err(self.error(
+                        self.signatures[group[0]].body,
+                        "le contrat du cycle récursif ne se stabilise pas",
+                    ));
                 }
                 seen.push(contracts);
                 // Generated bodies may depend on the contracts being solved.
                 // Rebuild those introduced in this pass before rechecking the cycle.
-                self.native_blocks.retain(|_, index| *index < generated_count);
+                self.native_blocks
+                    .retain(|_, index| *index < generated_count);
                 let first_rolled_back = self.signatures.len() + generated_count;
-                self.pipeline_mappers.retain(|_, (index, _)| *index < first_rolled_back);
-                self.pipeline_mapper_waits.retain(|index, _| *index < first_rolled_back);
+                self.pipeline_mappers
+                    .retain(|_, (index, _)| *index < first_rolled_back);
+                self.pipeline_mapper_waits
+                    .retain(|index, _| *index < first_rolled_back);
                 self.generated_functions.truncate(generated_count);
                 self.native_contracts.truncate(generated_count);
                 self.native_entry_contracts.truncate(generated_count);
@@ -2770,7 +3239,11 @@ impl<'a> Checker<'a> {
             self.waited_parameters.retain(|wait| waits.contains(wait));
         }
         let body_offset = self.tree.tokens[self.node(signature.body).start].span.start;
-        let std_io = self.tree.std_async_io_ranges.iter().any(|range| range.contains(&body_offset));
+        let std_io = self
+            .tree
+            .std_async_io_ranges
+            .iter()
+            .any(|range| range.contains(&body_offset));
         if signature.asynchronous && !async_region_body(&body, &self.structures, std_io) {
             return Err(self.error(signature.body, "le prototype async accepte ici les opérations fixes et les collections locales prises en charge"));
         }
@@ -2793,38 +3266,53 @@ impl<'a> Checker<'a> {
     }
 
     fn requires_wait(&self, ty: Ty) -> bool {
-        self.carries_handle(ty) || match ty {
-            Ty::Future(function) => self.signatures[function].parameters.iter()
-                .any(|(_, ty)| self.carries_handle(*ty)),
-            _ => false,
-        }
+        self.carries_handle(ty)
+            || match ty {
+                Ty::Future(function) => self.signatures[function]
+                    .parameters
+                    .iter()
+                    .any(|(_, ty)| self.carries_handle(*ty)),
+                _ => false,
+            }
     }
 
     fn handle_origin(&self, ty: Ty, path: &[Position]) -> bool {
         let ty = match ty {
             Ty::Allocation(content) => {
                 return match path {
-                    [Position::Field(0), rest @ ..] if contains_handle(content.ty(), &self.structures) =>
-                        self.handle_origin(content.ty(), rest),
+                    [Position::Field(0), rest @ ..]
+                        if contains_handle(content.ty(), &self.structures) =>
+                    {
+                        self.handle_origin(content.ty(), rest)
+                    }
                     [Position::Index(_), ..] => self.handle_origin(content.ty(), path),
                     _ => false,
                 };
             }
             _ => ty,
         };
-        let Ty::Struct(index) = ty else { return matches!(ty, Ty::Handle(..)) };
+        let Ty::Struct(index) = ty else {
+            return matches!(ty, Ty::Handle(..));
+        };
         let layout = &self.structures[index];
         let projected = match path {
-            [Position::Field(field), rest @ ..] =>
-                layout.fields.get(*field).map(|(_, ty)| (*ty, rest)),
-            [Position::Variant(tag), Position::Field(field), rest @ ..] =>
-                layout.variants.get(*tag).and_then(|(_, fields)| fields.get(*field))
-                    .map(|(_, ty)| (*ty, rest)),
-            [Position::Index(_), rest @ ..] => layout.array.map(|(ty, _)| (ty, rest))
-                .or_else(|| match layout.growing {
-                    Some(Growing::Vector(ty)) => Some((ty, rest)),
-                    _ => None,
-                }),
+            [Position::Field(field), rest @ ..] => {
+                layout.fields.get(*field).map(|(_, ty)| (*ty, rest))
+            }
+            [Position::Variant(tag), Position::Field(field), rest @ ..] => layout
+                .variants
+                .get(*tag)
+                .and_then(|(_, fields)| fields.get(*field))
+                .map(|(_, ty)| (*ty, rest)),
+            [Position::Index(_), rest @ ..] => {
+                layout
+                    .array
+                    .map(|(ty, _)| (ty, rest))
+                    .or_else(|| match layout.growing {
+                        Some(Growing::Vector(ty)) => Some((ty, rest)),
+                        _ => None,
+                    })
+            }
             _ => None,
         };
         projected.map_or_else(
@@ -2839,7 +3327,10 @@ impl<'a> Checker<'a> {
             _ => {
                 let path = &self.dependencies.paths[origin.at.0];
                 self.handle_origin(ty, path)
-                    || (path.is_empty() && !origin.storage && !origin.pool && self.carries_handle(ty))
+                    || (path.is_empty()
+                        && !origin.storage
+                        && !origin.pool
+                        && self.carries_handle(ty))
             }
         })
     }
@@ -2924,18 +3415,28 @@ impl<'a> Checker<'a> {
                 return Ok(continues);
             }
             "asm" => {
-                let abi = self.tree.target.assembly_abi()
+                let abi = self
+                    .tree
+                    .target
+                    .assembly_abi()
                     .ok_or_else(|| self.error(id, "@asm indisponible pour cette cible"))?;
                 let token = self.tree.tokens[node.start].span;
                 let block = crate::assembly::lower(
-                    abi, &self.source[token.start..token.end], token.start, |index, write| {
+                    abi,
+                    &self.source[token.start..token.end],
+                    token.start,
+                    |index, write| {
                         let operand = children[index];
-                        let binding = *self.uses.get(&operand)
+                        let binding = *self
+                            .uses
+                            .get(&operand)
                             .ok_or_else(|| self.error(operand, "liaison assembleur inconnue"))?;
                         let ty = self.live_slot(operand, binding)?.ty;
                         self.access_target(id, binding, write, false)?;
                         if write && !self.tree.bindings[binding.0].mutable {
-                            return Err(self.error(operand, "sortie assembleur exige une liaison mutable"));
+                            return Err(
+                                self.error(operand, "sortie assembleur exige une liaison mutable")
+                            );
                         }
                         Ok((binding, ty))
                     },
@@ -2949,16 +3450,19 @@ impl<'a> Checker<'a> {
                     (None, children[0], &children[1..])
                 };
                 let tuple = self.expression(expression, expected, Access::Move, out)?;
-                let fields = self.tuple_fields(tuple.ty)
+                let fields = self
+                    .tuple_fields(tuple.ty)
                     .filter(|fields| fields.len() == names.len())
-                    .ok_or_else(|| self.error(id, "tuple pattern arity mismatch"))?.to_vec();
+                    .ok_or_else(|| self.error(id, "tuple pattern arity mismatch"))?
+                    .to_vec();
                 let mut seen = std::collections::HashSet::new();
                 for (position, (&name, (_, ty))) in names.iter().zip(fields).enumerate() {
                     if !seen.insert(self.name(name).unwrap()) {
                         return Err(self.error(name, "duplicate tuple binding"));
                     }
                     let mut value = self.emit(ty, Expr::TakeTupleField(tuple, position), out);
-                    let origins = self.selected_origins(tuple.dependencies.loan, &[Position::Field(position)]);
+                    let origins = self
+                        .selected_origins(tuple.dependencies.loan, &[Position::Field(position)]);
                     self.unpack_output(&mut value, origins);
                     let value = value.finish_evaluation(out);
                     let binding = self.bindings[&name];
@@ -2999,7 +3503,8 @@ impl<'a> Checker<'a> {
                 if self.node(place).kind == "indice" {
                     let children = &self.node(place).children;
                     let base = children[0];
-                    let row = (self.node(base).kind == "indice").then(|| self.node(base).children[0]);
+                    let row =
+                        (self.node(base).kind == "indice").then(|| self.node(base).children[0]);
                     let slice = row.unwrap_or(base);
                     let binding = *self
                         .uses
@@ -3012,33 +3517,59 @@ impl<'a> Checker<'a> {
                         let (element, address) = if row.is_some() {
                             let (row_type, row_address) = self.slice_element_address(base, out)?;
                             let (ty, length) = self.array_layout(base, row_type.ty())?;
-                            let referent = ty.referent()
-                                .ok_or_else(|| self.error(place, "élément de ligne hors périmètre"))?;
-                            let mut owner = self.emit(Ty::Ref { target: row_type, mutable: true },
-                                Expr::SliceElementBorrow(row_address), out);
+                            let referent = ty.referent().ok_or_else(|| {
+                                self.error(place, "élément de ligne hors périmètre")
+                            })?;
+                            let mut owner = self.emit(
+                                Ty::Ref {
+                                    target: row_type,
+                                    mutable: true,
+                                },
+                                Expr::SliceElementBorrow(row_address),
+                                out,
+                            );
                             owner.dependencies.loan = row_address.dependencies.loan;
                             let index = self.index_after_owner(children[1], length, owner, out)?;
-                            let mut address = self.emit(Ty::Ref { target: referent, mutable: true },
-                                Expr::BorrowIndex(owner, index), out);
+                            let mut address = self.emit(
+                                Ty::Ref {
+                                    target: referent,
+                                    mutable: true,
+                                },
+                                Expr::BorrowIndex(owner, index),
+                                out,
+                            );
                             address.dependencies.loan = row_address.dependencies.loan;
                             (referent, address)
                         } else {
                             self.slice_element_address(place, out)?
                         };
                         let ty = element.ty();
-                        if !structurally_replicable(ty, &self.structures) || self.has_dependencies(ty) {
-                            return Err(self.error(place, "remplacement d’un élément de tranche hors périmètre"));
+                        if !structurally_replicable(ty, &self.structures)
+                            || self.has_dependencies(ty)
+                        {
+                            return Err(self.error(
+                                place,
+                                "remplacement d’un élément de tranche hors périmètre",
+                            ));
                         }
                         let slot = self.live_slot(place, binding)?;
                         self.access_reference(place, binding, true)?;
-                        let origins = self.origins(address.dependencies.loan).iter()
-                            .map(|origin| Origin { parent: Some(binding), ..*origin })
+                        let origins = self
+                            .origins(address.dependencies.loan)
+                            .iter()
+                            .map(|origin| Origin {
+                                parent: Some(binding),
+                                ..*origin
+                            })
                             .collect();
                         let loan = Some(self.intern(origins));
                         let pending = self.pending.len();
                         self.pending.push(Value {
                             ty: slot.ty,
-                            dependencies: DependencySummary { loan, ..address.dependencies },
+                            dependencies: DependencySummary {
+                                loan,
+                                ..address.dependencies
+                            },
                             ..address
                         });
                         let value = self.expression(node.children[1], Some(ty), Access::Move, out);
@@ -3058,24 +3589,35 @@ impl<'a> Checker<'a> {
                     let owner = self.local(children[0], binding, Access::Read, out)?;
                     let (element, length) = self.array_layout(place, owner.ty)?;
                     if element.scalar().is_none()
-                        && (!matches!(element, Ty::Struct(_)) || owns_resources(element, &self.structures))
+                        && (!matches!(element, Ty::Struct(_))
+                            || owns_resources(element, &self.structures))
                     {
-                        return Err(self.error(place, "écriture d’un élément de tableau hors périmètre"));
+                        return Err(
+                            self.error(place, "écriture d’un élément de tableau hors périmètre")
+                        );
                     }
                     let index = self.index_after_owner(children[1], length, owner, out)?;
                     let value =
                         self.expression(node.children[1], Some(element), Access::Move, out)?;
                     self.live_slot(place, binding)?;
-                    let position = Position::Index(index.integer.and_then(|n| usize::try_from(n).ok()));
+                    let position =
+                        Position::Index(index.integer.and_then(|n| usize::try_from(n).ok()));
                     self.access_projected_at(id, binding, false, true, true, &[position])?;
                     if self.has_dependencies(element) {
                         let slot = self.live_slot(id, binding)?;
                         let scope = self.tree.bindings[binding.0].scope;
                         self.check_dependency_scope(id, scope, value.dependencies.loan)?;
-                        let position = Position::Index(index.integer.and_then(|n| usize::try_from(n).ok()));
-                        let mut origins = self.origins(slot.loan).iter().copied()
-                            .filter(|origin| !matches!(position, Position::Index(Some(_)))
-                                || self.dependencies.paths[origin.at.0].first() != Some(&position))
+                        let position =
+                            Position::Index(index.integer.and_then(|n| usize::try_from(n).ok()));
+                        let mut origins = self
+                            .origins(slot.loan)
+                            .iter()
+                            .copied()
+                            .filter(|origin| {
+                                !matches!(position, Position::Index(Some(_)))
+                                    || self.dependencies.paths[origin.at.0].first()
+                                        != Some(&position)
+                            })
                             .collect::<Vec<_>>();
                         self.append_origins(&mut origins, value.dependencies.loan, &[position]);
                         self.slots[binding.0] = Some(Slot {
@@ -3090,16 +3632,32 @@ impl<'a> Checker<'a> {
                     let source = self.node(place).children[0];
                     if self.node(source).kind == "indirection" {
                         let (reference, outer) = self.dereference(source, true)?;
-                        let Ty::Ref { target, mutable: true } = outer.ty() else {
-                            return Err(self.error(place, "écriture exige deux références mutables"));
+                        let Ty::Ref {
+                            target,
+                            mutable: true,
+                        } = outer.ty()
+                        else {
+                            return Err(
+                                self.error(place, "écriture exige deux références mutables")
+                            );
                         };
                         if target.ty().scalar().is_none() {
-                            return Err(self.error(place, "écriture imbriquée exige une cible primitive"));
+                            return Err(
+                                self.error(place, "écriture imbriquée exige une cible primitive")
+                            );
                         }
-                        let value = self.expression(node.children[1], Some(target.ty()), Access::Move, out)?;
+                        let value = self.expression(
+                            node.children[1],
+                            Some(target.ty()),
+                            Access::Move,
+                            out,
+                        )?;
                         self.dereference(source, true)?;
                         if value.ty == Ty::Usize && value.dependencies.loan.is_some() {
-                            return Err(self.error(id, "écriture indirecte d’une adresse suivie hors périmètre"));
+                            return Err(self.error(
+                                id,
+                                "écriture indirecte d’une adresse suivie hors périmètre",
+                            ));
                         }
                         out.push(Instr::WriteNested(reference, value));
                         return Ok(true);
@@ -3107,7 +3665,8 @@ impl<'a> Checker<'a> {
                     let (reference, target) = self.dereference(place, true)?;
                     if matches!(target.ty(), Ty::Ref { .. }) {
                         let loan = self.live_slot(place, reference)?.loan;
-                        let value = self.expression(children[1], Some(target.ty()), Access::Move, out)?;
+                        let value =
+                            self.expression(children[1], Some(target.ty()), Access::Move, out)?;
                         self.dereference(place, true)?;
                         self.replace_entry_loan(place, loan, value.dependencies.loan, true)?;
                         let mut origins = self.origins(loan).to_vec();
@@ -3129,7 +3688,8 @@ impl<'a> Checker<'a> {
                         self.expression(children[1], Some(target.ty()), Access::Move, out)?;
                     self.live_slot(place, reference)?;
                     if value.ty == Ty::Usize && value.dependencies.loan.is_some() {
-                        return Err(self.error(id, "écriture indirecte d’une adresse suivie hors périmètre"));
+                        return Err(self
+                            .error(id, "écriture indirecte d’une adresse suivie hors périmètre"));
                     }
                     out.push(Instr::WriteThrough(reference, value));
                     return Ok(true);
@@ -3189,7 +3749,8 @@ impl<'a> Checker<'a> {
                                 ));
                             }
                             let origins = self.origins(value.dependencies.loan).to_vec();
-                            let awaited_origins = self.origins(value.dependencies.awaited_loan).to_vec();
+                            let awaited_origins =
+                                self.origins(value.dependencies.awaited_loan).to_vec();
                             let edges = self.loops.last_mut().unwrap();
                             edges.awaited_origins.extend(awaited_origins);
                             edges.result_type = Some(value.ty);
@@ -3257,7 +3818,10 @@ impl<'a> Checker<'a> {
     fn effect(&mut self, id: NodeId, result: Ty, out: &mut Vec<Instr>) -> Result<bool, Error> {
         if self.node(id).kind == "propagation" {
             if self.propagate(id, out)?.is_some() {
-                return Err(self.error(id, "le résultat de ? exige un receveur ou un drop explicite"));
+                return Err(self.error(
+                    id,
+                    "le résultat de ? exige un receveur ou un drop explicite",
+                ));
             }
             return Ok(true);
         }
@@ -3337,7 +3901,10 @@ impl<'a> Checker<'a> {
                     .enum_match(id, result, None, out)
                     .map(|(continues, _)| continues);
             }
-            "appel méthode" if self.name(id) == Some("collect") && self.pipeline_candidate(node.children[0]) => {
+            "appel méthode"
+                if self.name(id) == Some("collect")
+                    && self.pipeline_candidate(node.children[0]) =>
+            {
                 self.iter_collect(id, out)?;
                 return Ok(true);
             }
@@ -3348,7 +3915,10 @@ impl<'a> Checker<'a> {
             "appel méthode" => {
                 let (callee, values, result, _, _) = self.call(id, out)?;
                 if result != Ty::Void || self.signatures[callee].asynchronous {
-                    return Err(self.error(id, "le résultat de la méthode exige un receveur ou un drop explicite"));
+                    return Err(self.error(
+                        id,
+                        "le résultat de la méthode exige un receveur ou un drop explicite",
+                    ));
                 }
                 out.push(Instr::Call(callee, values));
             }
@@ -3414,9 +3984,15 @@ impl<'a> Checker<'a> {
                             self.expression(arguments[0], None, Access::Move, out)?
                         };
                         if self.dependent_handle(value.ty, value.dependencies.loan)
-                            || self.has_dependent_handle_output(value.ty, value.dependencies.awaited_loan)
+                            || self.has_dependent_handle_output(
+                                value.ty,
+                                value.dependencies.awaited_loan,
+                            )
                         {
-                            return Err(self.error(id, "un handle à captures dépendantes ne peut pas être abandonné"));
+                            return Err(self.error(
+                                id,
+                                "un handle à captures dépendantes ne peut pas être abandonné",
+                            ));
                         }
                         if matches!(value.ty, Ty::Allocation(_)) {
                             out.push(Instr::DropAllocation(value));
@@ -3530,7 +4106,11 @@ impl<'a> Checker<'a> {
                         receiver: true,
                         integer: None,
                         provenance: ValueProvenance::Merged,
-                        dependencies: DependencySummary { loan, awaited_loan, ..Default::default() },
+                        dependencies: DependencySummary {
+                            loan,
+                            awaited_loan,
+                            ..Default::default()
+                        },
                     };
                     out.push(Instr::Reserve(value));
                     Some(value)
@@ -3585,7 +4165,12 @@ impl<'a> Checker<'a> {
             )
         });
         origins.dedup();
-        if let Some(index) = self.dependencies.loans.iter().position(|previous| *previous == origins) {
+        if let Some(index) = self
+            .dependencies
+            .loans
+            .iter()
+            .position(|previous| *previous == origins)
+        {
             return LoanId(index);
         }
         let id = LoanId(self.dependencies.loans.len());
@@ -3599,7 +4184,12 @@ impl<'a> Checker<'a> {
 
     fn has_dependencies(&self, ty: Ty) -> bool {
         match ty {
-            Ty::Ref { .. } | Ty::Slice { .. } | Ty::Str | Ty::Allocation(_) | Ty::Handle(..) | Ty::Usize => true,
+            Ty::Ref { .. }
+            | Ty::Slice { .. }
+            | Ty::Str
+            | Ty::Allocation(_)
+            | Ty::Handle(..)
+            | Ty::Usize => true,
             Ty::Struct(index) => {
                 let layout = &self.structures[index];
                 layout.growing.is_some_and(|growing| match growing {
@@ -3628,7 +4218,9 @@ impl<'a> Checker<'a> {
                 Ty::Allocation(element) => pending.push(element.ty()),
                 Ty::Struct(index) if visited.insert(index) => {
                     let layout = &self.structures[index];
-                    if let Some(Growing::Vector(element) | Growing::Map(_, element)) = layout.growing {
+                    if let Some(Growing::Vector(element) | Growing::Map(_, element)) =
+                        layout.growing
+                    {
                         pending.push(element);
                     }
                     if let Some((element, _)) = layout.array {
@@ -3680,7 +4272,10 @@ impl<'a> Checker<'a> {
                         current.awaited_loan = (!origins.is_empty()).then(|| self.intern(origins));
                     }
                     if current.state != incoming.state
-                        && !matches!((current.state, incoming.state), (State::Moved(_), State::Moved(_)))
+                        && !matches!(
+                            (current.state, incoming.state),
+                            (State::Moved(_), State::Moved(_))
+                        )
                     {
                         current.state = State::Unavailable;
                     }
@@ -3691,7 +4286,12 @@ impl<'a> Checker<'a> {
     }
 
     fn path(&mut self, positions: Vec<Position>) -> PathId {
-        if let Some(index) = self.dependencies.paths.iter().position(|path| *path == positions) {
+        if let Some(index) = self
+            .dependencies
+            .paths
+            .iter()
+            .position(|path| *path == positions)
+        {
             return PathId(index);
         }
         let id = PathId(self.dependencies.paths.len());
@@ -3733,8 +4333,10 @@ impl<'a> Checker<'a> {
     // A shared reference stored in the source can point outside the source's
     // storage. Its target can then be shared by successive calls to next.
     fn shared_dependency_at(&self, ty: Ty, path: &[Position]) -> bool {
-        matches!(self.dependency_type_at(ty, path),
-            Some(Ty::Ref { mutable: false, .. } | Ty::Slice { mutable: false, .. } | Ty::Str))
+        matches!(
+            self.dependency_type_at(ty, path),
+            Some(Ty::Ref { mutable: false, .. } | Ty::Slice { mutable: false, .. } | Ty::Str)
+        )
     }
 
     fn dependency_type_at(&self, ty: Ty, path: &[Position]) -> Option<Ty> {
@@ -3742,43 +4344,73 @@ impl<'a> Checker<'a> {
             return Some(ty);
         }
         let layout = match ty {
-            Ty::Ref { target, .. } | Ty::Allocation(target) => return self.dependency_type_at(target.ty(), path),
+            Ty::Ref { target, .. } | Ty::Allocation(target) => {
+                return self.dependency_type_at(target.ty(), path);
+            }
             Ty::Struct(layout) => &self.structures[layout],
             _ => return None,
         };
         let field = match path {
-            [Position::Field(field), rest @ ..] =>
-                layout.fields.get(*field).map(|(_, ty)| (*ty, rest)),
-            [Position::Variant(tag), Position::Field(field), rest @ ..] =>
-                layout.variants.get(*tag).and_then(|(_, fields)| fields.get(*field))
-                    .map(|(_, ty)| (*ty, rest)),
-            [Position::Index(_), rest @ ..] => layout.array.map(|(ty, _)| (ty, rest)).or_else(|| match layout.growing {
-                Some(Growing::Vector(ty)) => Some((ty, rest)),
-                _ => None,
-            }),
+            [Position::Field(field), rest @ ..] => {
+                layout.fields.get(*field).map(|(_, ty)| (*ty, rest))
+            }
+            [Position::Variant(tag), Position::Field(field), rest @ ..] => layout
+                .variants
+                .get(*tag)
+                .and_then(|(_, fields)| fields.get(*field))
+                .map(|(_, ty)| (*ty, rest)),
+            [Position::Index(_), rest @ ..] => {
+                layout
+                    .array
+                    .map(|(ty, _)| (ty, rest))
+                    .or_else(|| match layout.growing {
+                        Some(Growing::Vector(ty)) => Some((ty, rest)),
+                        _ => None,
+                    })
+            }
             _ => None,
         };
         field.and_then(|(ty, rest)| self.dependency_type_at(ty, rest))
     }
 
     fn returned_argument_origins(
-        &mut self, ty: Ty, loan: Option<LoanId>, selector: &[Position], moved_handle: bool,
+        &mut self,
+        ty: Ty,
+        loan: Option<LoanId>,
+        selector: &[Position],
+        moved_handle: bool,
     ) -> Vec<Origin> {
-        let entry = moved_handle && selector.iter().any(|position| matches!(position, Position::Index(_)))
+        let entry = moved_handle
+            && selector
+                .iter()
+                .any(|position| matches!(position, Position::Index(_)))
             && matches!(self.dependency_type_at(ty, selector), Some(Ty::Handle(..)));
-        let precise = !selector.is_empty() && self.shared_dependency_at(ty, selector)
+        let precise = !selector.is_empty()
+            && self.shared_dependency_at(ty, selector)
             && self.origins(loan).iter().any(|origin| {
                 let path = &self.dependencies.paths[origin.at.0];
-                !origin.opaque && path.len() >= selector.len()
-                    && path.iter().zip(selector).all(|(&left, &right)| left.overlaps(right))
+                !origin.opaque
+                    && path.len() >= selector.len()
+                    && path
+                        .iter()
+                        .zip(selector)
+                        .all(|(&left, &right)| left.overlaps(right))
             });
         let loan = if precise || entry {
             // The selected shared reference carries its own target. The
             // container's storage only supplied the reference descriptor.
-            let origins = self.origins(loan).iter().copied().filter(|origin| {
-                !origin.storage || origin.opaque || origin.capture_exclusive || (!entry && origin.pool)
-                    || self.dependencies.paths[origin.at.0].len() >= selector.len()
-            }).collect();
+            let origins = self
+                .origins(loan)
+                .iter()
+                .copied()
+                .filter(|origin| {
+                    !origin.storage
+                        || origin.opaque
+                        || origin.capture_exclusive
+                        || (!entry && origin.pool)
+                        || self.dependencies.paths[origin.at.0].len() >= selector.len()
+                })
+                .collect();
             Some(self.intern(origins))
         } else {
             loan
@@ -3847,26 +4479,45 @@ impl<'a> Checker<'a> {
             )
             .collect::<Vec<_>>();
         for (origin, output) in origins {
-            if let Some((Position::TaskEffect(index), prefix)) = self.dependencies.paths[origin.at.0].split_last() {
+            if let Some((Position::TaskEffect(index), prefix)) =
+                self.dependencies.paths[origin.at.0].split_last()
+            {
                 let mut position = prefix.to_vec();
-                if output { position.insert(0, Position::TaskOutput); }
+                if output {
+                    position.insert(0, Position::TaskOutput);
+                }
                 let (target, source) = self.deferred_entries[*index];
                 let output = self.path(position);
-                let targets = self.origins(Some(target)).iter().filter_map(|origin| {
-                    self.parameters.iter().position(|&(binding, ty)| {
-                        binding == origin.root && !origin.storage && matches!(ty, Ty::Ref { target, mutable: true }
+                let targets = self
+                    .origins(Some(target))
+                    .iter()
+                    .filter_map(|origin| {
+                        self.parameters.iter().position(|&(binding, ty)| {
+                            binding == origin.root
+                                && !origin.storage
+                                && matches!(ty, Ty::Ref { target, mutable: true }
                             if matches!(target.ty(), Ty::Ref { .. }))
+                        })
                     })
-                }).collect::<Vec<_>>();
+                    .collect::<Vec<_>>();
                 if targets.is_empty() {
                     return Err(self.error(id, "la tâche retournée modifie une entrée locale"));
                 }
                 for target in targets {
                     for origin in self.origins(Some(source)).to_vec() {
-                        let source = self.parameters.iter().position(|&(binding, _)| {
-                            binding == origin.root && !origin.storage
-                        }).ok_or_else(|| self.error(id, "la référence installée vise une cible locale"))?;
-                        let effect = EntryEffect { target, source, path: origin.from, output };
+                        let source = self
+                            .parameters
+                            .iter()
+                            .position(|&(binding, _)| binding == origin.root && !origin.storage)
+                            .ok_or_else(|| {
+                                self.error(id, "la référence installée vise une cible locale")
+                            })?;
+                        let effect = EntryEffect {
+                            target,
+                            source,
+                            path: origin.from,
+                            output,
+                        };
                         if !self.returned_entry_effects.contains(&effect) {
                             self.returned_entry_effects.push(effect);
                         }
@@ -3874,8 +4525,14 @@ impl<'a> Checker<'a> {
                 }
                 continue;
             }
-            if self.dependencies.paths[origin.at.0].iter().any(|position| matches!(position, Position::TaskEffect(_))) {
-                return Err(self.error(id, "résultat imbriqué à remplacement différé hors périmètre"));
+            if self.dependencies.paths[origin.at.0]
+                .iter()
+                .any(|position| matches!(position, Position::TaskEffect(_)))
+            {
+                return Err(self.error(
+                    id,
+                    "résultat imbriqué à remplacement différé hors périmètre",
+                ));
             }
             let index = self
                 .parameters
@@ -3983,7 +4640,8 @@ impl<'a> Checker<'a> {
             !(owns_pool_slots(ty, &self.structures) && origin.pool)
                 && (exclusive
                     || if matches!(ty, Ty::Future(_))
-                        || self.handle_origin(ty, &self.dependencies.paths[origin.at.0]) {
+                        || self.handle_origin(ty, &self.dependencies.paths[origin.at.0])
+                    {
                         origin.capture_exclusive || !origin.storage
                     } else {
                         self.has_exclusive_dependencies(ty)
@@ -4182,7 +4840,10 @@ impl<'a> Checker<'a> {
         let slot = self.live_slot(id, binding)?;
         let exclusive = matches!(access, Access::Move);
         if exclusive && self.mapper_captures.contains(&binding) {
-            return Err(self.error(id, "map doit conserver ses captures pour les appels suivants"));
+            return Err(self.error(
+                id,
+                "map doit conserver ses captures pour les appels suivants",
+            ));
         }
         if exclusive && self.pool_layout(slot.ty).is_some() {
             return Err(self.error(id, "un pool reste dans son scope de création"));
@@ -4217,13 +4878,24 @@ impl<'a> Checker<'a> {
         self.entry_contracts[index].clone().unwrap_or_else(|| {
             let mut effects = Vec::new();
             for (target, &(_, ty)) in signature.parameters.iter().enumerate() {
-                let Ty::Ref { target: referent, mutable: true } = ty else { continue };
+                let Ty::Ref {
+                    target: referent,
+                    mutable: true,
+                } = ty
+                else {
+                    continue;
+                };
                 let incoming = referent.ty();
-                if !matches!(incoming, Ty::Ref { .. }) { continue; }
+                if !matches!(incoming, Ty::Ref { .. }) {
+                    continue;
+                }
                 for (source, &(_, ty)) in signature.parameters.iter().enumerate() {
                     if ty == incoming {
                         effects.push(EntryEffect {
-                            target, source, path: PathId::default(), output: PathId::default(),
+                            target,
+                            source,
+                            path: PathId::default(),
+                            output: PathId::default(),
                         })
                     }
                 }
@@ -4237,14 +4909,23 @@ impl<'a> Checker<'a> {
         if self.entry_contracts[index].is_some() || self.carries_handle(signature.result) {
             return self.wait_contracts[index].clone();
         }
-        signature.parameters.iter().enumerate().filter_map(|(parameter, &(_, ty))| {
-            self.carries_handle(ty).then_some((parameter, PathId::default()))
-        }).collect()
+        signature
+            .parameters
+            .iter()
+            .enumerate()
+            .filter_map(|(parameter, &(_, ty))| {
+                self.carries_handle(ty)
+                    .then_some((parameter, PathId::default()))
+            })
+            .collect()
     }
 
     fn qualified_method(&self, id: NodeId) -> Option<(usize, &'a str)> {
         let callee = self.node(self.node(id).children[0]);
-        if callee.kind == "nom qualifié" && callee.children.is_empty() && callee.end == callee.start + 3 {
+        if callee.kind == "nom qualifié"
+            && callee.children.is_empty()
+            && callee.end == callee.start + 3
+        {
             let layout = *self.structure_names.get(self.text(callee.start))?;
             Some((layout, self.text(callee.start + 2)))
         } else {
@@ -4274,7 +4955,9 @@ impl<'a> Checker<'a> {
         let callee = self.node(id).children[0];
         let node = self.node(callee);
         match node.kind {
-            "nom" if !self.uses.contains_key(&callee) => self.names.get(self.name(callee)?).copied(),
+            "nom" if !self.uses.contains_key(&callee) => {
+                self.names.get(self.name(callee)?).copied()
+            }
             "nom qualifié" => {
                 let method = self.qualified_method(id)?;
                 let &(index, receiver) = self.methods.get(&method)?;
@@ -4290,7 +4973,9 @@ impl<'a> Checker<'a> {
         out: &mut Vec<Instr>,
     ) -> Result<(usize, Vec<Value>, Ty, Option<LoanId>, Option<LoanId>), Error> {
         let node = self.node(id);
-        if node.kind == "appel" && let Some(layout) = self.explicit_conversion_target(id) {
+        if node.kind == "appel"
+            && let Some(layout) = self.explicit_conversion_target(id)
+        {
             let [_, argument] = node.children.as_slice() else {
                 return Err(self.error(id, "from exige un seul argument"));
             };
@@ -4302,7 +4987,8 @@ impl<'a> Checker<'a> {
             };
             let argument = self.expression(*argument, expected, Access::Move, out)?;
             let target = Ty::Struct(layout);
-            let index = self.conversion(argument.ty, target)
+            let index = self
+                .conversion(argument.ty, target)
                 .ok_or_else(|| self.error(id, "aucune surcharge from pour ce type source"))?;
             let arguments = vec![argument];
             let (loan, awaited) = self.call_effects(id, index, &arguments)?;
@@ -4310,19 +4996,29 @@ impl<'a> Checker<'a> {
         }
         let (index, arguments, receiver) = if node.kind == "appel méthode" {
             let base = node.children[0];
-            let binding = *self.uses.get(&base)
+            let binding = *self
+                .uses
+                .get(&base)
                 .ok_or_else(|| self.error(base, "liaison locale attendue comme receveur"))?;
             let layout = match self.live_slot(base, binding)?.ty {
-                Ty::Struct(layout) | Ty::Ref { target: Referent::Aggregate(layout), .. } => layout,
+                Ty::Struct(layout)
+                | Ty::Ref {
+                    target: Referent::Aggregate(layout),
+                    ..
+                } => layout,
                 _ => return Err(self.error(base, "structure attendue comme receveur")),
             };
-            let &(index, true) = self.methods.get(&(layout, self.name(id).unwrap()))
-                .ok_or_else(|| self.error(id, "méthode inconnue"))? else {
-                    return Err(self.error(id, "appel associé attendu"));
-                };
+            let &(index, true) = self
+                .methods
+                .get(&(layout, self.name(id).unwrap()))
+                .ok_or_else(|| self.error(id, "méthode inconnue"))?
+            else {
+                return Err(self.error(id, "appel associé attendu"));
+            };
             (index, node.children.as_slice(), Some(binding))
         } else {
-            let index = self.function_index(id)
+            let index = self
+                .function_index(id)
                 .ok_or_else(|| self.error(id, "fonction inconnue ou appel indirect"))?;
             (index, &node.children[1..], None)
         };
@@ -4337,8 +5033,10 @@ impl<'a> Checker<'a> {
         let inputs = arguments;
         let mut arguments = Vec::new();
         let preparation = (|| {
-            for (position, (&argument, (_, ty))) in inputs.iter()
-                .zip(signature.parameters.iter().copied()).enumerate()
+            for (position, (&argument, (_, ty))) in inputs
+                .iter()
+                .zip(signature.parameters.iter().copied())
+                .enumerate()
             {
                 let value = if let (Some(binding), Ty::Ref { mutable, .. }) =
                     (receiver.filter(|_| position == 0), ty)
@@ -4354,9 +5052,15 @@ impl<'a> Checker<'a> {
                         let mut value = self.emit(ty, Expr::Borrow(binding), out);
                         let mut origins = self.origins(slot.loan).to_vec();
                         origins.push(Origin {
-                            root: binding, storage: true, pool: false, parent: None,
-                            at: PathId::default(), from: PathId::default(), lock: PathId::default(),
-                            opaque: false, capture_exclusive: false,
+                            root: binding,
+                            storage: true,
+                            pool: false,
+                            parent: None,
+                            at: PathId::default(),
+                            from: PathId::default(),
+                            lock: PathId::default(),
+                            opaque: false,
+                            capture_exclusive: false,
                         });
                         value.dependencies.loan = Some(self.intern(origins));
                         value.finish_evaluation(out)
@@ -4387,12 +5091,20 @@ impl<'a> Checker<'a> {
     }
 
     fn call_effects(
-        &mut self, id: NodeId, index: usize, arguments: &[Value],
+        &mut self,
+        id: NodeId,
+        index: usize,
+        arguments: &[Value],
     ) -> Result<(Option<LoanId>, Option<LoanId>), Error> {
         let signature = self.signatures[index].clone();
         let pop = self.field_pop_contracts[index]
-            .zip(arguments.first().and_then(|argument| self.mutable_record_root(argument.ty, argument.dependencies.loan)))
-            .and_then(|(field, root)| self.precise_field_pop(root, field).map(|len| (root, field, len)));
+            .zip(arguments.first().and_then(|argument| {
+                self.mutable_record_root(argument.ty, argument.dependencies.loan)
+            }))
+            .and_then(|(field, root)| {
+                self.precise_field_pop(root, field)
+                    .map(|len| (root, field, len))
+            });
         let waits = self.call_waits(index);
         if !signature.asynchronous {
             for effect in self.call_entry_effects(index) {
@@ -4440,17 +5152,27 @@ impl<'a> Checker<'a> {
                     };
                 let moved_handle = self.handle_origin(signature.result, prefix);
                 let concrete_selector = match pop {
-                    Some((_, field, 0)) if dependency.parameter == 0
-                        && selector.starts_with(&[Position::Field(field), Position::Index(None)]) => continue,
-                    Some((_, field, len)) if dependency.parameter == 0
-                        && selector.starts_with(&[Position::Field(field), Position::Index(None)]) => {
+                    Some((_, field, 0))
+                        if dependency.parameter == 0
+                            && selector
+                                .starts_with(&[Position::Field(field), Position::Index(None)]) =>
+                    {
+                        continue;
+                    }
+                    Some((_, field, len))
+                        if dependency.parameter == 0
+                            && selector
+                                .starts_with(&[Position::Field(field), Position::Index(None)]) =>
+                    {
                         let mut path = selector.to_vec();
                         path[1] = Position::Index(Some(len - 1));
                         path
                     }
                     _ => selector.to_vec(),
                 };
-                for mut origin in self.returned_argument_origins(arg.ty, source, &concrete_selector, moved_handle) {
+                for mut origin in
+                    self.returned_argument_origins(arg.ty, source, &concrete_selector, moved_handle)
+                {
                     if dependency.pool
                         || (matches!(signature.result, Ty::Allocation(_))
                             && (origin.pool || pool_parameter))
@@ -4464,7 +5186,9 @@ impl<'a> Checker<'a> {
                     }
                     origin.opaque |= dependency.opaque;
                     origin.capture_exclusive |= dependency.capture_exclusive;
-                    if dependency.lock != PathId::default() { origin.lock = dependency.lock; }
+                    if dependency.lock != PathId::default() {
+                        origin.lock = dependency.lock;
+                    }
                     origin.at = self.path(path);
                     destination.push(origin);
                 }
@@ -4478,7 +5202,8 @@ impl<'a> Checker<'a> {
                     self.defer_entry_effects(id, &[effect], arguments, &mut origins)?;
                 }
             }
-            if origins.is_empty() && matches!(signature.result, Ty::Ref { .. } | Ty::Allocation(_))
+            if origins.is_empty()
+                && matches!(signature.result, Ty::Ref { .. } | Ty::Allocation(_))
                 && !(self.entry_contracts[index].is_none() && self.carries_handle(signature.result))
             {
                 return Err(self.error(id, "provenance de l’appel emprunté inconnue"));
@@ -4492,7 +5217,8 @@ impl<'a> Checker<'a> {
             self.finish_field_pop(root, field, len);
         } else {
             for &argument in arguments {
-                if let Some(root) = self.mutable_record_root(argument.ty, argument.dependencies.loan)
+                if let Some(root) =
+                    self.mutable_record_root(argument.ty, argument.dependencies.loan)
                     && let Some(slot) = &mut self.slots[root.0]
                 {
                     slot.field_lengths = None;
@@ -4505,11 +5231,21 @@ impl<'a> Checker<'a> {
     // Both built-in envelopes have the success variant at tag 1.
     fn propagation_layout(&self, ty: Ty) -> Option<(usize, bool)> {
         let Ty::Struct(layout) = ty else { return None };
-        if self.results.iter().any(|&(_, _, candidate)| candidate == layout)
-            || self.native_results.iter().any(|&(_, candidate)| candidate == layout)
+        if self
+            .results
+            .iter()
+            .any(|&(_, _, candidate)| candidate == layout)
+            || self
+                .native_results
+                .iter()
+                .any(|&(_, candidate)| candidate == layout)
         {
             Some((layout, true))
-        } else if self.options.iter().any(|&(_, candidate)| candidate == layout) {
+        } else if self
+            .options
+            .iter()
+            .any(|&(_, candidate)| candidate == layout)
+        {
             Some((layout, false))
         } else {
             None
@@ -4517,18 +5253,30 @@ impl<'a> Checker<'a> {
     }
 
     fn conversion(&self, source: Ty, destination: Ty) -> Option<usize> {
-        let Ty::Struct(layout) = destination else { return None };
-        self.conversions.get(&layout)?.iter().find_map(|&(input, index)| (input == source).then_some(index))
+        let Ty::Struct(layout) = destination else {
+            return None;
+        };
+        self.conversions
+            .get(&layout)?
+            .iter()
+            .find_map(|&(input, index)| (input == source).then_some(index))
     }
 
     fn propagate(&mut self, id: NodeId, out: &mut Vec<Instr>) -> Result<Option<Value>, Error> {
         let operand = self.node(id).children[0];
         let subject = self.expression(operand, None, Access::Move, out)?;
-        let (layout, is_result) = self.propagation_layout(subject.ty)
+        let (layout, is_result) = self
+            .propagation_layout(subject.ty)
             .ok_or_else(|| self.error(id, "? exige une valeur Result ou Option"))?;
-        let (result_layout, _) = self.propagation_layout(self.function_result)
+        let (result_layout, _) = self
+            .propagation_layout(self.function_result)
             .filter(|&(_, result)| result == is_result)
-            .ok_or_else(|| self.error(id, "? exige un retour de la même famille : Result ou Option"))?;
+            .ok_or_else(|| {
+                self.error(
+                    id,
+                    "? exige un retour de la même famille : Result ou Option",
+                )
+            })?;
         let test = self.emit(Ty::Bool, Expr::IsVariant(subject, 0), out);
 
         let mut early = Vec::new();
@@ -4541,10 +5289,18 @@ impl<'a> Checker<'a> {
             if inner == outer {
                 Some(error)
             } else {
-                let convert = self.conversion(inner, outer)
-                    .ok_or_else(|| self.error(id, "? exige une fonction associée Outer::from(Inner) -> Outer"))?;
+                let convert = self.conversion(inner, outer).ok_or_else(|| {
+                    self.error(
+                        id,
+                        "? exige une fonction associée Outer::from(Inner) -> Outer",
+                    )
+                })?;
                 let (loan, awaited_loan) = self.call_effects(id, convert, &[error])?;
-                let mut converted = self.emit(outer, Expr::Call(convert, vec![error], CallKind::ErrorConversion), &mut early);
+                let mut converted = self.emit(
+                    outer,
+                    Expr::Call(convert, vec![error], CallKind::ErrorConversion),
+                    &mut early,
+                );
                 converted.dependencies.loan = loan;
                 converted.dependencies.awaited_loan = awaited_loan;
                 Some(converted.finish_evaluation(&mut early))
@@ -4559,7 +5315,10 @@ impl<'a> Checker<'a> {
             self.dependent_handle(value.ty, value.dependencies.loan)
                 || self.has_dependent_handle_output(value.ty, value.dependencies.awaited_loan)
         }) {
-            return Err(self.error(id, "le handle à captures dépendantes doit être joint avant cette sortie"));
+            return Err(self.error(
+                id,
+                "le handle à captures dépendantes doit être joint avant cette sortie",
+            ));
         }
         early.push(Instr::Return(Some(returned)));
         // A wait established on the continuing path alone cannot be promised to callers.
@@ -4572,12 +5331,19 @@ impl<'a> Checker<'a> {
         self.waited_parameters.truncate(success_waits);
         out.push(Instr::If(test, early, Vec::new()));
 
-        Ok(self.structures[layout].variants[1].1.first().map(|&(_, ty)| ty)
+        Ok(self.structures[layout].variants[1]
+            .1
+            .first()
+            .map(|&(_, ty)| ty)
             .map(|ty| self.take_propagation_payload(subject, 1, ty, out)))
     }
 
     fn take_propagation_payload(
-        &mut self, subject: Value, tag: usize, ty: Ty, out: &mut Vec<Instr>,
+        &mut self,
+        subject: Value,
+        tag: usize,
+        ty: Ty,
+        out: &mut Vec<Instr>,
     ) -> Value {
         let extract = if matches!(ty, Ty::Struct(_) | Ty::Allocation(_) | Ty::Handle(..)) {
             Expr::TakeVariantField(subject, tag, 0)
@@ -4585,11 +5351,20 @@ impl<'a> Checker<'a> {
             Expr::VariantField(subject, tag, 0)
         };
         let mut value = self.emit(ty, extract, out);
-        self.variant_payload_dependencies(subject, &[Position::Variant(tag), Position::Field(0)], &mut value);
+        self.variant_payload_dependencies(
+            subject,
+            &[Position::Variant(tag), Position::Field(0)],
+            &mut value,
+        );
         value.finish_evaluation(out)
     }
 
-    fn variant_payload_dependencies(&mut self, subject: Value, selector: &[Position], value: &mut Value) {
+    fn variant_payload_dependencies(
+        &mut self,
+        subject: Value,
+        selector: &[Position],
+        value: &mut Value,
+    ) {
         if !self.has_dependencies(value.ty) {
             return;
         }
@@ -4610,11 +5385,25 @@ impl<'a> Checker<'a> {
         self.unpack_output(value, origins);
     }
 
-    fn wrap_payload(&mut self, ty: Ty, tag: usize, payload: Option<Value>, out: &mut Vec<Instr>) -> Value {
-        let mut value = self.emit(ty, Expr::Variant(tag, payload.into_iter().map(|item| (0, item)).collect()), out);
+    fn wrap_payload(
+        &mut self,
+        ty: Ty,
+        tag: usize,
+        payload: Option<Value>,
+        out: &mut Vec<Instr>,
+    ) -> Value {
+        let mut value = self.emit(
+            ty,
+            Expr::Variant(tag, payload.into_iter().map(|item| (0, item)).collect()),
+            out,
+        );
         if let Some(payload) = payload {
             let mut origins = Vec::new();
-            self.append_value_origins(&mut origins, payload, &[Position::Variant(tag), Position::Field(0)]);
+            self.append_value_origins(
+                &mut origins,
+                payload,
+                &[Position::Variant(tag), Position::Field(0)],
+            );
             value.dependencies.loan = (!origins.is_empty()).then(|| self.intern(origins));
         }
         value.finish_evaluation(out)
@@ -4654,19 +5443,26 @@ impl<'a> Checker<'a> {
             }
         }
         if let Some(value) = result
-            && self.origins(value.dependencies.loan).iter()
-                .chain(self.origins(value.dependencies.awaited_loan)).any(|origin| {
-                (self.slots[origin.root.0].is_none()
-                    && !(!origin.storage
-                        && self
-                            .parameters
-                            .iter()
-                            .any(|&(binding, _)| binding == origin.root)))
-                    || origin
-                        .parent
-                        .is_some_and(|parent| self.slots[parent.0].is_none()
-                            && !(!origin.storage && self.parameters.iter().any(|&(binding, _)| binding == parent)))
-            })
+            && self
+                .origins(value.dependencies.loan)
+                .iter()
+                .chain(self.origins(value.dependencies.awaited_loan))
+                .any(|origin| {
+                    (self.slots[origin.root.0].is_none()
+                        && !(!origin.storage
+                            && self
+                                .parameters
+                                .iter()
+                                .any(|&(binding, _)| binding == origin.root)))
+                        || origin.parent.is_some_and(|parent| {
+                            self.slots[parent.0].is_none()
+                                && !(!origin.storage
+                                    && self
+                                        .parameters
+                                        .iter()
+                                        .any(|&(binding, _)| binding == parent))
+                        })
+                })
         {
             return Err(self.error(id, "la dépendance ne survit pas à la sortie du bloc"));
         }
@@ -4736,11 +5532,18 @@ impl<'a> Checker<'a> {
         let Ty::Struct(layout) = nominal else {
             return Err(self.error(id, "enum attendu pour match"));
         };
-        if borrowed.is_none() && inline_destructor(subject.ty, &self.structures)
+        if borrowed.is_none()
+            && inline_destructor(subject.ty, &self.structures)
             && !self.results.iter().any(|&(_, _, index)| index == layout)
-            && !self.native_results.iter().any(|&(_, index)| index == layout)
+            && !self
+                .native_results
+                .iter()
+                .any(|&(_, index)| index == layout)
         {
-            return Err(self.error(id, "match par valeur sur un type à destructeur personnalisé hors périmètre"));
+            return Err(self.error(
+                id,
+                "match par valeur sur un type à destructeur personnalisé hors périmètre",
+            ));
         }
         let variants = self.structures[layout].variants.clone();
         if variants.is_empty() {
@@ -4753,7 +5556,9 @@ impl<'a> Checker<'a> {
         // A directly matched pop is the last operation on this vector.
         // Its None edge proves that no indexed dependencies remain.
         let popped_vector = out.last().and_then(|instruction| match instruction {
-            Instr::Evaluate(value, Expr::VectorExtract(vector, None, _)) if value.temp == subject.temp => {
+            Instr::Evaluate(value, Expr::VectorExtract(vector, None, _))
+                if value.temp == subject.temp =>
+            {
                 match vector.provenance {
                     ValueProvenance::LocalRead(binding) => Some(binding),
                     _ => None,
@@ -4798,11 +5603,22 @@ impl<'a> Checker<'a> {
                 return Err(self.error(pattern, "variante incompatible ou répétée"));
             }
             seen[tag] = true;
-            if option_pattern && tag == 0 && let Some(binding) = popped_vector {
+            if option_pattern
+                && tag == 0
+                && let Some(binding) = popped_vector
+            {
                 let slot = self.live_slot(pattern, binding)?;
-                let origins = self.origins(slot.loan).iter().copied().filter(|origin| {
-                    !matches!(self.dependencies.paths[origin.at.0].first(), Some(Position::Index(_)))
-                }).collect::<Vec<_>>();
+                let origins = self
+                    .origins(slot.loan)
+                    .iter()
+                    .copied()
+                    .filter(|origin| {
+                        !matches!(
+                            self.dependencies.paths[origin.at.0].first(),
+                            Some(Position::Index(_))
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 self.slots[binding.0] = Some(Slot {
                     vector_len: Some(0),
                     loan: (!origins.is_empty()).then(|| self.intern(origins)),
@@ -4810,11 +5626,15 @@ impl<'a> Checker<'a> {
                 });
             }
             let fields = &variants[tag].1;
-            if !option_pattern && !result_pattern
+            if !option_pattern
+                && !result_pattern
                 && (positional_pattern != Self::positional_fields(fields)
                     || positional_pattern && self.node(pattern).children.len() != fields.len())
             {
-                return Err(self.error(pattern, "motif incompatible avec les champs positionnels de la variante"));
+                return Err(self.error(
+                    pattern,
+                    "motif incompatible avec les champs positionnels de la variante",
+                ));
             }
             let mut arm_body = Vec::new();
             let mut bound_fields = std::collections::BTreeSet::new();
@@ -4861,14 +5681,19 @@ impl<'a> Checker<'a> {
                     (true, false) => Expr::PoolVariantField(subject, layout, tag, index),
                     (false, true) => Expr::BorrowVariantField(subject, tag, index),
                     (false, false)
-                        if matches!(ty, Ty::Struct(_)) && (result_pattern || option_pattern || contains_handle(ty, &self.structures)) =>
+                        if matches!(ty, Ty::Struct(_))
+                            && (result_pattern
+                                || option_pattern
+                                || contains_handle(ty, &self.structures)) =>
                     {
                         Expr::TakeVariantField(subject, tag, index)
                     }
                     (false, false) => Expr::VariantField(subject, tag, index),
                 };
                 if borrowed.is_some() && contains_handle(ty, &self.structures) && !borrow_field {
-                    return Err(self.error(field, "déplacement de handle depuis un agrégat emprunté"));
+                    return Err(
+                        self.error(field, "déplacement de handle depuis un agrégat emprunté")
+                    );
                 }
                 let ty = if borrow_field {
                     Ty::Ref {
@@ -4876,7 +5701,11 @@ impl<'a> Checker<'a> {
                         mutable: borrowed.unwrap(),
                     }
                 } else {
-                    if !((option_pattern || result_pattern || matches!(ty, Ty::Handle(..)) || contains_handle(ty, &self.structures)) && borrowed.is_none())
+                    if !((option_pattern
+                        || result_pattern
+                        || matches!(ty, Ty::Handle(..))
+                        || contains_handle(ty, &self.structures))
+                        && borrowed.is_none())
                         && !matches!(ty, Ty::Ref { mutable: false, .. })
                         && ty.scalar().is_none()
                     {
@@ -4917,9 +5746,15 @@ impl<'a> Checker<'a> {
                     if !contains_handle(*ty, &self.structures) || moved_fields.contains(&field) {
                         continue;
                     }
-                    let loan = self.selected_loan(subject.dependencies.loan, &[Position::Variant(tag), Position::Field(field)]);
+                    let loan = self.selected_loan(
+                        subject.dependencies.loan,
+                        &[Position::Variant(tag), Position::Field(field)],
+                    );
                     if self.dependent_handle(*ty, loan) {
-                        return Err(self.error(pattern, "un handle à captures dépendantes ne peut pas être abandonné"));
+                        return Err(self.error(
+                            pattern,
+                            "un handle à captures dépendantes ne peut pas être abandonné",
+                        ));
                     }
                 }
             }
@@ -4978,22 +5813,24 @@ impl<'a> Checker<'a> {
     }
 
     fn finish_scalar_binary(
-        &mut self, id: NodeId, rhs: NodeId, operator: &str, left: Value, right: Value,
+        &mut self,
+        id: NodeId,
+        rhs: NodeId,
+        operator: &str,
+        left: Value,
+        right: Value,
         out: &mut Vec<Instr>,
     ) -> Result<Value, Error> {
         let comparison = matches!(operator, "==" | "!=" | "<" | ">" | "<=" | ">=");
         if matches!(operator, "&" | "|" | "^") && !(left.ty.signed() || left.ty.unsigned()) {
             return Err(self.error(id, "opération bit à bit exige des entiers"));
         }
-        if left.ty.scalar().is_none()
-            || left.ty == Ty::Bool && !matches!(operator, "==" | "!=")
-        {
+        if left.ty.scalar().is_none() || left.ty == Ty::Bool && !matches!(operator, "==" | "!=") {
             return Err(self.error(id, "opérande entier requis"));
         }
         let ty = if comparison { Ty::Bool } else { left.ty };
         if matches!(operator, "/" | "%")
-            && (right.integer == Some(0)
-                || (right.ty.float() && self.float_zero(rhs)))
+            && (right.integer == Some(0) || (right.ty.float() && self.float_zero(rhs)))
         {
             return Err(self.error(id, "division par zéro"));
         }
@@ -5027,16 +5864,19 @@ impl<'a> Checker<'a> {
         }
         let mut value = self.emit(ty, Expr::Binary(operator.to_owned(), left, right), out);
         if ty == Ty::Usize {
-            value.dependencies.loan = self.union_loans(
-                [left.dependencies.loan, right.dependencies.loan].into_iter(),
-            );
+            value.dependencies.loan =
+                self.union_loans([left.dependencies.loan, right.dependencies.loan].into_iter());
             value = value.finish_evaluation(out);
         }
         Ok(value)
     }
 
     fn compound_assignment(
-        &mut self, id: NodeId, place: NodeId, rhs: NodeId, out: &mut Vec<Instr>,
+        &mut self,
+        id: NodeId,
+        place: NodeId,
+        rhs: NodeId,
+        out: &mut Vec<Instr>,
     ) -> Result<(), Error> {
         let operator = match self.name(id) {
             Some(">") => ">>",
@@ -5053,12 +5893,17 @@ impl<'a> Checker<'a> {
         while self.node(name).kind == "indirection" {
             name = self.node(name).children[0];
         }
-        let binding = *self.uses.get(&name)
+        let binding = *self
+            .uses
+            .get(&name)
             .ok_or_else(|| self.error(place, "place locale requise"))?;
         let slot = self.live_slot(place, binding)?;
         let via_slice = !borrowed && matches!(slot.ty, Ty::Slice { .. });
         if borrowed || via_slice {
-            if !matches!(slot.ty, Ty::Ref { mutable: true, .. } | Ty::Slice { mutable: true, .. }) {
+            if !matches!(
+                slot.ty,
+                Ty::Ref { mutable: true, .. } | Ty::Slice { mutable: true, .. }
+            ) {
                 return Err(self.error(place, "écriture par une référence partagée"));
             }
         } else if !self.tree.bindings[binding.0].mutable {
@@ -5070,11 +5915,23 @@ impl<'a> Checker<'a> {
             None
         } else if place == root && borrowed {
             if self.node(self.node(place).children[0]).kind == "indirection" {
-                let inner = self.expression(self.node(place).children[0], None, Access::Read, out)?;
-                let Ty::Ref { target, mutable: true } = inner.ty else {
+                let inner =
+                    self.expression(self.node(place).children[0], None, Access::Read, out)?;
+                let Ty::Ref {
+                    target,
+                    mutable: true,
+                } = inner.ty
+                else {
                     return Err(self.error(place, "écriture exige deux références mutables"));
                 };
-                let mut address = self.emit(Ty::Ref { target, mutable: false }, Expr::Temporary(inner), out);
+                let mut address = self.emit(
+                    Ty::Ref {
+                        target,
+                        mutable: false,
+                    },
+                    Expr::Temporary(inner),
+                    out,
+                );
                 address.dependencies.loan = inner.dependencies.loan;
                 Some(address.finish_evaluation(out))
             } else {
@@ -5087,10 +5944,14 @@ impl<'a> Checker<'a> {
             return Err(self.error(place, "place modifiable requise"));
         };
         let target = if let Some(address) = address {
-            let Ty::Ref { target, .. } = address.ty else { unreachable!() };
+            let Ty::Ref { target, .. } = address.ty else {
+                unreachable!()
+            };
             target
         } else {
-            slot.ty.scalar().ok_or_else(|| self.error(place, "place scalaire requise"))?
+            slot.ty
+                .scalar()
+                .ok_or_else(|| self.error(place, "place scalaire requise"))?
         };
         let ty = target.ty();
         if ty.scalar().is_none() || ty == Ty::Bool {
@@ -5107,23 +5968,43 @@ impl<'a> Checker<'a> {
         };
 
         // A shared reservation permits reads while preventing mutations and moves.
-        let mut origins = self.origins(address.and_then(|address| address.dependencies.loan)).to_vec();
-        let lock = origins.iter().find(|origin| {
-            if borrowed || via_slice { origin.parent == Some(binding) }
-            else { origin.root == binding && origin.storage }
-        }).map_or(PathId::default(), |origin| origin.lock);
+        let mut origins = self
+            .origins(address.and_then(|address| address.dependencies.loan))
+            .to_vec();
+        let lock = origins
+            .iter()
+            .find(|origin| {
+                if borrowed || via_slice {
+                    origin.parent == Some(binding)
+                } else {
+                    origin.root == binding && origin.storage
+                }
+            })
+            .map_or(PathId::default(), |origin| origin.lock);
         if local || borrowed || via_slice {
             origins.push(Origin {
-                root: binding, storage: true, pool: false, parent: None,
-                at: PathId::default(), from: PathId::default(), lock: PathId::default(),
-                opaque: false, capture_exclusive: false,
+                root: binding,
+                storage: true,
+                pool: false,
+                parent: None,
+                at: PathId::default(),
+                from: PathId::default(),
+                lock: PathId::default(),
+                opaque: false,
+                capture_exclusive: false,
             });
         }
         let pending = self.pending.len();
         let loan = Some(self.intern(origins));
         self.pending.push(Value {
-            ty: Ty::Ref { target, mutable: false },
-            dependencies: DependencySummary { loan, ..DependencySummary::default() },
+            ty: Ty::Ref {
+                target,
+                mutable: false,
+            },
+            dependencies: DependencySummary {
+                loan,
+                ..DependencySummary::default()
+            },
             ..left
         });
         let right = self.expression(rhs, (!shift).then_some(ty), Access::Read, out);
@@ -5132,7 +6013,14 @@ impl<'a> Checker<'a> {
         if borrowed || via_slice {
             self.access_target(id, binding, false, false)?;
         }
-        self.access_projected_at(id, binding, borrowed || via_slice, true, true, &self.dependencies.paths[lock.0])?;
+        self.access_projected_at(
+            id,
+            binding,
+            borrowed || via_slice,
+            true,
+            true,
+            &self.dependencies.paths[lock.0],
+        )?;
         let value = if shift {
             self.finish_shift(id, rhs, operator == "<<", left, right, out)?
         } else {
@@ -5140,7 +6028,9 @@ impl<'a> Checker<'a> {
         };
         if let Some(address) = address {
             if value.ty == Ty::Usize && value.dependencies.loan.is_some() {
-                return Err(self.error(id, "écriture indirecte d’une adresse suivie hors périmètre"));
+                return Err(
+                    self.error(id, "écriture indirecte d’une adresse suivie hors périmètre")
+                );
             }
             out.push(Instr::WriteSliceElement(address, value));
         } else {
@@ -5150,7 +6040,12 @@ impl<'a> Checker<'a> {
         Ok(())
     }
 
-    fn shift(&mut self, id: NodeId, expected: Option<Ty>, out: &mut Vec<Instr>) -> Result<Value, Error> {
+    fn shift(
+        &mut self,
+        id: NodeId,
+        expected: Option<Ty>,
+        out: &mut Vec<Instr>,
+    ) -> Result<Value, Error> {
         let leftward = self.operator(id) == "<<";
         let children = &self.node(id).children;
         let left = self.expression(children[0], expected, Access::Read, out)?;
@@ -5162,29 +6057,42 @@ impl<'a> Checker<'a> {
     }
 
     fn finish_shift(
-        &mut self, id: NodeId, rhs: NodeId, leftward: bool, left: Value, right: Value,
+        &mut self,
+        id: NodeId,
+        rhs: NodeId,
+        leftward: bool,
+        left: Value,
+        right: Value,
         out: &mut Vec<Instr>,
     ) -> Result<Value, Error> {
-        let bits = left.ty.integer_bits(self.tree.target.pointer_width())
+        let bits = left
+            .ty
+            .integer_bits(self.tree.target.pointer_width())
             .ok_or_else(|| self.error(id, "le décalage exige des entiers"))?;
         if !(right.ty.signed() || right.ty.unsigned()) {
             return Err(self.error(id, "le décalage exige un nombre entier de positions"));
         }
-        if right.integer.is_some_and(|n| !(0..i128::from(bits)).contains(&n)) {
+        if right
+            .integer
+            .is_some_and(|n| !(0..i128::from(bits)).contains(&n))
+        {
             return Err(self.error(rhs, "nombre de positions de décalage hors limites"));
         }
         if let (Some(value), Some(count)) = (left.integer, right.integer) {
             out.push(Instr::Discard(left));
             out.push(Instr::Discard(right));
-            let result = if leftward { value * (1_i128 << count) } else { value >> count };
+            let result = if leftward {
+                value * (1_i128 << count)
+            } else {
+                value >> count
+            };
             return self.checked_integer(id, left.ty, result, out);
         }
 
         let mut value = self.emit(left.ty, Expr::Shift(left, right, bits, leftward), out);
         if left.ty == Ty::Usize || !leftward {
-            value.dependencies.loan = self.union_loans(
-                [left.dependencies.loan, right.dependencies.loan].into_iter(),
-            );
+            value.dependencies.loan =
+                self.union_loans([left.dependencies.loan, right.dependencies.loan].into_iter());
         }
         Ok(value.finish_evaluation(out))
     }
@@ -5207,7 +6115,11 @@ impl<'a> Checker<'a> {
         let mut skip = Vec::new();
         let skipped = self.emit(Ty::Bool, Expr::Boolean(is_or), &mut skip);
         skip.push(Instr::Receive(receiver, skipped));
-        let (yes, no) = if is_or { (skip, evaluate) } else { (evaluate, skip) };
+        let (yes, no) = if is_or {
+            (skip, evaluate)
+        } else {
+            (evaluate, skip)
+        };
         out.push(Instr::Reserve(receiver));
         out.push(Instr::If(left, yes, no));
         Ok(receiver)
@@ -5326,11 +6238,14 @@ impl<'a> Checker<'a> {
             ty if ty.signed() || ty.unsigned() => Expr::Integer(0),
             Ty::F32 => Expr::Float("0.0f".into()),
             Ty::F64 => Expr::Float("0.0".into()),
-            Ty::Struct(index) if self.structures[index].variants.is_empty()
-                && self.structures[index].array.is_none()
-                && self.structures[index].pool.is_none()
-                && self.structures[index].growing.is_none() =>
-                return self.construct_fields(id, index, None, &[], true, out),
+            Ty::Struct(index)
+                if self.structures[index].variants.is_empty()
+                    && self.structures[index].array.is_none()
+                    && self.structures[index].pool.is_none()
+                    && self.structures[index].growing.is_none() =>
+            {
+                return self.construct_fields(id, index, None, &[], true, out);
+            }
             _ => return Err(self.error(id, "initialiseur explicite requis pour ce type")),
         };
         Ok(self.emit(ty, expression, out))
@@ -5344,7 +6259,8 @@ impl<'a> Checker<'a> {
             return Err(self.error(id, "représentation privée de std::io::File"));
         }
         for (name, (range, diagnostic)) in &self.tree.opaque_layouts {
-            if self.structure_names.get(name.as_str()) == Some(&layout) && !range.contains(&offset) {
+            if self.structure_names.get(name.as_str()) == Some(&layout) && !range.contains(&offset)
+            {
                 return Err(self.error(id, diagnostic));
             }
         }
@@ -5352,8 +6268,13 @@ impl<'a> Checker<'a> {
     }
 
     fn construct_fields(
-        &mut self, id: NodeId, index: usize, variant: Option<(usize, usize)>,
-        inputs: &[NodeId], defaults: bool, out: &mut Vec<Instr>,
+        &mut self,
+        id: NodeId,
+        index: usize,
+        variant: Option<(usize, usize)>,
+        inputs: &[NodeId],
+        defaults: bool,
+        out: &mut Vec<Instr>,
     ) -> Result<Value, Error> {
         self.check_fields_visible(id, index)?;
         let fields = variant
@@ -5366,7 +6287,10 @@ impl<'a> Checker<'a> {
             && (positional != Self::positional_fields(&fields)
                 || positional && inputs.len() != fields.len())
         {
-            return Err(self.error(id, "construction incompatible avec les champs positionnels de la variante"));
+            return Err(self.error(
+                id,
+                "construction incompatible avec les champs positionnels de la variante",
+            ));
         }
         let mut initializers = Vec::new();
         let pending = self.pending.len();
@@ -5381,10 +6305,15 @@ impl<'a> Checker<'a> {
                 if node.kind != "champ" {
                     return Err(self.error(id, "initialiseur de champ attendu"));
                 }
-                fields.iter().enumerate()
+                fields
+                    .iter()
+                    .enumerate()
                     .find_map(|(position, (name, ty))| {
-                        (Some(name.as_str()) == self.name(field))
-                            .then_some((position, *ty, node.children[0]))
+                        (Some(name.as_str()) == self.name(field)).then_some((
+                            position,
+                            *ty,
+                            node.children[0],
+                        ))
                     })
                     .ok_or_else(|| self.error(field, "champ inconnu"))?
             };
@@ -5425,7 +6354,9 @@ impl<'a> Checker<'a> {
             }
             prefix.push(Position::Field(field));
             self.append_value_origins(&mut origins, value, &prefix);
-            if variant.is_none() && let Some(len) = value.dependencies.vector_len {
+            if variant.is_none()
+                && let Some(len) = value.dependencies.vector_len
+            {
                 lengths.push((field, len));
             }
         }
@@ -5440,34 +6371,59 @@ impl<'a> Checker<'a> {
     fn tuple_fields(&self, ty: Ty) -> Option<&[(String, Ty)]> {
         let Ty::Struct(index) = ty else { return None };
         let fields = &self.structures[index].fields;
-        fields.first().is_some_and(|(name, _)| name == "0").then_some(fields)
+        fields
+            .first()
+            .is_some_and(|(name, _)| name == "0")
+            .then_some(fields)
     }
 
     fn tuple_type(&mut self, id: NodeId, types: Vec<Ty>) -> Result<Ty, Error> {
-        if types.iter().any(|&ty| matches!(ty, Ty::Void | Ty::Pool(_) | Ty::Future(_))
-            || self.pool_layout(ty).is_some() || self.growing_layout(ty).is_some())
-        {
+        if types.iter().any(|&ty| {
+            matches!(ty, Ty::Void | Ty::Pool(_) | Ty::Future(_))
+                || self.pool_layout(ty).is_some()
+                || self.growing_layout(ty).is_some()
+        }) {
             return Err(self.error(id, "unsupported inline tuple element"));
         }
-        let fields = types.into_iter().enumerate()
-            .map(|(position, ty)| (position.to_string(), ty)).collect::<Vec<_>>();
-        let index = self.structures.iter().position(|layout| layout.fields == fields)
+        let fields = types
+            .into_iter()
+            .enumerate()
+            .map(|(position, ty)| (position.to_string(), ty))
+            .collect::<Vec<_>>();
+        let index = self
+            .structures
+            .iter()
+            .position(|layout| layout.fields == fields)
             .unwrap_or_else(|| {
                 let index = self.structures.len();
                 self.structures.push(Structure {
-                    fields, array: None, pool: None, variants: vec![], growing: None, destructor: None,
+                    fields,
+                    array: None,
+                    pool: None,
+                    variants: vec![],
+                    growing: None,
+                    destructor: None,
                 });
                 index
             });
         Ok(Ty::Struct(index))
     }
 
-    fn tuple(&mut self, id: NodeId, expected: Option<Ty>, out: &mut Vec<Instr>) -> Result<Value, Error> {
+    fn tuple(
+        &mut self,
+        id: NodeId,
+        expected: Option<Ty>,
+        out: &mut Vec<Instr>,
+    ) -> Result<Value, Error> {
         let elements = self.node(id).children.clone();
-        let expected_fields = expected.map(|ty| {
-            self.tuple_fields(ty).filter(|fields| fields.len() == elements.len())
-                .ok_or_else(|| self.error(id, "tuple type or arity mismatch")).map(<[_]>::to_vec)
-        }).transpose()?;
+        let expected_fields = expected
+            .map(|ty| {
+                self.tuple_fields(ty)
+                    .filter(|fields| fields.len() == elements.len())
+                    .ok_or_else(|| self.error(id, "tuple type or arity mismatch"))
+                    .map(<[_]>::to_vec)
+            })
+            .transpose()?;
         let pending = self.pending.len();
         let result = (|| {
             let mut values = Vec::new();
@@ -5587,7 +6543,9 @@ impl<'a> Checker<'a> {
         let mut origins = Vec::new();
         for (index, value) in values.iter().enumerate() {
             self.append_value_origins(
-                &mut origins, *value, &[Position::Index((!repeat).then_some(index))],
+                &mut origins,
+                *value,
+                &[Position::Index((!repeat).then_some(index))],
             );
         }
         let loan = (!origins.is_empty()).then(|| self.intern(origins));
@@ -5630,7 +6588,8 @@ impl<'a> Checker<'a> {
                     ));
                     let mut value = self.emit(element, Expr::GrowingIndex(owner, index), out);
                     if self.has_dependencies(element) {
-                        value.dependencies.loan = self.selected_loan(owner.dependencies.loan, &[*path.last().unwrap()]);
+                        value.dependencies.loan =
+                            self.selected_loan(owner.dependencies.loan, &[*path.last().unwrap()]);
                         value = value.finish_evaluation(out);
                     }
                     return Ok(value);
@@ -5672,9 +6631,12 @@ impl<'a> Checker<'a> {
             && !(self.node(id).kind == "projection" && self.variant(id).is_some())
         {
             let node = self.node(id);
-            if node.kind == "indice" && self.uses.get(&node.children[0])
-                .and_then(|binding| self.slots[binding.0])
-                .is_some_and(|slot| matches!(slot.ty, Ty::Slice { .. }))
+            if node.kind == "indice"
+                && self
+                    .uses
+                    .get(&node.children[0])
+                    .and_then(|binding| self.slots[binding.0])
+                    .is_some_and(|slot| matches!(slot.ty, Ty::Slice { .. }))
             {
                 break;
             }
@@ -5695,7 +6657,12 @@ impl<'a> Checker<'a> {
     }
 
     fn access_projected_at(
-        &self, id: NodeId, binding: BindingId, borrowed: bool, mutable: bool, write: bool,
+        &self,
+        id: NodeId,
+        binding: BindingId,
+        borrowed: bool,
+        mutable: bool,
+        write: bool,
         path: &[Position],
     ) -> Result<(), Error> {
         self.live_slot(id, binding)?;
@@ -5822,8 +6789,14 @@ impl<'a> Checker<'a> {
         let mut path = Vec::new();
         let source = self.stored_place(place, root, base, &mut path, out)?;
         let (ty, exclusive) = match source.ty {
-            Ty::Ref { target, mutable: exclusive } => (Ty::Ref { target, mutable }, exclusive),
-            Ty::Slice { element, mutable: exclusive } => (Ty::Slice { element, mutable }, exclusive),
+            Ty::Ref {
+                target,
+                mutable: exclusive,
+            } => (Ty::Ref { target, mutable }, exclusive),
+            Ty::Slice {
+                element,
+                mutable: exclusive,
+            } => (Ty::Slice { element, mutable }, exclusive),
             _ => return Err(self.error(id, "référence stockée attendue")),
         };
         if mutable && !exclusive {
@@ -5865,19 +6838,32 @@ impl<'a> Checker<'a> {
     ) -> Result<Value, Error> {
         if self.node(id).kind == "indice" {
             let base = self.node(id).children[0];
-            if let Some(Ty::Slice { mutable: exclusive, .. }) = self.known_type(base) {
-                let binding = *self.uses.get(&base)
-                    .ok_or_else(|| self.error(base, "liaison de tranche requise pour le réemprunt"))?;
+            if let Some(Ty::Slice {
+                mutable: exclusive, ..
+            }) = self.known_type(base)
+            {
+                let binding = *self.uses.get(&base).ok_or_else(|| {
+                    self.error(base, "liaison de tranche requise pour le réemprunt")
+                })?;
                 if mutable && !exclusive {
                     return Err(self.error(id, "réemprunt mutable d’une tranche partagée"));
                 }
                 let (target, address) = self.slice_element_address(id, out)?;
                 self.live_slot(id, binding)?;
                 self.access_reference(id, binding, mutable)?;
-                let origins = self.origins(address.dependencies.loan).iter()
-                    .map(|origin| Origin { parent: Some(binding), ..*origin })
+                let origins = self
+                    .origins(address.dependencies.loan)
+                    .iter()
+                    .map(|origin| Origin {
+                        parent: Some(binding),
+                        ..*origin
+                    })
                     .collect();
-                let mut value = self.emit(Ty::Ref { target, mutable }, Expr::SliceElementBorrow(address), out);
+                let mut value = self.emit(
+                    Ty::Ref { target, mutable },
+                    Expr::SliceElementBorrow(address),
+                    out,
+                );
                 value.dependencies.loan = Some(self.intern(origins));
                 return Ok(value.finish_evaluation(out));
             }
@@ -5916,7 +6902,11 @@ impl<'a> Checker<'a> {
         } else {
             // Addressing one projection must allow disjoint reborrows.
             let (base_ty, expression) = if dereference {
-                let Ty::Ref { target, mutable: exclusive } = slot.ty else {
+                let Ty::Ref {
+                    target,
+                    mutable: exclusive,
+                } = slot.ty
+                else {
                     return Err(self.error(id, "une référence est requise pour le déréférencement"));
                 };
                 if mutable && !exclusive {
@@ -5970,9 +6960,15 @@ impl<'a> Checker<'a> {
             }
         } else {
             origins.push(Origin {
-                root: binding, storage: true, pool: false, parent: None,
-                at: PathId::default(), from: PathId::default(), lock,
-                opaque: false, capture_exclusive: false,
+                root: binding,
+                storage: true,
+                pool: false,
+                parent: None,
+                at: PathId::default(),
+                from: PathId::default(),
+                lock,
+                opaque: false,
+                capture_exclusive: false,
             });
         }
         let target = ty
@@ -5999,22 +6995,37 @@ impl<'a> Checker<'a> {
         };
         let ty = self.signatures[function].result;
         let mut value = self.emit(ty, Expr::Await(future), out);
-        self.unpack_output(&mut value, self.origins(future.dependencies.awaited_loan).to_vec());
+        self.unpack_output(
+            &mut value,
+            self.origins(future.dependencies.awaited_loan).to_vec(),
+        );
         value = value.finish_evaluation(out);
         Ok(value)
     }
 
     fn subslice(
-        &mut self, id: NodeId, base: NodeId, bounds: &[NodeId], mutable: bool,
+        &mut self,
+        id: NodeId,
+        base: NodeId,
+        bounds: &[NodeId],
+        mutable: bool,
         out: &mut Vec<Instr>,
     ) -> Result<Value, Error> {
         let [start, end] = *bounds else {
             return Err(self.error(id, "deux bornes explicites requises pour la sous-tranche"));
         };
-        let binding = *self.uses.get(&base)
+        let binding = *self
+            .uses
+            .get(&base)
             .ok_or_else(|| self.error(base, "liaison de tranche requise pour le réemprunt"))?;
         let slice = self.expression(base, None, Access::Read, out)?;
-        let Ty::Slice { element, mutable: exclusive } = slice.ty else { unreachable!() };
+        let Ty::Slice {
+            element,
+            mutable: exclusive,
+        } = slice.ty
+        else {
+            unreachable!()
+        };
         if mutable && !exclusive {
             return Err(self.error(id, "réemprunt mutable d’une tranche partagée"));
         }
@@ -6032,21 +7043,40 @@ impl<'a> Checker<'a> {
                 return Err(self.error(id, "borne entière attendue"));
             }
         }
-        if [start, end].iter().any(|bound| bound.integer.is_some_and(|n| n < 0))
-            || start.integer.zip(end.integer).is_some_and(|(lo, hi)| lo > hi)
+        if [start, end]
+            .iter()
+            .any(|bound| bound.integer.is_some_and(|n| n < 0))
+            || start
+                .integer
+                .zip(end.integer)
+                .is_some_and(|(lo, hi)| lo > hi)
         {
             return Err(self.error(id, "bornes de sous-tranche invalides"));
         }
         self.live_slot(id, binding)?;
         self.access_reference(id, binding, mutable)?;
-        let origins = self.origins(slice.dependencies.loan).iter()
-            .map(|origin| Origin { parent: Some(binding), ..*origin }).collect();
-        let mut value = self.emit(Ty::Slice { element, mutable }, Expr::Subslice(slice, start, end), out);
+        let origins = self
+            .origins(slice.dependencies.loan)
+            .iter()
+            .map(|origin| Origin {
+                parent: Some(binding),
+                ..*origin
+            })
+            .collect();
+        let mut value = self.emit(
+            Ty::Slice { element, mutable },
+            Expr::Subslice(slice, start, end),
+            out,
+        );
         value.dependencies.loan = Some(self.intern(origins));
         Ok(value.finish_evaluation(out))
     }
 
-    fn slice_element_address(&mut self, id: NodeId, out: &mut Vec<Instr>) -> Result<(Referent, Value), Error> {
+    fn slice_element_address(
+        &mut self,
+        id: NodeId,
+        out: &mut Vec<Instr>,
+    ) -> Result<(Referent, Value), Error> {
         let children = &self.node(id).children;
         let ty = self.usize_type(id)?;
         let slice = self.expression(children[0], None, Access::Read, out)?;
@@ -6085,19 +7115,25 @@ impl<'a> Checker<'a> {
         let mut origins = arguments
             .iter()
             .flat_map(|value| {
-                self.origins(value.dependencies.loan).iter().map(|origin| Origin {
-                    capture_exclusive: origin.capture_exclusive
-                        || self.has_exclusive_dependencies(value.ty),
-                    ..*origin
-                })
+                self.origins(value.dependencies.loan)
+                    .iter()
+                    .map(|origin| Origin {
+                        capture_exclusive: origin.capture_exclusive
+                            || self.has_exclusive_dependencies(value.ty),
+                        ..*origin
+                    })
             })
             .collect::<Vec<_>>();
         origins.retain(|origin| {
-            !self.dependencies.paths[origin.at.0].iter().any(|p| matches!(p, Position::TaskEffect(_)))
+            !self.dependencies.paths[origin.at.0]
+                .iter()
+                .any(|p| matches!(p, Position::TaskEffect(_)))
         });
         for (parameter, path) in self.call_waits(function) {
             let selector = self.dependencies.paths[path.0].clone();
-            for mut origin in self.selected_origins(arguments[parameter].dependencies.loan, &selector) {
+            for mut origin in
+                self.selected_origins(arguments[parameter].dependencies.loan, &selector)
+            {
                 let positions = &self.dependencies.paths[origin.at.0];
                 if let Some(Position::TaskEffect(index)) = positions.last().copied()
                     && !positions.contains(&Position::TaskOutput)
@@ -6135,48 +7171,78 @@ impl<'a> Checker<'a> {
             let value = self.expression(literal, Some(ty), Access::Read, out)?;
             return self.coerce(id, value, expected, out);
         }
-        if self.node(id).kind == "appel" && self.named_constant(self.node(id).children[0]).is_some() {
+        if self.node(id).kind == "appel" && self.named_constant(self.node(id).children[0]).is_some()
+        {
             return Err(self.error(id, "une constante ne peut pas être appelée"));
         }
         if self.runtime_call(id, "wait_socket") {
             let offset = self.tree.tokens[self.node(id).start].span.start;
-            if !self.in_async || !self.tree.std_socket_wait_ranges.iter().any(|range| range.contains(&offset))
+            if !self.in_async
+                || !self
+                    .tree
+                    .std_socket_wait_ranges
+                    .iter()
+                    .any(|range| range.contains(&offset))
                 || self.node(id).children.len() != 3
             {
                 return Err(self.error(id, "attente de socket réservée au réacteur de std"));
             }
-            let socket = self.expression(self.node(id).children[1], Some(Ty::U64), Access::Read, out)?;
-            let direction = self.expression(self.node(id).children[2], Some(Ty::Bool), Access::Read, out)?;
+            let socket =
+                self.expression(self.node(id).children[1], Some(Ty::U64), Access::Read, out)?;
+            let direction =
+                self.expression(self.node(id).children[2], Some(Ty::Bool), Access::Read, out)?;
             return Ok(self.emit(Ty::I64, Expr::SocketWait(socket, direction), out));
         }
         if self.runtime_call(id, "complete_socket") {
             let offset = self.tree.tokens[self.node(id).start].span.start;
-            if !self.in_async || !self.tree.std_socket_wait_ranges.iter().any(|range| range.contains(&offset))
+            if !self.in_async
+                || !self
+                    .tree
+                    .std_socket_wait_ranges
+                    .iter()
+                    .any(|range| range.contains(&offset))
                 || self.node(id).children.len() != 3
             {
                 return Err(self.error(id, "attente de socket réservée au réacteur de std"));
             }
-            let socket = self.expression(self.node(id).children[1], Some(Ty::U64), Access::Read, out)?;
-            let request = self.expression(self.node(id).children[2], Some(Ty::Usize), Access::Read, out)?;
+            let socket =
+                self.expression(self.node(id).children[1], Some(Ty::U64), Access::Read, out)?;
+            let request = self.expression(
+                self.node(id).children[2],
+                Some(Ty::Usize),
+                Access::Read,
+                out,
+            )?;
             return Ok(self.emit(Ty::I64, Expr::SocketCompletion(socket, request), out));
         }
         if self.runtime_call(id, "attach_socket") {
             let offset = self.tree.tokens[self.node(id).start].span.start;
-            if !self.tree.std_socket_wait_ranges.iter().any(|range| range.contains(&offset))
+            if !self
+                .tree
+                .std_socket_wait_ranges
+                .iter()
+                .any(|range| range.contains(&offset))
                 || self.node(id).children.len() != 2
             {
                 return Err(self.error(id, "association de socket réservée au réacteur de std"));
             }
-            let socket = self.expression(self.node(id).children[1], Some(Ty::U64), Access::Read, out)?;
+            let socket =
+                self.expression(self.node(id).children[1], Some(Ty::U64), Access::Read, out)?;
             return Ok(self.emit(Ty::I64, Expr::SocketAttach(socket), out));
         }
         if self.runtime_call(id, "process_args") {
-            let trusted = self.names.get("__crust_package_env_args").is_some_and(|&index| {
-                let body = self.node(self.signatures[index].body);
-                body.children.len() == 1 && self.node(body.children[0]).children == [id]
-            });
+            let trusted = self
+                .names
+                .get("__crust_package_env_args")
+                .is_some_and(|&index| {
+                    let body = self.node(self.signatures[index].body);
+                    body.children.len() == 1 && self.node(body.children[0]).children == [id]
+                });
             let offset = self.tree.tokens[self.node(id).start].span.start;
-            if !trusted || !self.tree.std_env_range.contains(&offset) || self.node(id).children.len() != 1 {
+            if !trusted
+                || !self.tree.std_env_range.contains(&offset)
+                || self.node(id).children.len() != 1
+            {
                 return Err(self.error(id, "accès aux arguments réservé à std::env"));
             }
             return Ok(self.emit(self.function_result, Expr::ProcessArgs, out));
@@ -6245,10 +7311,16 @@ impl<'a> Checker<'a> {
         let node = self.node(id);
         let children = &node.children;
         let value = match node.kind {
-            "propagation" => self.propagate(id, out)?
+            "propagation" => self
+                .propagate(id, out)?
                 .ok_or_else(|| self.error(id, "? ne produit pas de valeur ici"))?,
-            "nom" if self.name(id) == Some("None") && !self.uses.contains_key(&id)
-                && matches!(expected.and_then(|ty| self.propagation_layout(ty)), Some((_, false))) =>
+            "nom"
+                if self.name(id) == Some("None")
+                    && !self.uses.contains_key(&id)
+                    && matches!(
+                        expected.and_then(|ty| self.propagation_layout(ty)),
+                        Some((_, false))
+                    ) =>
             {
                 self.wrap_payload(expected.unwrap(), 0, None, out)
             }
@@ -6270,8 +7342,9 @@ impl<'a> Checker<'a> {
             "if" => self.conditional_value(id, expected, out)?,
             "tuple" => self.tuple(id, expected, out)?,
             "construction" => self.construct(id, out)?,
-            "appel méthode" if let Some(variant @ (layout, _)) = self.variant_call(id) =>
-                self.construct_fields(id, layout, Some(variant), &children[1..], false, out)?,
+            "appel méthode" if let Some(variant @ (layout, _)) = self.variant_call(id) => {
+                self.construct_fields(id, layout, Some(variant), &children[1..], false, out)?
+            }
             "pool" => self.pool(id, out)?,
             "tableau" | "tableau répété" => self.array(id, expected, out)?,
             "projection" if self.variant(id).is_some() => self.construct_variant_unit(id, out)?,
@@ -6281,7 +7354,10 @@ impl<'a> Checker<'a> {
                     return Err(self.error(id, "lecture indexée réservée au vecteur"));
                 };
                 if contains_handle(element, &self.structures) {
-                    return Err(self.error(id, "utiliser remove ou pop pour déplacer un handle de vecteur"));
+                    return Err(self.error(
+                        id,
+                        "utiliser remove ou pop pour déplacer un handle de vecteur",
+                    ));
                 }
                 let handle = self.local(children[0], binding, Access::Read, out)?;
                 let index = self.expression(children[1], None, Access::Read, out)?;
@@ -6300,7 +7376,8 @@ impl<'a> Checker<'a> {
                 if self.has_dependencies(element) {
                     let position =
                         Position::Index(index.integer.and_then(|i| usize::try_from(i).ok()));
-                    value.dependencies.loan = self.selected_loan(handle.dependencies.loan, &[position]);
+                    value.dependencies.loan =
+                        self.selected_loan(handle.dependencies.loan, &[position]);
                     value = value.finish_evaluation(out);
                 }
                 value
@@ -6338,51 +7415,80 @@ impl<'a> Checker<'a> {
                         let mutable = self.text(node.start + 1) == "mut";
                         if matches!(self.known_type(root), Some(Ty::Slice { .. })) {
                             if index.name == Some(index.start) {
-                                return Err(self.error(id, "deux bornes explicites requises pour la sous-tranche"));
+                                return Err(self.error(
+                                    id,
+                                    "deux bornes explicites requises pour la sous-tranche",
+                                ));
                             }
                             let value = self.subslice(id, root, &index.children, mutable, out)?;
                             return self.coerce(id, value, expected, out);
                         }
-                        if let Some((binding, Growing::Vector(element))) = self.growing_handle(root) {
+                        if let Some((binding, Growing::Vector(element))) = self.growing_handle(root)
+                        {
                             if index.name != Some(index.start) || !index.children.is_empty() {
                                 return Err(self.error(id, "tranche complète de vecteur attendue"));
                             }
-                            if self.has_dependencies(element) || inline_destructor(element, &self.structures) {
-                                return Err(self.error(id, "élément de tranche de vecteur avec dépendances hors périmètre"));
+                            if self.has_dependencies(element)
+                                || inline_destructor(element, &self.structures)
+                            {
+                                return Err(self.error(
+                                    id,
+                                    "élément de tranche de vecteur avec dépendances hors périmètre",
+                                ));
                             }
                             if mutable && !self.tree.bindings[binding.0].mutable {
-                                return Err(self.error(id, "vecteur mutable attendu pour la tranche"));
+                                return Err(
+                                    self.error(id, "vecteur mutable attendu pour la tranche")
+                                );
                             }
-                            let referent = element.referent()
-                                .ok_or_else(|| self.error(id, "type d’élément de tranche non pris en charge"))?;
+                            let referent = element.referent().ok_or_else(|| {
+                                self.error(id, "type d’élément de tranche non pris en charge")
+                            })?;
                             self.access_target(id, binding, mutable, false)?;
                             let handle = self.local(root, binding, Access::Read, out)?;
-                            let mut view = self.emit(Ty::Slice { element: referent, mutable },
-                                Expr::GrowingSlice(handle, element), out);
+                            let mut view = self.emit(
+                                Ty::Slice {
+                                    element: referent,
+                                    mutable,
+                                },
+                                Expr::GrowingSlice(handle, element),
+                                out,
+                            );
                             view.dependencies.loan = Some(self.intern(vec![Origin {
-                                root: binding, storage: true, pool: false, parent: None,
-                                at: PathId::default(), from: PathId::default(), lock: PathId::default(),
-                                opaque: false, capture_exclusive: false,
+                                root: binding,
+                                storage: true,
+                                pool: false,
+                                parent: None,
+                                at: PathId::default(),
+                                from: PathId::default(),
+                                lock: PathId::default(),
+                                opaque: false,
+                                capture_exclusive: false,
                             }]));
                             let view = view.finish_evaluation(out);
                             return self.coerce(id, view, expected, out);
                         }
                         if index.name != Some(index.start) {
-                            return Err(self.error(id, "borne inférieure de tranche hors périmètre"));
+                            return Err(
+                                self.error(id, "borne inférieure de tranche hors périmètre")
+                            );
                         }
                         let binding = self.uses.get(&root).copied();
                         let (array_ty, projected) = if let Some(binding) = binding {
                             (self.live_slot(id, binding)?.ty, None)
                         } else if matches!(self.node(root).kind, "projection" | "indice") {
                             let base = self.borrow_projection(root, mutable, true, out)?;
-                            let Ty::Ref { target, .. } = base.ty else { unreachable!() };
+                            let Ty::Ref { target, .. } = base.ty else {
+                                unreachable!()
+                            };
                             (target.ty(), Some(base))
                         } else {
                             return Err(self.error(id, "place de tableau attendue"));
                         };
                         let (element, length) = self.array_layout(id, array_ty)?;
-                        let element = element.referent()
-                            .ok_or_else(|| self.error(id, "type d’élément de tranche non pris en charge"))?;
+                        let element = element.referent().ok_or_else(|| {
+                            self.error(id, "type d’élément de tranche non pris en charge")
+                        })?;
                         let end = if let Some(&end) = index.children.first() {
                             let expected = if self.known_type(end).is_none()
                                 && self.node(end).kind == "littéral"
@@ -6410,15 +7516,24 @@ impl<'a> Checker<'a> {
                         };
                         let (base, loan) = if let Some(binding) = binding {
                             if mutable && !self.tree.bindings[binding.0].mutable {
-                                return Err(self.error(id, "tableau mutable attendu pour la tranche"));
+                                return Err(
+                                    self.error(id, "tableau mutable attendu pour la tranche")
+                                );
                             }
                             self.access_target(id, binding, mutable, false)?;
                             let base = self.local(root, binding, Access::Read, out)?;
-                            let mut origins = self.origins(self.live_slot(id, binding)?.loan).to_vec();
+                            let mut origins =
+                                self.origins(self.live_slot(id, binding)?.loan).to_vec();
                             origins.push(Origin {
-                                root: binding, storage: true, pool: false, parent: None,
-                                at: PathId::default(), from: PathId::default(), lock: PathId::default(),
-                                opaque: false, capture_exclusive: false,
+                                root: binding,
+                                storage: true,
+                                pool: false,
+                                parent: None,
+                                at: PathId::default(),
+                                from: PathId::default(),
+                                lock: PathId::default(),
+                                opaque: false,
+                                capture_exclusive: false,
                             });
                             (base, Some(self.intern(origins)))
                         } else {
@@ -6439,17 +7554,32 @@ impl<'a> Checker<'a> {
                     let parent = self.node(children[0]).children[0];
                     if self.node(parent).kind == "indirection" {
                         let (binding, outer) = self.dereference(parent, mutable)?;
-                        let Ty::Ref { target, mutable: inner } = outer.ty() else {
+                        let Ty::Ref {
+                            target,
+                            mutable: inner,
+                        } = outer.ty()
+                        else {
                             return Err(self.error(id, "référence interne attendue"));
                         };
                         if mutable && !inner {
-                            return Err(self.error(id, "réemprunt mutable d’une référence partagée"));
+                            return Err(
+                                self.error(id, "réemprunt mutable d’une référence partagée")
+                            );
                         }
                         let reference = self.expression(parent, None, Access::Read, out)?;
-                        let mut value = self.emit(Ty::Ref { target, mutable }, Expr::BorrowThrough(reference), out);
-                        let origins = self.origins(reference.dependencies.loan).iter().map(|origin| Origin {
-                            parent: Some(binding), ..*origin
-                        }).collect();
+                        let mut value = self.emit(
+                            Ty::Ref { target, mutable },
+                            Expr::BorrowThrough(reference),
+                            out,
+                        );
+                        let origins = self
+                            .origins(reference.dependencies.loan)
+                            .iter()
+                            .map(|origin| Origin {
+                                parent: Some(binding),
+                                ..*origin
+                            })
+                            .collect();
                         value.dependencies.loan = Some(self.intern(origins));
                         return self.coerce(id, value.finish_evaluation(out), expected, out);
                     }
@@ -6529,26 +7659,40 @@ impl<'a> Checker<'a> {
                 let handle = self.local(children[0], binding, Access::Read, out)?;
                 self.emit(Ty::U64, Expr::GrowingLen(handle, element), out)
             }
-            "appel méthode" if matches!(self.name(id), Some("pop" | "remove"))
-                && (self.growing_handle(children[0]).is_some() || self.vector_field(children[0]).is_some()) =>
-                self.vector_extract(id, out)?,
-            "appel méthode" if self.name(id) == Some("as_bytes")
-                && self.known_type(children[0]) == Some(Ty::Str) =>
+            "appel méthode"
+                if matches!(self.name(id), Some("pop" | "remove"))
+                    && (self.growing_handle(children[0]).is_some()
+                        || self.vector_field(children[0]).is_some()) =>
             {
-                if children.len() != 1 { return Err(self.error(id, "as_bytes ne prend aucun argument")); }
+                self.vector_extract(id, out)?
+            }
+            "appel méthode"
+                if self.name(id) == Some("as_bytes")
+                    && self.known_type(children[0]) == Some(Ty::Str) =>
+            {
+                if children.len() != 1 {
+                    return Err(self.error(id, "as_bytes ne prend aucun argument"));
+                }
                 let text = self.expression(children[0], Some(Ty::Str), Access::Read, out)?;
-                let ty = Ty::Slice { element: Referent::U8, mutable: false };
+                let ty = Ty::Slice {
+                    element: Referent::U8,
+                    mutable: false,
+                };
                 let mut view = self.emit(ty, Expr::StrBytes(text), out);
                 view.dependencies.loan = text.dependencies.loan;
                 view.finish_evaluation(out)
             }
-            "appel méthode" if self.name(id) == Some("content_eq")
-                && matches!(self.known_type(children[0]), Some(Ty::Slice { .. })) =>
+            "appel méthode"
+                if self.name(id) == Some("content_eq")
+                    && matches!(self.known_type(children[0]), Some(Ty::Slice { .. })) =>
             {
                 let [left, right] = children.as_slice() else {
                     return Err(self.error(id, "content_eq exige un argument"));
                 };
-                let function = self.names.get("__crust_package_byte_content_eq").copied()
+                let function = self
+                    .names
+                    .get("__crust_package_byte_content_eq")
+                    .copied()
                     .ok_or_else(|| self.error(id, "content_eq exige la bibliothèque standard"))?;
                 let left = self.expression(*left, None, Access::Read, out)?;
                 let pending = self.pending.len();
@@ -6556,23 +7700,52 @@ impl<'a> Checker<'a> {
                 let right = self.expression(*right, None, Access::Read, out);
                 self.pending.truncate(pending);
                 let right = right?;
-                if ![left, right].iter().all(|value| matches!(value.ty, Ty::Slice { element: Referent::U8, .. })) {
+                if ![left, right].iter().all(|value| {
+                    matches!(
+                        value.ty,
+                        Ty::Slice {
+                            element: Referent::U8,
+                            ..
+                        }
+                    )
+                }) {
                     return Err(self.error(id, "content_eq exige deux tranches d’octets"));
                 }
-                self.emit(Ty::Bool, Expr::Call(function, vec![left, right], CallKind::Ordinary), out)
+                self.emit(
+                    Ty::Bool,
+                    Expr::Call(function, vec![left, right], CallKind::Ordinary),
+                    out,
+                )
             }
-            "appel méthode" if self.name(id) == Some("len")
-                && matches!(self.known_type(children[0]), Some(Ty::Slice { .. })) =>
+            "appel méthode"
+                if self.name(id) == Some("len")
+                    && matches!(self.known_type(children[0]), Some(Ty::Slice { .. })) =>
             {
-                if children.len() != 1 { return Err(self.error(id, "len ne prend aucun argument")); }
+                if children.len() != 1 {
+                    return Err(self.error(id, "len ne prend aucun argument"));
+                }
                 let slice = self.expression(children[0], None, Access::Read, out)?;
                 self.emit(Ty::Usize, Expr::SliceLen(slice), out)
             }
-            "appel méthode" if self.name(id) == Some("new")
-                && self.uses.get(&children[0]).and_then(|binding| self.slots[binding.0])
-                    .is_some_and(|slot| self.pool_layout(slot.ty).is_some()
-                        || matches!(slot.ty, Ty::Ref { target: Referent::Pool(_), .. })) =>
-                self.pool_new(id, out)?,
+            "appel méthode"
+                if self.name(id) == Some("new")
+                    && self
+                        .uses
+                        .get(&children[0])
+                        .and_then(|binding| self.slots[binding.0])
+                        .is_some_and(|slot| {
+                            self.pool_layout(slot.ty).is_some()
+                                || matches!(
+                                    slot.ty,
+                                    Ty::Ref {
+                                        target: Referent::Pool(_),
+                                        ..
+                                    }
+                                )
+                        }) =>
+            {
+                self.pool_new(id, out)?
+            }
             "indirection"
                 if self
                     .uses
@@ -6589,7 +7762,10 @@ impl<'a> Checker<'a> {
                 if contains_handle(ty, &self.structures) && matches!(access, Access::Move) {
                     let allocation = self.local(children[0], binding, Access::Move, out)?;
                     let mut value = self.emit(ty, Expr::PoolTake(allocation), out);
-                    let payload = self.origins(allocation.dependencies.loan).iter().copied()
+                    let payload = self
+                        .origins(allocation.dependencies.loan)
+                        .iter()
+                        .copied()
                         .filter(|origin| {
                             let path = &self.dependencies.paths[origin.at.0];
                             path.first() == Some(&Position::Field(0))
@@ -6675,7 +7851,11 @@ impl<'a> Checker<'a> {
                 if matches!(target, Referent::Pool(_)) {
                     return Err(self.error(id, "utiliser le pool à travers sa référence"));
                 }
-                if matches!(target.ty(), Ty::Struct(_) | Ty::Allocation(_) | Ty::Ref { .. }) && matches!(access, Access::Move) {
+                if matches!(
+                    target.ty(),
+                    Ty::Struct(_) | Ty::Allocation(_) | Ty::Ref { .. }
+                ) && matches!(access, Access::Move)
+                {
                     return Err(self.error(id, "déplacement d’un agrégat emprunté"));
                 }
                 let mut value = self.emit(target.ty(), Expr::Dereference(reference), out);
@@ -6688,9 +7868,12 @@ impl<'a> Checker<'a> {
             "littéral" if matches!(self.name(id), Some("true" | "false")) => {
                 self.emit(Ty::Bool, Expr::Boolean(self.name(id) == Some("true")), out)
             }
-            "littéral" if self.tree.tokens[node.start].kind == crate::lexer::Kind::Text => {
-                self.emit(Ty::Str, Expr::StrLiteral(crate::lexer::decoded_text(self.text(node.start))), out)
-            }
+            "littéral" if self.tree.tokens[node.start].kind == crate::lexer::Kind::Text => self
+                .emit(
+                    Ty::Str,
+                    Expr::StrLiteral(crate::lexer::decoded_text(self.text(node.start))),
+                    out,
+                ),
             "littéral" => self.integer(id, false, expected, out)?,
             "groupe" if children.len() == 1 => {
                 self.expression(children[0], expected, access, out)?
@@ -6718,27 +7901,39 @@ impl<'a> Checker<'a> {
                     out.push(Instr::Discard(operand));
                     return self.checked_integer(id, operand.ty, -value, out);
                 }
-                let mut value = self.emit(operand.ty, Expr::Unary(operator.to_owned(), operand), out);
+                let mut value =
+                    self.emit(operand.ty, Expr::Unary(operator.to_owned(), operand), out);
                 value.dependencies.loan = operand.dependencies.loan;
                 value.finish_evaluation(out)
             }
             "binaire" if self.operator(id) == "as" => {
                 let input = self.expression(children[0], None, Access::Read, out)?;
                 let target = self.ty(children[1])?;
-                if !input.ty.exact_cast_to(target, self.tree.target.pointer_width()) {
-                    return Err(self.error(id, "as exige une conversion exacte pour tout le type source"));
+                if !input
+                    .ty
+                    .exact_cast_to(target, self.tree.target.pointer_width())
+                {
+                    return Err(self.error(
+                        id,
+                        "as exige une conversion exacte pour tout le type source",
+                    ));
                 }
                 let mut value = self.emit(target, Expr::Cast(input), out);
-                value.integer = input.integer.filter(|_| target.signed() || target.unsigned());
+                value.integer = input
+                    .integer
+                    .filter(|_| target.signed() || target.unsigned());
                 value.dependencies.loan = input.dependencies.loan;
                 value.finish_evaluation(out)
             }
-            "binaire" if matches!(self.operator(id), "<<" | ">>") => self.shift(id, expected, out)?,
+            "binaire" if matches!(self.operator(id), "<<" | ">>") => {
+                self.shift(id, expected, out)?
+            }
             "binaire" if matches!(self.operator(id), "&&" | "||") => self.short_circuit(id, out)?,
             "binaire" => {
                 let operator = self.operator(id);
                 let comparison = matches!(operator, "==" | "!=" | "<" | ">" | "<=" | ">=");
-                if !comparison && !matches!(operator, "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^") {
+                if !comparison && !matches!(operator, "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^")
+                {
                     return Err(self.error(id, "opérateur hors du sous-ensemble vérifié"));
                 }
                 let hint = if comparison { None } else { expected };
@@ -6758,7 +7953,11 @@ impl<'a> Checker<'a> {
                     if !matches!(right.ty, Ty::Slice { element: other, .. } if other == element) {
                         return Err(self.error(id, "tranches de même type d’élément attendues"));
                     }
-                    let value = self.emit(Ty::Bool, Expr::Binary(operator.to_owned(), left, right), out);
+                    let value = self.emit(
+                        Ty::Bool,
+                        Expr::Binary(operator.to_owned(), left, right),
+                        out,
+                    );
                     return self.coerce(id, value, expected, out);
                 }
                 let right = self.expression(children[1], Some(left.ty), Access::Read, out)?;
@@ -6777,14 +7976,20 @@ impl<'a> Checker<'a> {
             }
             "appel méthode"
                 if matches!(self.name(id), Some("insert" | "get" | "get_mut" | "remove"))
-                    && self.uses.get(&children[0]).and_then(|binding| self.slots[binding.0])
-                        .is_some_and(|slot| matches!(self.growing_layout(slot.ty), Some(Growing::Map(..)))) =>
+                    && self
+                        .uses
+                        .get(&children[0])
+                        .and_then(|binding| self.slots[binding.0])
+                        .is_some_and(|slot| {
+                            matches!(self.growing_layout(slot.ty), Some(Growing::Map(..)))
+                        }) =>
             {
                 self.map_method(id, out)?
             }
-            "appel" if self.node(children[0]).kind == "nom"
-                && self.name(children[0]) == Some("addr")
-                && !self.uses.contains_key(&children[0]) =>
+            "appel"
+                if self.node(children[0]).kind == "nom"
+                    && self.name(children[0]) == Some("addr")
+                    && !self.uses.contains_key(&children[0]) =>
             {
                 if children.len() != 2 {
                     return Err(self.error(id, "addr exige une référence"));
@@ -6824,26 +8029,39 @@ impl<'a> Checker<'a> {
                 }
                 value
             }
-            "appel" if self.node(children[0]).kind == "nom"
-                && matches!(self.name(children[0]), Some("Ok" | "Err" | "Some"))
-                && !self.uses.contains_key(&children[0])
-                && !self.names.contains_key(self.name(children[0]).unwrap()) =>
+            "appel"
+                if self.node(children[0]).kind == "nom"
+                    && matches!(self.name(children[0]), Some("Ok" | "Err" | "Some"))
+                    && !self.uses.contains_key(&children[0])
+                    && !self.names.contains_key(self.name(children[0]).unwrap()) =>
             {
                 let name = self.name(children[0]).unwrap();
                 let is_result = name != "Some";
-                let (layout, _) = expected.and_then(|ty| self.propagation_layout(ty))
+                let (layout, _) = expected
+                    .and_then(|ty| self.propagation_layout(ty))
                     .filter(|&(_, result)| result == is_result)
-                    .ok_or_else(|| self.error(id, if is_result {
-                        "type Result attendu pour Ok ou Err"
-                    } else {
-                        "type Option attendu pour Some"
-                    }))?;
+                    .ok_or_else(|| {
+                        self.error(
+                            id,
+                            if is_result {
+                                "type Result attendu pour Ok ou Err"
+                            } else {
+                                "type Option attendu pour Some"
+                            },
+                        )
+                    })?;
                 let tag = usize::from(name != "Err");
                 let fields = &self.structures[layout].variants[tag].1;
                 let argument = match (fields.as_slice(), &children[1..]) {
-                    ([(_, ty)], [child]) => Some(self.expression(*child, Some(*ty), Access::Move, out)?),
-                    ([], [child]) if self.node(*child).kind == "groupe"
-                        && self.node(*child).children.is_empty() => None,
+                    ([(_, ty)], [child]) => {
+                        Some(self.expression(*child, Some(*ty), Access::Move, out)?)
+                    }
+                    ([], [child])
+                        if self.node(*child).kind == "groupe"
+                            && self.node(*child).children.is_empty() =>
+                    {
+                        None
+                    }
                     ([], [child]) if self.node(*child).kind == "propagation" => {
                         if self.propagate(*child, out)?.is_some() {
                             return Err(self.error(*child, "charge de Result incompatible"));
@@ -6855,30 +8073,52 @@ impl<'a> Checker<'a> {
                 self.wrap_payload(Ty::Struct(layout), tag, argument, out)
             }
             "appel" if self.iter_constructor(id) => self.iter_new(id, out)?,
-            "appel méthode" if self.name(id) == Some("map") && self.pipeline_candidate(children[0]) =>
-                self.iter_map(id, out)?,
-            "appel méthode" if self.name(id) == Some("next") && self.is_pipeline(children[0]) =>
-                self.iter_next(id, out)?,
+            "appel méthode"
+                if self.name(id) == Some("map") && self.pipeline_candidate(children[0]) =>
+            {
+                self.iter_map(id, out)?
+            }
+            "appel méthode" if self.name(id) == Some("next") && self.is_pipeline(children[0]) => {
+                self.iter_next(id, out)?
+            }
             "appel" | "appel méthode" => {
                 let (callee, arguments, ty, loan, awaited_loan) = self.call(id, out)?;
                 if self.signatures[callee].asynchronous {
-                    let value = self.future_value(id, callee, arguments, ty, loan, awaited_loan, out)?;
+                    let value =
+                        self.future_value(id, callee, arguments, ty, loan, awaited_loan, out)?;
                     return self.coerce(id, value, expected, out);
                 }
                 if ty == Ty::Void {
                     return Err(self.error(id, "appel Void utilisé comme valeur"));
                 }
-                let offset = self.tree.tokens[self.node(self.signatures[callee].body).start].span.start;
+                let offset = self.tree.tokens[self.node(self.signatures[callee].body).start]
+                    .span
+                    .start;
                 let method_metadata = node.kind == "appel méthode"
-                    && matches!(self.name(id), Some("addr" | "peer" | "port" | "ipv4_bits" | "count" | "sender" | "size"))
+                    && matches!(
+                        self.name(id),
+                        Some("addr" | "peer" | "port" | "ipv4_bits" | "count" | "sender" | "size")
+                    )
                     && (self.tree.std_file_range.contains(&offset)
-                        || self.tree.std_async_io_ranges.iter().any(|range| range.contains(&offset)));
+                        || self
+                            .tree
+                            .std_async_io_ranges
+                            .iter()
+                            .any(|range| range.contains(&offset)));
                 let file_mode = node.kind == "appel"
                     && self.tree.std_file_range.contains(&offset)
-                    && self.qualified_method(id).is_some_and(|(_, name)|
-                        matches!(name, "read_only" | "write_only" | "read_write" | "append" | "truncate"));
+                    && self.qualified_method(id).is_some_and(|(_, name)| {
+                        matches!(
+                            name,
+                            "read_only" | "write_only" | "read_write" | "append" | "truncate"
+                        )
+                    });
                 let metadata = method_metadata || file_mode;
-                let kind = if metadata { CallKind::IoMetadata } else { CallKind::Ordinary };
+                let kind = if metadata {
+                    CallKind::IoMetadata
+                } else {
+                    CallKind::Ordinary
+                };
                 let mut value = self.emit(ty, Expr::Call(callee, arguments, kind), out);
                 value.dependencies.loan = loan;
                 value.dependencies.awaited_loan = awaited_loan;
@@ -6917,17 +8157,24 @@ impl<'a> Checker<'a> {
         let index = self.node(id).name.unwrap();
         let span = self.tree.tokens[index].span;
         let next = self.tree.tokens[index + 1].span;
-        if self.text(index) == ">" && span.end == next.start && matches!(self.text(index + 1), "=" | ">") {
+        if self.text(index) == ">"
+            && span.end == next.start
+            && matches!(self.text(index + 1), "=" | ">")
+        {
             return &self.source[span.start..next.end];
         }
         self.text(index)
     }
 
     fn known_type(&mut self, id: NodeId) -> Option<Ty> {
-        if let Some((ty, _)) = self.named_constant(id) { return Some(ty); }
+        if let Some((ty, _)) = self.named_constant(id) {
+            return Some(ty);
+        }
         let node = self.node(id);
         match node.kind {
-            "binaire" if matches!(self.operator(id), "<<" | ">>") => self.known_type(node.children[0]),
+            "binaire" if matches!(self.operator(id), "<<" | ">>") => {
+                self.known_type(node.children[0])
+            }
             "binaire" if self.operator(id) == "as" => self.ty(node.children[1]).ok(),
             "nom" => self.uses.get(&id).copied().and_then(|binding| {
                 self.slots[binding.0].map(|slot| slot.ty).or_else(|| {
@@ -6937,18 +8184,25 @@ impl<'a> Checker<'a> {
                 })
             }),
             "groupe" | "unaire" if node.children.len() == 1 => self.known_type(node.children[0]),
-            "appel" if self.node(node.children[0]).kind == "nom"
-                && self.name(node.children[0]) == Some("addr") => self.usize_type(id).ok(),
-            "appel méthode" if let Some((layout, _)) = self.variant_call(id) => Some(Ty::Struct(layout)),
-            "appel" if let Some(layout) = self.explicit_conversion_target(id) => Some(Ty::Struct(layout)),
-            "appel" => self.function_index(id)
-                .map(|i| {
-                    if self.signatures[i].asynchronous {
-                        Ty::Future(i)
-                    } else {
-                        self.signatures[i].result
-                    }
-                }),
+            "appel"
+                if self.node(node.children[0]).kind == "nom"
+                    && self.name(node.children[0]) == Some("addr") =>
+            {
+                self.usize_type(id).ok()
+            }
+            "appel méthode" if let Some((layout, _)) = self.variant_call(id) => {
+                Some(Ty::Struct(layout))
+            }
+            "appel" if let Some(layout) = self.explicit_conversion_target(id) => {
+                Some(Ty::Struct(layout))
+            }
+            "appel" => self.function_index(id).map(|i| {
+                if self.signatures[i].asynchronous {
+                    Ty::Future(i)
+                } else {
+                    self.signatures[i].result
+                }
+            }),
             "await" => match self.known_type(node.children[0])? {
                 Ty::Future(index) => Some(self.signatures[index].result),
                 Ty::Handle(layout, true) => Some(Ty::Struct(layout)),
@@ -6957,10 +8211,17 @@ impl<'a> Checker<'a> {
             "propagation" => {
                 let ty = self.known_type(node.children[0])?;
                 let (layout, _) = self.propagation_layout(ty)?;
-                Some(self.structures[layout].variants[1].1.first().map_or(Ty::Void, |field| field.1))
+                Some(
+                    self.structures[layout].variants[1]
+                        .1
+                        .first()
+                        .map_or(Ty::Void, |field| field.1),
+                )
             }
             "littéral" if matches!(self.name(id), Some("true" | "false")) => Some(Ty::Bool),
-            "littéral" if self.tree.tokens[node.start].kind == crate::lexer::Kind::Text => Some(Ty::Str),
+            "littéral" if self.tree.tokens[node.start].kind == crate::lexer::Kind::Text => {
+                Some(Ty::Str)
+            }
             _ => None,
         }
     }
@@ -7122,10 +8383,10 @@ pub(crate) fn owns_pool_slots(ty: Ty, layouts: &[Structure]) -> bool {
             let layout = &layouts[index];
             matches!(layout.growing, Some(Growing::Map(_, Ty::Allocation(_))))
                 || layout
-                .fields
-                .iter()
-                .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
-                .any(|(_, ty)| owns_pool_slots(*ty, layouts))
+                    .fields
+                    .iter()
+                    .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
+                    .any(|(_, ty)| owns_pool_slots(*ty, layouts))
                 || layout
                     .array
                     .is_some_and(|(ty, len)| len != 0 && owns_pool_slots(ty, layouts))
@@ -7139,9 +8400,14 @@ pub(crate) fn contains_handle(ty: Ty, layouts: &[Structure]) -> bool {
         Ty::Handle(..) => true,
         Ty::Struct(index) => {
             let layout = &layouts[index];
-            layout.fields.iter().chain(layout.variants.iter().flat_map(|(_, fields)| fields))
+            layout
+                .fields
+                .iter()
+                .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
                 .any(|(_, ty)| contains_handle(*ty, layouts))
-                || layout.array.is_some_and(|(ty, len)| len != 0 && contains_handle(ty, layouts))
+                || layout
+                    .array
+                    .is_some_and(|(ty, len)| len != 0 && contains_handle(ty, layouts))
         }
         _ => false,
     }
@@ -7151,9 +8417,14 @@ pub(crate) fn inline_destructor(ty: Ty, layouts: &[Structure]) -> bool {
     let Ty::Struct(index) = ty else { return false };
     let layout = &layouts[index];
     layout.destructor.is_some()
-        || layout.fields.iter().chain(layout.variants.iter().flat_map(|(_, fields)| fields))
+        || layout
+            .fields
+            .iter()
+            .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
             .any(|(_, ty)| inline_destructor(*ty, layouts))
-        || layout.array.is_some_and(|(ty, len)| len != 0 && inline_destructor(ty, layouts))
+        || layout
+            .array
+            .is_some_and(|(ty, len)| len != 0 && inline_destructor(ty, layouts))
 }
 
 fn structurally_replicable(ty: Ty, layouts: &[Structure]) -> bool {
@@ -7167,7 +8438,10 @@ fn structurally_replicable(ty: Ty, layouts: &[Structure]) -> bool {
         && layout.pool.is_none()
         && layout.growing.is_none()
         && layout.variants.is_empty()
-        && layout.fields.iter().all(|(_, field)| structurally_replicable(*field, layouts))
+        && layout
+            .fields
+            .iter()
+            .all(|(_, field)| structurally_replicable(*field, layouts))
 }
 
 fn option_item_supported(ty: Ty) -> bool {
@@ -7179,11 +8453,16 @@ fn owns_resources(ty: Ty, layouts: &[Structure]) -> bool {
         Ty::Allocation(_) | Ty::Handle(..) => true,
         Ty::Struct(index) => {
             let layout = &layouts[index];
-            layout.destructor.is_some() || matches!(layout.growing, Some(Growing::Map(..)))
-                || layout.fields.iter()
+            layout.destructor.is_some()
+                || matches!(layout.growing, Some(Growing::Map(..)))
+                || layout
+                    .fields
+                    .iter()
                     .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
                     .any(|(_, ty)| owns_resources(*ty, layouts))
-                || layout.array.is_some_and(|(ty, len)| len != 0 && owns_resources(ty, layouts))
+                || layout
+                    .array
+                    .is_some_and(|(ty, len)| len != 0 && owns_resources(ty, layouts))
         }
         _ => false,
     }
@@ -7199,14 +8478,15 @@ fn async_fixed(ty: Ty, layouts: &[Structure]) -> bool {
             } => true,
             Ty::Struct(index) => {
                 let layout = &layouts[index];
-                matches!(layout.growing, Some(Growing::Map(..))) || layout.pool.is_none()
-                    && layout.growing.is_none()
-                    && layout
-                        .fields
-                        .iter()
-                        .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
-                        .all(|(_, ty)| async_fixed(*ty, layouts))
-                    && layout.array.is_none_or(|(ty, _)| async_fixed(ty, layouts))
+                matches!(layout.growing, Some(Growing::Map(..)))
+                    || layout.pool.is_none()
+                        && layout.growing.is_none()
+                        && layout
+                            .fields
+                            .iter()
+                            .chain(layout.variants.iter().flat_map(|(_, fields)| fields))
+                            .all(|(_, ty)| async_fixed(*ty, layouts))
+                        && layout.array.is_none_or(|(ty, _)| async_fixed(ty, layouts))
             }
             _ => false,
         }
@@ -7297,17 +8577,23 @@ fn async_region_body(body: &[Instr], layouts: &[Structure], std_io: bool) -> boo
         | Instr::DropOwned(value) => local(value.ty),
         Instr::Receive(receiver, value) => local(receiver.ty) && local(value.ty),
         Instr::Block(body) => async_region_body(body, layouts, std_io),
-        Instr::If(_, yes, no) => async_region_body(yes, layouts, std_io) && async_region_body(no, layouts, std_io),
+        Instr::If(_, yes, no) => {
+            async_region_body(yes, layouts, std_io) && async_region_body(no, layouts, std_io)
+        }
         Instr::Loop {
             condition, body, ..
-        } => async_region_body(condition, layouts, std_io) && async_region_body(body, layouts, std_io),
+        } => {
+            async_region_body(condition, layouts, std_io)
+                && async_region_body(body, layouts, std_io)
+        }
         Instr::Break(_)
         | Instr::Continue
         | Instr::Return(_)
         | Instr::FreePages
         | Instr::RegionScope { .. }
         | Instr::GrowingPush(..)
-        | Instr::GrowingText(..) | Instr::DropMap(_) => true,
+        | Instr::GrowingText(..)
+        | Instr::DropMap(_) => true,
         Instr::Call(_, arguments) if std_io => arguments.iter().all(|value| local(value.ty)),
         Instr::Yield | Instr::CheckIndex(..) | Instr::Assembly(_) => true,
         Instr::DropHandle(value) => matches!(value.ty, Ty::Future(_) | Ty::Handle(_, true)),

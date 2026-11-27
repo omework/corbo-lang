@@ -4,7 +4,7 @@
 
 /// Runs completion-port initialization once with pthread_once.
 fn once_completion() {
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 pthread_once(&completion_once,completion_initialize);
 }}
 }
@@ -12,7 +12,7 @@ pthread_once(&completion_once,completion_initialize);
 /// Returns the completion_events callback address for the matching native ABI.
 /// The caller must invoke it through the exact declared function-pointer type.
 fn pointer_completion_events()->usize {let mut out:usize=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=(uintptr_t)&completion_events;
 }}
 copy(out)
@@ -20,7 +20,7 @@ copy(out)
 
 /// Creates the target completion-port object, returning the platform handle/error encoding.
 fn completion_create()->usize {let mut out:usize=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_completion_create();
 }}
 copy(out)
@@ -28,7 +28,7 @@ copy(out)
 
 /// Waits for the next operation-specific completion record through the target ABI.
 fn completion_next(port:usize)->usize {let mut out:usize=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_completion_next(${port});
 }}
 copy(out)
@@ -36,7 +36,7 @@ copy(out)
 
 /// Associates a native socket handle with a completion port through the target ABI.
 fn completion_attach(port:usize, descriptor:u64)->i64 {let mut out:i64=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_completion_attach(${port},${descriptor});
 }}
 copy(out)
@@ -44,7 +44,7 @@ copy(out)
 
 /// Passes a stable operation descriptor to the target completion submission primitive.
 fn completion_submit(address:usize)->i64 {let mut out:i64=0;
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 ${out}=corbo_completion_submit(${address});
 }}
 copy(out)
@@ -52,7 +52,7 @@ copy(out)
 
 /// Closes the native completion port after failed initialization.
 fn completion_close(port:usize) {
-@unchecked{@c(includes={"corbo_runtime_abi.h"}){
+@unchecked{@c++(includes={"corbo_runtime_abi.h"}){
 #ifdef _WIN32
 CloseHandle((HANDLE)${port});
 #else

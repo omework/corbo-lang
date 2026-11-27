@@ -19,7 +19,7 @@ pub struct AES128GCM {
     accelerated: bool;
 
     /// Builds a GCM context from a 16-byte AES key.
-    fn new(key: &[u8; 16]) AES128GCM {
+    pub fn new(key: &[u8; 16]) AES128GCM {
         let mut cipher = AES128GCM { schedule: [0; 240], accelerated: hardware_available() };
         let mut i: u64 = 0;
         while i < 16 {
@@ -33,7 +33,7 @@ pub struct AES128GCM {
 
     /// Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
     /// Use a unique 12-byte nonce for every message under the same key.
-    fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
+    pub fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
         ciphertext: &mut [u8]) Result<[u8; 16], Error> {
         let accelerated = (*self).accelerated;
         seal_message(&(*self).schedule, 10, accelerated, &*nonce,
@@ -41,7 +41,7 @@ pub struct AES128GCM {
     }
 
     /// Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
-    fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
+    pub fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
         plaintext: &mut [u8]) Result<(), Error> {
         let accelerated = (*self).accelerated;
         open_message(&(*self).schedule, 10, accelerated, &*nonce,
@@ -57,7 +57,7 @@ pub struct AES256GCM {
     accelerated: bool;
 
     /// Builds a GCM context from a 32-byte AES key.
-    fn new(key: &[u8; 32]) AES256GCM {
+    pub fn new(key: &[u8; 32]) AES256GCM {
         let mut cipher = AES256GCM { schedule: [0; 240], accelerated: hardware_available() };
         let mut i: u64 = 0;
         while i < 32 {
@@ -71,7 +71,7 @@ pub struct AES256GCM {
 
     /// Encrypts into a ciphertext buffer the same size as the plaintext and returns the detached tag.
     /// Use a unique 12-byte nonce for every message under the same key.
-    fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
+    pub fn seal(&self, nonce: &[u8; 12], aad: &[u8], plaintext: &[u8],
         ciphertext: &mut [u8]) Result<[u8; 16], Error> {
         let accelerated = (*self).accelerated;
         seal_message(&(*self).schedule, 14, accelerated, &*nonce,
@@ -79,7 +79,7 @@ pub struct AES256GCM {
     }
 
     /// Authenticates the ciphertext and associated data before writing plaintext. Authentication failure leaves the output unchanged.
-    fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
+    pub fn open(&self, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8], tag: &[u8; 16],
         plaintext: &mut [u8]) Result<(), Error> {
         let accelerated = (*self).accelerated;
         open_message(&(*self).schedule, 14, accelerated, &*nonce,
@@ -164,8 +164,8 @@ fn seal_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u
     aad: &[u8], plaintext: &[u8], ciphertext: &mut [u8]) Result<[u8; 16], Error> {
     let length = plaintext.len();
     let aad_len = aad.len();
-    if length != ciphertext.len() { return Err(Error.LengthMismatch); }
-    if !within_limit(copy(length), copy(aad_len)) { return Err(Error.InputTooLong); }
+    if length != ciphertext.len() { return Err(Error::LengthMismatch); }
+    if !within_limit(copy(length), copy(aad_len)) { return Err(Error::InputTooLong); }
     crypt(&*schedule, copy(rounds), copy(accelerated), &*nonce, &plaintext[0..length], &mut ciphertext[0..length]);
     Ok(compute_tag(&*schedule, rounds, accelerated, &*nonce, &aad[0..aad_len], &ciphertext[0..length]))
 }
@@ -175,8 +175,8 @@ fn open_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u
     aad: &[u8], ciphertext: &[u8], tag: &[u8; 16], plaintext: &mut [u8]) Result<(), Error> {
     let length = ciphertext.len();
     let aad_len = aad.len();
-    if length != plaintext.len() { return Err(Error.LengthMismatch); }
-    if !within_limit(copy(length), copy(aad_len)) { return Err(Error.InputTooLong); }
+    if length != plaintext.len() { return Err(Error::LengthMismatch); }
+    if !within_limit(copy(length), copy(aad_len)) { return Err(Error::InputTooLong); }
     let expected = compute_tag(&*schedule, copy(rounds), copy(accelerated), &*nonce,
         &aad[0..aad_len], &ciphertext[0..length]);
     let mut difference: u8 = 0;
@@ -185,7 +185,7 @@ fn open_message(schedule: &[u8; 240], rounds: u64, accelerated: bool, nonce: &[u
         difference = difference | ((*tag)[i] ^ expected[i]);
         i = i + 1;
     }
-    if difference != 0 { return Err(Error.AuthenticationFailed); }
+    if difference != 0 { return Err(Error::AuthenticationFailed); }
     crypt(&*schedule, rounds, accelerated, &*nonce, &ciphertext[0..length], &mut plaintext[0..length]);
     Ok(())
 }

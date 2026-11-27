@@ -1,6 +1,6 @@
 use corbo_frontend::{
     frontend,
-    parser::Mode,
+    legacy_parser::Mode,
     tree::{Fact, StaticTree},
 };
 use std::{
@@ -123,6 +123,8 @@ fn token_summary(source: &str) -> String {
                         Kind::Text => 4,
                         Kind::Punct => 5,
                         Kind::Assembly => 6,
+                        Kind::Cpp => 7,
+                        Kind::C => 8,
                     };
                     format!("{class}:{}:{}", token.span.start, token.span.end)
                 })
@@ -151,7 +153,8 @@ fn syntax_summary(source: &str) -> Result<String, corbo_frontend::Error> {
         } else {
             (tokens[node.start].span.start, tokens[node.end - 1].span.end)
         };
-        let (name_start, name_end) = node.name
+        let (name_start, name_end) = node
+            .name
             .map(|index| {
                 let span = tokens[index].span;
                 let end = if node.kind == "affectation" && &source[span.start..span.end] == ">" {
@@ -164,7 +167,11 @@ fn syntax_summary(source: &str) -> Result<String, corbo_frontend::Error> {
             .unwrap_or((0, 0));
         let kind = node.kind;
         let public = u8::from(node.public);
-        write!(output, "\t{kind}:{parent}:{start}:{end}:{name_start}:{name_end}:{public}").unwrap();
+        write!(
+            output,
+            "\t{kind}:{parent}:{start}:{end}:{name_start}:{name_end}:{public}"
+        )
+        .unwrap();
         pending.extend(node.children.iter().rev().map(|&child| (child, position)));
         position += 1;
     }
@@ -193,9 +200,8 @@ fn batch() -> io::Result<()> {
         if let Some(text) = line.strip_prefix("verify\t") {
             match decode_hex(text) {
                 Some(source) => {
-                    let result = frontend(&source, Mode::Program).and_then(|tree| {
-                        corbo_frontend::verify::verify(&source, &tree)
-                    });
+                    let result = frontend(&source, Mode::Program)
+                        .and_then(|tree| corbo_frontend::verify::verify(&source, &tree));
                     match result {
                         Ok(_) => writeln!(output, "OK")?,
                         Err(error) => writeln!(output, "ERR\t{}\t{}", error.offset, error.message)?,
@@ -227,7 +233,9 @@ fn build_executable(
 
     let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
     let mut command = Command::new(compiler);
-    command.args(["-std=c11", "-pthread", "-x", "c", "-"]).arg("-lm");
+    command
+        .args(["-std=c11", "-pthread", "-x", "c", "-"])
+        .arg("-lm");
     if cfg!(windows) {
         command.args(["-lws2_32", "-ladvapi32", "-lbcrypt"]);
     }
@@ -245,7 +253,9 @@ fn build_executable(
         .map_err(|error| format!("could not start the C compiler: {error}"))?;
     let generated = corbo_frontend::c_backend::emit_c(program);
     let written = child.stdin.take().unwrap().write_all(generated.as_bytes());
-    let status = child.wait().map_err(|error| format!("C compiler wait failed: {error}"))?;
+    let status = child
+        .wait()
+        .map_err(|error| format!("C compiler wait failed: {error}"))?;
     if !status.success() {
         return Err(format!("C compilation failed ({status})"));
     }
@@ -272,7 +282,7 @@ fn output_program(
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
-    let arg = args.next().unwrap_or_else(|| "program".to_owned());
+    let arg = args.next().unwrap_or_else(|| "parse".to_owned());
     let mut target = corbo_frontend::target::Target::host();
     let mut root = None;
     let mut explicit_target = false;
@@ -312,6 +322,70 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         } else {
             ExitCode::FAILURE
+        };
+    }
+    if arg == "resolve" {
+        if explicit_target {
+            eprintln!(
+                "resolve currently uses the host target; cross-target semantic input is not integrated"
+            );
+            return ExitCode::FAILURE;
+        }
+        let mut source = String::new();
+        if let Err(error) = io::stdin().read_to_string(&mut source) {
+            eprintln!("{error}");
+            return ExitCode::FAILURE;
+        }
+        let unit = match corbo_frontend::parse_source(source) {
+            Ok(unit) => unit,
+            Err(error) => {
+                eprintln!("{error:#?}");
+                return ExitCode::FAILURE;
+            }
+        };
+        return match corbo_frontend::semantic::resolve(unit) {
+            Ok(result) => {
+                for warning in &result.warnings {
+                    let start = warning.span.start.min(result.syntax.source.len());
+                    let line = result.syntax.source[..start]
+                        .bytes()
+                        .filter(|b| *b == b'\n')
+                        .count()
+                        + 1;
+                    let column = result.syntax.source[..start]
+                        .rfind('\n')
+                        .map_or(start + 1, |at| start - at);
+                    eprintln!(
+                        "<input>:{line}:{column}: warning[{:?}]: {}",
+                        warning.kind, warning.message
+                    );
+                }
+                println!("{:#?}", result.logical);
+                ExitCode::SUCCESS
+            }
+            Err(errors) => {
+                for error in errors {
+                    eprintln!("{error:#?}");
+                }
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if arg == "parse" {
+        let mut source = String::new();
+        if let Err(error) = io::stdin().read_to_string(&mut source) {
+            eprintln!("{error}");
+            return ExitCode::FAILURE;
+        }
+        return match corbo_frontend::parse_source(source) {
+            Ok(unit) => {
+                println!("{unit:#?}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("{error:#?}");
+                ExitCode::FAILURE
+            }
         };
     }
     if arg == "build" && (output.is_none() || explicit_target) {

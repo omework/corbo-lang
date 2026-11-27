@@ -6,21 +6,28 @@
 
 ## Destructor method
 
-`fn drop(&mut self)` is the destructor signature for a declared
-type. The omitted return type is `Void`. Define it in the type's `impl`. The name `drop` is reserved for
-destruction. User code requests destruction with `drop(object)`; the
-compiler alone invokes the method.
+`fn drop(&mut self)` is the user-defined destruction hook, declared inside
+its struct or enum definition. Its omitted return type is unit. The name `drop`
+is reserved: user code requests destruction with `drop(value)`; the compiler
+invokes the hook as part of the runtime destruction procedure.
 
-Every declared type has an empty destructor by default. If the developer
-defines a destructor, that definition takes the place of the empty default.
-The compiler may omit a call to the empty default in generated code.
+`drop(value)` consumes ownership of its argument. This transfers responsibility
+to the destruction procedure; it does not free storage immediately. Automatic
+scope cleanup invokes the same procedure for each value it still owns.
 
-Explicit `drop(object)` and automatic destruction at scope exit follow
-the same sequence:
+The complete procedure is:
 
-1. Invoke the destructor once while the object and its fields are valid.
-2. Destroy the owned fields in the order required by their dependencies.
-3. Reclaim the object's storage.
+1. Invoke the user hook, or the default empty hook, exactly once while the object
+   and its fields are valid. The hook receives only `&mut self`.
+2. Destroy owned fields in the order required by their dependencies.
+3. End the object's lifetime and reclaim its storage.
+
+Overriding the hook replaces only the default empty hook. It does not replace
+field cleanup or storage reclamation. The hook cannot start a second destruction
+chain for `self`; it does not own `self`.
+
+Copying and destruction remain distinct: each value created by an allowed copy
+has its own cleanup responsibility. Consuming one copy does not consume another.
 
 A move transfers responsibility for destruction to the receiver. The moved
 value is destroyed through that receiver. The Rust backend supports custom destructors for fixed values, including

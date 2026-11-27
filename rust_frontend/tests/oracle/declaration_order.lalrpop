@@ -1,0 +1,30 @@
+// Independent minimal declaration subset from CORE_GRAMMAR.ebnf.
+// Approved policy: every annotation group precedes pub.
+use crate::OracleToken;
+grammar;
+
+pub Declaration: () = {
+    Function,
+    Contract* "pub"? "struct" "identifier" "{" "}" => (),
+    Contract* "pub"? "enum" "identifier" "{" "identifier" ";" "}" => (),
+};
+Function: () = Contract* "pub"? "fn" "identifier" "(" ")" "{" "}" => ();
+pub Method: () = Contract* "pub"? "fn" "identifier" "(" ")" "{" "}" => ();
+Contract: () = "#" "(" "type" ":" "identifier" ")" => ();
+
+extern {
+ type Location = usize;
+ type Error = &'static str;
+ enum OracleToken {
+   "identifier" => OracleToken::Identifier(<String>),
+   "pub" => OracleToken::Symbol("pub"),
+   "fn" => OracleToken::Symbol("fn"),
+   "struct" => OracleToken::Symbol("struct"),
+   "enum" => OracleToken::Symbol("enum"),
+   "type" => OracleToken::Symbol("type"),
+   "#" => OracleToken::Symbol("#"), ":" => OracleToken::Symbol(":"),
+   "(" => OracleToken::Symbol("("), ")" => OracleToken::Symbol(")"),
+   "{" => OracleToken::Symbol("{"), "}" => OracleToken::Symbol("}"),
+   ";" => OracleToken::Symbol(";"),
+ }
+}

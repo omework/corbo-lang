@@ -74,13 +74,13 @@ fn read_key(input: &[u8], private: bool, raw_allowed: bool, wrapped_allowed: boo
             output: &mut [u8]) Result<usize, Error> {
     let size = input.len();
     if raw_allowed && valid_pkcs1(&input[0..size], copy(private)) {
-        if size > output.len() { return Err(Error.BufferTooSmall); }
+        if size > output.len() { return Err(Error::BufferTooSmall); }
         return Ok(copy_der(&input[0..size], output));
     }
-    if !wrapped_allowed { return Err(Error.InvalidKey); }
+    if !wrapped_allowed { return Err(Error::InvalidKey); }
     let inner = wrapped_key(&input[0..size], copy(private));
-    if inner.end == 0 || !valid_pkcs1(&input[inner.body..inner.end], private) { return Err(Error.InvalidKey); }
-    if inner.end - inner.body > output.len() as u64 { return Err(Error.BufferTooSmall); }
+    if inner.end == 0 || !valid_pkcs1(&input[inner.body..inner.end], private) { return Err(Error::InvalidKey); }
+    if inner.end - inner.body > output.len() as u64 { return Err(Error::BufferTooSmall); }
     Ok(copy_der(&input[inner.body..inner.end], output))
 }
 
@@ -97,13 +97,13 @@ pub fn private_from_der(input: &[u8], output: &mut [u8]) Result<usize, Error> {
 /// Writes canonical DER around a validated RSA PKCS#1 key.
 fn write_key(input: &[u8], private: bool, output: &mut [u8]) Result<usize, Error> {
     let size = input.len() as u64;
-    if size > 4294967264 || !valid_pkcs1(&input[0..size], copy(private)) { return Err(Error.InvalidKey); }
+    if size > 4294967264 || !valid_pkcs1(&input[0..size], copy(private)) { return Err(Error::InvalidKey); }
     let prefix: u64 = if private { 18 } else { 15 };
     let extra: u64 = if private { 0 } else { 1 };
     let payload = size + extra;
     let body = prefix + der_header_size(copy(payload)) + payload;
     let total = der_header_size(copy(body)) + body;
-    if total > output.len() as u64 { return Err(Error.BufferTooSmall); }
+    if total > output.len() as u64 { return Err(Error::BufferTooSmall); }
     let at = write_der_header(48, body, &mut output[0..total]);
     let mut cursor = at;
     if private {
@@ -144,9 +144,9 @@ fn read_pem(input: &[u8], standard: &[u8], traditional: &[u8], private: bool,
         Ok(used) => { return read_key(&scratch[0..used], private, false, true, output); },
         Err(error) => {
             match error {
-                PemError.BufferTooSmall => { return Err(Error.BufferTooSmall); },
-                PemError.InvalidBase64 => { return Err(Error.InvalidKey); },
-                PemError.InvalidEnvelope => {},
+                PemError::BufferTooSmall => { return Err(Error::BufferTooSmall); },
+                PemError::InvalidBase64 => { return Err(Error::InvalidKey); },
+                PemError::InvalidEnvelope => {},
             };
         },
     };
@@ -154,9 +154,9 @@ fn read_pem(input: &[u8], standard: &[u8], traditional: &[u8], private: bool,
         Ok(used) => { read_key(&scratch[0..used], private, true, false, output) },
         Err(error) => {
             match error {
-                PemError.BufferTooSmall => { Err(Error.BufferTooSmall) },
-                PemError.InvalidEnvelope => { Err(Error.InvalidKey) },
-                PemError.InvalidBase64 => { Err(Error.InvalidKey) },
+                PemError::BufferTooSmall => { Err(Error::BufferTooSmall) },
+                PemError::InvalidEnvelope => { Err(Error::InvalidKey) },
+                PemError::InvalidBase64 => { Err(Error::InvalidKey) },
             }
         },
     }
@@ -180,7 +180,7 @@ pub fn private_from_pem(input: &[u8], scratch: &mut [u8], output: &mut [u8]) Res
 fn wrap_pem(input: &[u8], label: &[u8], output: &mut [u8]) Result<usize, Error> {
     match encode_pem(input, label, output) {
         Ok(used) => { Ok(used) },
-        Err(error) => { drop(error); Err(Error.BufferTooSmall) },
+        Err(error) => { drop(error); Err(Error::BufferTooSmall) },
     }
 }
 
@@ -205,7 +205,7 @@ pub fn private_to_pem(pkcs1: &[u8], scratch: &mut [u8], output: &mut [u8]) Resul
 /// Writes an RSA PUBLIC KEY PEM block containing the supplied PKCS#1 key.
 pub fn public_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error> {
     let size = pkcs1.len();
-    if !valid_pkcs1(&pkcs1[0..size], false) { return Err(Error.InvalidKey); }
+    if !valid_pkcs1(&pkcs1[0..size], false) { return Err(Error::InvalidKey); }
     let label: [u8; 14] = [82,83,65,32,80,85,66,76,73,67,32,75,69,89];
     wrap_pem(&pkcs1[0..size], &label[..], output)
 }
@@ -213,7 +213,7 @@ pub fn public_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error>
 /// Writes an unencrypted RSA PRIVATE KEY PEM block containing the supplied PKCS#1 key.
 pub fn private_to_pkcs1_pem(pkcs1: &[u8], output: &mut [u8]) Result<usize, Error> {
     let size = pkcs1.len();
-    if !valid_pkcs1(&pkcs1[0..size], true) { return Err(Error.InvalidKey); }
+    if !valid_pkcs1(&pkcs1[0..size], true) { return Err(Error::InvalidKey); }
     let label: [u8; 15] = [82,83,65,32,80,82,73,86,65,84,69,32,75,69,89];
     wrap_pem(&pkcs1[0..size], &label[..], output)
 }

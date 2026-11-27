@@ -1,7 +1,7 @@
 //! Control flow and backward binding liveness for the synchronous verifier.
 
 use crate::{
-    parser::NodeId,
+    legacy_parser::NodeId,
     tree::{BindingId, Fact, StaticTree},
 };
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -64,14 +64,17 @@ impl Flow {
                 })
                 .collect(),
         };
-        let functions = tree.syntax.nodes[tree.syntax.root.0].children.iter().flat_map(|id| {
-            let node = &tree.syntax.nodes[id.0];
-            if node.kind == "impl" {
-                node.children.as_slice()
-            } else {
-                std::slice::from_ref(id)
-            }
-        });
+        let functions = tree.syntax.nodes[tree.syntax.root.0]
+            .children
+            .iter()
+            .flat_map(|id| {
+                let node = &tree.syntax.nodes[id.0];
+                if node.kind == "impl" {
+                    node.children.as_slice()
+                } else {
+                    std::slice::from_ref(id)
+                }
+            });
         for &function in functions {
             let node = &tree.syntax.nodes[function.0];
             if matches!(node.kind, "fn" | "async fn") {
@@ -195,10 +198,12 @@ impl Builder<'_> {
                     self.node(children[0], right, targets)
                 }
             }
-            "binaire" if node.name.is_some_and(|token| {
-                let span = self.tree.tokens[token].span;
-                matches!(&self.source[span.start..span.end], "&&" | "||")
-            }) => {
+            "binaire"
+                if node.name.is_some_and(|token| {
+                    let span = self.tree.tokens[token].span;
+                    matches!(&self.source[span.start..span.end], "&&" | "||")
+                }) =>
+            {
                 let right = self.node(children[1], next, targets);
                 let branch = self.point(vec![right, next], vec![], vec![]);
                 self.node(children[0], branch, targets)

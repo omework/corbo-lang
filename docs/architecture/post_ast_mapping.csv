@@ -1,0 +1,56 @@
+AST_NodeKind,PostAST_units,Required_semantic_information,Rule_consumers,Cpp_generation_information
+Module,ModuleDefinition; PackageDefinition; Scope,Resolved package/module identities and lexical scope,N8,Declaration and instance inventories
+Import,SymbolAlias; TargetSelection,Target selected before imports; resolved target/visibility,N1 N8,No runtime operation; no name lookup in generation
+ImportEntry,SymbolAlias,Resolved imported symbol and alias origin,N1 N8,Uses resolved symbol identity
+Function,FunctionDefinition; FunctionInstance; Signature; FunctionBody,"Resolved parameters, receiver, result, contracts, body and effects",N1 N8,"Concrete call targets, ABI and body identities"
+Parameter,ParameterDefinition; Binding,"Type, permission, binding identity and entry moment",N1 N3 N4 N8,Resolved parameter order and representation
+Struct,StructDefinition,"Fields, defaults, methods and resolved type parameters",N1 N2 N7 N8,Type layout and construction/destruction plans
+Enum,EnumDefinition,"Variants, payload fields, methods and resolved type parameters",N1 N2 N7 N8,Explicit discriminant/payload layout plan
+Field,FieldDefinition; DefaultInitializationPlan,"Owner type, field ID, type, visibility and resolved default",N1 N2 N4,Field ID to layout; no field-name resolution
+Variant,VariantDefinition,"Owner enum, variant ID and payload fields",N1 N2 N6,Resolved tag and active-payload layout
+Constant,ConstantDefinition,"Resolved type/value, lexical origin and configurable status",N1 N8,Resolved constant; no expression evaluation in generator
+Annotation,StructuralTypeContract; BranchContract; LockContract; ThreadTransferContract; MemoryConfiguration; ResolvedConfiguration,Typed annotation subject and resolved properties,N1 N4 N5 N6 N8,Effects/configuration already resolved
+TypeContractAlternative,ContractAlternative; MethodRequirement,Nonempty method set; common mode belongs to StructuralTypeContract,N1 N8,"Resolved match information, never first-branch guessing"
+Property,Typed configuration or contract field,Resolved annotation-specific property; not a runtime property operation,N8,No property-string interpretation
+Size,BudgetRequest; RegionConfiguration,Byte quantity resolved from K/M/G and its source origin,N1 N8,Concrete requested/inferred memory bounds
+Conditional,TargetSelection,Selected/excluded syntax identities and target facts,N1 N8,Excluded declarations never emitted or resolved as active
+Type,ResolvedType; TypeArgument; TypeSubstitution,Resolved type identity; symbolic parameters remain explicit,N1 N3 N8,Completed target layouts for emitted instances
+Pattern,ResolvedPattern; ExtractVariantField; ExtractTupleField; InitializeBinding,"Variant/field IDs, binders, guards and transfer modes",N1 N2 N3 N4 N6,Resolved tests and extraction paths
+Block,Scope; EnterScope; ExitScope; ReceiveValue; ForwardResult,"Entry/exit moments, receiver and result forwarding",N2 N4 N6 N7,Exit cleanup and storage plans
+Let,InitializeBinding; MoveValue; CopyPrimitive; CopyEligibleEnum,Resolved binding and selected transfer/initialization sequence,N1 N2 N3 N6,No inferred transfer in generator
+Assignment,Assign and ten distinct compound-assignment types,"Evaluated destination once, operands, checks and read/compute/write events",N1 N2 N3 N5 N6 N7,"Explicit numeric domain, replacement and runtime checks"
+ExpressionStatement,DiscardResult,"Result use or discard, destructor/default-empty destructor and source cause",N2 N7,Explicit result disposal; semicolon has no separate operation
+Return,ReturnControl; ForwardResult,Resolved function result receiver and scope exits,N2 N4 N6 N7 N8,"Return path, result storage and cleanup"
+Break,BreakControl; ForwardResult,"Resolved loop destination, result and exited scopes",N2 N4 N6 N7,Break continuation and value receiver
+Continue,ContinueControl,Resolved loop back/continue target and exited scopes,N2 N6 N7,Explicit back edge and cleanup
+Yield,YieldExecution; SuspensionPoint,Suspend/resume edges and live values/places,N4 N5 N6 N8,Async transition/frame plan
+NamedMove,MoveValue; InitializeBinding,"Explicit child receiver/owner, transfer moment and identity preservation",N2 N3 N4 N6,No duplicated value allocation from the name change
+While,WhileControl; LoopRegion,"Condition region, iteration domain, exits and back edges",N1 N4 N5 N6 N7,Explicit loop control flow
+For,ForControl; ResolvedIteration; ResolvedPattern,"Source evaluated once, resolved iteration route, payload and binders",N1 N2 N3 N4 N5 N6,"Resolved array/slice/next protocol, not collection-name heuristics"
+Path,Resolved symbol; Place; EvaluatePlace; ReadValue or transfer operation,Source name bound once; usage context selects place/value operation,N1 N2 N3 N6,Direct identities; spelling retained only for diagnostics
+Literal,IntegerLiteral; FloatLiteral; BooleanLiteral; TextLiteral,"Decoded value, resolved type and static origin",N1 N3,Typed literal encoding
+Parenthesized,Operand forwarding plus SourceOrigin,Grouping consumed by AST; retain origin without fake work,N6,No runtime operation introduced for parentheses
+Tuple,ConstructTuple,Ordered typed components and per-component transfers,N1 N2 N3 N4 N7,Tuple layout and cleanup plan
+Array,ConstructArray or RepeatArray,Ordered components or one seed evaluation plus replication plan,N1 N2 N3 N4 N7,Length/element layout and replication plan
+Unary,Negate; BooleanNot; BitNot; Dereference; BorrowShared; BorrowMutable; ReborrowShared; ReborrowMutable,Exact operation and native/declared dereference route,N1 N3 N4 N5 N6,Resolved checks and access targets
+Binary,Distinct arithmetic/bitwise/comparison operations; ShortCircuitAnd; ShortCircuitOr,"Typed operands, explicit equality/numeric strategy and conditional evaluation",N1 N4 N5 N6,No C++ overload selection or operand-order inference
+Conversion,NumericCast,Numeric target and representability check,N1 N8,Chosen runtime/static conversion disposition
+Call,DirectCall; MethodCall; CallableCall; ExternalCall; IntrinsicCall and derived effect operations,"Resolved invocation route, argument mapping, receiver mode and effects",N1 N2 N3 N4 N5 N6 N8,"Concrete target/ABI; branch/lock effects from contracts, not names"
+Projection,ProjectField or ProjectTupleField,Resolved field/index and cached base place,N1 N4 N5,Field ID and physical layout
+Index,IndexPlace; ReadValue or borrow/move operation; SequenceLength,"Index evaluated once, resolved access route and bounds requirement",N1 N3 N4 N5 N6,Explicit storage access and bounds disposition
+Range,Resolved bounds used by SlicePlace; SliceView; SequenceLength or resolved range-argument call,Default endpoints expanded explicitly; no lost source-bound origin,N1 N4 N5,Start/end/length values and check disposition
+Await,AwaitValue; SuspensionPoint; CompleteBranch when established by contract,"Resolved await/poll route, result, suspension and guarded deferred effects",N2 N4 N5 N6 N8,"Frame transitions, result reception and runtime bindings"
+Propagate,PropagateResult or PropagateOption,"Resolved variants, extraction, optional From target and early-exit cleanup",N1 N2 N3 N4 N6 N7 N8,Explicit success/failure routes and conversion call
+Unwrap,UnwrapResult or UnwrapOption,Resolved success variant and failure requirement,N1 N2 N3 N6 N7,Check/failure continuation and payload extraction
+Construct,ConstructStruct or ConstructEnum,Explicit/inferred constructor type resolved once; all default fields explicit,N1 N2 N3 N4 N7,No default/field/variant inference in generator
+FieldInitializer,ComponentInitialization and operand operations,Resolved field ID and shorthand source binding,N1 N2 N3 N4,Explicit component and transfer
+Closure,CreateClosure; CaptureMove; CaptureCopy; CaptureRecord,"Concrete capture record, callable signature/body and capture-at-creation effects",N1 N2 N3 N4 N8,Resolved environment layout and callable route
+Async,CreateFuture; CaptureRecord; FunctionBody,Capture creation separate from activation/poll; concrete task state/result,N2 N3 N4 N5 N8,State/frame layout; no execution edge into inactive body
+MoveBlock,EnterMoveBlock; CaptureMove; CaptureCopy; Scope,"Resolved captures, child owner and capture event",N2 N3 N4 N6 N7,Transfer/storage/cleanup plans
+If,IfDecision; ConditionalBranch; BranchMerge; MergeValue,"Guarded alternatives, result sources and continuation",N1 N2 N4 N5 N6,Explicit guarded control and data flow
+LetCondition,IfLetDecision; ResolvedPattern; extraction operations,Resolved variant/payload and branch-local binders,N1 N3 N4 N6,"Pattern tests, extraction and guards"
+Match,MatchDecision; MatchArmBranch; BranchMerge; MergeValue,"Subject once, resolved arm patterns, guards, results and continuation",N1 N2 N3 N4 N5 N6,Explicit switch/tests and branch-specific payload access
+MatchArm,ResolvedMatchArm; MatchArmBranch,"Resolved pattern, bindings, body scope and exit moments",N1 N2 N3 N4 N6 N7,Arm tests/cleanup/result plan
+Loop,LoopControl; LoopRegion,"Back edge, exit target, instance domain and result receiver",N2 N4 N5 N6 N7,Loop structure without graph unrolling
+Unchecked,EnterUnchecked; ExitUnchecked; Scope,Lexical trusted boundary and permitted escape constraints,N3 N4 N8,Boundary retained; no claimed analysis of foreign body
+Foreign,ForeignC; ForeignCpp; ForeignAssembly; ForeignRegion,"Original body/headers, resolved operands/types/storage modes/writebacks and explicit opaque boundary effects",N1 N3 N4 N8,Target assembly/ABI/header/operand plan; no reparsing names

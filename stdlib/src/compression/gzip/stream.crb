@@ -55,14 +55,14 @@ pub struct Encoder {
     /// Returns output bytes written. consumed() reports accepted input; re-submit its remaining suffix.
     /// finish marks EOF only once all supplied input is accepted; an empty output can apply backpressure.
     fn process(&mut self, input: &[u8], output: &mut [u8], finish: bool) Result<usize, Error> {
-        if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error.InvalidState); }
+        if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error::InvalidState); }
         let level=(*self).level;
         let mut used=(*self).used; let mut count=(*self).count; let mut next=(*self).next;
         let mut ending=(*self).ending; let mut finished=(*self).done;
         let mut seen=(*self).seen;
         let staging=&mut *(*self).input; let pending=&mut *(*self).pending; let workspace=&mut *(*self).workspace;
         let capacity=staging.len() as u64;
-        if capacity==0 || capacity>0xffffffff || (pending.len() as u64)<capacity*2+128 { return Err(Error.InvalidParams); }
+        if capacity==0 || capacity>0xffffffff || (pending.len() as u64)<capacity*2+128 { return Err(Error::InvalidParams); }
         let mut read:u64=0; let mut written:u64=0;
         loop {
             while next<count && written<output.len() as u64 { output[written]=pending[next]; next=next+STREAM_ONE; written=written+STREAM_ONE; }
@@ -136,37 +136,37 @@ pub struct Decoder {
     /// Returns validated output bytes written; consumed() reports accepted input.
     /// Frame, checksum or state errors require reset or destruction; a truncated prefix waits for more input.
     fn process(&mut self,input:&[u8],output:&mut [u8],finish:bool)Result<usize,Error>{
-        if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error.InvalidState); }
+        if (*self).failed || ((*self).ending && input.len()!=0) { return Err(Error::InvalidState); }
 
         let mut used=(*self).used;let mut count=(*self).count;let mut next=(*self).next;
         let mut ending=(*self).ending;let mut finished=(*self).done;
         let mut seen=(*self).seen;
         let encoded=&mut *(*self).encoded;let decoded=&mut *(*self).decoded;
         let capacity=encoded.len() as u64;
-        if capacity==0 { return Err(Error.InvalidParams); }
+        if capacity==0 { return Err(Error::InvalidParams); }
         let mut read:u64=0;let mut written:u64=0;
         loop {
             while next<count && written<output.len() as u64 { output[written]=decoded[next];next=next+STREAM_ONE;written=written+STREAM_ONE; }
             if next<count { break; } count=0;next=0;
-            if used==0 && ending { if !seen { let failure=&mut (*self).failed;*failure=true;return Err(Error.TruncatedInput); } finished=true;break; }
+            if used==0 && ending { if !seen { let failure=&mut (*self).failed;*failure=true;return Err(Error::TruncatedInput); } finished=true;break; }
             while read<input.len() as u64 && used<capacity { encoded[used]=input[read];used=used+STREAM_ONE;read=read+STREAM_ONE; }
             if finish && read==input.len() as u64 { ending=true; }
             let mut consumed:u64=0;let mut produced:u64=0;
             match decode_member(&encoded[0..used],&mut decoded[0..decoded.len()]) {
                 Ok(frame)=>{consumed=frame.read;produced=frame.written;},
                 Err(error)=>{match error {
-                    Error.TruncatedInput=>{},
-                    Error.InvalidParams=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.InvalidParams);},
-                    Error.WorkspaceTooSmall=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.WorkspaceTooSmall);},
-                    Error.BufferTooSmall=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.BufferTooSmall);},
-                    Error.InvalidData=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.InvalidData);},
-                    Error.ChecksumMismatch=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.ChecksumMismatch);},
-                    Error.InvalidState=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.InvalidState);},
-                    Error.FrameTooLarge=>{let failure=&mut (*self).failed;*failure=true;return Err(Error.FrameTooLarge);},}},
+                    Error::TruncatedInput=>{},
+                    Error::InvalidParams=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::InvalidParams);},
+                    Error::WorkspaceTooSmall=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::WorkspaceTooSmall);},
+                    Error::BufferTooSmall=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::BufferTooSmall);},
+                    Error::InvalidData=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::InvalidData);},
+                    Error::ChecksumMismatch=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::ChecksumMismatch);},
+                    Error::InvalidState=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::InvalidState);},
+                    Error::FrameTooLarge=>{let failure=&mut (*self).failed;*failure=true;return Err(Error::FrameTooLarge);},}},
             }
             if consumed==0 {
-                if ending { let failure=&mut (*self).failed;*failure=true;return Err(Error.TruncatedInput); }
-                if used==capacity { let failure=&mut (*self).failed;*failure=true;return Err(Error.FrameTooLarge); }
+                if ending { let failure=&mut (*self).failed;*failure=true;return Err(Error::TruncatedInput); }
+                if used==capacity { let failure=&mut (*self).failed;*failure=true;return Err(Error::FrameTooLarge); }
                 break;
             }
             let remaining=used-consumed;let mut i:u64=0;

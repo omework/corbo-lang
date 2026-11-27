@@ -36,6 +36,15 @@ syntax match corboDocComment /\/\/[\/!].*$/ contains=corboTodo,@Spell
 syntax match corboEscape /\\\%(["\\/bfnrt]\|u[0-9A-Fa-f]\{4}\)/ contained
 syntax region corboString start=/"/ skip=/\\./ end=/"/ end=/$/ contains=corboEscape,@Spell
 
+" Embed the installed C++ syntax; Corbo itself still owns the outer boundary.
+syntax include @corboCpp syntax/cpp.vim
+unlet! b:current_syntax
+syntax region corboCppOptions start=/(/ end=/)/ contained contains=corboString
+syntax region corboCppBody matchgroup=corboAnnotation start=/{/ end=/}/ contained
+      \ contains=@corboCpp,corboCppBody,corboAsmOperand
+syntax region corboCpp matchgroup=corboAnnotation start=/@c++\ze\%([ \t]*(\|[ \t]*{\)/ end=/\%(}\)\@<=/
+      \ contains=corboCppOptions,corboCppBody
+
 syntax match corboAsmOperand /\${[A-Za-z_][A-Za-z_0-9]*}/ contained
 syntax region corboAsm matchgroup=corboAnnotation start=/@asm\>\_s*{/ end=/}/
       \ contains=corboAsmOperand,corboComment,corboDocComment
